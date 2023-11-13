@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{77360b3e-73d5-4eb4-8f2d-8ba5280ef06c}</ProjectGuid>
+    <RootNamespace>lifter</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <EnableASAN>false</EnableASAN>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+    <EnableASAN>false</EnableASAN>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>../../zydis-4.0.0/include;../../llvm-project/llvm/include;../../zydis-4.0.0/dependencies/zycore/include;C:\Users\yusuf\Desktop\Z2LLVM\llvm-project\llvm\build\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>../../zydis-4.0.0/build/Debug/Zydis.lib;../../zydis-4.0.0/build/zycore/Debug/Zycore.lib;../../llvm-project/llvm/build/Debug/lib/LLVMCore.lib;../../llvm-project/llvm/build/Debug/lib/LLVMExecutionEngine.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMC.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMCJIT.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSupport.lib;../../llvm-project/llvm/build/Debug/lib/LLVMX86CodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMX86Desc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMX86Info.lib;../../llvm-project/llvm/build/Debug/lib/LLVMOrcTargetProcess.lib;../../llvm-project/llvm/build/Debug/lib/LLVMOrcShared.lib;../../llvm-project/llvm/build/Debug/lib/LLVMRuntimeDyld.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMCDisassembler.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAsmPrinter.lib;../../llvm-project/llvm/build/Debug/lib/LLVMCFGuard.lib;../../llvm-project/llvm/build/Debug/lib/LLVMGlobalISel.lib;../../llvm-project/llvm/build/Debug/lib/LLVMInstrumentation.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSelectionDAG.lib;../../llvm-project/llvm/build/Debug/lib/LLVMCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMTarget.lib;../../llvm-project/llvm/build/Debug/lib/LLVMBitWriter.lib;../../llvm-project/llvm/build/Debug/lib/LLVMObjCARCOpts.lib;../../llvm-project/llvm/build/Debug/lib/LLVMScalarOpts.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAggressiveInstCombine.lib;../../llvm-project/llvm/build/Debug/lib/LLVMInstCombine.lib;../../llvm-project/llvm/build/Debug/lib/LLVMCodeGenTypes.lib;../../llvm-project/llvm/build/Debug/lib/LLVMTransformUtils.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAnalysis.lib;../../llvm-project/llvm/build/Debug/lib/LLVMProfileData.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSymbolize.lib;../../llvm-project/llvm/build/Debug/lib/LLVMDebugInfoDWARF.lib;../../llvm-project/llvm/build/Debug/lib/LLVMDebugInfoPDB.lib;../../llvm-project/llvm/build/Debug/lib/LLVMObject.lib;../../llvm-project/llvm/build/Debug/lib/LLVMIRReader.lib;../../llvm-project/llvm/build/Debug/lib/LLVMBitReader.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMRemarks.lib;../../llvm-project/llvm/build/Debug/lib/LLVMBitstreamReader.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMCParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMTextAPI.lib;../../llvm-project/llvm/build/Debug/lib/LLVMBinaryFormat.lib;../../llvm-project/llvm/build/Debug/lib/LLVMTargetParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMDebugInfoCodeView.lib;../../llvm-project/llvm/build/Debug/lib/LLVMDebugInfoMSF.lib;../../llvm-project/llvm/build/Debug/lib/LLVMDebugInfoBTF.lib;../../llvm-project/llvm/build/Debug/lib/LLVMDemangle.lib;../../llvm-project/llvm/build/Debug/lib/LLVMPasses.lib;psapi.lib;shell32.lib;ole32.lib;uuid.lib;advapi32.lib;delayimp.lib;-delayload:shell32.dll;-delayload:ole32.dll;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;oleaut32.lib;comdlg32.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAArch64AsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAMDGPUAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMARMAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAVRAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMBPFAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMHexagonAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLanaiAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLoongArchAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMipsAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMSP430AsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMPowerPCAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMRISCVAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSparcAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSystemZAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMVEAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMWebAssemblyAsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMX86AsmParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAArch64CodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAMDGPUCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMARMCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAVRCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMBPFCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMHexagonCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLanaiCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLoongArchCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMipsCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMSP430CodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMNVPTXCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMPowerPCCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMRISCVCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSparcCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSystemZCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMVECodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMWebAssemblyCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMXCoreCodeGen.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAArch64Desc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAMDGPUDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMARMDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAVRDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMBPFDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMHexagonDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLanaiDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLoongArchDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMipsDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMSP430Desc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMNVPTXDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMPowerPCDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMRISCVDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSparcDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSystemZDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMVEDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMWebAssemblyDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMXCoreDesc.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAArch64Info.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAMDGPUInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMARMInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAVRInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMBPFInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMHexagonInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLanaiInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLoongArchInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMipsInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMSP430Info.lib;../../llvm-project/llvm/build/Debug/lib/LLVMNVPTXInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMPowerPCInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMRISCVInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSparcInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMSystemZInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMVEInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMWebAssemblyInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMXCoreInfo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMCoroutines.lib;../../llvm-project/llvm/build/Debug/lib/LLVMExtensions.lib;../../llvm-project/llvm/build/Debug/lib/LLVMipo.lib;../../llvm-project/llvm/build/Debug/lib/LLVMIRPrinter.lib;../../llvm-project/llvm/build/Debug/lib/LLVMVectorize.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAArch64Utils.lib;../../llvm-project/llvm/build/Debug/lib/LLVMAMDGPUUtils.lib;../../llvm-project/llvm/build/Debug/lib/LLVMMIRParser.lib;../../llvm-project/llvm/build/Debug/lib/LLVMARMUtils.lib;../../llvm-project/llvm/build/Debug/lib/LLVMFrontendOpenMP.lib;../../llvm-project/llvm/build/Debug/lib/LLVMLinker.lib;../../llvm-project/llvm/build/Debug/lib/LLVMWebAssemblyUtils.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>../../zydis-4.0.0/include;../../llvm-project/llvm/include;../../zydis-4.0.0/dependencies/zycore/include;C:\Users\yusuf\Desktop\Z2LLVM\llvm-project\llvm\build\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <Optimization>MaxSpeed</Optimization>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>../../zydis-4.0.0/build/Release/Zydis.lib;../../zydis-4.0.0/build/zycore/Release/Zycore.lib;../../llvm-project/llvm/build/Release/lib/LLVMCore.lib;../../llvm-project/llvm/build/Release/lib/LLVMExecutionEngine.lib;../../llvm-project/llvm/build/Release/lib/LLVMMC.lib;../../llvm-project/llvm/build/Release/lib/LLVMMCJIT.lib;../../llvm-project/llvm/build/Release/lib/LLVMSupport.lib;../../llvm-project/llvm/build/Release/lib/LLVMX86CodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMX86Desc.lib;../../llvm-project/llvm/build/Release/lib/LLVMX86Info.lib;../../llvm-project/llvm/build/Release/lib/LLVMOrcTargetProcess.lib;../../llvm-project/llvm/build/Release/lib/LLVMOrcShared.lib;../../llvm-project/llvm/build/Release/lib/LLVMRuntimeDyld.lib;../../llvm-project/llvm/build/Release/lib/LLVMMCDisassembler.lib;../../llvm-project/llvm/build/Release/lib/LLVMAsmPrinter.lib;../../llvm-project/llvm/build/Release/lib/LLVMCFGuard.lib;../../llvm-project/llvm/build/Release/lib/LLVMGlobalISel.lib;../../llvm-project/llvm/build/Release/lib/LLVMInstrumentation.lib;../../llvm-project/llvm/build/Release/lib/LLVMSelectionDAG.lib;../../llvm-project/llvm/build/Release/lib/LLVMCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMTarget.lib;../../llvm-project/llvm/build/Release/lib/LLVMBitWriter.lib;../../llvm-project/llvm/build/Release/lib/LLVMObjCARCOpts.lib;../../llvm-project/llvm/build/Release/lib/LLVMScalarOpts.lib;../../llvm-project/llvm/build/Release/lib/LLVMAggressiveInstCombine.lib;../../llvm-project/llvm/build/Release/lib/LLVMInstCombine.lib;../../llvm-project/llvm/build/Release/lib/LLVMCodeGenTypes.lib;../../llvm-project/llvm/build/Release/lib/LLVMTransformUtils.lib;../../llvm-project/llvm/build/Release/lib/LLVMAnalysis.lib;../../llvm-project/llvm/build/Release/lib/LLVMProfileData.lib;../../llvm-project/llvm/build/Release/lib/LLVMSymbolize.lib;../../llvm-project/llvm/build/Release/lib/LLVMDebugInfoDWARF.lib;../../llvm-project/llvm/build/Release/lib/LLVMDebugInfoPDB.lib;../../llvm-project/llvm/build/Release/lib/LLVMObject.lib;../../llvm-project/llvm/build/Release/lib/LLVMIRReader.lib;../../llvm-project/llvm/build/Release/lib/LLVMBitReader.lib;../../llvm-project/llvm/build/Release/lib/LLVMAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMRemarks.lib;../../llvm-project/llvm/build/Release/lib/LLVMBitstreamReader.lib;../../llvm-project/llvm/build/Release/lib/LLVMMCParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMTextAPI.lib;../../llvm-project/llvm/build/Release/lib/LLVMBinaryFormat.lib;../../llvm-project/llvm/build/Release/lib/LLVMTargetParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMDebugInfoCodeView.lib;../../llvm-project/llvm/build/Release/lib/LLVMDebugInfoMSF.lib;../../llvm-project/llvm/build/Release/lib/LLVMDebugInfoBTF.lib;../../llvm-project/llvm/build/Release/lib/LLVMDemangle.lib;../../llvm-project/llvm/build/Release/lib/LLVMPasses.lib;psapi.lib;shell32.lib;ole32.lib;uuid.lib;advapi32.lib;delayimp.lib;-delayload:shell32.dll;-delayload:ole32.dll;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;oleaut32.lib;comdlg32.lib;../../llvm-project/llvm/build/Release/lib/LLVMAArch64AsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMAMDGPUAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMARMAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMAVRAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMBPFAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMHexagonAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMLanaiAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMLoongArchAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMMipsAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMMSP430AsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMPowerPCAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMRISCVAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMSparcAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMSystemZAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMVEAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMWebAssemblyAsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMX86AsmParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMAArch64CodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMAMDGPUCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMARMCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMAVRCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMBPFCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMHexagonCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMLanaiCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMLoongArchCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMMipsCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMMSP430CodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMNVPTXCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMPowerPCCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMRISCVCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMSparcCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMSystemZCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMVECodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMWebAssemblyCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMXCoreCodeGen.lib;../../llvm-project/llvm/build/Release/lib/LLVMAArch64Desc.lib;../../llvm-project/llvm/build/Release/lib/LLVMAMDGPUDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMARMDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMAVRDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMBPFDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMHexagonDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMLanaiDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMLoongArchDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMMipsDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMMSP430Desc.lib;../../llvm-project/llvm/build/Release/lib/LLVMNVPTXDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMPowerPCDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMRISCVDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMSparcDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMSystemZDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMVEDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMWebAssemblyDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMXCoreDesc.lib;../../llvm-project/llvm/build/Release/lib/LLVMAArch64Info.lib;../../llvm-project/llvm/build/Release/lib/LLVMAMDGPUInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMARMInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMAVRInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMBPFInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMHexagonInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMLanaiInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMLoongArchInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMMipsInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMMSP430Info.lib;../../llvm-project/llvm/build/Release/lib/LLVMNVPTXInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMPowerPCInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMRISCVInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMSparcInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMSystemZInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMVEInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMWebAssemblyInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMXCoreInfo.lib;../../llvm-project/llvm/build/Release/lib/LLVMCoroutines.lib;../../llvm-project/llvm/build/Release/lib/LLVMExtensions.lib;../../llvm-project/llvm/build/Release/lib/LLVMipo.lib;../../llvm-project/llvm/build/Release/lib/LLVMIRPrinter.lib;../../llvm-project/llvm/build/Release/lib/LLVMVectorize.lib;../../llvm-project/llvm/build/Release/lib/LLVMAArch64Utils.lib;../../llvm-project/llvm/build/Release/lib/LLVMAMDGPUUtils.lib;../../llvm-project/llvm/build/Release/lib/LLVMMIRParser.lib;../../llvm-project/llvm/build/Release/lib/LLVMARMUtils.lib;../../llvm-project/llvm/build/Release/lib/LLVMFrontendOpenMP.lib;../../llvm-project/llvm/build/Release/lib/LLVMLinker.lib;../../llvm-project/llvm/build/Release/lib/LLVMWebAssemblyUtils.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="lifter.cpp" />
+    <ClCompile Include="LLVM-init.cpp" />
+    <ClCompile Include="nacibaba_opts.cpp" />
+    <ClCompile Include="OperandUtils.cpp" />
+    <ClCompile Include="ROPdetection.cpp" />
+    <ClCompile Include="Semantics.cpp" />
+    <ClCompile Include="utils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="includes.h" />
+    <ClInclude Include="LLVM-init.h" />
+    <ClInclude Include="nacibaba_opts.h" />
+    <ClInclude Include="OperandUtils.h" />
+    <ClInclude Include="ROPdetection.h" />
+    <ClInclude Include="Semantics.h" />
+    <ClInclude Include="utils.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
