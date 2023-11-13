@@ -46,3 +46,12 @@ inline/outline calls
 ABI, calling conventions
 
 better memory operations, LLVM doesnt support INTTOPTR !!!! which this code relies on unfortunately, so a (shitty) custom optimization has been written for it. However while rewriting the code, it would be better if we can come up with an alternative. I believe we can create an array that stands for RAM. It would be easier if we knew which memory we access at **everytime** but we cant assume that, it could be a pointer passed as an argument. However since VM constants are, well, constants we should always know which handler we will access
+
+
+building:
+
+[llvm branch that was used](https://github.com/llvm/llvm-project/tree/701e6f7630474b637e0bc45d009bf2ec47f2d3fd)
+
+[zydis branch that was used](https://github.com/zyantific/zydis/tree/v4.0.0)
+
+
