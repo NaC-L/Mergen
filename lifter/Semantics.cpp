@@ -3,6 +3,8 @@
 #include "ROPdetection.h"
 
 
+
+
 Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
     // Extract least significant byte
     Value* lsb = builder.CreateAnd(value, ConstantInt::get(value->getType(), 0xFF),"parity-and-lsb");
@@ -28,12 +30,12 @@ void lift_test(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     Value* testResult = builder.CreateAnd(Lvalue, Rvalue,"testAnd");
 
     // OF and CF are cleared
-    Value* of = ConstantInt::get(Type::getInt64Ty(context), 0,"of");
-    Value* cf = ConstantInt::get(Type::getInt64Ty(context), 0,"cf");
+    Value* of = ConstantInt::get(Type::getInt64Ty(context), 0,"of-test");
+    Value* cf = ConstantInt::get(Type::getInt64Ty(context), 0,"cf-test");
 
     // Calculate SF, ZF, and PF based on testResult
-    Value* sf = builder.CreateICmpSLT(testResult, ConstantInt::get(testResult->getType(), 0),"sf");
-    Value* zf = builder.CreateICmpEQ(testResult, ConstantInt::get(testResult->getType(), 0),"zf");
+    Value* sf = builder.CreateICmpSLT(testResult, ConstantInt::get(testResult->getType(), 0),"sf-test");
+    Value* zf = builder.CreateICmpEQ(testResult, ConstantInt::get(testResult->getType(), 0),"zf-test");
     Value* pf = computeParityFlag(builder, testResult);
 
     Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
@@ -389,8 +391,8 @@ void lift_sbb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
     // Perform the subtract with borrow operation
     Value* tmpResult = builder.CreateSub(destValue, srcValue,"sbb-tempresult");
-    cf = builder.CreateSExtOrTrunc(cf,tmpResult->getType() ,"sbb");
-    Value* result = builder.CreateSub(tmpResult, cf,"sbb-result");
+    cf = builder.CreateZExtOrTrunc(cf,tmpResult->getType() ,"sbb-getcf");
+    Value* result = builder.CreateSub(tmpResult, cf,"sbb-result-" + to_string(instruction.runtime_address) + "-");
 
     // TODO: Update the necessary flags in RFLAGS based on the result (ZF, CF, OF, etc.)
     // ...
@@ -487,7 +489,7 @@ void lift_not(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     auto dest = instruction.operands[0];
 
     auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
-    Rvalue = builder.CreateNot(Rvalue,"not");
+    Rvalue = builder.CreateNot(Rvalue,"not-" + to_string(instruction.runtime_address) + "-");
     SetOperandValue(context, builder, dest, Rvalue);
 
 
@@ -756,17 +758,32 @@ void lift_setl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     SetOperandValue(context, builder, dest, result);
 }
 
-
 void lift_neg(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-
     auto dest = instruction.operands[0];
+    Value* Rvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
-    Rvalue = builder.CreateNeg(Rvalue,"neg");
+    // Perform negation
+    Rvalue = builder.CreateNeg(Rvalue, "neg-" + to_string(instruction.runtime_address) + "-");
     SetOperandValue(context, builder, dest, Rvalue);
 
+    // Zero Flag (ZF)
+    Value* zf = builder.CreateICmpEQ(Rvalue, ConstantInt::get(Rvalue->getType(), 0), "zf");
 
+    // Sign Flag (SF)
+    Value* sf = builder.CreateICmpSLT(Rvalue, ConstantInt::get(Rvalue->getType(), 0), "sf");
+
+    // Parity Flag (PF)
+    Value* pf = computeParityFlag(builder, Rvalue);
+
+    // Update flags
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_ZF, SET_VALUE, zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_SF, SET_VALUE, sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
 }
+
 
 void lift_bswap(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
@@ -776,7 +793,7 @@ void lift_bswap(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIns
 
     // Define the intrinsic based on the size of the operand
     
-    /*
+    
     if (ConstantInt* CI = dyn_cast<ConstantInt>(destValue)) {
         // destValue is a ConstantInt
         unsigned size = destValue->getType()->getIntegerBitWidth();
@@ -797,11 +814,11 @@ void lift_bswap(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIns
         // Replace the original value with the byte-swapped value
         SetOperandValue(context, builder, dest, newConstInt);
         return;
-    }*/
+    }
 
     Function* bswapIntrinsic = Intrinsic::getDeclaration(builder.GetInsertBlock()->getModule(), Intrinsic::bswap, destValue->getType() );
     // Use the intrinsic
-    Value* swappedValue = builder.CreateCall(bswapIntrinsic, destValue,"bswap");
+    Value* swappedValue = builder.CreateCall(bswapIntrinsic, destValue,"bswap-" + to_string(instruction.runtime_address) + "-");
     SetOperandValue(context, builder, dest, swappedValue);
 
 
@@ -949,8 +966,6 @@ void lift_btc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     // StoreBitInFlag(isBitSet); // you'd have to implement StoreBitInFlag
 }
 
-
-
 void lift_sar(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     auto dest = instruction.operands[0];
     auto count = instruction.operands[1];
@@ -961,18 +976,35 @@ void lift_sar(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     unsigned bitWidth = destValue->getType()->getIntegerBitWidth();
 
     // Clamp countValue to ensure it's within the bit width of destValue
-    Value* clampedCount = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), bitWidth - 1), "clampedCount");
+    Value* clampedCount = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), bitWidth), "sar-clampedCount");
 
     // Perform the arithmetic right shift
     Value* shiftedValue = builder.CreateAShr(destValue, clampedCount, "sar-ashr-" + to_string(instruction.runtime_address) + "-");
 
-    // Optionally, update EFLAGS/RFLAGS based on the result if needed. 
-    // For instance, setting CF and OF flags based on the SAR result.
-    // ...
+    // Update EFLAGS/RFLAGS based on the result if needed. 
+    Value* sf = builder.CreateICmpSLT(shiftedValue, ConstantInt::get(shiftedValue->getType(), 0), "sf-sar");
+    Value* zf = builder.CreateICmpEQ(shiftedValue, ConstantInt::get(shiftedValue->getType(), 0), "zf-sar");
+    Value* pf = computeParityFlag(builder, shiftedValue);
+    Value* of = ConstantInt::get(Type::getInt64Ty(context), 0, "of-sar"); // OF is cleared
+
+    // Compute CF: Check if clampedCount is not zero and extract the last bit shifted out
+    Value* nonZeroShift = builder.CreateICmpNE(clampedCount, ConstantInt::get(clampedCount->getType(), 0), "nonZeroShift");
+    Value* lastBitMask = builder.CreateShl(ConstantInt::get(destValue->getType(), 1), builder.CreateSub(clampedCount, ConstantInt::get(clampedCount->getType(), 1)), "lastBitMask");
+    Value* lastBitShiftedOut = builder.CreateAnd(destValue, lastBitMask, "lastBitShiftedOut");
+    Value* cf = builder.CreateSelect(nonZeroShift, builder.CreateICmpNE(lastBitShiftedOut, ConstantInt::get(lastBitShiftedOut->getType(), 0), "cf-sar"), ConstantInt::get(nonZeroShift->getType(), 0), "cf-sar2-");
+
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_SF, SET_VALUE, sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_OF, SET_VALUE, of);
+    new_flags = setFlag(context, builder, new_flags, FLAG_CF, SET_VALUE, cf);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
 
     SetOperandValue(context, builder, dest, shiftedValue);
 }
-
 
 
 void lift_mov(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
@@ -980,7 +1012,18 @@ void lift_mov(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
+    
+
     auto Rvalue = GetOperandValue(context,builder,src, src.size);
+
+
+    if ((dest.type == ZYDIS_OPERAND_TYPE_MEMORY) && (src.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) && (src.size < dest.size)) {
+        Rvalue = GetOperandValue(context, builder, src, dest.size);
+#ifdef _DEVELOPMENT
+        cout << " rvalue: ";  Rvalue->print(outs()); cout << " size: " << dec << src.size << " size2: " << dest.size << "\n";
+#endif
+    }
+
     switch (instruction.info.mnemonic) {
     case ZYDIS_MNEMONIC_MOVSX: {
         Rvalue = builder.CreateSExt(Rvalue, getIntSize(dest.size, context), "movsx-" + to_string(instruction.runtime_address) + "-");
@@ -1115,6 +1158,13 @@ void lift_lahf(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     auto af = getFlag(context, builder, flags,FLAG_AF);
     auto pf = getFlag(context, builder, flags,FLAG_PF);
     auto cf = getFlag(context, builder, flags,FLAG_CF);
+    auto type16 = Type::getInt16Ty(context);
+
+    sf = builder.CreateSExt(sf, type16);
+    zf = builder.CreateSExt(sf, type16);
+    af = builder.CreateSExt(sf, type16);
+    pf = builder.CreateSExt(sf, type16);
+    cf = builder.CreateSExt(sf, type16);
 
     Value* Rvalue = builder.CreateOr(
         builder.CreateShl(sf, 7),
@@ -1123,7 +1173,7 @@ void lift_lahf(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
             builder.CreateOr(
                 builder.CreateShl(af, 4),
                 builder.CreateOr(
-                    builder.CreateShl(pf, 2), cf,"lahf-or-3"), "lahf-or-2"), "lahf-or1"), "lahf-or");
+                    builder.CreateShl(pf, 2), cf,"lahf-or-3-"), "lahf-or-2-"), "lahf-or1-"), "lahf-or-");
 
 
     SetRegisterValue(context, builder, ZYDIS_REGISTER_AH, Rvalue);
@@ -1235,6 +1285,46 @@ void lift_bts(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     SetOperandValue(context, builder, base, baseVal);
 }
 
+void lift_rdtsc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+    // Use LLVM's timing functions to get a timestamp
+    Function* clockFunc = Intrinsic::getDeclaration(builder.GetInsertBlock()->getModule(), Intrinsic::readcyclecounter);
+
+    // Call the timing function
+    Value* timestamp = builder.CreateCall(clockFunc);
+
+    // Split the 64-bit timestamp into two 32-bit values (RDX:RAX)
+    Value* rax = builder.CreateTrunc(timestamp, Type::getInt32Ty(context));
+    Value* rdx = builder.CreateLShr(timestamp, 32);
+    rdx = builder.CreateTrunc(rdx, Type::getInt32Ty(context));
+
+    // Update the RAX and RDX registers with the computed values
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RAX, rax);
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RDX, rdx);
+}
+
+void lift_rdtscp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+    // Use LLVM's timing functions to get a timestamp
+    Function* clockFunc = Intrinsic::getDeclaration(builder.GetInsertBlock()->getModule(), Intrinsic::readcyclecounter);
+
+    // Call the timing function
+    Value* timestamp = builder.CreateCall(clockFunc);
+
+    // Split the 64-bit timestamp into two 32-bit values (RDX:RAX)
+    Value* rax = builder.CreateTrunc(timestamp, Type::getInt32Ty(context));
+    Value* rdx = builder.CreateLShr(timestamp, 32);
+    rdx = builder.CreateTrunc(rdx, Type::getInt32Ty(context));
+
+    // Simulate the retrieval of the current core ID for RCX
+    // This is platform-specific and may not be directly possible in LLVM
+    // For simulation, we can set a default value (e.g., 0)
+    Value* rcx = ConstantInt::get(Type::getInt32Ty(context), 0);
+
+    // Update the RAX, RDX, and RCX registers with the computed values
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RAX, rax);
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RDX, rdx);
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RCX, rcx);
+}
+
 
 void lift_cwd(LLVMContext& context, IRBuilder<>& builder) {
     // Get the AX register value
@@ -1257,7 +1347,7 @@ void lift_cwd(LLVMContext& context, IRBuilder<>& builder) {
 void lift_cqo(LLVMContext& context, IRBuilder<>& builder) {
     // Retrieve the RAX register's value
     Value* rax = GetRegisterValue(context, builder, ZYDIS_REGISTER_RAX);
-
+    rax = builder.CreateSExtOrTrunc(rax, Type::getInt64Ty(context));
     // Extract the sign bit (MSB) of RAX
     Value* msb = builder.CreateLShr(rax, 63,"cqo-msb");  // 63 for a 64-bit register
     msb = builder.CreateAnd(msb, 1,"cqo-and");
@@ -1293,6 +1383,30 @@ void lift_cwde(LLVMContext& context, IRBuilder<>& builder) {
     SetRegisterValue(context, builder, ZYDIS_REGISTER_EAX, eax);
 }
 
+void lift_stosd(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+    // Assuming 32-bit mode for simplicity. Adjust for 16-bit or 64-bit as necessary.
+
+    // Step 1: Retrieve the value in EAX
+    Value* eaxValue = GetRegisterValue(context, builder, ZYDIS_REGISTER_EAX);
+
+    // Step 2: Retrieve the current value of EDI
+    Value* ediValue = GetRegisterValue(context, builder, ZYDIS_REGISTER_EDI);
+
+    // Step 3: Store the value from EAX into the memory pointed by EDI
+    builder.CreateStore(eaxValue, builder.CreateIntToPtr(ediValue, PointerType::get(IntegerType::get(context, 32), 0)));
+
+    // Step 4: Update EDI based on the direction flag
+    Value* dfValue = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_DF); // Implement GetFlagValue to retrieve the direction flag
+    Value* increment = ConstantInt::get(Type::getInt32Ty(context), 4); // 4 bytes for a doubleword
+    Value* updatedEdiValue = builder.CreateSelect(dfValue, builder.CreateSub(ediValue, increment), builder.CreateAdd(ediValue, increment));
+
+    // Step 5: Set the updated EDI value
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_EDI, updatedEdiValue);
+
+    // Flags are not affected by STOSD
+}
+
+
 void lift_cdqe(LLVMContext& context, IRBuilder<>& builder) {
     // Get the EAX register value
     Value* eax = builder.CreateZExtOrTrunc(GetRegisterValue(context, builder, ZYDIS_REGISTER_EAX), Type::getInt32Ty(context) , "cdqe-trunc");
@@ -1303,27 +1417,56 @@ void lift_cdqe(LLVMContext& context, IRBuilder<>& builder) {
     // Store the result back to RAX
     SetRegisterValue(context, builder, ZYDIS_REGISTER_RAX, rax);
 }
-
 void lift_shl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     auto dest = instruction.operands[0];
     auto count = instruction.operands[1];
-
+    
     Value* destValue = GetOperandValue(context, builder, dest, dest.size);
     Value* countValue = GetOperandValue(context, builder, count, dest.size);
 
-    auto maxShiftValue = ConstantInt::get(countValue->getType(), destValue->getType()->getIntegerBitWidth() - 1);
-    auto clampedCountValue = builder.CreateSelect(builder.CreateICmpUGE(countValue, maxShiftValue), maxShiftValue, countValue);
+    auto destBitWidth = destValue->getType()->getIntegerBitWidth();
+    auto modShiftValue = ConstantInt::get(countValue->getType(), destBitWidth);
+    auto effectiveCountValue = builder.CreateURem(countValue, modShiftValue);
 
     // Perform the logical left shift
-    Value* shiftedValue = builder.CreateShl(destValue, clampedCountValue, "shl-shift");
+    Value* shiftedValue = builder.CreateShl(destValue, effectiveCountValue, "shl-shift-" + to_string(instruction.runtime_address) + "-");
+
+    // Update EFLAGS/RFLAGS based on the result if needed.
+    Value* sf = builder.CreateICmpSLT(shiftedValue, ConstantInt::get(shiftedValue->getType(), 0), "sf");
+    Value* zf = builder.CreateICmpEQ(shiftedValue, ConstantInt::get(shiftedValue->getType(), 0), "zf");
+    Value* pf = computeParityFlag(builder, shiftedValue);
+
+    // Compute CF: get the Nth (n = count) bit
+    // ( r>>16-n ) & 0xff
+    auto p1 = builder.CreateSub(modShiftValue, effectiveCountValue);
+    auto p2 = builder.CreateLShr(destValue, p1);
+
+    Value* cf = builder.CreateTrunc(p2,Type::getInt1Ty(context) );
+    
+
+    // Compute OF: OF is set to the most-significant bit of the result for the first shift, otherwise unchanged
+// Compute OF: OF is set to the most-significant bit of the result for the first shift, otherwise unchanged
+    Value* msbOfResult = builder.CreateLShr(shiftedValue, ConstantInt::get(shiftedValue->getType(), destBitWidth - 1));
+    msbOfResult = builder.CreateTrunc(msbOfResult, Type::getInt1Ty(context));  // Truncate to i1
+    Value* isOneShift = builder.CreateICmpEQ(effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
+    Value* currentOF = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_OF);
+    Value* of = builder.CreateSelect(isOneShift, msbOfResult, currentOF, "of-shl");
 
 
-    // Optionally, update EFLAGS/RFLAGS based on the result if needed. 
-    // For instance, setting CF and OF flags based on the SHL result.
-    // ...
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_SF, SET_VALUE, sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_CF, SET_VALUE, cf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_OF, SET_VALUE, of);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
 
     SetOperandValue(context, builder, dest, shiftedValue);
+
 }
+
 
 void lift_shld(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     auto dest = instruction.operands[0];
@@ -1349,6 +1492,25 @@ void lift_shld(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
 
     // Combine shiftedDest and shiftedSource
     auto resultValue = builder.CreateOr(shiftedDest, shiftedSource, "shldResult-" + to_string(instruction.runtime_address) + "-");
+
+
+    // Update EFLAGS/RFLAGS based on the result
+    Value* sf = builder.CreateICmpSLT(resultValue, ConstantInt::get(resultValue->getType(), 0), "sf");
+    Value* zf = builder.CreateICmpEQ(resultValue, ConstantInt::get(resultValue->getType(), 0), "zf");
+    Value* pf = computeParityFlag(builder, resultValue);
+
+    // Calculate CF and OF
+    // TODO
+
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_SF, SET_VALUE, sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+    //new_flags = setFlag(context, builder, new_flags, FLAG_CF, SET_VALUE, cf);
+    //new_flags = setFlag(context, builder, new_flags, FLAG_OF, SET_VALUE, of);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
+
 
     // Update the operand with the result
     SetOperandValue(context, builder, dest, resultValue);
@@ -1379,8 +1541,35 @@ void lift_shrd(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     // Combine shiftedDest and shiftedSource
     auto resultValue = builder.CreateOr(shiftedDest, shiftedSource, "shrdResult-" + to_string(instruction.runtime_address) + "-");
 
+    auto shiftCount = builder.CreateSub(effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1), "shiftCount");
+
+    // Ensure shift count is not negative
+    auto zero = ConstantInt::get(effectiveCountValue->getType(), 0);
+    auto isNonNegative = builder.CreateICmpSGE(shiftCount, zero, "isNonNegative");
+    auto validShiftCount = builder.CreateSelect(isNonNegative, shiftCount, zero, "validShiftCount");
+
+    Value* shiftedValue = builder.CreateLShr(destValue, validShiftCount, "shiftedValue");
+    Value* cf = builder.CreateAnd(shiftedValue, ConstantInt::get(destValue->getType(), 1), "cf-shrd");
+
+
+    Value* of = builder.CreateXor(builder.CreateLShr(resultValue, bitWidth - 1,"of1"), builder.CreateLShr(resultValue, bitWidth - 2));
+    Value* sf = builder.CreateICmpSLT(resultValue, ConstantInt::get(resultValue->getType(), 0));
+    Value* zf = builder.CreateICmpEQ(resultValue, ConstantInt::get(resultValue->getType(), 0));
+    Value* pf = computeParityFlag(builder, resultValue);
+
     // Update the operand with the result
     SetOperandValue(context, builder, dest, resultValue);
+
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_OF, SET_VALUE, of);
+    new_flags = setFlag(context, builder, new_flags, FLAG_CF, SET_VALUE, cf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_SF, SET_VALUE, sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
+
 }
 
 
@@ -1391,18 +1580,47 @@ void lift_shr(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     Value* destValue = GetOperandValue(context, builder, dest, dest.size);
     Value* countValue = GetOperandValue(context, builder, count, dest.size);
 
-    auto maxShiftValue = ConstantInt::get(countValue->getType(), destValue->getType()->getIntegerBitWidth() - 1);
-    auto clampedCountValue = builder.CreateSelect(builder.CreateICmpUGE(countValue, maxShiftValue), maxShiftValue, countValue);
+    auto destBitWidth = destValue->getType()->getIntegerBitWidth();
+    auto modShiftValue = ConstantInt::get(countValue->getType(), destBitWidth);
+    auto effectiveCountValue = builder.CreateURem(countValue, modShiftValue);
 
     // Perform the logical left shift
-    Value* shiftedValue = builder.CreateLShr(destValue, clampedCountValue, "shl-shift");
-
+    Value* shiftedValue = builder.CreateLShr(destValue, effectiveCountValue, "shr-shift-" + to_string(instruction.runtime_address) + "-");
 
     // Optionally, update EFLAGS/RFLAGS based on the result if needed. 
     // For instance, setting CF and OF flags based on the SHL result.
     // ...
 
+    Value* cf = builder.CreateAnd(builder.CreateLShr(destValue, builder.CreateSub(effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1))), ConstantInt::get(destValue->getType(), 1));
+    unsigned bitWidth = destValue->getType()->getIntegerBitWidth();
+
+    // Compare 'countValue' to 1
+    Value* isOneBitShift = builder.CreateICmpEQ(countValue, ConstantInt::get(countValue->getType(), 1));
+
+    // Calculate OF for a 1-bit shift
+    Value* ofForOneBitShift = builder.CreateLShr(destValue, bitWidth - 1);
+
+    // Handle OF based on the shift count
+    // If countValue is 1, use 'ofForOneBitShift', else OF is undefined (or you can set it to a default value)
+    Value* of = builder.CreateSelect(isOneBitShift, ofForOneBitShift, ConstantInt::get(countValue->getType(), 0));
+
+    Value* sf = builder.CreateICmpSLT(shiftedValue, ConstantInt::get(shiftedValue->getType(), 0));
+    Value* zf = builder.CreateICmpEQ(shiftedValue, ConstantInt::get(shiftedValue->getType(), 0));
+    Value* pf = computeParityFlag(builder, shiftedValue);
+
+
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_OF, SET_VALUE, of);
+    new_flags = setFlag(context, builder, new_flags, FLAG_CF, SET_VALUE, cf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_SF, SET_VALUE, sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
+
     SetOperandValue(context, builder, dest, shiftedValue);
+
 }
 
 
@@ -1423,13 +1641,14 @@ void lift_call(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     auto RspValue = GetOperandValue(context, builder, rsp, rsp.size);
 
     auto val = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 8); // assuming its x64
-    auto result = builder.CreateSub(RspValue, val, "pushing_newrsp");
+    auto result = builder.CreateSub(RspValue, val, "calling_newrsp-" + to_string(instruction.runtime_address) + "-");
 
     SetOperandValue(context, builder, rsp, result); // sub rsp 8 first,
 
     auto push_into_rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
 
-    SetOperandValue(context, builder, rsp_memory, push_into_rsp); // sub rsp 8 first,
+    Value* pushing = SetOperandValue(context, builder, rsp_memory, push_into_rsp); // push [rsp] into stack
+
 
 
     string block_name = "jmp-call";
@@ -1439,20 +1658,33 @@ void lift_call(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     builder.CreateBr(bb);
 
     uintptr_t test = src.imm.value.s + instruction.runtime_address;
-    cout << "jmp address: " << test << "\n";
+    //cout << "jmp address: " << test << "\n";
     blockAddresses->push_back(make_tuple(test, bb, getRegisterList()));
 
 }
 
 int ret_count = 0;
 void lift_ret(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, bool* run) {
+    // [0] = rip
+    // [1] = rsp
+    // [2] = [rsp]
 
+    // if its ret 0x10
+    // then its
+    // [0] = 0x10
+    // [1] = rip
+    // [2] = rsp
+    // [3] = [rsp]
+
+    auto rspaddr = instruction.operands[2];
 
     auto rsp = ZYDIS_REGISTER_RSP;
     auto rspvalue = GetRegisterValue(context, builder, rsp);
-    auto trunc = builder.CreateZExtOrTrunc(rspvalue, llvm::Type::getInt64Ty(context),"ret-zexttrunc");
-    auto topointer = builder.CreateIntToPtr(trunc,PointerType::get(context,0) );
-    auto realval = builder.CreateLoad(llvm::Type::getInt64Ty(context), topointer, "ret-rsp");
+    if (instruction.operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+        rspaddr = instruction.operands[3];
+    }
+
+    auto realval = GetOperandValue(context,builder, rspaddr, rspaddr.size);
 
 
     auto block = builder.GetInsertBlock();
@@ -1460,18 +1692,26 @@ void lift_ret(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     auto function = block->getParent();
 
     auto lastinst = builder.CreateRet(realval);
-    
+#ifdef _DEVELOPMENT
+    cout << "rspvalue: "; rspvalue->print(outs()); cout << "\n";
     std::string Filename = "output_rets.ll";
     std::error_code EC;
     llvm::raw_fd_ostream OS(Filename, EC);
-    Function* originalFunc = builder.GetInsertBlock()->getParent();
-    
-    originalFunc->print(OS, nullptr);
-   
+    function->print(OS);
+#endif
 
     llvm::ValueToValueMapTy VMap;
     //function->print(outs());
-    llvm::Function* clonedFunc = llvm::CloneFunction(function, VMap);
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName() );
+
+
     BasicBlock* clonedBlock = block;
     for (auto& blocks : *clonedFunc) {
         if (blocks.getName() == "ret_check" + to_string(ret_count))
@@ -1480,31 +1720,33 @@ void lift_ret(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
 
     uintptr_t destination;
-
+#ifdef _DEVELOPMENT
     std::string Filename_before = "output_before_rop_opt.ll";
     std::error_code EC_before;
     llvm::raw_fd_ostream OS_before(Filename_before, EC_before);
     clonedFunc->print(OS_before);
+#endif
     ROP_info ROP = isROP(clonedFunc, *clonedBlock, destination);
     
 
 
+#ifdef _DEVELOPMENT
     std::string Filename_after = "output_after_rop_opt.ll";
     std::error_code EC_after;
     llvm::raw_fd_ostream OS_after(Filename_after, EC_after);
     clonedFunc->print(OS_after);
-    
+#endif
     clonedFunc->eraseFromParent();
     lastinst->eraseFromParent();
 
     block->setName("previousret_block");
 
-    cout << "rop value: " << ROP << "\n";
+    //cout << "rop value: " << ROP << "\n";
     if (ROP == ROP_return) {
         // can we make it so we remove the store for it?
         
         
-        cout << "jmp address: " << destination << "\n";
+        //cout << "jmp address: " << destination << "\n";
 
 
         block->setName("fake_ret");
@@ -1515,6 +1757,13 @@ void lift_ret(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         auto val = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 8); // assuming its x64
         auto result = builder.CreateAdd(rspvalue, val, "ret-new-rsp-" + to_string(instruction.runtime_address) + "-");
 
+        if (instruction.operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+            rspaddr = instruction.operands[3];
+            auto offset = instruction.operands[0];
+            result = builder.CreateSub(rspvalue, ConstantInt::get(rspvalue->getType(), offset.imm.value.u));
+
+
+        }
 
         SetRegisterValue(context, builder, rsp, result); // then add rsp 8
 
@@ -1528,38 +1777,43 @@ void lift_ret(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
         block->setName("real_ret");
         builder.CreateRet(GetRegisterValue(context,builder,ZYDIS_REGISTER_RAX) );
+        Function* originalFunc_finalnopt = builder.GetInsertBlock()->getParent();
+#ifdef _DEVELOPMENT
         std::string Filename_finalnopt = "output_finalnoopt.ll";
         std::error_code EC_finalnopt;
         llvm::raw_fd_ostream OS_finalnopt(Filename_finalnopt, EC_finalnopt);
-        Function* originalFunc_finalnopt = builder.GetInsertBlock()->getParent();
+        
         originalFunc_finalnopt->print(OS_finalnopt);
-
+#endif
 
         llvm::ValueToValueMapTy VMap_finale;
         //function->print(outs());
         llvm::Function* clonedFunc_finale = llvm::CloneFunction(originalFunc_finalnopt, VMap_finale);
 
         final_optpass(originalFunc_finalnopt);
-
+#ifdef _DEVELOPMENT
         std::string Filename = "output_finalopt.ll";
         std::error_code EC;
         llvm::raw_fd_ostream OS(Filename, EC);
         originalFunc_finalnopt->print(OS);
-        
+#endif
+        clonedFunc_finale->eraseFromParent();
         (*run) = 0;
     }
 
+
+
 }
+
 void lift_jmp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, bool* run) {
 
     auto dest = instruction.operands[0];
     
     auto Value = GetOperandValue(context,builder,dest, 64);
     auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
-
-    auto newRip = builder.CreateAdd(Value, ripval,"jumpxd-" + to_string(instruction.runtime_address) + "-");
-
-
+    auto newRip = builder.CreateAdd(Value, ripval, "jump-xd-" + to_string(instruction.runtime_address) + "-");
+    
+ 
     if (dest.type == ZYDIS_OPERAND_TYPE_REGISTER) {
         auto rspvalue = GetOperandValue(context, builder, dest, 64);
         auto trunc = builder.CreateZExtOrTrunc(rspvalue, llvm::Type::getInt64Ty(context), "jmp-register");
@@ -1572,8 +1826,23 @@ void lift_jmp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         auto lastinst = builder.CreateRet(trunc);
 
         llvm::ValueToValueMapTy VMap;
-        //function->print(outs());
-        llvm::Function* clonedFunc = llvm::CloneFunction(function, VMap);
+        #ifdef _DEVELOPMENT
+        std::string Filename = "output_beforeJMP.ll";
+        std::error_code EC;
+        llvm::raw_fd_ostream OS(Filename, EC);
+        function->print(OS);
+        #endif
+        llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+        std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+        clonedFunctmp->removeFromParent();
+
+        // Add the cloned function to the destination module
+        destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+        Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+
         BasicBlock* clonedBlock = block;
         for (auto& blocks : *clonedFunc) {
             if (blocks.getName() == "jmp_check" + to_string(ret_count))
@@ -1583,22 +1852,19 @@ void lift_jmp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         uintptr_t destination;
         JMP_info ROP = isJOP(clonedFunc, *clonedBlock, destination);
 
+#ifdef _DEVELOPMENT
+        std::string Filename2 = "output_afterJMP.ll";
+        std::error_code EC2;
+        llvm::raw_fd_ostream OS2(Filename2, EC2);
+        clonedFunc->print(OS2);
+#endif
 
         llvm::ValueToValueMapTy VMap_test;
-        //function->print(outs());
 
-        llvm::Function* clonedFunc_test = llvm::CloneFunction(function, VMap_test);
-        test_optxd(clonedFunc_test);
-        std::string Filename = "output_jumps_opt.ll";
-        std::error_code EC;
-        llvm::raw_fd_ostream OS(Filename, EC);
-        Function* originalFunc = builder.GetInsertBlock()->getParent();
-        clonedFunc_test->print(OS);
-        clonedFunc_test->eraseFromParent();
         lastinst->eraseFromParent();
 
         block->setName("previousjmp_block");
-        cout << "isJOP:" << ROP << "\n";
+        //cout << "isJOP:" << ROP << "\n";
         if (ROP == JOP_jmp) {
 
             string block_name = "jmp-" + to_string(destination) + "-";
@@ -1619,7 +1885,7 @@ void lift_jmp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, newRip);
 
     uintptr_t test = dest.imm.value.s + instruction.runtime_address ;
-    cout << "jmp address: " << test << "\n";
+    //cout << "jmp address: " << test << "\n";
 
     string block_name = "jmp-" + to_string(test) + "-";
     auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
@@ -1628,6 +1894,62 @@ void lift_jmp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
     blockAddresses->push_back( make_tuple(test, bb,  getRegisterList() ) );
     (*run) = 0;
+
+}
+
+void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, opaque_info opaque, Value* condition, Value* newRip, string instname) {
+
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+    auto result = newRip;
+    auto dest = instruction.operands[0];
+    switch (opaque) {
+    case OPAQUE_TRUE: {
+        string block_name = instname+"-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb);
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+        break;
+    }
+    case OPAQUE_FALSE: {
+        string block_name2 = instname+"-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+        result = ripval;
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb2);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        result = ripval;
+        break;
+    }
+    case NOT_OPAQUE: {
+        DebugBreak();
+        string block_name = instname+"-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+        string block_name2 = instname+"-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+
+        result = builder.CreateSelect(condition, newRip, ripval);
+        builder.CreateCondBr(condition, bb, bb2);
+
+        auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
+        builder.SetInsertPoint(bb);
+
+        builder.CreateRet(placeholder);
+
+        builder.SetInsertPoint(bb2);
+
+        builder.CreateRet(placeholder);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+
+    }
+    }
 
 }
 
@@ -1660,19 +1982,28 @@ void lift_jnz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
     llvm::ValueToValueMapTy VMap;
     //function->print(outs());
-    llvm::Function* clonedFunc = llvm::CloneFunction(function, VMap);
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
     BasicBlock* clonedBlock = block;
     for (auto& blocks : *clonedFunc) {
         if (blocks.getName() == "jnz_check" + to_string(jnz_count))
             clonedBlock = &blocks;
     }
 
-    /*
+    #ifdef _DEVELOPMENT
     std::string Filename = "output_opaque_noopt.ll";
     std::error_code EC;
     llvm::raw_fd_ostream OS(Filename, EC);
     function->print(OS);
-    */
+    #endif
     opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
 
     lastinst->eraseFromParent();
@@ -1682,62 +2013,285 @@ void lift_jnz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     // i want to create a opaque detector here
     // if opaque, return 1 or 2
     // if not, return 0
-    auto result = newRip;
 
 
-
-    switch (opaque) {
-    case OPAQUE_TRUE: {
-        string block_name = "jnz-jump";
-        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
-
-        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
-        builder.CreateBr(bb);
-        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
-        break;
-    }
-    case OPAQUE_FALSE: {
-        string block_name2 = "jnz-notjump";
-        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
-        result = ripval;
-        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
-        builder.CreateBr(bb2);
-
-        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
-        result = ripval; 
-        break;
-    }
-    case NOT_OPAQUE: {
-
-        string block_name = "jnz-jump";
-        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
-        string block_name2 = "jnz-notjump";
-        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
-
-        
-        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
-
-        result = builder.CreateSelect(zf, newRip, ripval);
-        builder.CreateCondBr(zf, bb, bb2);
-
-        auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
-        builder.SetInsertPoint(bb);
-       
-        builder.CreateRet(placeholder);
-
-        builder.SetInsertPoint(bb2);
-
-        builder.CreateRet(placeholder);
-
-        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
-        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
-
-    }
-    }
+    branchHelper(context, builder, instruction, blockAddresses, opaque, zf, newRip, "jnz");
 
 
     jnz_count++;
 
+
+}
+
+int jnb_count = 0;
+// jnz and jne
+void lift_jnb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // if 0, then jmp, if not then not jump
+
+    auto cf = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_CF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+    auto newRip = builder.CreateAdd(Value, ripval, "jnb");
+
+
+    cf = builder.CreateICmpEQ(cf, ConstantInt::get(Type::getInt1Ty(context), 0));
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jnb_check" + to_string(jnb_count));
+    auto function = block->getParent();
+
+    auto newcond = builder.CreateZExt(cf, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jnb_check" + to_string(jnb_count))
+            clonedBlock = &blocks;
+    }
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+    lastinst->eraseFromParent();
+
+    clonedFunc->eraseFromParent();
+    block->setName("previousjnb_block");
+    // i want to create a opaque detector here
+    // if opaque, return 1 or 2
+    // if not, return 0
+
+
+    branchHelper(context, builder, instruction, blockAddresses, opaque, cf, newRip, "jnb");
+
+
+    jnb_count++;
+
+
+}
+
+int jb_count = 0;
+// jnz and jne
+void lift_jb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // if 0, then jmp, if not then not jump
+
+    auto cf = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_CF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+    auto newRip = builder.CreateAdd(Value, ripval, "jb");
+
+
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jb_check" + to_string(jnb_count));
+    auto function = block->getParent();
+
+    auto newcond = builder.CreateZExt(cf, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jb_check" + to_string(jnb_count))
+            clonedBlock = &blocks;
+    }
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+    lastinst->eraseFromParent();
+
+    clonedFunc->eraseFromParent();
+    block->setName("previousjb_block");
+    // i want to create a opaque detector here
+    // if opaque, return 1 or 2
+    // if not, return 0
+
+
+    branchHelper(context, builder, instruction, blockAddresses, opaque, cf, newRip, "jb");
+
+
+    jb_count++;
+
+
+}
+
+
+int jp_count = 0;
+// jnz and jne
+void lift_jp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // if 0, then jmp, if not then not jump
+
+    auto condition = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_PF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+    auto newRip = builder.CreateAdd(Value, ripval, "jp");
+
+
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jp_check" + to_string(jp_count));
+    auto function = block->getParent();
+    auto newcond = builder.CreateZExt(condition, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jp_check" + to_string(jp_count))
+            clonedBlock = &blocks;
+    }
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+    lastinst->eraseFromParent();
+
+    clonedFunc->eraseFromParent();
+    block->setName("previousjp_block");
+    // i want to create a opaque detector here
+    // if opaque, return 1 or 2
+    // if not, return 0
+
+
+    branchHelper(context, builder, instruction, blockAddresses, opaque, condition, newRip, "jp");
+
+
+    jp_count++;
+
+
+}
+
+int jnp_count = 0;
+// jnz and jne
+void lift_jnp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // if 0, then jmp, if not then not jump
+
+    auto condition = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_PF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+    auto newRip = builder.CreateAdd(Value, ripval, "jnp");
+
+
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jnp_check" + to_string(jnb_count));
+    auto function = block->getParent();
+    condition = builder.CreateNot(condition);
+    auto newcond = builder.CreateZExt(condition, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jnp_check" + to_string(jnp_count))
+            clonedBlock = &blocks;
+    }
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+    lastinst->eraseFromParent();
+
+    clonedFunc->eraseFromParent();
+    block->setName("previousjnp_block-"+to_string(instruction.runtime_address) +"-");
+    // i want to create a opaque detector here
+    // if opaque, return 1 or 2
+    // if not, return 0
+
+
+    branchHelper(context, builder, instruction, blockAddresses, opaque, condition, newRip, "jnp-"+to_string(instruction.runtime_address) +"-");
+
+
+    jnp_count++;
 
 
 }
@@ -1754,7 +2308,7 @@ void lift_jz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstru
     auto Value = GetOperandValue(context, builder, dest, 64);
     auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
 
-    auto newRip = builder.CreateAdd(Value, ripval, "jnz");
+    auto newRip = builder.CreateAdd(Value, ripval, "jz");
 
 
 
@@ -1768,19 +2322,28 @@ void lift_jz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstru
 
     llvm::ValueToValueMapTy VMap;
     //function->print(outs());
-    llvm::Function* clonedFunc = llvm::CloneFunction(function, VMap);
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
     BasicBlock* clonedBlock = block;
     for (auto& blocks : *clonedFunc) {
-        if (blocks.getName() == "jnz_check" + to_string(jnz_count))
+        if (blocks.getName() == "jz_check" + to_string(jnz_count))
             clonedBlock = &blocks;
     }
 
-    
+    #ifdef _DEVELOPMENT
     std::string Filename = "output_opaque_noopt.ll";
     std::error_code EC;
     llvm::raw_fd_ostream OS(Filename, EC);
     function->print(OS);
-    
+    #endif
     opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
 
     lastinst->eraseFromParent();
@@ -1793,10 +2356,10 @@ void lift_jz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstru
     auto result = newRip;
 
 
-
+    //help branch
     switch (opaque) {
     case OPAQUE_TRUE: {
-        string block_name = "jnz-jump";
+        string block_name = "jz-jump";
         auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
 
         SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
@@ -1805,7 +2368,7 @@ void lift_jz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstru
         break;
     }
     case OPAQUE_FALSE: {
-        string block_name2 = "jnz-notjump";
+        string block_name2 = "jz-notjump";
         auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
         result = ripval;
         SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
@@ -1817,9 +2380,9 @@ void lift_jz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstru
     }
     case NOT_OPAQUE: {
 
-        string block_name = "jnz-jump";
+        string block_name = "jz-jump";
         auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
-        string block_name2 = "jnz-notjump";
+        string block_name2 = "jz-notjump";
         auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
 
         SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
@@ -1851,6 +2414,148 @@ void lift_jz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstru
 }
 
 
+auto jnle_count = 0;
+void lift_jnle(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+    auto newRip = builder.CreateAdd(Value, ripval, "jnle");
+
+    // Check if neither CF nor ZF are set
+    auto zf = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_ZF);
+    auto sf = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_SF);
+    auto of = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_OF);
+
+
+    // ZF = 0 and SF = OF
+    auto zf_zero = builder.CreateNot(zf, "zf_zero");
+    auto sf_eq_of = builder.CreateICmpEQ(sf, of, "sf_eq_of");
+    auto condition = builder.CreateAnd(zf_zero, sf_eq_of, "jnle_Condition");
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jnle_check" + to_string(jnle_count));
+    auto function = block->getParent();
+
+    auto newcond = builder.CreateZExt(condition, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jnle_check" + to_string(jnle_count))
+            clonedBlock = &blocks;
+    }
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+
+#ifdef _DEVELOPMENT
+    std::string Filename2 = "output_opaque_opt.ll";
+    std::error_code EC2;
+    llvm::raw_fd_ostream OS2(Filename2, EC2);
+    clonedFunc->print(OS2);
+#endif
+
+    lastinst->eraseFromParent();
+    clonedFunc->eraseFromParent();
+
+    string opinfo = (opaque == OPAQUE_TRUE ? "True" : "False");
+    block->setName("previousjnle-block_" + opinfo + "-");
+
+    branchHelper(context, builder, instruction, blockAddresses, opaque, condition, newRip, "jnle");
+
+
+    jnle_count++;
+}
+
+auto jbe_count = 0;
+void lift_jbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // If CF=0 and ZF=0, then jump. Otherwise, do not jump.
+
+    auto cf = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_CF);
+    auto zf = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_ZF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+    auto newRip = builder.CreateAdd(Value, ripval, "jbe");
+
+    // Check if neither CF nor ZF are set
+    auto condition = builder.CreateOr(cf, zf, "jbe_Condition");
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jbe_check" + to_string(jbe_count));
+    auto function = block->getParent();
+
+    auto newcond = builder.CreateZExt(condition, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jbe_check" + to_string(jbe_count))
+            clonedBlock = &blocks;
+    }
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+     
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+
+#ifdef _DEVELOPMENT
+    std::string Filename2 = "output_opaque_opt.ll";
+    std::error_code EC2;
+    llvm::raw_fd_ostream OS2(Filename2, EC2);
+    clonedFunc->print(OS2);
+#endif
+
+    lastinst->eraseFromParent();
+    clonedFunc->eraseFromParent();
+
+    string opinfo = (opaque == OPAQUE_TRUE ? "True" : "False");
+    block->setName("previousjbe-block_" + opinfo + "-");
+
+    branchHelper(context, builder, instruction, blockAddresses, opaque, condition, newRip, "jbe");
+
+
+    jbe_count++;
+}
+
 auto jnbe_count = 0;
 // jnbe == ja
 void lift_jnbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
@@ -1878,7 +2583,16 @@ void lift_jnbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
 
     llvm::ValueToValueMapTy VMap;
     //function->print(outs());
-    llvm::Function* clonedFunc = llvm::CloneFunction(function, VMap);
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
     BasicBlock* clonedBlock = block;
     for (auto& blocks : *clonedFunc) {
         if (blocks.getName() == "jnbe_ja_check" + to_string(jnbe_count))
@@ -1886,12 +2600,12 @@ void lift_jnbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     }
     opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
 
-    
+#ifdef _DEVELOPMENT
     std::string Filename = "output_opaque_noopt.ll";
     std::error_code EC;
     llvm::raw_fd_ostream OS(Filename, EC);
     function->print(OS);
-    
+#endif
 
 
     lastinst->eraseFromParent();
@@ -1903,9 +2617,9 @@ void lift_jnbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     // if opaque, return 1 or 2
     // if not, return 0
 
-    cout << "is Opaque: " << opaque << "\n";
+    //cout << "is Opaque: " << opaque << "\n";
 
-
+    //help branch
     auto result = newRip;
     switch (opaque) {
         case OPAQUE_TRUE: {
@@ -1961,6 +2675,478 @@ void lift_jnbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     jnbe_count++;
 }
 
+
+
+int jo_count = 0;
+void lift_jo(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // if 0, then jmp, if not then not jump
+
+    auto of = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_OF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+    auto newRip = builder.CreateAdd(Value, ripval, "jo");
+
+
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jo_check" + to_string(jo_count));
+    auto function = block->getParent();
+
+    auto newcond = builder.CreateZExt(of, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jo_check" + to_string(jo_count))
+            clonedBlock = &blocks;
+    }
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+    lastinst->eraseFromParent();
+
+    clonedFunc->eraseFromParent();
+    block->setName("previousjo_block");
+    // i want to create a opaque detector here
+    // if opaque, return 1 or 2
+    // if not, return 0
+    auto result = newRip;
+
+
+    //help branch
+    switch (opaque) {
+    case OPAQUE_TRUE: {
+        string block_name = "jo-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb);
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+        break;
+    }
+    case OPAQUE_FALSE: {
+        string block_name2 = "jo-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+        result = ripval;
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb2);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        result = ripval;
+        break;
+    }
+    case NOT_OPAQUE: {
+
+        string block_name = "jo-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+        string block_name2 = "jo-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+
+        result = builder.CreateSelect(of, newRip, ripval);
+        builder.CreateCondBr(of, bb, bb2);
+
+
+        auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
+        builder.SetInsertPoint(bb);
+
+        builder.CreateRet(placeholder);
+
+        builder.SetInsertPoint(bb2);
+
+        builder.CreateRet(placeholder);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+
+    }
+    }
+
+
+    jo_count++;
+
+
+
+}
+
+int jno_count = 0;
+void lift_jno(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // if 0, then jmp, if not then not jump
+
+    auto of = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_OF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+    auto newRip = builder.CreateAdd(Value, ripval, "jno");
+
+
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jno_check" + to_string(jo_count));
+    auto function = block->getParent();
+    of = builder.CreateNot(of);
+    auto newcond = builder.CreateZExt(of, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jno_check" + to_string(jo_count))
+            clonedBlock = &blocks;
+    }
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+    lastinst->eraseFromParent();
+
+    clonedFunc->eraseFromParent();
+    block->setName("previousjno_block");
+    // i want to create a opaque detector here
+    // if opaque, return 1 or 2
+    // if not, return 0
+    auto result = newRip;
+
+
+    //help branch
+    switch (opaque) {
+    case OPAQUE_TRUE: {
+        string block_name = "jno-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb);
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+        break;
+    }
+    case OPAQUE_FALSE: {
+        string block_name2 = "jno-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+        result = ripval;
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb2);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        result = ripval;
+        break;
+    }
+    case NOT_OPAQUE: {
+
+        string block_name = "jno-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+        string block_name2 = "jno-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+
+        result = builder.CreateSelect(of, newRip, ripval);
+        builder.CreateCondBr(of, bb, bb2);
+
+
+        auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
+        builder.SetInsertPoint(bb);
+
+        builder.CreateRet(placeholder);
+
+        builder.SetInsertPoint(bb2);
+
+        builder.CreateRet(placeholder);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+
+    }
+    }
+
+
+    jno_count++;
+
+
+
+}
+
+int js_count = 0;
+void lift_js(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // if 0, then jmp, if not then not jump
+
+    auto of = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_SF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+    auto newRip = builder.CreateAdd(Value, ripval, "js");
+
+
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("js_check" + to_string(js_count));
+    auto function = block->getParent();
+
+    auto newcond = builder.CreateZExt(of, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "js_check" + to_string(js_count))
+            clonedBlock = &blocks;
+    }
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+    lastinst->eraseFromParent();
+
+    clonedFunc->eraseFromParent();
+    block->setName("previousjo_block");
+    // i want to create a opaque detector here
+    // if opaque, return 1 or 2
+    // if not, return 0
+    auto result = newRip;
+
+
+    //help branch
+    switch (opaque) {
+    case OPAQUE_TRUE: {
+        string block_name = "jo-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb);
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+        break;
+    }
+    case OPAQUE_FALSE: {
+        string block_name2 = "jo-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+        result = ripval;
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb2);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        result = ripval;
+        break;
+    }
+    case NOT_OPAQUE: {
+
+        string block_name = "js-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+        string block_name2 = "js-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+
+        result = builder.CreateSelect(of, newRip, ripval);
+        builder.CreateCondBr(of, bb, bb2);
+
+
+        auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
+        builder.SetInsertPoint(bb);
+
+        builder.CreateRet(placeholder);
+
+        builder.SetInsertPoint(bb2);
+
+        builder.CreateRet(placeholder);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+
+    }
+    }
+
+
+    js_count++;
+
+
+
+}
+
+int jns_count = 0;
+void lift_jns(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // if 0, then jmp, if not then not jump
+
+    auto of = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_SF);
+
+    auto dest = instruction.operands[0];
+
+    auto Value = GetOperandValue(context, builder, dest, 64);
+    auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+    auto newRip = builder.CreateAdd(Value, ripval, "jns");
+
+
+
+
+    auto block = builder.GetInsertBlock();
+    block->setName("jns_check" + to_string(jns_count));
+    auto function = block->getParent();
+    of = builder.CreateNot(of);
+    auto newcond = builder.CreateZExt(of, function->getReturnType());
+    auto lastinst = builder.CreateRet(newcond);
+
+    llvm::ValueToValueMapTy VMap;
+    //function->print(outs());
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
+
+    BasicBlock* clonedBlock = block;
+    for (auto& blocks : *clonedFunc) {
+        if (blocks.getName() == "jns_check" + to_string(jns_count))
+            clonedBlock = &blocks;
+    }
+
+#ifdef _DEVELOPMENT
+    std::string Filename = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    function->print(OS);
+#endif
+    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+
+    lastinst->eraseFromParent();
+
+    clonedFunc->eraseFromParent();
+    block->setName("previousjns_block");
+    // i want to create a opaque detector here
+    // if opaque, return 1 or 2
+    // if not, return 0
+    auto result = newRip;
+
+
+    //help branch
+    switch (opaque) {
+    case OPAQUE_TRUE: {
+        string block_name = "jns-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb);
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+        break;
+    }
+    case OPAQUE_FALSE: {
+        string block_name2 = "jns-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+        result = ripval;
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+        builder.CreateBr(bb2);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        result = ripval;
+        break;
+    }
+    case NOT_OPAQUE: {
+
+        string block_name = "jns-jump";
+        auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+        string block_name2 = "jns-notjump";
+        auto bb2 = llvm::BasicBlock::Create(context, block_name2.c_str(), builder.GetInsertBlock()->getParent());
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, result);
+
+        result = builder.CreateSelect(of, newRip, ripval);
+        builder.CreateCondBr(of, bb, bb2);
+
+
+        auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
+        builder.SetInsertPoint(bb);
+
+        builder.CreateRet(placeholder);
+
+        builder.SetInsertPoint(bb2);
+
+        builder.CreateRet(placeholder);
+
+        blockAddresses->push_back(make_tuple(instruction.runtime_address, bb2, getRegisterList()));
+        blockAddresses->push_back(make_tuple(dest.imm.value.s + instruction.runtime_address, bb, getRegisterList()));
+
+    }
+    }
+
+
+    jns_count++;
+
+
+
+}
+
+
+
 void lift_lea(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
     auto dest = instruction.operands[0];
@@ -1981,9 +3167,20 @@ void lift_add_sub(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
     auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
     Value* result = nullptr;
+
+    Value* cf = nullptr; // Carry flag
+    Value* of = nullptr; // Overflow flag
     switch (instruction.info.mnemonic) {
-    case ZYDIS_MNEMONIC_ADD: {result = builder.CreateAdd(Lvalue, Rvalue,"realadd-" + to_string(instruction.runtime_address) + "-"); break; }
-    case ZYDIS_MNEMONIC_SUB: {result = builder.CreateSub(Lvalue, Rvalue,"realsub-" + to_string(instruction.runtime_address) + "-"); break; }
+    case ZYDIS_MNEMONIC_ADD: {result = builder.CreateAdd(Lvalue, Rvalue,"realadd-" + to_string(instruction.runtime_address) + "-");  
+        cf = builder.CreateICmpULT(result, Lvalue); // CF set if result < Lvalue
+        of = builder.CreateXor(builder.CreateICmpSLT(Lvalue, ConstantInt::get(Lvalue->getType(), 0)),
+            builder.CreateICmpSLT(result, Lvalue)); // OF set if sign of Lvalue is different from sign of result
+        break; }
+    case ZYDIS_MNEMONIC_SUB: {result = builder.CreateSub(Lvalue, Rvalue,"realsub-" + to_string(instruction.runtime_address) + "-");  
+        cf = builder.CreateICmpULT(Lvalue, Rvalue); // CF set if Lvalue < Rvalue
+        of = builder.CreateXor(builder.CreateICmpSLT(Lvalue, Rvalue),
+            builder.CreateICmpSLT(result, Lvalue)); // OF set if sign of Lvalue is different from sign of result
+        break; }
     case ZYDIS_MNEMONIC_IMUL: {result = builder.CreateMul(Lvalue, Rvalue); break; }
     case ZYDIS_MNEMONIC_IDIV: {
         result = builder.CreateSDiv(Lvalue,Rvalue);
@@ -1993,6 +3190,24 @@ void lift_add_sub(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
         break; }
     }
     SetOperandValue(context, builder, dest, result);
+
+    Value* sf = builder.CreateICmpSLT(result, ConstantInt::get(result->getType(), 0)); // SF set if result is negative
+    Value* zf = builder.CreateICmpEQ(result, ConstantInt::get(result->getType(), 0)); // ZF set if result is zero
+    Value* pf = computeParityFlag(builder, result); // Compute PF inline or using a helper function
+
+    // Retrieve old flags
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+
+    // Set new flags
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_CF, SET_VALUE, cf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_OF, SET_VALUE, of);
+    new_flags = setFlag(context, builder, new_flags, FLAG_SF, SET_VALUE, sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+
+    // Update flags register
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
+
 
 }
 
@@ -2006,30 +3221,101 @@ void lift_xor_and_or(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     llvm::Value* bitWidthVal = llvm::ConstantInt::get(Lvalue->getType(), bitWidth);
 
     Value* result = nullptr;
+    Value* of = nullptr;
+    Value* cf = nullptr;
+    Value* sf = nullptr;
+    Value* zf = nullptr;
+    Value* pf = nullptr;
+
     switch (instruction.info.mnemonic) {
-    case ZYDIS_MNEMONIC_XOR: {result = builder.CreateXor(Lvalue, Rvalue,"xor-" + to_string(instruction.runtime_address) + "-"); break; }
-    case ZYDIS_MNEMONIC_OR: {result = builder.CreateOr(Lvalue, Rvalue,"or-" + to_string(instruction.runtime_address) + "-"); break; }
-    case ZYDIS_MNEMONIC_AND: {result = builder.CreateAnd(Lvalue, Rvalue,"and-" + to_string(instruction.runtime_address) + "-"); break; }
-    case ZYDIS_MNEMONIC_ROL: {
-        llvm::Function* fshlIntrinsic = llvm::Intrinsic::getDeclaration(
-            builder.GetInsertBlock()->getModule(), // Assuming you have a pointer/reference to the LLVM module
-            llvm::Intrinsic::fshl,
-            Lvalue->getType()
-        );
-
-        // Use the fshl intrinsic for ROL
-        result = builder.CreateCall(fshlIntrinsic, { Lvalue, Lvalue, Rvalue }, "rol_result-" + to_string(instruction.runtime_address) + "-");
-        break;
-    }
+    case ZYDIS_MNEMONIC_XOR: {result = builder.CreateXor(Lvalue, Rvalue,"xor-" + to_string(instruction.runtime_address) + "-");
+        of = ConstantInt::get(Type::getInt64Ty(context), 0); // OF is cleared
+        cf = ConstantInt::get(Type::getInt64Ty(context), 0); // CF is cleared
+        sf = builder.CreateICmpSLT(result, ConstantInt::get(result->getType(), 0)); // SF
+        zf = builder.CreateICmpEQ(result, ConstantInt::get(result->getType(), 0)); // ZF
+        pf = computeParityFlag(builder, result); // PF
+        break; }
+    case ZYDIS_MNEMONIC_OR: {result = builder.CreateOr(Lvalue, Rvalue,"or-" + to_string(instruction.runtime_address) + "-");
+        of = ConstantInt::get(Type::getInt64Ty(context), 0); // OF is cleared
+        cf = ConstantInt::get(Type::getInt64Ty(context), 0); // CF is cleared
+        sf = builder.CreateICmpSLT(result, ConstantInt::get(result->getType(), 0)); // SF
+        zf = builder.CreateICmpEQ(result, ConstantInt::get(result->getType(), 0)); // ZF
+        pf = computeParityFlag(builder, result); // PF
+        break; }
+    case ZYDIS_MNEMONIC_AND: {result = builder.CreateAnd(Lvalue, Rvalue,"and-" + to_string(instruction.runtime_address) + "-");
+        of = ConstantInt::get(Type::getInt64Ty(context), 0); // OF is cleared
+        cf = ConstantInt::get(Type::getInt64Ty(context), 0); // CF is cleared
+        sf = builder.CreateICmpSLT(result, ConstantInt::get(result->getType(), 0)); // SF
+        zf = builder.CreateICmpEQ(result, ConstantInt::get(result->getType(), 0)); // ZF
+        pf = computeParityFlag(builder, result); // PF
+        break; }
+    case ZYDIS_MNEMONIC_ROL:
     case ZYDIS_MNEMONIC_ROR: {
-        llvm::Function* fshrIntrinsic = llvm::Intrinsic::getDeclaration(
-            builder.GetInsertBlock()->getModule(), // Assuming you have a pointer/reference to the LLVM module
-            llvm::Intrinsic::fshr,
+        if (ConstantInt* CL = dyn_cast<ConstantInt>(Lvalue)) {
+            if (ConstantInt* CR = dyn_cast<ConstantInt>(Rvalue)) {
+                unsigned size = CL->getType()->getIntegerBitWidth();
+                uint64_t lValue = CL->getZExtValue();
+                uint64_t rValue = CR->getZExtValue() % size; // Ensure the rotation is within bounds
+
+                uint64_t rotatedValue = 0;
+                if (instruction.info.mnemonic == ZYDIS_MNEMONIC_ROL) {
+                    // Perform constant rotation left
+                    rotatedValue = (lValue << rValue) | (lValue >> (size - rValue));
+                }
+                else {
+                    // Perform constant rotation right
+                    rotatedValue = (lValue >> rValue) | (lValue << (size - rValue));
+                }
+
+                // Create a new ConstantInt with the rotated value
+                result = ConstantInt::get(context, APInt(size, rotatedValue));
+                if (instruction.info.mnemonic == ZYDIS_MNEMONIC_ROR) {
+                    // CF for ROR: set to the MSB of the result
+                    cf =
+                        builder.CreateTrunc( builder.CreateLShr(result,size-1), Type::getInt1Ty(context), "ror-cf");
+
+                    #ifdef _DEVELOPMENT
+                    cout << " Lvalue: ";  Lvalue->print(outs()); cout << "\n";
+                    cout << " Rvalue: ";  Rvalue->print(outs()); cout << "\n";
+                    cout << " result: ";  result->print(outs()); cout << "\n";
+                    cout << " cf: ";  cf->print(outs()); cout << "\n";
+                    #endif
+                }
+                break;
+            }
+        }
+
+        // If not constants, use the intrinsic functions
+        llvm::Intrinsic::ID intrinsicID = (instruction.info.mnemonic == ZYDIS_MNEMONIC_ROL) ? llvm::Intrinsic::fshl : llvm::Intrinsic::fshr;
+        llvm::Function* rotateIntrinsic = llvm::Intrinsic::getDeclaration(
+            builder.GetInsertBlock()->getModule(),
+            intrinsicID,
             Lvalue->getType()
         );
 
-        // Use the fshl intrinsic for ROr
-        result = builder.CreateCall(fshrIntrinsic, { Lvalue, Lvalue, Rvalue }, "ror_result-" + to_string(instruction.runtime_address) + "-");
+        // Use the intrinsic for ROL or ROR
+        result = builder.CreateCall(rotateIntrinsic, { Lvalue, Lvalue, Rvalue },
+            (instruction.info.mnemonic == ZYDIS_MNEMONIC_ROL ? "rol_result-" : "ror_result-") +
+            std::to_string(instruction.runtime_address) + "-");
+
+        if (instruction.info.mnemonic == ZYDIS_MNEMONIC_ROL) {
+            // CF for ROL: set to the MSB of the result
+            cf = builder.CreateICmpEQ(
+                builder.CreateAnd(result, ConstantInt::get(result->getType(), 1ULL << (bitWidth - 1))),
+                ConstantInt::get(result->getType(), 1ULL << (bitWidth - 1)),
+                "rol-cf"
+            );
+
+            auto msb = builder.CreateLShr(result, ConstantInt::get(result->getType(), bitWidth - 1), "rol-msb");
+            auto msbAsBool = builder.CreateTrunc(msb, Type::getInt1Ty(context), "rol-msb-bool");
+
+            of = builder.CreateXor(cf, msbAsBool, "rol-of");
+        }
+        else if (instruction.info.mnemonic == ZYDIS_MNEMONIC_ROR) {
+            // CF for ROR: set to the LSB of the result
+            cf =
+                builder.CreateTrunc(result,Type::getInt1Ty(context), "ror-cf");
+        }
         break;
     }
     default: {
@@ -2039,31 +3325,62 @@ void lift_xor_and_or(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
 
 
     SetOperandValue(context, builder, dest, result);
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+    Value* new_flags = old_flags;
+    if (of) new_flags = setFlag(context, builder, new_flags, FLAG_OF, SET_VALUE, of);
+    if (cf) new_flags = setFlag(context, builder, new_flags, FLAG_CF, SET_VALUE, cf);
+    if (sf) new_flags = setFlag(context, builder, new_flags, FLAG_SF, SET_VALUE, sf);
+    if (zf) new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, zf);
+    if (pf) new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
 
 }
-
 
 void lift_inc_dec(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     auto operand = instruction.operands[0];
 
     Value* originalValue = GetOperandValue(context, builder, operand, operand.size);
-
-    Value* one = ConstantInt::get(originalValue->getType(), 1,true);
+    Value* one = ConstantInt::get(originalValue->getType(), 1, true);
     Value* result;
 
     if (instruction.info.mnemonic == ZYDIS_MNEMONIC_INC) {
-        result = builder.CreateAdd(originalValue, one,"inc-" + to_string(instruction.runtime_address) + "-");
+        result = builder.CreateAdd(originalValue, one, "inc-" + to_string(instruction.runtime_address) + "-");
     }
     else {
-        result = builder.CreateSub(originalValue, one,"dec-" + to_string(instruction.runtime_address) + "-");
+        result = builder.CreateSub(originalValue, one, "dec-" + to_string(instruction.runtime_address) + "-");
     }
 
-    // Optionally, update EFLAGS/RFLAGS based on the result if needed.
-    // For instance, setting OF, SF, ZF, AF, PF flags based on the INC/DEC result.
-    // This depends on your requirements.
+    // Update EFLAGS/RFLAGS based on the result
+    Value* sf = builder.CreateICmpSLT(result, ConstantInt::get(result->getType(), 0), "sf");
+    Value* zf = builder.CreateICmpEQ(result, ConstantInt::get(result->getType(), 0), "zf");
+    Value* pf = computeParityFlag(builder, result);
+
+    // OF calculation for INC and DEC
+    Value* of = nullptr;
+    if (instruction.info.mnemonic == ZYDIS_MNEMONIC_INC) {
+        of = builder.CreateICmpEQ(originalValue, ConstantInt::get(originalValue->getType(), -1, true), "of");
+    }
+    else {
+        of = builder.CreateICmpEQ(originalValue, ConstantInt::get(originalValue->getType(), 0, true), "of");
+    }
+
+    // AF calculation
+    Value* af = builder.CreateICmpNE(builder.CreateAnd(originalValue, ConstantInt::get(originalValue->getType(), 0xF)), builder.CreateAnd(result, ConstantInt::get(result->getType(), 0xF)), "af");
+
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_SF, SET_VALUE, sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, pf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_OF, SET_VALUE, of);
+    new_flags = setFlag(context, builder, new_flags, FLAG_AF, SET_VALUE, af);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
 
     SetOperandValue(context, builder, operand, result);
 }
+
+
 
 void lift_push(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     auto src = instruction.operands[0]; // value that we are pushing
@@ -2077,9 +3394,8 @@ void lift_push(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInst
     auto result = builder.CreateSub(RspValue, val,"pushing_newrsp-" + to_string(instruction.runtime_address) + "-");
 
     SetOperandValue(context, builder, rsp, result); // sub rsp 8 first,
+    Value* pushing = SetOperandValue(context, builder, dest, Rvalue); // then mov rsp, val
 
-
-    SetOperandValue(context, builder, dest, Rvalue); // then mov rsp, val
 
 }
 
@@ -2144,63 +3460,109 @@ void lift_adc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
     Value* destValue = GetOperandValue(context, builder, dest, dest.size);
     Value* srcValue = GetOperandValue(context, builder, src, dest.size);
-
-    // Get the Carry Flag (CF)
     Value* cf = getFlag(context, builder, GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS), FLAG_CF);
 
-    // Extend CF to the size of the destination operand to prepare it for addition
     cf = builder.CreateZExt(cf, destValue->getType());
+    Value* tempResult = builder.CreateAdd(destValue, srcValue, "adcpart1-");
+    Value* result = builder.CreateAdd(tempResult, cf,"adc-"+to_string(instruction.runtime_address)+"-");
 
-    // Perform addition
-    Value* tempResult = builder.CreateAdd(destValue, srcValue,"adc-temp-" + to_string(instruction.runtime_address) + "-");
-    Value* result = builder.CreateAdd(tempResult, cf,"adc-result-" + to_string(instruction.runtime_address) + "-");
+    // Overflow Flag (OF)
+// Compute the sign bits
+    Value* msbSrc = builder.CreateICmpSLT(srcValue, ConstantInt::get(srcValue->getType(), 0));
+    Value* msbDest = builder.CreateICmpSLT(destValue, ConstantInt::get(destValue->getType(), 0));
+    Value* msbResult = builder.CreateICmpSLT(result, ConstantInt::get(result->getType(), 0));
 
-    // Set the flags:
-    /*
-    // CF: result is less than either operand, indicating a carry
-    Value* newCF = builder.CreateICmpULT(result, tempResult);
-    setFlag(context, builder, ZYDIS_REGISTER_RFLAGS, FLAG_CF, newCF);
+    // Check if source and destination have the same sign
+    Value* sameSign = builder.CreateXor(msbSrc, msbDest);
+    sameSign = builder.CreateNot(sameSign); // Overflow is possible only if sameSign is true
 
-    // OF: Overflow flag
-    Value* overflow = builder.CreateXor(builder.CreateAnd(builder.CreateXor(destValue, srcValue), ConstantInt::get(destValue->getType(), ~0, true)),
-        builder.CreateXor(destValue, result));
-    Value* newOF = builder.CreateICmpSLT(overflow, ConstantInt::get(destValue->getType(), 0));
-    setFlag(context, builder, ZYDIS_REGISTER_RFLAGS, FLAG_OF, newOF);
+    // Check if the result's sign bit is different from the operands' sign bits
+    Value* signChange = builder.CreateXor(msbResult, msbSrc); // You can also use msbDest here
 
-    // ZF: Zero flag
-    Value* newZF = builder.CreateICmpEQ(result, ConstantInt::get(destValue->getType(), 0));
-    setFlag(context, builder, ZYDIS_REGISTER_RFLAGS, FLAG_ZF, newZF);
+    // Compute the new overflow flag
+    Value* new_of = builder.CreateAnd(sameSign, signChange, "adc-of");
+    // Sign Flag (SF)
+    Value* new_sf = msbResult;
 
-    // SF: Sign flag
-    Value* newSF = builder.CreateICmpSLT(result, ConstantInt::get(destValue->getType(), 0));
-    setFlag(context, builder, ZYDIS_REGISTER_RFLAGS, FLAG_SF, newSF);
-    */
-    // Store the result in the destination operand
+    // Zero Flag (ZF)
+    Value* new_zf = builder.CreateICmpEQ(result, ConstantInt::get(result->getType(), 0), "adc-zf");
+
+    // Auxiliary Carry Flag (AF)
+    // TODO
+
+    // Carry Flag (CF)
+    Value* new_cf = builder.CreateICmpULT(result, destValue);
+
+    // Parity Flag (PF)
+    Value* new_pf = computeParityFlag(builder, result);
+
+    // Update flags
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_OF, SET_VALUE, new_of);
+    new_flags = setFlag(context, builder, new_flags, FLAG_SF, SET_VALUE, new_sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, new_zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_CF, SET_VALUE, new_cf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, new_pf);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
     SetOperandValue(context, builder, dest, result);
 }
+
 void lift_xadd(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-    // Assuming the first operand is the destination and the second operand is the source
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Retrieve the values
-    auto destValue = GetOperandValue(context, builder, dest, dest.size);
-    auto srcValue = GetOperandValue(context, builder, src, src.size);
+    Value* destValue = GetOperandValue(context, builder, dest, dest.size);
+    Value* srcValue = GetOperandValue(context, builder, src, src.size);
 
-    // Calculate the sum of destValue and srcValue
-    Value* sumValue = builder.CreateAdd(destValue, srcValue, "xadd_sum-" + to_string(instruction.runtime_address) + "-");
+    // Perform the xadd operation
+    Value* sumValue = builder.CreateAdd(destValue, srcValue, "xadd-sum-"+ to_string(instruction.runtime_address) + "-");
 
-    // The result to be stored in the destination is sumValue
+    // Set the new values
     SetOperandValue(context, builder, dest, sumValue);
-
-    // The result to be stored in the source is the original destValue
     SetOperandValue(context, builder, src, destValue);
 
-    // Update EFLAGS based on the result (if your framework requires it)
-    // For example:
-    // - Update overflow and carry flags based on the addition
-    // - Update zero, sign, and parity flags based on sumValue
+    // Inline flag calculations
+    // Overflow Flag (OF)
+    Value* signDest = builder.CreateICmpSLT(destValue, ConstantInt::get(destValue->getType(), 0));
+    Value* signSrc = builder.CreateICmpSLT(srcValue, ConstantInt::get(srcValue->getType(), 0));
+    Value* signSum = builder.CreateICmpSLT(sumValue, ConstantInt::get(sumValue->getType(), 0));
+    Value* sameSignInputs = builder.CreateAnd(signDest, signSrc);
+    Value* differentSignResult = builder.CreateXor(signDest, signSum);
+    Value* new_of = builder.CreateAnd(sameSignInputs, differentSignResult);
+
+
+    // Sign Flag (SF)
+    Value* new_sf = builder.CreateICmpSLT(sumValue, ConstantInt::get(sumValue->getType(), 0));
+
+    // Zero Flag (ZF)
+    Value* new_zf = builder.CreateICmpEQ(sumValue, ConstantInt::get(sumValue->getType(), 0), "zf-xadd");
+
+    // Auxiliary Flag (AF)
+    Value* lowNibbleDest = builder.CreateAnd(destValue, 0xF);
+    Value* lowNibbleSrc = builder.CreateAnd(srcValue, 0xF);
+    Value* new_af = builder.CreateICmpULT(builder.CreateAdd(lowNibbleDest, lowNibbleSrc), lowNibbleDest);
+
+    // Parity Flag (PF)
+    Value* new_pf = computeParityFlag(builder, sumValue);
+
+    // Carry Flag (CF)
+    Value* new_cf = builder.CreateICmpULT(sumValue, destValue, "cf-xadd");
+
+
+
+    // Update the flags in the EFLAGS register
+    Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+    Value* new_flags = setFlag(context, builder, old_flags, FLAG_OF, SET_VALUE, new_of);
+    new_flags = setFlag(context, builder, new_flags, FLAG_SF, SET_VALUE, new_sf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_ZF, SET_VALUE, new_zf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_AF, SET_VALUE, new_af);
+    new_flags = setFlag(context, builder, new_flags, FLAG_PF, SET_VALUE, new_pf);
+    new_flags = setFlag(context, builder, new_flags, FLAG_CF, SET_VALUE, new_cf);
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
 }
+
 
 
 
@@ -2217,6 +3579,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     // TODO: standardize and make it beautiful, multiple arch support
     // I dont want to explain every asm instruction, so probably skip to OperandUtils.cpp, then ROPdetection.cpp
     switch (instruction.info.mnemonic) {
+        // MOVES
         case ZYDIS_MNEMONIC_MOVUPS: 
         case ZYDIS_MNEMONIC_MOVZX: 
         case ZYDIS_MNEMONIC_MOVSX: 
@@ -2229,6 +3592,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_movsb(context, builder, instruction);
             break;
         }
+        // CONDITIONAL MOVES MAYBE MOV DEFAULTAND NOT VERSION TO SAME FUNCTION
         case ZYDIS_MNEMONIC_CMOVZ: {
             lift_cmovz(context, builder, instruction);
             break;
@@ -2241,6 +3605,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_cmovl(context, builder, instruction);
             break;
         }   
+        // CMOVNL
         case ZYDIS_MNEMONIC_CMOVB: {
             lift_cmovb(context, builder, instruction);
             break;
@@ -2249,6 +3614,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_cmovnb(context, builder, instruction);
             break;
         }
+                                  //CMOVS
         case ZYDIS_MNEMONIC_CMOVNS: {
             lift_cmovns(context, builder, instruction);
             break;
@@ -2262,6 +3628,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_cmovnbz(context, builder, instruction);
             break;
         }
+                                   //CMOVL
         case ZYDIS_MNEMONIC_CMOVNL: {
             lift_cmovnl(context, builder, instruction);
             break;
@@ -2270,6 +3637,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_cmovs(context, builder, instruction);
             break;
         }
+                                 //CMOVNS
         case ZYDIS_MNEMONIC_CMOVNLE: {
             lift_cmovnle(context, builder, instruction);
             break;
@@ -2295,14 +3663,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_cmovnp(context, builder, instruction);
             break;
         }
-        case ZYDIS_MNEMONIC_XCHG: {
-            lift_xchg(context, builder, instruction);
-            break;
-        }
-        case ZYDIS_MNEMONIC_NOT: {
-            lift_not(context,builder,instruction);
-            break;
-        }    
+        //SET INSTRUCTIONS
         case ZYDIS_MNEMONIC_SETZ: {
             lift_setz(context, builder, instruction);
             break;
@@ -2319,18 +3680,20 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_setno(context, builder, instruction);
             break;
         }
+                                 // SETB
         case ZYDIS_MNEMONIC_SETNB: {
             lift_setnb(context, builder, instruction);
-            break;
-        }
-        case ZYDIS_MNEMONIC_SETNBE: {
-            lift_setnbe(context, builder, instruction);
             break;
         }
         case ZYDIS_MNEMONIC_SETBE: {
             lift_setbe(context, builder, instruction);
             break;
         }
+        case ZYDIS_MNEMONIC_SETNBE: {
+            lift_setnbe(context, builder, instruction);
+            break;
+        }
+                                  //SETS
         case ZYDIS_MNEMONIC_SETNS: {
             lift_setns(context, builder, instruction);
             break;
@@ -2347,10 +3710,12 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_setb(context, builder, instruction);
             break;
         }
+                                //SETNB
         case ZYDIS_MNEMONIC_SETS: {
             lift_sets(context, builder, instruction);
             break;
         }
+                                //SETNS
         case ZYDIS_MNEMONIC_SETNLE: {
             lift_setnle(context, builder, instruction);
             break;
@@ -2367,10 +3732,12 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_setl(context, builder, instruction);
             break;
         }
+                                // NEED INSTRINCTICS
         case ZYDIS_MNEMONIC_BSWAP: {
             lift_bswap(context,builder,instruction);
             break;
         }           
+                                 // SET FLAGS - REWRITE
         case ZYDIS_MNEMONIC_NEG: {
             lift_neg(context,builder,instruction);
             break;
@@ -2410,6 +3777,10 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
         case ZYDIS_MNEMONIC_CLC: {
             lift_clc(context,builder,instruction);
             break;
+        }          
+        case ZYDIS_MNEMONIC_STOSD: {
+            lift_stosd(context,builder,instruction);
+            break;
         }             
         case ZYDIS_MNEMONIC_CLD: {
             lift_cld(context,builder,instruction);
@@ -2444,6 +3815,14 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
         
         case ZYDIS_MNEMONIC_SHR: {
             lift_shr(context,builder,instruction);
+            break;
+        }         
+        case ZYDIS_MNEMONIC_RDTSC: {
+            lift_rdtsc(context,builder,instruction);
+            break;
+        }         
+        case ZYDIS_MNEMONIC_RDTSCP: {
+            lift_rdtscp(context,builder,instruction);
             break;
         }         
    
@@ -2499,14 +3878,12 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
 
             break;
         }
+                               // OTHER
         case ZYDIS_MNEMONIC_PUSH: {
             lift_push(context, builder, instruction);
             break;
         }        
-        case ZYDIS_MNEMONIC_CALL: {
-            lift_call(context, builder, instruction, blockAddresses);
-            break;
-        }
+
         case ZYDIS_MNEMONIC_PUSHFQ: {
             lift_pushfq(context, builder, instruction);
             break;
@@ -2519,6 +3896,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             lift_popfq(context, builder, instruction);
             break;
         }        
+
         case ZYDIS_MNEMONIC_CDQ: 
         {break; }        
         case ZYDIS_MNEMONIC_CWDE: {
@@ -2541,6 +3919,11 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
         {
             lift_cbw(context, builder, instruction);
             break; }
+        // BRANCHES
+        case ZYDIS_MNEMONIC_CALL: {
+            lift_call(context, builder, instruction, blockAddresses);
+            break;
+        }
         case ZYDIS_MNEMONIC_RET: // implement to check if its a real ret or not
         { 
             lift_ret(context, builder, instruction, blockAddresses, run);
@@ -2554,14 +3937,61 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
         case ZYDIS_MNEMONIC_JNZ: {
             lift_jnz(context, builder, instruction, blockAddresses);
             break; 
-        }
+        }       
         case ZYDIS_MNEMONIC_JZ: {
             lift_jz(context, builder, instruction, blockAddresses);
             break; 
         }
+        case ZYDIS_MNEMONIC_JB: {
+            lift_jb(context, builder, instruction, blockAddresses);
+            break;
+        }
+        case ZYDIS_MNEMONIC_JP: {
+            lift_jp(context, builder, instruction, blockAddresses);
+            break;
+        }
+        case ZYDIS_MNEMONIC_JNP: {
+            lift_jnp(context, builder, instruction, blockAddresses);
+            break;
+        }
+        case ZYDIS_MNEMONIC_JNB: {
+            lift_jnb(context, builder, instruction, blockAddresses);
+            break;
+        }
+        case ZYDIS_MNEMONIC_JBE: {
+
+            lift_jbe(context, builder, instruction, blockAddresses);
+            break;
+        }
         case ZYDIS_MNEMONIC_JNBE: {
 
             lift_jnbe(context, builder, instruction, blockAddresses);
+            break;
+        }            
+        case ZYDIS_MNEMONIC_JNLE: {
+
+            lift_jnle(context, builder, instruction, blockAddresses);
+            break;
+        }            
+     
+        case ZYDIS_MNEMONIC_JO: {
+
+            lift_jo(context, builder, instruction, blockAddresses);
+            break;
+        }        
+        case ZYDIS_MNEMONIC_JNO: {
+
+            lift_jno(context, builder, instruction, blockAddresses);
+            break;
+        }        
+        case ZYDIS_MNEMONIC_JS: {
+
+            lift_js(context, builder, instruction, blockAddresses);
+            break;
+        }        
+        case ZYDIS_MNEMONIC_JNS: {
+
+            lift_jns(context, builder, instruction, blockAddresses);
             break;
         }
         case ZYDIS_MNEMONIC_TEST: {
@@ -2573,6 +4003,14 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
             break;
         }        
         case ZYDIS_MNEMONIC_NOP:{
+            break;
+        }
+        case ZYDIS_MNEMONIC_XCHG: {
+            lift_xchg(context, builder, instruction);
+            break;
+        }
+        case ZYDIS_MNEMONIC_NOT: {
+            lift_not(context, builder, instruction);
             break;
         }
 
