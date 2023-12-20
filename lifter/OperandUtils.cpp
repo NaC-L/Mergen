@@ -139,6 +139,13 @@ void setRegisterList(unordered_map<int, Value*> newRegisterList) {
 }
 
 
+
+Value* memoryAlloc;
+
+void initMemoryAlloc(Value* allocArg) {
+	memoryAlloc = allocArg;
+}
+
 unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip) {
 
 	int zydisRegister = ZYDIS_REGISTER_RAX; // Replace with desired key
@@ -156,8 +163,8 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 		arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
 		// Check if it's the last argument, if its last argument, create a FLAGS argument where we store flags. probably create a struct for it instead
 		if (std::next(argIt) == argEnd) {
-			arg->setName("RFLAGS");
-			RegisterList[ZYDIS_REGISTER_RFLAGS] = arg;
+			arg->setName("memory");
+			memoryAlloc = arg;
 		}
 		else {
 			RegisterList[(ZydisRegister)zydisRegister] = arg;
@@ -184,6 +191,7 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 	auto new_stack_pointer = builder.CreateAdd(stackvalue, zero);
 	// move initialized value into map
 	RegisterList[ZYDIS_REGISTER_RSP] = new_stack_pointer;
+
 	return RegisterList;
 }
 
@@ -225,7 +233,7 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
 
 	// testing?
 	if (key == ZYDIS_REGISTER_RIP) {
-		cout << "rip\n";
+		//cout << "rip\n";
 	}
 
 	return RegisterList[newKey];
@@ -344,7 +352,8 @@ Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDeco
 		indexValue = GetRegisterValue(context, builder, op.mem.index);
 		if (op.mem.scale > 1) {
 			Value* scaleValue = ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-			indexValue = builder.CreateMul(indexValue, scaleValue);
+			indexValue = builder.CreateZExt(indexValue, Type::getInt64Ty(context));
+			indexValue = builder.CreateMul(indexValue, scaleValue,"gea");
 		}
 	}
 
@@ -388,6 +397,7 @@ void ClearMemoryMap() {
 }
 
 
+
 // responsible for retrieving a value in SSA Value map
 Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize) {
 
@@ -425,11 +435,13 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			Value* baseValue = nullptr;
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
 				baseValue = GetRegisterValue(context, builder, op.mem.base);
+				baseValue = builder.CreateZExt(baseValue, Type::getInt64Ty(context));
 			}
 
 			Value* indexValue = nullptr;
 			if (op.mem.index != ZYDIS_REGISTER_NONE) {
 				indexValue = GetRegisterValue(context,builder,op.mem.index);
+				indexValue = builder.CreateZExt(indexValue, Type::getInt64Ty(context));
 				if (op.mem.scale > 1) {
 					Value* scaleValue = ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
 					indexValue = builder.CreateMul(indexValue, scaleValue);
@@ -437,7 +449,6 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			}
 
 			if (baseValue && indexValue) {
-				indexValue = builder.CreateZExtOrTrunc(indexValue, baseValue->getType(),"indexValue");
 				effectiveAddress = builder.CreateAdd(baseValue, indexValue,"bvalue_indexvalue");
 			}
 			else if (baseValue) {
@@ -457,14 +468,17 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			// Load the value from the computed address.
 			Type* loadType = getIntSize(possiblesize,context); // Determine based on op.mem.size or some other attribute
-			Value* pointer = builder.CreateIntToPtr(effectiveAddress, loadType->getPointerTo());
-			
+			//Value* pointer = builder.CreateIntToPtr(effectiveAddress, loadType->getPointerTo());
+
+			std::vector<Value*> indices;
+			indices.push_back(effectiveAddress); // First index is always 0 in this context
+
+			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoad");
 			if (isa<ConstantExpr>(pointer)) {
-				if (Value* MapValue = GetMemoryValueFromMap(pointer)) {
-					if (MapValue->getType() == loadType)
-						return MapValue;
+				if (Value* MapValue = GetMemoryValueFromMap(pointer)) { // MMap
+					 return builder.CreateZExtOrTrunc(MapValue, loadType);
 				}
-				if (Operator* op = dyn_cast<Operator>(pointer)) {
+				if (Operator* op = dyn_cast<Operator>(pointer)) { // Binary
 					if (ConstantInt* CI = dyn_cast<ConstantInt>(op->getOperand(0))) {
 						uintptr_t addr = CI->getZExtValue();
 						uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
@@ -522,15 +536,16 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 
 
 // responsible for setting a value in SSA Value map
-void SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value) {
+Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value) {
 
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
+			GetRegisterValue(context, builder, op.reg.value);
+			
 			SetRegisterValue(context, builder, op.reg.value, value);
 			break;
 
-		}case ZYDIS_OPERAND_TYPE_MEMORY:
-		{
+		}case ZYDIS_OPERAND_TYPE_MEMORY:		{
 			// Compute the effective address, as before.
 			Value* effectiveAddress = nullptr;
 
@@ -540,19 +555,20 @@ void SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOpe
 			Value* baseValue = nullptr;
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
 				baseValue = GetRegisterValue(context, builder, op.mem.base);
+				baseValue = builder.CreateZExt(baseValue, Type::getInt64Ty(context));
 			}
 
 			Value* indexValue = nullptr;
 			if (op.mem.index != ZYDIS_REGISTER_NONE) {
 				indexValue = GetRegisterValue(context, builder, op.mem.index);
+				indexValue = builder.CreateZExt(indexValue, Type::getInt64Ty(context),"areyouok");
 				if (op.mem.scale > 1) {
 					Value* scaleValue = ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-					indexValue = builder.CreateMul(indexValue, scaleValue);
+					indexValue = builder.CreateMul(indexValue, scaleValue, "mul_ea");
 				}
 			}
 
 			if (baseValue && indexValue) {
-				indexValue = builder.CreateZExtOrTrunc(indexValue, baseValue->getType() ,"indexValue");
 				effectiveAddress = builder.CreateAdd(baseValue, indexValue,"bvalue_indexvalue_set");
 			}
 			else if (baseValue) {
@@ -572,11 +588,23 @@ void SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOpe
 
 			// Store the value to the computed address.
 			Type* storeType = getIntSize(op.size, context); // Determine based on op.mem.size or some other attribute
-			Value* pointer = builder.CreateIntToPtr(effectiveAddress, storeType->getPointerTo());
-			builder.CreateStore(value, pointer);  // Ensure `valueToSet` matches the expected type
-			
-			/*if (isa<ConstantExpr>(pointer)) {
+			//Value* pointer = builder.CreateIntToPtr(effectiveAddress, storeType->getPointerTo());
+			std::vector<Value*> indices;
+			indices.push_back(effectiveAddress); // First index is always 0 in this context
 
+			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,indices,"GEPSTORE");
+			Value* store = builder.CreateStore(value, pointer);  // Ensure `valueToSet` matches the expected type
+			
+
+			// we need to bring back this, this helps us alot.
+			// with this, we dont need to run optimizations in ROPdetection, optimizations take like 70% of our time if not more
+			/*
+			if (isa<ConstantExpr>(pointer)) {
+				// store i64 38, ptr inttoptr (i64 -99296 to ptr), align 32
+				// pointer = -99296
+				// value or mergedValue is 38
+				// but we also want to set -99295,...,-99289
+				
 				if (Value* existingValue = GetMemoryValueFromMap(pointer)) {
 					Value* mergedValue = merge(context, builder, existingValue, value);
 					SetMemoryValueToMap(pointer, mergedValue);
@@ -584,11 +612,8 @@ void SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOpe
 				else {
 					SetMemoryValueToMap(pointer, value);
 				}
-			}
-			else {
-				ClearMemoryMap();
-
 			}*/
+			return store;
 		}
 		break;
 

@@ -152,7 +152,6 @@ namespace {
 
         bool runOnFunction(Function& F) override {
             bool modified = false;
-
             for (BasicBlock& BB : F) {
                 for (Instruction& I : BB) {
                     if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
@@ -364,4 +363,69 @@ static RegisterPass<IntToPtrToAllocaPass> X("inttoptr-to-alloca", "IntToPtr to A
 
 FunctionPass* createIntToPtrToAllocaPass() {
     return new IntToPtrToAllocaPass();
+}
+
+
+
+
+
+namespace {
+
+    struct IntToPtrStackDSEPass : public FunctionPass {
+        static char ID;
+
+        IntToPtrStackDSEPass() : FunctionPass(ID) {
+        }
+
+        bool runOnFunction(Function& F) override {
+             bool modified = false;
+            std::vector<Instruction*> deleteCandidates;
+
+            for (Instruction& I : instructions(F)) {
+                if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
+                    if (shouldDelete(load->getPointerOperand())) {
+                        deleteCandidates.push_back(load);
+                    }
+                }
+                else if (StoreInst* store = dyn_cast<StoreInst>(&I)) {
+                    if (shouldDelete(store->getPointerOperand())) {
+                        deleteCandidates.push_back(store);
+                    }
+                }
+            }
+
+            for (Instruction* inst : deleteCandidates) {
+                inst->eraseFromParent();
+                modified = true;
+            }
+
+            return modified;
+        }
+
+        bool shouldDelete(Value* ptrOperand) {
+
+            if (auto* ce = dyn_cast<ConstantExpr>(ptrOperand)) {
+                if (ce->getOpcode() == Instruction::IntToPtr) {
+                    if (auto* ci = dyn_cast<ConstantInt>(ce->getOperand(0))) {
+                        return -512 < ( STACKP_VALUE - ci->getZExtValue() ) < 4096; // Assuming STACKP_VALUE is defined
+                    }
+                }
+            }
+            return false;
+        }
+    };
+
+}  // End of anonymous namespace
+
+char IntToPtrStackDSEPass::ID = 0;
+
+
+
+// basically replace detect binary loads and replace the load with value
+//before pass-> 
+// %x = load i64, ptr 0x140002000
+// after pass ->
+// %x = [whatever the value is at 0x140002000, but no load inst]
+FunctionPass* CreateIntToPtrStackDSEPass() {
+    return new IntToPtrStackDSEPass();
 }
