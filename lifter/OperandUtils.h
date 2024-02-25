@@ -15,10 +15,11 @@ unordered_map<int, Value*> getRegisterList();
 
 void setRegisterList(unordered_map<int, Value*> newRegisterList);
 
-Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Value* rflag_var, Flag flag, FlagOperation operation, Value* newValue = nullptr);
-
-
-Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Value* rflag_var, Flag flag);
+Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr);
+Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag);
 
 
 void initBases2(LPVOID file_base, ZyanU8* data);
+
+
+Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* value);

@@ -28,7 +28,7 @@
 //
 
 
-vector< tuple<uintptr_t,BasicBlock*, unordered_map<int, Value*> > > added_blocks_addresses;
+vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > added_blocks_addresses;
 uintptr_t original_address = 0;
 
 // first of all, this function is UGLY af, so I'm sorry you are reading this.
@@ -44,10 +44,12 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             // find the real address in memory of where we want to continue parsing
             runtime_address = get<0>(blockAddresses->back());
             uintptr_t offset = address_to_mapped_address((LPVOID)file_base, runtime_address);
+#ifdef _DEVELOPMENT
             cout << "runtime_addr: " << runtime_address << " offset:" << offset << " byte there: 0x" << (int)*(BYTE*)(file_base + offset) << endl;
             cout << "offset: " << offset << " file_base?: " << original_address << " runtime: " << runtime_address << endl;
+#endif
 
-            
+
 
 
 
@@ -76,7 +78,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             //
             // if we hadn't store the registers then branch 
             // branch2 would thought we still operate on %ecx_1 and since it's in a different branch, it wouldn't work
-            
+
 
             // we are working on this block, so remove it from vector
             blockAddresses->pop_back();
@@ -101,7 +103,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             // more loops :trollface:
             ZydisDisassembledInstruction instruction;
             // this loop is responsible of parsing asm into zydis then LLVM.
-            for (; run && runtime_address > 0 ; )
+            for (; run && runtime_address > 0; )
             {
                 //the function we know and we love
                 ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, runtime_address, data + offset, 15, &instruction);
@@ -112,8 +114,11 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
                 {
 
                     // Print current instruction.
-                    cout << instruction.text << "\n";
                     
+#ifdef _DEVELOPMENT
+                    cout << instruction.text << "\n";
+                    cout << "runtime: " << runtime_address << "\n";
+#endif
                     instruction.runtime_address += instruction.info.length;
 
 
@@ -123,7 +128,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
                     // i dont remember.
                     offset += instruction.info.length;
                     runtime_address += instruction.info.length;
-                    cout << "runtime: " << runtime_address << "\n";
+
                     for (auto& b_address : added_blocks_addresses) {
                         if (get<0>(b_address) - file_base == offset) {
                             builder.CreateBr(get<1>(b_address));
@@ -148,9 +153,8 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
         std::string Filename = "output_noopts.ll";
         std::error_code EC;
         llvm::raw_fd_ostream OS(Filename, EC);
-        Function* originalFunc = builder.GetInsertBlock()->getParent();
 
-        originalFunc->print(OS, nullptr);
+        function->print(OS, nullptr);
 
     }
 }
@@ -172,7 +176,6 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
 
 
     // initialize arguments
-    // TODO: swap this logic with a CPUState struct
     std::vector<llvm::Type*> argTypes;
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
@@ -190,9 +193,9 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
-    argTypes.push_back(llvm::Type::getInt64Ty(context)); // 1 off because rsp
+    argTypes.push_back(llvm::Type::getVoidTy(context)->getPointerTo()); // 1 off because rsp
 
-    auto functionType = llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes,0);
+    auto functionType = llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 
 
     // initialize function
@@ -205,7 +208,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
     // "link" the arguments to a register map
-    auto RegisterList = InitRegisters(context,builder,function, runtime_address);
+    auto RegisterList = InitRegisters(context, builder, function, runtime_address);
 
     ZydisDisassembledInstruction instruction;
 
@@ -214,7 +217,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     // this works, but its ugly.
     std::shared_ptr<std::vector<std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>> blockAddresses = std::make_shared<std::vector<std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>>();
 
-    blockAddresses->push_back(make_tuple(runtime_address,bb, RegisterList) );
+    blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
 
     // WHERE MAGIC HAPPENS.
     asm_to_zydis_to_lift(context, builder, (BYTE*)file_base, runtime_address, blockAddresses, function, file_base);
@@ -227,7 +230,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
 
     if (EC) {
         llvm::errs() << "Could not open file: " << EC.message();
-        return ;
+        return;
     }
 
     lifting_module.print(OS, nullptr);
@@ -235,7 +238,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     OS.flush();
 
 
-    return ;
+    return;
 }
 
 

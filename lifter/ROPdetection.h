@@ -13,4 +13,4 @@ void initDetections(LPVOID file_base, ZyanU8* data);
 
 ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t& dest);
 
-JMP_info isJOP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t& dest);
+JMP_info isJOP(Function* function, uintptr_t& dest);
