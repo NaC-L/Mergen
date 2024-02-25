@@ -3,6 +3,7 @@
 #define _SILENCE_ALL_CXX20_DEPRECATION_WARNINGS
 #define _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS
 #define ZYDIS_STATIC_BUILD
+#define _DEVELOPMENT
 #pragma warning(disable:4146)
 #include <iostream>
 #include <vector>
@@ -227,7 +228,7 @@
 using namespace std;
 using namespace llvm;
 #define RIP 0x007FFFFFFF400000
-#define STACKP_VALUE 0xffffffffffffff00
+#define STACKP_VALUE 0x0000000000200000
 
 enum FlagOperation {
 	SET_VALUE,

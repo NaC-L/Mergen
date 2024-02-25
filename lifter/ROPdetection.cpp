@@ -377,9 +377,11 @@ opaque_info isOpaque(Function* clonedFunc , BasicBlock& clonedBB) {
         if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
             if (constInt->getZExtValue() == 1) {
                 result = OPAQUE_TRUE;
+                return result;
             }
             else if (constInt->getZExtValue() == 0) {
                 result = OPAQUE_FALSE;
+                return result;
             }
         }
     }
@@ -664,15 +666,36 @@ ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
 }
 
 // is a real JOP or a switch case or smt?
-JMP_info isJOP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t& dest) {
+JMP_info isJOP(Function* function, uintptr_t& dest) {
     //create clone of module/function then analyze it.
 
-
+    // check to add if we already know the result
 
 
     JMP_info result = REAL_jmp;
-    //clonedFunc->print(outs());
-    llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(clonedBB.getTerminator());
+    llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
+
+    if (returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
+        // Assuming you want to check the return value of the ReturnInst
+        if (returnInst->getReturnValue() != nullptr) {
+            // Check if the return value is a constant integer
+            if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
+                dest = constInt->getZExtValue();
+                result = JOP_jmp;
+                return result;
+            }
+        }
+    }
+
+    llvm::ValueToValueMapTy VMap;
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", function->getContext());
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
 
     // instead of passing function, lets pass a new module because this optimization shit only works with the module now
     llvm::PassBuilder passBuilder;
@@ -774,6 +797,13 @@ JMP_info isJOP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t& dest) {
     }
 
 
+#ifdef _DEVELOPMENT
+    std::string Filename2 = "output_afterJMP.ll";
+    std::error_code EC2;
+    llvm::raw_fd_ostream OS2(Filename2, EC2);
+    clonedFunc->print(OS2);
+#endif
 
+    clonedFunc->eraseFromParent();
     return result;
 }

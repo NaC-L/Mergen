@@ -14,6 +14,7 @@ void initBases2(LPVOID file_base, ZyanU8* data) {
 
 
 unordered_map<int,Value*> RegisterList;
+unordered_map<Flag,Value*> FlagList;
 
 
 IntegerType* getIntSize(int size, LLVMContext& context) {
@@ -47,85 +48,33 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 }
 
 // responsible of operations on RFLAG
-Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Value* rflag_var, Flag flag, FlagOperation operation, Value* newValue = nullptr) {
-
-	Value* position = ConstantInt::get(context, APInt(64, flag));
-	// Create the '1 << position' value
-	Value* one = ConstantInt::get(context, APInt(64, 1));
-	Value* bit_position = builder.CreateShl(one, position);
-
-	switch (operation) {
-	case SET_VALUE: {
-		Value* inverse_mask = builder.CreateNot(bit_position);
-
-		// Clear the flag at 'position' in the rflag_var
-		Value* cleared_rflag = builder.CreateAnd(rflag_var, inverse_mask);
-
-		// Shift the new value to the correct position
-		Value* shifted_newValue = builder.CreateShl(builder.CreateZExtOrTrunc(newValue, Type::getInt64Ty(context)), position,"flagsetweird");
-		return builder.CreateOr(cleared_rflag, shifted_newValue,"setflag-or");
-	}
-	case SET_ONE:
-		return builder.CreateOr(rflag_var, bit_position,"setflag-or2");
-
-	case SET_ZERO: {
-		Value* not_position = builder.CreateNot(bit_position);
-		return builder.CreateAnd(rflag_var, not_position);
-	}
-
-	case TOGGLE:
-		return builder.CreateXor(rflag_var, bit_position);
-
-	default:
-		// Handle error or return some default value
-		return rflag_var;
-	}
+Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
+	return FlagList[flag] = newValue;
+	
 }
-Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Value* rflag_var, Flag flag) {
-
-	Value* position = ConstantInt::get(context, APInt(64, flag));
-	// Create the '1 << position' value
-	Value* one = ConstantInt::get(context, APInt(64, 1));
-	Value* bit_position = builder.CreateShl(one, position,"getflag-shl");
-
-	// Return if the bit at 'position' is set
-	Value* and_result = builder.CreateAnd(rflag_var, bit_position,"getflag-and");
-	return builder.CreateICmpNE(and_result, ConstantInt::get(context, APInt(64, 0)),"getflag-cmpne");
+Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
+	return FlagList[flag];
 }
 
 
 
-// ... why there is two getFlag functions? probably should remove this
-Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Value* rflag_var, Value* position) {
-
-	// type should be value* to i1 byte variable, or a boolean
-	// 
-	// return rflag_var & (1 << position) , if its true, it will return > 0, if its not it will return == 0
-	// 
-
-	auto one = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 1);
-
-	auto bit_position = builder.CreateShl(one, position);
 
 
-	return builder.CreateAnd(rflag_var, bit_position);
-
-
-
-
-}
-
+// instead of 1 variable
+// have multiple variables that correspond to the flags
 void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
+	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0);
 
-	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
-	auto value = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 2); // 2nd bit is reserved and always true
-
-	auto flags = RegisterList[ZYDIS_REGISTER_RFLAGS];
-
-	auto new_flag = builder.CreateAdd(zero, value);
-
-	RegisterList[ZYDIS_REGISTER_RFLAGS] = new_flag;
+	FlagList[FLAG_CF] = zero;
+	FlagList[FLAG_PF] = zero;
+	FlagList[FLAG_AF] = zero;
+	FlagList[FLAG_ZF] = zero;
+	FlagList[FLAG_SF] = zero;
+	FlagList[FLAG_TF] = zero;
+	FlagList[FLAG_IF] = zero;
+	FlagList[FLAG_DF] = zero;
+	FlagList[FLAG_OF] = zero;
 }
 
 //...
@@ -212,7 +161,9 @@ Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, 
 }
 
 
+Value* GetFlagValue(LLVMContext& context, IRBuilder<>& builder) {
 
+}
 
 
 // responsible for retrieving latest llvm SSA value from a asm register
@@ -231,9 +182,8 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
 		throw std::runtime_error("register not found"); exit(-1);
 	}
 
-	// testing?
-	if (key == ZYDIS_REGISTER_RIP) {
-		//cout << "rip\n";
+	if (key == ZYDIS_REGISTER_RFLAGS) {
+		return ;
 	}
 
 	return RegisterList[newKey];
@@ -378,25 +328,80 @@ Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDeco
 
 	return effectiveAddress;
 }
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Value.h"
+#include <vector>
+#include <cassert>
+
+using namespace llvm;
+
+class ValueByteReference {
+public:
+	Value* value;
+	short byteOffset;
+
+	ValueByteReference(Value* val, short offset) : value(val), byteOffset(offset) {}
+};
+
+class lifterMemoryBuffer {
+public:
+	std::vector<ValueByteReference*> buffer; // Now storing pointers to ValueByteReference
+
+	lifterMemoryBuffer() : buffer(STACKP_VALUE+0x100, nullptr) {} // Initialize with a default size, all nullptrs
+
+	~lifterMemoryBuffer() {
+		// Clean up dynamically allocated ValueByteReferences
+		for (auto* ref : buffer) {
+			delete ref;
+		}
+	}
+
+	// addValueReference v = 0x12345678 at 0x0
+	// v0 v1 v2 v3 =
+	// when retrieved
+	// v & 0xff + v & 0xff00 + v & 0xff0000 + v & 0xff000000
+
+	void addValueReference(Value* value, unsigned address) {
+		unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8; 
+		for (unsigned i = 0; i < valueSizeInBytes; i++) {
+			// Ensure the buffer is large enough
+			delete buffer[address + i];
+			// Create a new reference for each byte
+			buffer[address + i] = new ValueByteReference(value, i);
+		}
+	}
+
+	Value* retrieveCombinedValue(llvm::IRBuilder<>& builder, unsigned startAddress, unsigned byteCount) {
+		Value* result = nullptr;
+		for (unsigned i = 0; i < byteCount; i++) {
+			unsigned currentAddress = startAddress + i;
+			if (currentAddress < buffer.size() && buffer[currentAddress] != nullptr) {
+				auto* ref = buffer[currentAddress];
+				llvm::Value* byteValue = extractByte(builder, ref->value, ref->byteOffset);
+				if (!result) {
+					result = builder.CreateZExt(byteValue, Type::getIntNTy(builder.getContext(), byteCount * 8));
+				}
+				else {
+					llvm::Value* shiftedByteValue = builder.CreateShl(builder.CreateZExt(byteValue, Type::getIntNTy(builder.getContext(), byteCount*8) ), llvm::APInt(byteCount * 8, i * 8));
+					result = builder.CreateAdd(result, shiftedByteValue);
+				}
+			}
+
+		}
+		return result;
+	}
+
+private:
+	llvm::Value* extractByte(llvm::IRBuilder<>& builder, llvm::Value* value, unsigned byteOffset) {
+		// Assuming the value is a 32-bit integer, adjust the shift amount based on the byte offset
+		unsigned shiftAmount = byteOffset * 8;
+		llvm::Value* shiftedValue = builder.CreateLShr(value, llvm::APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
+		return builder.CreateTrunc(shiftedValue, Type::getInt8Ty(builder.getContext()));
+	}
+};
 
 
-unordered_map<llvm::Value*, Value*> MemoryMap;
-Value* GetMemoryValueFromMap(Value* K) {
-	if (MemoryMap.find(K) != MemoryMap.end() )
-		return MemoryMap[K];
-	
-	return 0;
-}
-
-void SetMemoryValueToMap(Value* K, Value* V) {
-	MemoryMap[K] = V;
-}
-
-void ClearMemoryMap() {
-	MemoryMap.clear();
-}
-
-
+lifterMemoryBuffer globalBuffer;
 
 // responsible for retrieving a value in SSA Value map
 Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize) {
@@ -435,8 +440,12 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			Value* baseValue = nullptr;
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
 				baseValue = GetRegisterValue(context, builder, op.mem.base);
+
+
+
 				baseValue = builder.CreateZExt(baseValue, Type::getInt64Ty(context));
 			}
+
 
 			Value* indexValue = nullptr;
 			if (op.mem.index != ZYDIS_REGISTER_NONE) {
@@ -472,8 +481,41 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			std::vector<Value*> indices;
 			indices.push_back(effectiveAddress); // First index is always 0 in this context
+			
+			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadxd-");
+			
 
-			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoad");
+
+			if (isa<ConstantInt>(effectiveAddress)) {
+				ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
+				if (!effectiveAddressInt) return nullptr;
+
+				uintptr_t addr = effectiveAddressInt->getZExtValue();
+				uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
+
+				unsigned byteSize = loadType->getIntegerBitWidth() / 8;
+				uintptr_t tempValue;
+
+				if (mappedAddr > 0) {
+					std::memcpy(&tempValue, reinterpret_cast<const void*>(data_g_operand + mappedAddr), byteSize);
+
+					APInt readValue(byteSize * 8, tempValue);
+					Constant* newVal = ConstantInt::get(loadType, readValue);
+					return newVal;
+				}
+				
+				if (addr > 0 && addr < STACKP_VALUE) { 
+					
+					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
+					return newval;
+
+				}
+				
+				
+			}
+
+
+			/*
 			if (isa<ConstantExpr>(pointer)) {
 				if (Value* MapValue = GetMemoryValueFromMap(pointer)) { // MMap
 					 return builder.CreateZExtOrTrunc(MapValue, loadType);
@@ -498,7 +540,8 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 					}
 				}
 			}
-			
+			*/
+
 			return builder.CreateLoad(loadType, pointer);
 		}
 		default: {
@@ -595,24 +638,22 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,indices,"GEPSTORE");
 			Value* store = builder.CreateStore(value, pointer);  // Ensure `valueToSet` matches the expected type
 			
+			
 
-			// we need to bring back this, this helps us alot.
-			// with this, we dont need to run optimizations in ROPdetection, optimizations take like 70% of our time if not more
-			/*
-			if (isa<ConstantExpr>(pointer)) {
-				// store i64 38, ptr inttoptr (i64 -99296 to ptr), align 32
-				// pointer = -99296
-				// value or mergedValue is 38
-				// but we also want to set -99295,...,-99289
-				
-				if (Value* existingValue = GetMemoryValueFromMap(pointer)) {
-					Value* mergedValue = merge(context, builder, existingValue, value);
-					SetMemoryValueToMap(pointer, mergedValue);
-				}
-				else {
-					SetMemoryValueToMap(pointer, value);
-				}
-			}*/
+
+
+
+			if (isa<ConstantInt>(effectiveAddress) ) {
+
+				ConstantInt* effectiveAddressInt = cast<ConstantInt>(effectiveAddress);
+				ConstantInt* valueInt = cast<ConstantInt>(value);
+				unsigned bitWidth = valueInt->getBitWidth(); 
+				uint64_t dataValue = valueInt->getZExtValue(); 
+
+				globalBuffer.addValueReference(valueInt, effectiveAddressInt->getZExtValue());
+			}
+
+		
 			return store;
 		}
 		break;
@@ -621,5 +662,19 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			throw std::runtime_error("operand type not implemented"); exit(-1);
 		}
 	}
+
+}
+
+
+Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
+
+	Type* storeType = value->getType(); // Determine based on op.mem.size or some other attribute
+	//Value* pointer = builder.CreateIntToPtr(effectiveAddress, storeType->getPointerTo());
+	std::vector<Value*> indices;
+	indices.push_back(value); // First index is always 0 in this context
+
+	Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPSTOREVALUE");
+
+	return pointer;
 
 }
