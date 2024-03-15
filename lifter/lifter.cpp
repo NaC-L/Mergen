@@ -247,12 +247,15 @@ int main(int argc, char* argv[])
 {
     auto start = std::chrono::high_resolution_clock::now();
 
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <filename> <startAddr>" << std::endl;
+        _getch();
+        return 1;
+    }
 
-    //open the file and get a pointer to function we virtualized
-    const char* filename = "testing.vmp.exe";
-    // its 0x140001000 when its the first virtualized function
-    // I just hardcoded because lazyness
-    uint64_t startAddr = 0x140001000;
+    const char* filename = argv[1];
+    uint64_t startAddr = std::stoull(argv[2], nullptr, 0);
+
 
     HANDLE hFile = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
@@ -287,7 +290,7 @@ int main(int argc, char* argv[])
     auto elapsed = std::chrono::high_resolution_clock::now() - start;
     long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(
         elapsed).count();
-    cout << "\n" << microseconds << " microsecond has past";
+    cout << "\n" << dec << microseconds << " microsecond has past";
 
     UnmapViewOfFile(fileBase);
     CloseHandle(hMapping);
