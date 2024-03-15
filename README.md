@@ -12,6 +12,9 @@ This tool is designed for:
 
 ### Optimization
 
+## Diagram
+![image](https://github.com/loneicewolf/Mergen/assets/68499986/d557b048-9c77-49f2-82b2-ef299bc783c8)
+
 
 ## Operational Workflow of Mergen:
 1. Parsing Assembly to LLVM IR:
