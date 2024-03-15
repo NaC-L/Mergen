@@ -280,6 +280,7 @@ void lift_cmovnbz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
 
 
 void lift_cmovz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+    instruction.info.raw.disp.value;
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 

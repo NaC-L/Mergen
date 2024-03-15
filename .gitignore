@@ -1,4 +1,6 @@
-
+*.suo
+*.db*
+*.ipch
 *.ll
 *.exe
 *.ilk
@@ -10,3 +12,5 @@
 *.pdb
 *.ipdb
 *.iobj
+*\x64*
+*.exe*
