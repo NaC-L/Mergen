@@ -15,7 +15,7 @@ unordered_map<int, Value*> getRegisterList();
 
 void setRegisterList(unordered_map<int, Value*> newRegisterList);
 
-Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr);
+Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue);
 Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag);
 
 
