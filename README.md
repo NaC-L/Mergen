@@ -42,3 +42,5 @@ Mergen is a sophisticated software tool engineered to convert Assembly code into
 
 
 
+# Getting in touch
+Join [discord chat](https://discord.gg/e3eftYguqB) to trade ideas or just chatting in general.
