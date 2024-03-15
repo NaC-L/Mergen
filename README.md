@@ -34,17 +34,6 @@ Mergen is a sophisticated software tool engineered to convert Assembly code into
     Termination Condition: This iteration continues until Mergen identifies a real `ret` instruction. A real ret is confirmed when the stack pointer (xSP) at the end of the function matches the xSP value at the start of the function.
 
 
-# Demo
-Releases include binary protected by VMProtect Ultimate 3.4.0, (maths function virtualized, anything else is off) and the original binary for comparison.
-
-to execute the demo:
-lifter.exe
-clang output.ll -O3 
-open up the output from clang and the devirtualized function is in main, type declaration is 
-
-```int __cdecl main(int rax, int rcx, int rdx, int rbx, int rsp, int rbp, int rsi, int rdi, int r8, int r9, int r10, int r11, int r12, int r13, int r14, int r15)```
-
-
 # Missing features:
 
 ### multiple branch support
