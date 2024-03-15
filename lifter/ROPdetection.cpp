@@ -264,13 +264,7 @@ void test_optxd(Function* clonedFuncx) {
     do {
         changed = false;
 
-        // Compute the initial hash of the module
-        std::string beforeOptimization;
-        llvm::raw_string_ostream beforeStream(beforeOptimization);
-        beforeStream << *module;
-        beforeStream.flush();
-        std::hash<std::string> hasher;
-        size_t beforeHash = hasher(beforeOptimization);
+        size_t beforeSize = module->getInstructionCount();
 
         // Build and run the optimization pipeline
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
@@ -279,15 +273,11 @@ void test_optxd(Function* clonedFuncx) {
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.run(*module, moduleAnalysisManager);
 
-        // Compute the hash of the module after optimization
-        std::string afterOptimization;
-        llvm::raw_string_ostream afterStream(afterOptimization);
-        afterStream << *module;
-        afterStream.flush();
-        size_t afterHash = hasher(afterOptimization);
+        
+        size_t afterSize = module->getInstructionCount();
 
         // Check if the module has changed
-        if (beforeHash != afterHash) {
+        if (beforeSize != afterSize) {
             changed = true;
         }
 
@@ -329,13 +319,7 @@ void final_optpass(Function* clonedFuncx) {
     do {
         changed = false;
 
-        // Compute the initial hash of the module
-        std::string beforeOptimization;
-        llvm::raw_string_ostream beforeStream(beforeOptimization);
-        beforeStream << *module;
-        beforeStream.flush();
-        std::hash<std::string> hasher;
-        size_t beforeHash = hasher(beforeOptimization);
+        size_t beforeSize = module->getInstructionCount();
 
         // Build and run the optimization pipeline
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
@@ -343,15 +327,10 @@ void final_optpass(Function* clonedFuncx) {
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.run(*module, moduleAnalysisManager);
 
-        // Compute the hash of the module after optimization
-        std::string afterOptimization;
-        llvm::raw_string_ostream afterStream(afterOptimization);
-        afterStream << *module;
-        afterStream.flush();
-        size_t afterHash = hasher(afterOptimization);
+        size_t afterSize = module->getInstructionCount();
 
         // Check if the module has changed
-        if (beforeHash != afterHash) {
+        if (beforeSize != afterSize) {
             changed = true;
         }
 
@@ -419,13 +398,9 @@ opaque_info isOpaque(Function* clonedFunc , BasicBlock& clonedBB) {
     do {
         changed = false;
 
-        // Compute the initial hash of the module
-        std::string beforeOptimization;
-        llvm::raw_string_ostream beforeStream(beforeOptimization);
-        beforeStream << *module;
-        beforeStream.flush();
-        std::hash<std::string> hasher;
-        size_t beforeHash = hasher(beforeOptimization);
+        
+
+        size_t beforeSize = module->getInstructionCount();
 
         // Build and run the optimization pipeline
 
@@ -460,15 +435,11 @@ opaque_info isOpaque(Function* clonedFunc , BasicBlock& clonedBB) {
         clonedFunc->print(OS2);
 #endif
 
-        // Compute the hash of the module after optimization
-        std::string afterOptimization;
-        llvm::raw_string_ostream afterStream(afterOptimization);
-        afterStream << *module;
-        afterStream.flush();
-        size_t afterHash = hasher(afterOptimization);
+        
+        size_t afterSize = module->getInstructionCount();
 
         // Check if the module has changed
-        if (beforeHash != afterHash) {
+        if (beforeSize != afterSize) {
             changed = true;
         }
 
@@ -565,13 +536,8 @@ ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
         bool haschanged = false;
         changed = false;
 
-        // Compute the initial hash of the module
-        std::string beforeOptimization;
-        llvm::raw_string_ostream beforeStream(beforeOptimization);
-        beforeStream << *module;
-        beforeStream.flush();
-        std::hash<std::string> hasher;
-        size_t beforeHash = hasher(beforeOptimization);
+        
+        size_t beforeSize = module->getInstructionCount();
 
         // Build and run the optimization pipeline
 
@@ -606,15 +572,12 @@ ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
         clonedFunc->print(OS2);
 #endif
 
-        // Compute the hash of the module after optimization
+        
         std::string afterOptimization;
-        llvm::raw_string_ostream afterStream(afterOptimization);
-        afterStream << *module;
-        afterStream.flush();
-        size_t afterHash = hasher(afterOptimization);
+        size_t afterSize = module->getInstructionCount();
 
         // Check if the module has changed
-        if (beforeHash != afterHash) {
+        if (beforeSize != afterSize) {
             changed = true;
         }
 
@@ -731,13 +694,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
     do {
         changed = false;
 
-        // Compute the initial hash of the module
-        std::string beforeOptimization;
-        llvm::raw_string_ostream beforeStream(beforeOptimization);
-        beforeStream << *module;
-        beforeStream.flush();
-        std::hash<std::string> hasher;
-        size_t beforeHash = hasher(beforeOptimization);
+        size_t beforeSize = module->getInstructionCount();
 
         // Build and run the optimization pipeline
 
@@ -765,15 +722,10 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
 
         auto result = modulePassManager.run(*module, moduleAnalysisManager);
 
-        // Compute the hash of the module after optimization
-        std::string afterOptimization;
-        llvm::raw_string_ostream afterStream(afterOptimization);
-        afterStream << *module;
-        afterStream.flush();
-        size_t afterHash = hasher(afterOptimization);
+        size_t afterSize = module->getInstructionCount();
 
         // Check if the module has changed
-        if (beforeHash != afterHash) {
+        if (beforeSize != afterSize) {
             changed = true;
         }
 
