@@ -1,7 +1,10 @@
 # Project Overview:
-Mergen is a sophisticated software tool engineered to convert Assembly code into LLVM Intermediate Representation (IR). This tool is specifically created for the deobfuscation or devirtualization of obfuscated binary code. It is designed to enhance the reverse engineering process, making it more efficient and effective, especially for complex software systems.
+Mergen is a tool engineered to convert Assembly code into LLVM Intermediate Representation (IR).
+This tool is designed for:
+- The deobfuscation or devirtualization of obfuscated binary code
+- The enhancement of the reverse engineering process, making it more efficient and effective, especially for complex software systems.
 
-### Core Objectives:
+## Core Objectives:
 
 ### Deobfuscation
 
@@ -10,7 +13,7 @@ Mergen is a sophisticated software tool engineered to convert Assembly code into
 ### Optimization
 
 
-# Operational Workflow of Mergen:
+## Operational Workflow of Mergen:
 1. Parsing Assembly to LLVM IR:
 
     Initial Step: Mergen begins by parsing existing Assembly instructions into LLVM Intermediate Representation.
@@ -34,7 +37,7 @@ Mergen is a sophisticated software tool engineered to convert Assembly code into
     Termination Condition: This iteration continues until Mergen identifies a real `ret` instruction. A real ret is confirmed when the stack pointer (xSP) at the end of the function matches the xSP value at the start of the function.
 
 
-# Missing features:
+## Missing features:
 
 ### multiple branch support
 
@@ -43,4 +46,4 @@ Mergen is a sophisticated software tool engineered to convert Assembly code into
 
 
 # Getting in touch
-Join [discord chat](https://discord.gg/e3eftYguqB) to trade ideas or just chatting in general.
+Join our [Mergen Discord Server](https://discord.gg/e3eftYguqB) to trade ideas or just chatting in general.
