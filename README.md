@@ -40,11 +40,15 @@ This tool is designed for:
     Termination Condition: This iteration continues until Mergen identifies a real `ret` instruction. A real ret is confirmed when the stack pointer (xSP) at the end of the function matches the xSP value at the start of the function.
 
 
-## Missing features:
+# What can/cant it do:
 
-### multiple branch support
+### It can follow the code until function ends, then optimizes the code. That means it will inline every code to provided function until the provided function ends.
 
-### identifying inline/outline functions
+### It can deobfuscate/devirtualize a function with minimal effort. 
+
+### It can figure out if jcc is opaque and follow the path.
+
+### It cant decide which path to follow if jcc is not opaque.
 
 
 
