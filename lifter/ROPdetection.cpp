@@ -17,6 +17,40 @@ ZyanU8* data_g;
 #include "llvm/IR/Constants.h"
 
 
+class RemovePseudoStackPass : public llvm::PassInfoMixin<RemovePseudoStackPass> {
+public:
+
+ 
+    llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
+        // %stackmemory = alloca i128, i128 STACKP_VALUE
+        // insert %stackmemory as first inst
+        // if load is < STACKP_VALUE
+        //     replace %memory with %stackmemory
+        bool hasChanged = false;
+
+        for (auto& F : M) {
+            for (auto& BB : F) {
+                llvm::IRBuilder<> Builder(&*BB.getFirstInsertionPt());
+                auto stackMemory = Builder.CreateAlloca(llvm::Type::getInt128Ty(M.getContext()), llvm::ConstantInt::get(llvm::Type::getInt128Ty(M.getContext()), STACKP_VALUE * 10), "stackmemory");
+
+                for (auto& I : BB) {
+                    if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
+                        // Assuming the offset is the last operand
+                        auto* OffsetOperand = GEP->getOperand(GEP->getNumOperands() - 1);
+                        if (auto* ConstInt = llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
+                            uintptr_t constintvalue = (uintptr_t)ConstInt->getZExtValue();
+                            if (constintvalue < STACKP_VALUE + 100) {
+                                GEP->setOperand((GEP->getNumOperands() - 1), stackMemory);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return hasChanged ? llvm::PreservedAnalyses::none() : llvm::PreservedAnalyses::all();
+    }
+};
+
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
 
@@ -325,6 +359,8 @@ void final_optpass(Function* clonedFuncx) {
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
         modulePassManager.addPass(GEPLoadPass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
+        modulePassManager.addPass(RemovePseudoStackPass());
+
         modulePassManager.run(*module, moduleAnalysisManager);
 
         size_t afterSize = module->getInstructionCount();
