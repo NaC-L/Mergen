@@ -27,12 +27,19 @@ public:
         // if load is < STACKP_VALUE
         //     replace %memory with %stackmemory
         bool hasChanged = false;
-
+        Value* stackMemory = NULL;
+#ifdef _DEVELOPMENT
+        std::string Filename2 = "output_before_finalopt2.ll";
+        std::error_code EC2;
+        llvm::raw_fd_ostream OS2(Filename2, EC2);
+        M.print(OS2, nullptr);
+#endif
         for (auto& F : M) {
+            if (!stackMemory) {
+                llvm::IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
+                stackMemory = Builder.CreateAlloca(llvm::Type::getInt128Ty(M.getContext()), llvm::ConstantInt::get(llvm::Type::getInt128Ty(M.getContext()), STACKP_VALUE * 10), "stackmemory");
+            }
             for (auto& BB : F) {
-                llvm::IRBuilder<> Builder(&*BB.getFirstInsertionPt());
-                auto stackMemory = Builder.CreateAlloca(llvm::Type::getInt128Ty(M.getContext()), llvm::ConstantInt::get(llvm::Type::getInt128Ty(M.getContext()), STACKP_VALUE * 10), "stackmemory");
-
                 for (auto& I : BB) {
                     if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
                         // Assuming the offset is the last operand
@@ -40,7 +47,7 @@ public:
                         if (auto* ConstInt = llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
                             uintptr_t constintvalue = (uintptr_t)ConstInt->getZExtValue();
                             if (constintvalue < STACKP_VALUE + 100) {
-                                GEP->setOperand((GEP->getNumOperands() - 1), stackMemory);
+                                GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
                             }
                         }
                     }
@@ -348,6 +355,7 @@ void final_optpass(Function* clonedFuncx) {
 
 
     llvm::Module* module = clonedFuncx->getParent();
+
 
     bool changed;
     do {
