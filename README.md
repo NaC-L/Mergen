@@ -25,21 +25,21 @@ int maths(int a, int b, int c) {
 }
 ```
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/Original_Asm_Code.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/Original_Asm_Code.png)
 
 VMProtect settings, everything is turned off, we virtualize the function on ultra setting. (Tested versions 3.4.0-3.6.0) 
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/vmp_settings.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/vmp_settings.png)
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/vmp_settings2.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/vmp_settings2.png)
 
 This is how it looks after virtualizing.
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/vmp_ultra_asm.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/vmp_ultra_asm.png)
 
 Here, we run mergen. First argument is the name of the file and the second argument is the address of the function. Look how simple it is to run. And we can compile the output so we can explore it using our favorite decompiler.
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/mergen_run.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/mergen_run.png)
 
 ```llvm
 ; ModuleID = 'my_lifting_module'
@@ -63,9 +63,9 @@ attributes #0 = { mustprogress nofree norecurse nosync nounwind willreturn memor
 
 After compiling:
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/disass.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/disass.png)
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/decomp.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/decomp.png)
 
 Now you might notice the registers are a little bit off. This is because of we dont follow the calling conventions, if we were to follow the calling conventions, function signature would look like this:
 ```llvm
@@ -73,9 +73,9 @@ define i64 @main(i64 %rcx, i64 %rdx, i64 %rdx, i64 %r8, i64 %r9 ...)
 ```
 So, we just adjust the function signature to look normally. If you have more questions about this part, I suggest you research [calling conventions](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#parameter-passing) and [ABI](https://learn.microsoft.com/en-us/cpp/build/x64-software-conventions?view=msvc-170&source=recommendations#register-volatility-and-preservation).
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/decomp2.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/decomp2.png)
 
-![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/adjusted.PNG)
+![image](https://raw.githubusercontent.com/NaC-L/Mergen/main/images/adjusted.png)
 
 ## What it can/cant do
 
