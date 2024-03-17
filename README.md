@@ -15,36 +15,77 @@ This tool is designed for:
 ## Diagram
 ![image](https://github.com/loneicewolf/Mergen/assets/68499986/d557b048-9c77-49f2-82b2-ef299bc783c8)
 
+## Example
 
-## Operational Workflow of Mergen:
-1. Parsing Assembly to LLVM IR:
+This is our target program
 
-    Initial Step: Mergen begins by parsing existing Assembly instructions into LLVM Intermediate Representation.
+```cpp
+int maths(int a, int b, int c) {
+    return a + b - c;
+}
+```
 
-    Process: It continues this parsing process until it encounters a jump instruction or a return. `asm_to_zydis_to_lift` parses bytes to zydis Instructions to be lifted into llvm ir in the function `liftInstruction`. 
+![image](images/Original_Asm_Code.PNG)
 
-2. Analyzing Jumps and Returns:
+VMProtect settings, everything is turned off, we virtualize the function on ultra setting. (Tested versions 3.4.0-3.6.0) 
 
-    Jump Analysis: When a jump instruction is encountered, Mergen checks if the jump destination is a constant value.
+![image](images/vmp_settings.PNG)
 
-    Return Analysis: For return instructions, the tool assesses whether the `ret` is part of a standard function return or a Return-Oriented Programming gadget used for jumping to the next handler. This involves checking for any modifications to the instruction pointer (xIP).
+![image](images/vmp_settings2.PNG)
 
-3. Solving Jump Destinations:
+This is how it looks after virtualizing.
 
-    Destination Resolution: If the jump is not to a constant or the return is identified as an ROP gadget, Mergen resolves where the control flow is intended to jump next.
+![image](images/vmp_ultra_asm.PNG)
 
-4. Iterative Parsing and Analysis:
+Here, we run mergen. First argument is the name of the file and the second argument is the address of the function. Look how simple it is to run. And we can compile the output so we can explore it using our favorite decompiler.
 
-    Looping Process: The tool repeats the process from step 1, parsing subsequent asm instructions into LLVM IR.
+![image](images/mergen_run.PNG)
 
-    Termination Condition: This iteration continues until Mergen identifies a real `ret` instruction. A real ret is confirmed when the stack pointer (xSP) at the end of the function matches the xSP value at the start of the function.
+```llvm
+; ModuleID = 'my_lifting_module'
+source_filename = "my_lifting_module"
 
+; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
+define i64 @main(i64 %rax, i64 %rcx, i64 %rdx, i64 %rbx, i64 %0, i64 %rbp, i64 %rsi, i64 %rdi, i64 %r8, i64 %r9, i64 %r10, i64 %r11, i64 %r12, i64 %r13, i64 %r14, i64 %r15, ptr nocapture readnone %memory) local_unnamed_addr #0 {
+entry:
+  %stackmemory = alloca i128, i128 20971520, align 8
+  %1 = trunc i64 %r8 to i32
+  %2 = trunc i64 %rdx to i32
+  %3 = trunc i64 %rcx to i32
+  %realadd-5369234850- = add i32 %2, %3
+  %not17196 = sub i32 %realadd-5369234850-, %1
+  %4 = zext i32 %not17196 to i64
+  ret i64 %4
+}
 
-## Missing features:
+attributes #0 = { mustprogress nofree norecurse nosync nounwind willreturn memory(none) }
+```
 
-### multiple branch support
+After compiling:
 
-### identifying inline/outline functions
+![image](images/disass.PNG)
+
+![image](images/decomp.PNG)
+
+Now you might notice the registers are a little bit off. This is because of we dont follow the calling conventions, if we were to follow the calling conventions, function signature would look like this:
+```llvm
+define i64 @main(i64 %rcx, i64 %rdx, i64 %rdx, i64 %r8, i64 %r9 ...) 
+```
+So, we just adjust the function signature to look normally. If you have more questions about this part, I suggest you research [calling conventions](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#parameter-passing) and [ABI](https://learn.microsoft.com/en-us/cpp/build/x64-software-conventions?view=msvc-170&source=recommendations#register-volatility-and-preservation).
+
+![image](images/decomp2.PNG)
+
+![image](images/adjusted.PNG)
+
+## What it can/cant do
+
+### It can devirtualize some versions of some programs. 
+
+### It can figure out if `jcc` is opaque.
+
+### It cant decide which path to follow if `jcc` is not opaque.
+
+### It cant optimize whole binary, only one function at a time. 
 
 
 
