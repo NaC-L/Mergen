@@ -754,7 +754,6 @@ namespace branches {
 
             llvm::ValueToValueMapTy VMap_finale;
             //function->print(outs());
-            llvm::Function* clonedFunc_finale = llvm::CloneFunction(originalFunc_finalnopt, VMap_finale);
 
             final_optpass(originalFunc_finalnopt);
 #ifdef _DEVELOPMENT
@@ -763,7 +762,6 @@ namespace branches {
             llvm::raw_fd_ostream OS(Filename, EC);
             originalFunc_finalnopt->print(OS);
 #endif
-            clonedFunc_finale->eraseFromParent();
             (*run) = 0;
         }
 
@@ -912,6 +910,26 @@ namespace branches {
         branchnumber++;
     }
 
+
+    void lift_jnb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+        // If CF=0, then jump. Otherwise, do not jump.
+
+        auto cf = getFlag(context, builder, FLAG_CF);
+
+        auto dest = instruction.operands[0];
+
+        auto Value = GetOperandValue(context, builder, dest, 64);
+        auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+        auto newRip = builder.CreateAdd(Value, ripval, "jnb");
+
+
+        // Check if neither CF nor ZF are set
+        auto condition = builder.CreateNot(cf, "notCF");
+        branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jnb", branchnumber);
+
+        branchnumber++;
+    }
 
     // jnbe == ja
     void lift_jnbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
@@ -1294,11 +1312,6 @@ namespace arithmeticsAndLogical {
         // Perform the logical left shift
         Value* shiftedValue = builder.CreateShl(destValue, clampedCountValue, "shl-shift");
 
-
-        // Optionally, update EFLAGS/RFLAGS based on the result if needed. 
-        // For instance, setting CF and OF flags based on the SHL result.
-        // ...
-
         SetOperandValue(context, builder, dest, shiftedValue);
     }
 
@@ -1535,8 +1548,6 @@ namespace arithmeticsAndLogical {
         new_flags = setFlag(context, builder, FLAG_PF, pf);
 
 
-
-        
 
         SetOperandValue(context, builder, dest, result);
 
@@ -1943,7 +1954,6 @@ namespace arithmeticsAndLogical {
         Value* Rvalue = GetOperandValue(context, builder, instruction.operands[1], instruction.operands[0].size);
 
         Value* cmpResult = builder.CreateSub(Lvalue, Rvalue);
-
         // Calculate flags based on cmpResult
         Value* signL = builder.CreateICmpSLT(Lvalue, ConstantInt::get(Lvalue->getType(), 0));
         Value* signR = builder.CreateICmpSLT(Rvalue, ConstantInt::get(Rvalue->getType(), 0));
@@ -1967,8 +1977,7 @@ namespace arithmeticsAndLogical {
         new_flags = setFlag(context, builder, FLAG_SF, sf);
         new_flags = setFlag(context, builder, FLAG_ZF, zf);
         new_flags = setFlag(context, builder, FLAG_PF, pf);
-
-        
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
     }
 
 
@@ -2709,6 +2718,10 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     case ZYDIS_MNEMONIC_JNBE: {
 
         branches::lift_jnbe(context, builder, instruction, blockAddresses);
+        break;
+    }       
+    case ZYDIS_MNEMONIC_JNB: {
+        branches::lift_jnb(context, builder, instruction, blockAddresses);
         break;
     }   
     case ZYDIS_MNEMONIC_JBE: {

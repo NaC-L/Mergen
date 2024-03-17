@@ -3,7 +3,9 @@
 #define _SILENCE_ALL_CXX20_DEPRECATION_WARNINGS
 #define _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS
 #define ZYDIS_STATIC_BUILD
+
 #define _DEVELOPMENT
+
 #pragma warning(disable:4146)
 #include <iostream>
 #include <vector>

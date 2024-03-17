@@ -717,6 +717,7 @@ Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* new
 
 	// Shift the new value to the correct position
 	Value* shifted_newValue = builder.CreateShl(builder.CreateZExtOrTrunc(newValue, Type::getInt64Ty(context)), position, "flagsetweird");
+	shifted_newValue = builder.CreateOr(cleared_rflag, shifted_newValue, "setflag-or");
 	SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, shifted_newValue);
 	return shifted_newValue;
 }
