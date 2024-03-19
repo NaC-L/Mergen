@@ -47,7 +47,7 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 }
 
 
-void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
+void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0);
 
@@ -63,11 +63,11 @@ void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
 }
 
 // responsible of operations on RFLAG
-Value* setFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
+Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
 	return FlagList[flag] = newValue;
 	
 }
-Value* getFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
+Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 	return FlagList[flag];
 }
 
@@ -78,7 +78,7 @@ Value* getFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 // instead of 1 variable
 // have multiple variables that correspond to the flags
 
-void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
+void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
 
 
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
@@ -175,7 +175,19 @@ Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, 
 	return highByteValue;
 }
 
+Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
+	Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0); // Assuming a 64-bit value for simplicity
 
+	for (int flag = FLAG_CF; flag++; flag < FLAGS_END) {
+		Value* flagValue = getFlag(context, builder, (Flag)flag);
+		// Calculate the shift amount; this depends on how your flags are defined.
+		int shiftAmount = flag; // This is just a placeholder. You'll need to map flags to their actual positions.
+		Value* shiftedFlagValue = builder.CreateShl(flagValue, ConstantInt::get(Type::getInt64Ty(context), shiftAmount));
+		rflags = builder.CreateOr(rflags, shiftedFlagValue);
+		// shl and or flags to have one big flag
+	}
+	return rflags;
+}
 
 // responsible for retrieving latest llvm SSA value from a asm register
 Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
@@ -189,10 +201,15 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
 	int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP) ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key) : key;
 
 
+	if (key == ZYDIS_REGISTER_RFLAGS) {
+		return GetRFLAGSValue(context, builder);
+	}
+
+	/*
 	if (RegisterList.find(newKey) == RegisterList.end()) {
 		throw std::runtime_error("register not found"); exit(-1);
 	}
-
+	*/
 
 	return RegisterList[newKey];
 
@@ -286,7 +303,10 @@ void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value
 	if (((key >= ZYDIS_REGISTER_AX) && (key <= ZYDIS_REGISTER_R15W))) {
 		value = SetValueToSubRegister2(context, builder, key, value);
 	}
-
+	/*
+	if (key == ZYDIS_REGISTER_RFLAGS) {
+		return SetRFLAGSValue(context, builder);
+	}*/
     int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP) ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key) : key;
 
     RegisterList[newKey] = value;
@@ -512,12 +532,14 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 					APInt readValue(byteSize * 8, tempValue);
 					Constant* newVal = ConstantInt::get(loadType, readValue);
+					if (newVal)
 					return newVal;
 				}
 				
 				if (addr > 0 && addr < STACKP_VALUE) { 
 					
 					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
+					if (newval)
 					return newval;
 
 				}
@@ -691,7 +713,7 @@ Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* val
 
 
 
-Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
+Value* getFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 	Value* rflag_var = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
 	Value* position = ConstantInt::get(context, APInt(64, flag));
 	// Create the '1 << position' value
@@ -703,7 +725,7 @@ Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 	return builder.CreateICmpNE(and_result, ConstantInt::get(context, APInt(64, 0)), "getflag-cmpne");
 }
 
-Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue) {
+Value* setFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue) {
 	Value* rflag_var = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
 	Value* position = ConstantInt::get(context, APInt(64, flag));
 	// Create the '1 << position' value

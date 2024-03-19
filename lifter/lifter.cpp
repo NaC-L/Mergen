@@ -30,6 +30,7 @@
 
 vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > added_blocks_addresses;
 uintptr_t original_address = 0;
+uintptr_t instcount = 0;
 
 // first of all, this function is UGLY af, so I'm sorry you are reading this.
 void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* data, ZyanU64 runtime_address, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, Function* function, ZyanU64 file_base) {
@@ -105,6 +106,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             // this loop is responsible of parsing asm into zydis then LLVM.
             for (; run && runtime_address > 0; )
             {
+                
                 //the function we know and we love
                 ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, runtime_address, data + offset, 15, &instruction);
 
@@ -116,8 +118,10 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
                     // Print current instruction.
                     
 #ifdef _DEVELOPMENT
+                    instcount++;
                     cout << instruction.text << "\n";
                     cout << "runtime: " << runtime_address << "\n";
+                    cout << "instcount: " << instcount << "\n";
 #endif
                     instruction.runtime_address += instruction.info.length;
 

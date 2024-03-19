@@ -14,3 +14,5 @@
 *.iobj
 *\x64*
 *.exe*
+*.sln
+*vcxproj*
