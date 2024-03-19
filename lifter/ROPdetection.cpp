@@ -239,7 +239,6 @@ bool doesReturnRsp(Function* clonedFunc, BasicBlock& clonedBB, LPVOID file_base,
 
     FPM.get()->add(createEarlyCSEPass(true));
     FPM.get()->add(createDeadCodeEliminationPass());
-    FPM.get()->add(createMergedLoadStoreMotionPass());
     //FPM.get()->add(CreateIntToPtrStackDSEPass());
 
     // create a pass that acatually works to promote memory to register
