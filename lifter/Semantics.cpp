@@ -63,7 +63,7 @@ void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
 
     llvm::ValueToValueMapTy VMap;
     //function->print(outs());
-    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap); // only do this if needed, move this part to isOpaque
     std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
     clonedFunctmp->removeFromParent();
 
@@ -668,7 +668,7 @@ namespace branches {
 
         llvm::ValueToValueMapTy VMap;
         //function->print(outs());
-        llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+        llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap); // only do this if needed, move this part to isROP
         std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
         clonedFunctmp->removeFromParent();
 
@@ -863,6 +863,50 @@ namespace branches {
 
     }
 
+    void lift_js(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+        // if 0, then jmp, if not then not jump
+
+        auto sf = getFlag(context, builder, FLAG_SF);
+
+        auto dest = instruction.operands[0];
+
+        auto Value = GetOperandValue(context, builder, dest, 64);
+        auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+        auto newRip = builder.CreateAdd(Value, ripval, "jns");
+
+
+        branchHelper(context, builder, instruction, blockAddresses, sf, newRip, "jns", branchnumber);
+
+        branchnumber++;
+
+
+
+    }    
+    void lift_jns(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+        // if 0, then jmp, if not then not jump
+
+        auto sf = getFlag(context, builder, FLAG_SF);
+
+        auto dest = instruction.operands[0];
+
+        auto Value = GetOperandValue(context, builder, dest, 64);
+        auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+
+        auto newRip = builder.CreateAdd(Value, ripval, "jns");
+
+        sf = builder.CreateNot(sf);
+
+        branchHelper(context, builder, instruction, blockAddresses, sf, newRip, "jns", branchnumber);
+
+        branchnumber++;
+
+
+
+    }
+
     void lift_jz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
         // if 0, then jmp, if not then not jump
@@ -910,6 +954,27 @@ namespace branches {
         branchnumber++;
     }
 
+
+
+    void lift_jb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+        // If CF=0, then jump. Otherwise, do not jump.
+
+        auto cf = getFlag(context, builder, FLAG_CF);
+
+        auto dest = instruction.operands[0];
+
+        auto Value = GetOperandValue(context, builder, dest, 64);
+        auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
+        auto newRip = builder.CreateAdd(Value, ripval, "jb");
+
+
+        // Check if neither CF nor ZF are set
+        auto condition = cf;
+        branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jb", branchnumber);
+
+        branchnumber++;
+    }
 
     void lift_jnb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
@@ -2714,6 +2779,14 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     case ZYDIS_MNEMONIC_JZ: {
         branches::lift_jz(context, builder, instruction, blockAddresses);
         break;
+    }    
+    case ZYDIS_MNEMONIC_JS: {
+        branches::lift_js(context, builder, instruction, blockAddresses);
+        break;
+    }    
+    case ZYDIS_MNEMONIC_JNS: {
+        branches::lift_jns(context, builder, instruction, blockAddresses);
+        break;
     }
     case ZYDIS_MNEMONIC_JNBE: {
 
@@ -2722,6 +2795,10 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     }       
     case ZYDIS_MNEMONIC_JNB: {
         branches::lift_jnb(context, builder, instruction, blockAddresses);
+        break;
+    }       
+    case ZYDIS_MNEMONIC_JB: {
+        branches::lift_jb(context, builder, instruction, blockAddresses);
         break;
     }   
     case ZYDIS_MNEMONIC_JBE: {
