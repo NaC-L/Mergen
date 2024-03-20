@@ -61,43 +61,11 @@ void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
     auto newcond = builder.CreateZExt(condition, function->getReturnType());
     auto lastinst = builder.CreateRet(newcond);
 
-    llvm::ValueToValueMapTy VMap;
-    //function->print(outs());
-    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap); // only do this if needed, move this part to isOpaque
-    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
-    clonedFunctmp->removeFromParent();
 
-    // Add the cloned function to the destination module
-    destinationModule->getFunctionList().push_back(clonedFunctmp);
-
-    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
-
-
-    BasicBlock* clonedBlock = block;
-    for (auto& blocks : *clonedFunc) {
-        if (blocks.getName() == instname + to_string(numbered))
-            clonedBlock = &blocks;
-    }
-
-#ifdef _DEVELOPMENT
-    std::string Filename = "output_opaque_noopt.ll";
-    std::error_code EC;
-    llvm::raw_fd_ostream OS(Filename, EC);
-    function->print(OS);
-#endif
-    opaque_info opaque = isOpaque(clonedFunc, *clonedBlock);
+    opaque_info opaque = isOpaque(function);
 
     lastinst->eraseFromParent();
 
-
-#ifdef _DEVELOPMENT
-    std::string Filename2 = "output_opaque_opt.ll";
-    std::error_code EC2;
-    llvm::raw_fd_ostream OS2(Filename2, EC2);
-    clonedFunc->print(OS2);
-#endif
-
-    clonedFunc->eraseFromParent();
     block->setName("previous"+ instname+"-"+to_string(instruction.runtime_address)+"-");
     // i want to create a opaque detector here
     // if opaque, return 1 or 2
@@ -666,43 +634,15 @@ namespace branches {
         function->print(OS);
 #endif
 
-        llvm::ValueToValueMapTy VMap;
-        //function->print(outs());
-        llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap); // only do this if needed, move this part to isROP
-        std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", context);
-        clonedFunctmp->removeFromParent();
-
-        // Add the cloned function to the destination module
-        destinationModule->getFunctionList().push_back(clonedFunctmp);
-
-        Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
-
-
-        BasicBlock* clonedBlock = block;
-        for (auto& blocks : *clonedFunc) {
-            if (blocks.getName() == "ret_check" + to_string(ret_count))
-                clonedBlock = &blocks;
-        }
 
 
         uintptr_t destination;
-#ifdef _DEVELOPMENT
-        std::string Filename_before = "output_before_rop_opt.ll";
-        std::error_code EC_before;
-        llvm::raw_fd_ostream OS_before(Filename_before, EC_before);
-        clonedFunc->print(OS_before);
-#endif
-        ROP_info ROP = isROP(clonedFunc, *clonedBlock, destination);
+
+        ROP_info ROP = isROP(function, function->back(), destination);
 
 
 
-#ifdef _DEVELOPMENT
-        std::string Filename_after = "output_after_rop_opt.ll";
-        std::error_code EC_after;
-        llvm::raw_fd_ostream OS_after(Filename_after, EC_after);
-        clonedFunc->print(OS_after);
-#endif
-        clonedFunc->eraseFromParent();
+
         lastinst->eraseFromParent();
 
         block->setName("previousret_block");
