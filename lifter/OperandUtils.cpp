@@ -177,7 +177,7 @@ Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, 
 
 
 // this function will probably cause issues in the future
-void* SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
+void SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
 
 	for (int flag = FLAG_CF; flag++; flag < FLAGS_END) {
 		int shiftAmount = flag;
@@ -316,10 +316,11 @@ void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value
 		value = SetValueToSubRegister2(context, builder, key, value);
 	}
 
-	/*
+	
 	if (key == ZYDIS_REGISTER_RFLAGS) {
-		return SetRFLAGSValue(context, builder, value);
-	}*/
+		SetRFLAGSValue(context, builder, value);
+		return;
+	}
 
     int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP) ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key) : key;
 
