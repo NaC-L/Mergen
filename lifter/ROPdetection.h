@@ -7,7 +7,7 @@ void test_optxd(Function* clonedFuncx);
 void final_optpass(Function* clonedFuncx);
 
 
-opaque_info isOpaque(Function* clonedFunc);
+opaque_info isOpaque(Function* function);
 
 void initDetections(LPVOID file_base, ZyanU8* data);
 
