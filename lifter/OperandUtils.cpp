@@ -175,16 +175,28 @@ Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, 
 	return highByteValue;
 }
 
+
+// this function will probably cause issues in the future
+void* SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
+
+	for (int flag = FLAG_CF; flag++; flag < FLAGS_END) {
+		int shiftAmount = flag;
+		Value* shiftedFlagValue = builder.CreateLShr(value, ConstantInt::get(Type::getInt64Ty(context), shiftAmount) ); // Value >> flag
+		auto flagValue = builder.CreateTrunc(shiftedFlagValue, Type::getInt1Ty(context)); // i64 ...0001 to 1
+		setFlag(context,builder,(Flag)flag,flagValue);
+		// shl and or flags to have one big flag
+	}
+	return ;
+}
+
 Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
 	Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0); // Assuming a 64-bit value for simplicity
 
 	for (int flag = FLAG_CF; flag++; flag < FLAGS_END) {
 		Value* flagValue = getFlag(context, builder, (Flag)flag);
-		// Calculate the shift amount; this depends on how your flags are defined.
-		int shiftAmount = flag; // This is just a placeholder. You'll need to map flags to their actual positions.
+		int shiftAmount = flag; 
 		Value* shiftedFlagValue = builder.CreateShl(flagValue, ConstantInt::get(Type::getInt64Ty(context), shiftAmount));
 		rflags = builder.CreateOr(rflags, shiftedFlagValue);
-		// shl and or flags to have one big flag
 	}
 	return rflags;
 }
@@ -303,10 +315,12 @@ void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value
 	if (((key >= ZYDIS_REGISTER_AX) && (key <= ZYDIS_REGISTER_R15W))) {
 		value = SetValueToSubRegister2(context, builder, key, value);
 	}
+
 	/*
 	if (key == ZYDIS_REGISTER_RFLAGS) {
-		return SetRFLAGSValue(context, builder);
+		return SetRFLAGSValue(context, builder, value);
 	}*/
+
     int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP) ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key) : key;
 
     RegisterList[newKey] = value;
