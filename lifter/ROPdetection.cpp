@@ -382,7 +382,7 @@ void final_optpass(Function* clonedFuncx) {
 
 
 // check if the flag is a constant
-opaque_info isOpaque(Function* clonedFunc , BasicBlock& clonedBB) {
+opaque_info isOpaque(Function* function) {
     //create clone of module/function then analyze it.
 
     auto file_base = file_base_g;
@@ -391,7 +391,7 @@ opaque_info isOpaque(Function* clonedFunc , BasicBlock& clonedBB) {
 
     opaque_info result = NOT_OPAQUE;
 
-    llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(clonedBB.getTerminator());
+    llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
     // Assuming you want to check the return value of the ReturnInst
     if (returnInst->getReturnValue() != nullptr) {
@@ -408,8 +408,23 @@ opaque_info isOpaque(Function* clonedFunc , BasicBlock& clonedBB) {
         }
     }
 
+    llvm::ValueToValueMapTy VMap;
+    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
+    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", function->getContext());
+    clonedFunctmp->removeFromParent();
+
+    // Add the cloned function to the destination module
+    destinationModule->getFunctionList().push_back(clonedFunctmp);
+
+    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
     llvm::PassBuilder passBuilder;
 
+#ifdef _DEVELOPMENT
+    std::string Filename2 = "output_opaque_noopt.ll";
+    std::error_code EC;
+    llvm::raw_fd_ostream OS(Filename, EC);
+    clonedFunc->print(OS);
+#endif
     // Create a new module analysis manager
     llvm::LoopAnalysisManager loopAnalysisManager;
     llvm::FunctionAnalysisManager functionAnalysisManager;
