@@ -1,11 +1,12 @@
-#pragma once
+#include "coff/section_header.hpp"
 #include "includes.h"
+#include "nt/nt_headers.hpp"
 
-PIMAGE_SECTION_HEADER GetEnclosingSectionHeader(DWORD rva, PIMAGE_NT_HEADERS pNTHeader) {
-    PIMAGE_SECTION_HEADER section = IMAGE_FIRST_SECTION(pNTHeader);
-    for (unsigned i = 0; i < pNTHeader->FileHeader.NumberOfSections; i++, section++) {
-        if ((rva >= section->VirtualAddress) &&
-            (rva < (section->VirtualAddress + section->Misc.VirtualSize))) {
+win::section_header_t* GetEnclosingSectionHeader(uint32_t rva, win::nt_headers_x64_t* pNTHeader) {
+    auto section = pNTHeader->get_sections();
+    for (unsigned i = 0; i < pNTHeader->file_header.num_sections; i++, section++) {
+        if ((rva >= section->virtual_address) &&
+            (rva < (section->virtual_address + section->virtual_size))) {
             return section;
         }
     }
@@ -13,22 +14,22 @@ PIMAGE_SECTION_HEADER GetEnclosingSectionHeader(DWORD rva, PIMAGE_NT_HEADERS pNT
 }
 
 
-uintptr_t RvaToFileOffset(PIMAGE_NT_HEADERS ntHeaders, DWORD rva) {
-    PIMAGE_SECTION_HEADER sectionHeader = IMAGE_FIRST_SECTION(ntHeaders);
-    for (UINT i = 0; i < ntHeaders->FileHeader.NumberOfSections; i++, sectionHeader++) {
-        if (rva >= sectionHeader->VirtualAddress && rva < (sectionHeader->VirtualAddress + sectionHeader->Misc.VirtualSize)) {
-            return rva - sectionHeader->VirtualAddress + sectionHeader->PointerToRawData;
+uintptr_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva) {
+    auto sectionHeader = ntHeaders->get_sections();
+    for (int i = 0; i < ntHeaders->file_header.num_sections; i++, sectionHeader++) {
+        if (rva >= sectionHeader->virtual_address && rva < (sectionHeader->virtual_address + sectionHeader->virtual_size)) {
+            return rva - sectionHeader->virtual_address + sectionHeader->ptr_raw_data;
         }
     }
     return 0;
 }
 
 
-uintptr_t address_to_mapped_address(LPVOID fileBase, uintptr_t rva) {
+uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva) {
 
-    PIMAGE_DOS_HEADER dosHeader = static_cast<PIMAGE_DOS_HEADER>(fileBase);
-    PIMAGE_NT_HEADERS ntHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>(reinterpret_cast<BYTE*>(fileBase) + dosHeader->e_lfanew);
+    auto dosHeader = (win::dos_header_t*)fileBase;
+    auto ntHeaders = (win::nt_headers_x64_t*)((uint8_t*)fileBase + dosHeader->e_lfanew);
 
-    auto ADDRESS = rva - ntHeaders->OptionalHeader.ImageBase;
+    auto ADDRESS = rva - ntHeaders->optional_header.image_base;
     return RvaToFileOffset(ntHeaders, ADDRESS);
 }

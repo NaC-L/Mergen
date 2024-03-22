@@ -19,7 +19,7 @@ Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* new
 Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag);
 
 
-void initBases2(LPVOID file_base, ZyanU8* data);
+void initBases2(void* file_base, ZyanU8* data);
 
 
 Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* value);

@@ -6,6 +6,9 @@
 #include "OperandUtils.h"
 #include "ROPdetection.h"
 #include "OperandUtils.h"
+#include "nt/nt_headers.hpp"
+#include <cstdlib>
+#include <fstream>
 
 #define _CRTDBG_MAP_ALLOC
 // Function to disassemble and convert
@@ -14,16 +17,16 @@
 // plan:
 // 1- Handle operands, get set etc. (framework for handling instructions)  -done
 // ^^^dont forget properly getting highest register
-// 
+//
 // 1a- Initialize calling stuff, registers - done
 // 1b- Get and set registers done
 // ^^^dont forget size conversions
 // ^^^most of the stuff that elongates the reversing process is writing stuff into memory.
-// 
+//
 // 2- Handle instructions.  - semi done , added few instructions
-// 
+//
 // 3- Handle blocks or optimization - working on blocks
-// 
+//
 // 4- Handle blocks or optimization
 //
 
@@ -44,9 +47,9 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
 
             // find the real address in memory of where we want to continue parsing
             runtime_address = get<0>(blockAddresses->back());
-            uintptr_t offset = address_to_mapped_address((LPVOID)file_base, runtime_address);
+            uintptr_t offset = address_to_mapped_address((void*)file_base, runtime_address);
 #ifdef _DEVELOPMENT
-            cout << "runtime_addr: " << runtime_address << " offset:" << offset << " byte there: 0x" << (int)*(BYTE*)(file_base + offset) << endl;
+            cout << "runtime_addr: " << runtime_address << " offset:" << offset << " byte there: 0x" << (int)*(uint8_t*)(file_base + offset) << endl;
             cout << "offset: " << offset << " file_base?: " << original_address << " runtime: " << runtime_address << endl;
 #endif
 
@@ -65,7 +68,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             // we want to store the register list because its SSA.
             setRegisterList(get<2>(blockAddresses->back()));
             // a very simplified representation why:
-            // 
+            //
             // mov ecx, 10 --- %ecx_0 = 10
             // test eax, eax --- if (!eax) jump branch2;
             // je branch2:
@@ -77,7 +80,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             // sub ecx, 10 --- %ecx_2 = %ecx_0 - 10
             // ret -- ret i64 %ecx_2
             //
-            // if we hadn't store the registers then branch 
+            // if we hadn't store the registers then branch
             // branch2 would thought we still operate on %ecx_1 and since it's in a different branch, it wouldn't work
 
 
@@ -85,8 +88,8 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             blockAddresses->pop_back();
 
             // this is for memory accesses to the binary
-            initDetections((LPVOID)file_base, data);
-            initBases2((LPVOID)file_base, data);
+            initDetections((void*)file_base, data);
+            initBases2((void*)file_base, data);
             size_t last_value;
 
             //idk?
@@ -116,7 +119,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
                 {
 
                     // Print current instruction.
-                    
+
 #ifdef _DEVELOPMENT
                     instcount++;
                     cout << instruction.text << "\n";
@@ -197,7 +200,8 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
-    argTypes.push_back(llvm::Type::getVoidTy(context)->getPointerTo()); // 1 off because rsp
+    argTypes.push_back(llvm::Type::getInt8PtrTy(context)); // 1 off because rsp
+    //argTypes.push_back(llvm::Type::getVoidTy(context)->getPointerTo()); // 1 off because rsp
 
     auto functionType = llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 
@@ -224,7 +228,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
 
     // WHERE MAGIC HAPPENS.
-    asm_to_zydis_to_lift(context, builder, (BYTE*)file_base, runtime_address, blockAddresses, function, file_base);
+    asm_to_zydis_to_lift(context, builder, (uint8_t*)file_base, runtime_address, blockAddresses, function, file_base);
 
 
     // dump the result to output.ll
@@ -245,41 +249,44 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     return;
 }
 
-
-
 int main(int argc, char* argv[])
 {
     auto start = std::chrono::high_resolution_clock::now();
 
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <filename> <startAddr>" << std::endl;
-        _getch();
         return 1;
     }
 
     const char* filename = argv[1];
     uint64_t startAddr = std::stoull(argv[2], nullptr, 0);
 
-
-    HANDLE hFile = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hFile == INVALID_HANDLE_VALUE) {
+    std::ifstream ifs(filename, std::ios::binary);
+    if(!ifs.is_open()) {
         std::cout << "Failed to open the file." << std::endl;
         return 1;
     }
 
-    // probably move this part to a function
-    DWORD fileSize = GetFileSize(hFile, NULL);
-    HANDLE hMapping = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
-    LPVOID fileBase = MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, fileSize);
+    ifs.seekg(0, std::ios::end);
+    std::vector<uint8_t> fileData(ifs.tellg());
+    ifs.seekg(0, std::ios::beg);
+
+    if(!ifs.read((char*)fileData.data(), fileData.size())) {
+        std::cout << "Failed to read the file." << std::endl;
+        return 1;
+    }
+    ifs.close();
+
+    auto fileBase = fileData.data();
 
     // Parse the PE headers
-    PIMAGE_DOS_HEADER dosHeader = static_cast<PIMAGE_DOS_HEADER>(fileBase);
-    PIMAGE_NT_HEADERS ntHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>(reinterpret_cast<BYTE*>(fileBase) + dosHeader->e_lfanew);
-    PIMAGE_SECTION_HEADER sectionHeader = IMAGE_FIRST_SECTION(ntHeaders);
-    auto ADDRESS = ntHeaders->OptionalHeader.ImageBase;
+    auto dosHeader = (win::dos_header_t*)fileBase;
+    auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
+    auto sectionHeader = ntHeaders->get_sections();
+    auto ADDRESS = ntHeaders->optional_header.image_base;
     uintptr_t RVA = static_cast<uintptr_t>(startAddr - ADDRESS);
     uintptr_t fileOffset = RvaToFileOffset(ntHeaders, RVA);
-    BYTE* dataAtAddress = reinterpret_cast<BYTE*>(fileBase) + fileOffset;
+    uint8_t* dataAtAddress = fileBase + fileOffset;
     cout << hex << "0x" << (int)*dataAtAddress << endl;
     original_address = ADDRESS;
     cout << "address: " << ADDRESS << " filebase: " << (uintptr_t)fileBase << " fOffset: " << fileOffset << " RVA: " << RVA << endl;
@@ -295,9 +302,4 @@ int main(int argc, char* argv[])
     long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(
         elapsed).count();
     cout << "\n" << dec << microseconds << " microsecond has past";
-
-    UnmapViewOfFile(fileBase);
-    CloseHandle(hMapping);
-    CloseHandle(hFile);
-
 }

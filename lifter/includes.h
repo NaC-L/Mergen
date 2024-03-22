@@ -2,18 +2,24 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _SILENCE_ALL_CXX20_DEPRECATION_WARNINGS
 #define _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS
+#ifndef ZYDIS_STATIC_BUILD
 #define ZYDIS_STATIC_BUILD
+#endif // ZYDIS_STATIC_BUILD
 //#define _DEVELOPMENT
 #pragma warning(disable:4146)
 #include <iostream>
 #include <vector>
 #include <map>
 #include <tuple>
-#include <windows.h>
-#undef min 
-#undef max
-#include <Zydis/Zydis.h>
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h>
 #include <conio.h>
+#else
+#define DebugBreak() __builtin_debugtrap()
+#endif // _WIN32
+
+#include <Zydis/Zydis.h>
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
@@ -67,7 +73,7 @@
 #include "llvm/Transforms/Scalar/DCE.h"
 #include "llvm/Transforms/Scalar/DeadStoreElimination.h"
 #include "llvm/Transforms/Scalar/EarlyCSE.h"
-#include "llvm/Transforms/Scalar/Reg2mem.h"
+#include "llvm/Transforms/Scalar/Reg2Mem.h"
 #include "llvm/Transforms/Scalar/Reassociate.h"
 #include "llvm/Transforms/Scalar/SCCP.h"
 #include "llvm/Transforms/Scalar/SROA.h"
@@ -111,7 +117,7 @@
 #include "llvm/Transforms/IPO/CrossDSOCFI.h"
 #include "llvm/Transforms/IPO/DeadArgumentElimination.h"
 #include "llvm/Transforms/IPO/ElimAvailExtern.h"
-#include "llvm/Transforms/IPO/EmbedBitcodePass.h"
+//#include "llvm/Transforms/IPO/EmbedBitcodePass.h"
 #include "llvm/Transforms/IPO/ForceFunctionAttrs.h"
 #include "llvm/Transforms/IPO/FunctionAttrs.h"
 #include "llvm/Transforms/IPO/GlobalDCE.h"
@@ -122,7 +128,7 @@
 #include "llvm/Transforms/IPO/InferFunctionAttrs.h"
 #include "llvm/Transforms/IPO/Inliner.h"
 #include "llvm/Transforms/IPO/LowerTypeTests.h"
-#include "llvm/Transforms/IPO/MemProfContextDisambiguation.h"
+//#include "llvm/Transforms/IPO/MemProfContextDisambiguation.h"
 #include "llvm/Transforms/IPO/MergeFunctions.h"
 #include "llvm/Transforms/IPO/ModuleInliner.h"
 #include "llvm/Transforms/IPO/OpenMPOpt.h"
@@ -187,11 +193,11 @@
 #include "llvm/Transforms/Utils/AddDiscriminators.h"
 #include "llvm/Transforms/Utils/AssumeBundleBuilder.h"
 #include "llvm/Transforms/Utils/CanonicalizeAliases.h"
-#include "llvm/Transforms/Utils/CountVisits.h"
+//#include "llvm/Transforms/Utils/CountVisits.h"
 #include "llvm/Transforms/Utils/InjectTLIMappings.h"
 #include "llvm/Transforms/Utils/LibCallsShrinkWrap.h"
 #include "llvm/Transforms/Utils/Mem2Reg.h"
-#include "llvm/Transforms/Utils/MoveAutoInit.h"
+//#include "llvm/Transforms/Utils/MoveAutoInit.h"
 #include "llvm/Transforms/Utils/NameAnonGlobals.h"
 #include "llvm/Transforms/Utils/RelLookupTableConverter.h"
 #include "llvm/Transforms/Utils/SimplifyCFGOptions.h"
@@ -200,7 +206,7 @@
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
 
 
-#include "llvm/Codegen/Passes.h"
+#include "llvm/CodeGen/Passes.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
