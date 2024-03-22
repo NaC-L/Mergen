@@ -1,12 +1,11 @@
-#pragma once
 #include "includes.h"
 
 // this file is where helper functions reside.
 
-LPVOID file_base_g_operand;
+void* file_base_g_operand;
 ZyanU8* data_g_operand;
 
-void initBases2(LPVOID file_base, ZyanU8* data) {
+void initBases2(void* file_base, ZyanU8* data) {
 	file_base_g_operand = file_base;
 	data_g_operand = data;
 }
@@ -42,6 +41,9 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 		return llvm::Type::getInt128Ty(context);
 	}
 
+    default: {
+        return llvm::Type::getIntNTy(context, size);
+    }
 
 	}
 }
@@ -65,7 +67,7 @@ void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 // responsible of operations on RFLAG
 Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
 	return FlagList[flag] = newValue;
-	
+
 }
 Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 	return FlagList[flag];
@@ -142,16 +144,16 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 
 
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
-	auto value = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), rip); 
+	auto value = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), rip);
 
-	// initialize xIP value, should be function start, its here for stuff like getting .data or calling functions 
+	// initialize xIP value, should be function start, its here for stuff like getting .data or calling functions
 	auto new_rip = builder.CreateAdd(zero, value);
 	// move initialized value into map
 	RegisterList[ZYDIS_REGISTER_RIP] = new_rip;
 
 
 	// initialize xSP value, as said, when xSP is not a defined value, optimizations get messy.
-	auto stackvalue = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), STACKP_VALUE); 
+	auto stackvalue = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), STACKP_VALUE);
 	auto new_stack_pointer = builder.CreateAdd(stackvalue, zero);
 	// move initialized value into map
 	RegisterList[ZYDIS_REGISTER_RSP] = new_stack_pointer;
@@ -300,7 +302,7 @@ Value* SetValueToSubRegister2(LLVMContext& context, IRBuilder<>& builder, int re
 
 // responsible for setting a LLVM SSA Value
 void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value) {
-    if ( 
+    if (
         (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH || key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) { // handling all 8 sub-registers
         value = SetValueToSubRegister(context, builder, key, value);
 
@@ -365,9 +367,9 @@ Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDeco
 	else {
 		effectiveAddress = ConstantInt::get(Type::getInt64Ty(context), 0);
 	}
-	
+
 	if (op.mem.disp.has_displacement) {
-		
+
 		Value* dispValue = ConstantInt::get(Type::getInt64Ty(context), (int)(op.mem.disp.value));
 		effectiveAddress = builder.CreateAdd(effectiveAddress, dispValue,"effective_address");
 	}
@@ -408,7 +410,7 @@ public:
 	// v & 0xff + v & 0xff00 + v & 0xff0000 + v & 0xff000000
 
 	void addValueReference(Value* value, unsigned address) {
-		unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8; 
+		unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
 		for (unsigned i = 0; i < valueSizeInBytes; i++) {
 			// Ensure the buffer is large enough
 			delete buffer[address + i];
@@ -458,11 +460,11 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
 			Value* value = GetRegisterValue(context, builder, op.reg.value);
 
-			
 
-			auto opBitWidth = op.size;  
+
+			auto opBitWidth = op.size;
 			auto typeBitWidth = dyn_cast<IntegerType>(value->getType())->getBitWidth();
-			auto new_value = 
+			auto new_value =
 				builder.CreateZExtOrTrunc(value, type, "trunc");
 			return new_value;
 		}
@@ -474,7 +476,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			else {
 				val = llvm::ConstantInt::get(context, llvm::APInt(possiblesize, op.imm.value.u));
 			}
-			return val; 
+			return val;
 		}
 		case ZYDIS_OPERAND_TYPE_MEMORY: {
 			// First, compute the effective address.
@@ -527,9 +529,9 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			std::vector<Value*> indices;
 			indices.push_back(effectiveAddress); // First index is always 0 in this context
-			
+
 			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadxd-");
-			
+
 
 
 			if (isa<ConstantInt>(effectiveAddress)) {
@@ -550,16 +552,16 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 					if (newVal)
 					return newVal;
 				}
-				
-				if (addr > 0 && addr < STACKP_VALUE) { 
-					
+
+				if (addr > 0 && addr < STACKP_VALUE) {
+
 					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
 					if (newval)
 					return newval;
 
 				}
-				
-				
+
+
 			}
 
 
@@ -622,7 +624,7 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 
 	// Combine the masked existing value with the extended new value
 	return builder.CreateOr(maskedExistingValue, extendedNewValue, "mergedValue");
-	
+
 }
 
 
@@ -632,7 +634,7 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
 			GetRegisterValue(context, builder, op.reg.value);
-			
+
 			SetRegisterValue(context, builder, op.reg.value, value);
 			break;
 
@@ -687,25 +689,27 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,indices,"GEPSTORE");
 			Value* store = builder.CreateStore(value, pointer);  // Ensure `valueToSet` matches the expected type
-			
+
 
 			if (isa<ConstantInt>(effectiveAddress) ) {
 
 				ConstantInt* effectiveAddressInt = cast<ConstantInt>(effectiveAddress);
 				ConstantInt* valueInt = cast<ConstantInt>(value);
-				unsigned bitWidth = valueInt->getBitWidth(); 
-				uint64_t dataValue = valueInt->getZExtValue(); 
+				unsigned bitWidth = valueInt->getBitWidth();
+				uint64_t dataValue = valueInt->getZExtValue();
 
 				globalBuffer.addValueReference(valueInt, effectiveAddressInt->getZExtValue());
 			}
 
-		
+
 			return store;
 		}
 		break;
 
 		default: {
+            printf("kurwa: %d\n", op.type);
 			throw std::runtime_error("operand type not implemented"); exit(-1);
+            return nullptr;
 		}
 	}
 
