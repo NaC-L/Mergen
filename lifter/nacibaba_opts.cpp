@@ -26,15 +26,15 @@ namespace {
             // store t1 x, ptr y
             // load t2, ptr y
             // replace y with alloc, so it should be
-            // %z = alloca t (can it be i128 default? 
-            //   
+            // %z = alloca t (can it be i128 default?
+            //
             // %0 = alloca i32, i32 2
             // store t1 x, ptr %z
             // load t2, ptr %z
             //
             // lets say
             // push rax
-            // mov rax, [rsp+4] 
+            // mov rax, [rsp+4]
             //
             // %0 = alloca i64
             // store %rax, %0
@@ -43,7 +43,7 @@ namespace {
             //
             // however in this case we also need to put it to map;
             // currently we do it like this
-            // 
+            //
             // store t1 x, ptr y
             // load t2, ptr y+4
             // so y and y+4 should share same alloca, but its like
@@ -67,30 +67,30 @@ namespace {
 
                 // Handling Load Instructions
                 else if (LoadInst* load = dyn_cast<LoadInst>(&*I)) {
-                    
+
                     Value* ptr = load->getPointerOperand();
-                    
+
                     unsigned loadBitWidth = load->getType()->getIntegerBitWidth();
-                    
+
 
                     if (latestStore.find(ptr) != latestStore.end()) {
                         IRBuilder<> builder(load);
                         Value* loadedVal = ConstantInt::get(load->getType(), 0); // Start with 0
 
                         for (const StoreInfo& storeInfo : latestStore[ptr]) {
-       
 
-                            Value* storedVal = storeInfo.val; 
-  
-                            unsigned storedBitWidth = storeInfo.bitWidth; 
-         
-                            
+
+                            Value* storedVal = storeInfo.val;
+
+                            unsigned storedBitWidth = storeInfo.bitWidth;
+
+
 
                             Value* mask1 = builder.CreateSub(
                                 ConstantInt::get(storedVal->getType(), 0),
                                 ConstantInt::get(storedVal->getType(), 1),
                                 "mask1");
-                            
+
 
                             if (mask1->getType()->getIntegerBitWidth() != loadBitWidth)
                                 mask1 = builder.CreateZExtOrTrunc(mask1, load->getType(), "mask2");
@@ -106,8 +106,8 @@ namespace {
                                 storedVal = builder.CreateZExtOrTrunc(storedVal, load->getType(),"opt_zext");
 
                             loadedVal = builder.CreateOr(storedVal, MaskedStored,"opt_or");
-                            
-                            
+
+
                         }
                         load->replaceAllUsesWith(loadedVal);
                         modified = true;
@@ -125,7 +125,7 @@ char ReplaceLoadWithStoreValuePass::ID = 0;
 // before pass ->
 // store i64 100, ptr some_mem
 // %x = load i64, ptr some_mem
-// 
+//
 // after pass ->
 // store i64 100, ptr some_mem
 // %x = 100
@@ -139,10 +139,10 @@ namespace {
 
     struct LoadFromBinaryPass : public FunctionPass {
         static char ID;
-        LPVOID binaryBase;
+        void* binaryBase;
         ZyanU8* data;
 
-        LoadFromBinaryPass(LPVOID base, ZyanU8* fdata) : FunctionPass(ID) {
+        LoadFromBinaryPass(void* base, ZyanU8* fdata) : FunctionPass(ID) {
             binaryBase = base;
             data = fdata;
             // Read the binary into binaryMemory using std::ifstream
@@ -156,7 +156,7 @@ namespace {
                 for (Instruction& I : BB) {
                     if (LoadInst* load = dyn_cast<LoadInst>(&I)) {
                         Value* pointerOperand = load->getPointerOperand();
-                        
+
                         if (Operator* op = dyn_cast<Operator>(pointerOperand)) {
                             if (ConstantInt* CI = dyn_cast<ConstantInt>(op->getOperand(0))) {
                                 uintptr_t addr = CI->getZExtValue();
@@ -192,11 +192,11 @@ char LoadFromBinaryPass::ID = 0;
 
 
 // basically replace detect binary loads and replace the load with value
-//before pass-> 
+//before pass->
 // %x = load i64, ptr 0x140002000
 // after pass ->
 // %x = [whatever the value is at 0x140002000, but no load inst]
-FunctionPass* create_nacibaba_replace_load_from_memory(LPVOID binaryBase, ZyanU8* data) {
+FunctionPass* create_nacibaba_replace_load_from_memory(void* binaryBase, ZyanU8* data) {
     return new LoadFromBinaryPass(binaryBase, data);
 }
 
@@ -301,7 +301,7 @@ namespace {
                             load->replaceAllUsesWith(loadedVal);
                             modified = true;
                         }
-                        
+
                     }
                 }
             }
@@ -407,7 +407,9 @@ namespace {
             if (auto* ce = dyn_cast<ConstantExpr>(ptrOperand)) {
                 if (ce->getOpcode() == Instruction::IntToPtr) {
                     if (auto* ci = dyn_cast<ConstantInt>(ce->getOperand(0))) {
-                        return -512 < ( STACKP_VALUE - ci->getZExtValue() ) < 4096; // Assuming STACKP_VALUE is defined
+                        auto delta = STACKP_VALUE - (int64_t)ci->getZExtValue();
+                        return delta > -512 && delta < 4096;
+                        //return -512 < ( STACKP_VALUE - ci->getZExtValue() ) < 4096; // Assuming STACKP_VALUE is defined
                     }
                 }
             }
@@ -422,7 +424,7 @@ char IntToPtrStackDSEPass::ID = 0;
 
 
 // basically replace detect binary loads and replace the load with value
-//before pass-> 
+//before pass->
 // %x = load i64, ptr 0x140002000
 // after pass ->
 // %x = [whatever the value is at 0x140002000, but no load inst]
