@@ -5,7 +5,8 @@
 #ifndef ZYDIS_STATIC_BUILD
 #define ZYDIS_STATIC_BUILD
 #endif // ZYDIS_STATIC_BUILD
-//#define _DEVELOPMENT
+#define _DEVELOPMENT
+#pragma warning(disable: 4996)
 #pragma warning(disable:4146)
 #include <iostream>
 #include <vector>
@@ -204,7 +205,6 @@
 #include "llvm/Transforms/Vectorize/LoopVectorize.h"
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
-
 
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/ADT/STLExtras.h"

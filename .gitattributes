@@ -1,0 +1,6 @@
+# cmkr
+/**/CMakeLists.txt linguist-generated
+/**/cmkr.cmake linguist-vendored
+# Zydis
+/**/Zydis/Zydis.c linguist-vendored
+/**/Zydis/Zydis.h linguist-vendored
