@@ -6,6 +6,7 @@
 void* file_base_g;
 ZyanU8* data_g;
 
+#pragma once
 #ifndef GEPLoadPass_H
 #define GEPLoadPass_H
 
@@ -15,13 +16,11 @@ ZyanU8* data_g;
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Constants.h"
 
-#include "llvm/Transforms/Scalar/SROA.h"
-
 
 class RemovePseudoStackPass : public llvm::PassInfoMixin<RemovePseudoStackPass> {
 public:
 
-
+ 
     llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
         // %stackmemory = alloca i128, i128 STACKP_VALUE
         // insert %stackmemory as first inst
@@ -174,23 +173,23 @@ void initDetections(void* file_base, ZyanU8* data) {
 
 // detects if RSP matches the starting value of RSP
 // normal function:
-//
+// 
 // -- rsp = 0xffff
 // push ecx 0xfff8
 // ...etc...
 // pop ecx  0xffff
 // (before ret rsp = 0xffff)
-// ret
-//
+// ret      
+// 
 // fake ret/function
-//
+// 
 // -- rsp = 0xffff
 // push ecx 0xfff8
 // ...etc...
 // pop ecx  0xffff
 // push (next_handler) 0xfff8
-// (before ret rsp = 0xfff8)
-// ret
+// (before ret rsp = 0xfff8) 
+// ret 
 //
 
 // basically apply bunch of optimizations and compare RSP
@@ -203,7 +202,7 @@ bool doesReturnRsp(Function* clonedFunc, BasicBlock& clonedBB, void* file_base, 
 
 
         if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(clonedBB.getTerminator()->getOperand(0))) {
-            return constInt->getZExtValue() == 18446744073709551600ull;
+            return constInt->getZExtValue() == 18446744073709551600;
         }
 
     }
@@ -259,11 +258,11 @@ bool doesReturnRsp(Function* clonedFunc, BasicBlock& clonedBB, void* file_base, 
 
 
         if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(clonedBB.getTerminator()->getOperand(0))) {
-            return constInt->getZExtValue() == 18446744073709551600ull;
+            return constInt->getZExtValue() == 18446744073709551600;
         }
 
     }
-
+    
 
 
     // after analysis
@@ -314,7 +313,7 @@ void test_optxd(Function* clonedFuncx) {
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.run(*module, moduleAnalysisManager);
 
-
+        
         size_t afterSize = module->getInstructionCount();
 
         // Check if the module has changed
@@ -421,7 +420,7 @@ opaque_info isOpaque(Function* function) {
     llvm::PassBuilder passBuilder;
 
 #ifdef _DEVELOPMENT
-    std::string Filename2 = "output_opaque_noopt.ll";
+    std::string Filename = "output_opaque_noopt.ll";
     std::error_code EC;
     llvm::raw_fd_ostream OS(Filename, EC);
     clonedFunc->print(OS);
@@ -457,19 +456,19 @@ opaque_info isOpaque(Function* function) {
     do {
         changed = false;
 
-
+        
 
         size_t beforeSize = module->getInstructionCount();
 
         // Build and run the optimization pipeline
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O0);
-        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass()));
+        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass(SROAOptions::PreserveCFG)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(EarlyCSEPass(true)));
         modulePassManager.addPass(IPSCCPPass());
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(InstCombinePass()));
 
-        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass()));
+        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass(SROAOptions::PreserveCFG)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(EarlyCSEPass(true)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(InstCombinePass()));
 
@@ -494,7 +493,7 @@ opaque_info isOpaque(Function* function) {
         clonedFunc->print(OS2);
 #endif
 
-
+        
         size_t afterSize = module->getInstructionCount();
 
         // Check if the module has changed
@@ -505,7 +504,7 @@ opaque_info isOpaque(Function* function) {
     } while (changed);
 
 
-
+        
     returnInst = dyn_cast<llvm::ReturnInst>(clonedFunc->back().getTerminator());
         // Assuming you want to check the return value of the ReturnInst
         if (returnInst->getReturnValue() != nullptr) {
@@ -530,7 +529,7 @@ opaque_info isOpaque(Function* function) {
 ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
     //create clone of module/function then analyze it.
 
-
+   
 
     auto file_base = file_base_g;
     auto data = data_g;
@@ -595,18 +594,18 @@ ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
         bool haschanged = false;
         changed = false;
 
-
+        
         size_t beforeSize = module->getInstructionCount();
 
         // Build and run the optimization pipeline
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O0);
-        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass()));
+        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass(SROAOptions::PreserveCFG)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(EarlyCSEPass(true)));
         modulePassManager.addPass(IPSCCPPass());
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(InstCombinePass()));
 
-        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass()));
+        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass(SROAOptions::PreserveCFG)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(EarlyCSEPass(true)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(InstCombinePass()));
 
@@ -631,7 +630,7 @@ ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
         clonedFunc->print(OS2);
 #endif
 
-
+        
         std::string afterOptimization;
         size_t afterSize = module->getInstructionCount();
 
@@ -666,7 +665,7 @@ ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
         llvm::Value* returnValue = returnInst->getReturnValue();
         if (llvm::ConstantInt* constInt = llvm::dyn_cast<llvm::ConstantInt>(returnValue)) {
             dest = constInt->getZExtValue();
-
+           
         }
     }
 
@@ -697,7 +696,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
     JMP_info result = REAL_jmp;
     llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
-    if ((returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator()))) {
+    if (returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
         // Assuming you want to check the return value of the ReturnInst
         if (returnInst->getReturnValue() != nullptr) {
             // Check if the return value is a constant integer
@@ -758,12 +757,12 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
         // Build and run the optimization pipeline
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O0);
-        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass()));
+        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass(SROAOptions::PreserveCFG)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(EarlyCSEPass(true)));
         modulePassManager.addPass(IPSCCPPass());
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(InstCombinePass()));
 
-        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass()));
+        modulePassManager.addPass(createModuleToFunctionPassAdaptor(SROAPass(SROAOptions::PreserveCFG)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(EarlyCSEPass(true)));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(InstCombinePass()));
 
@@ -796,7 +795,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
 
     //we need to modify here when adding branches
     //maybe we add metadata to return instruction and search it?
-    if ((returnInst = dyn_cast<llvm::ReturnInst>(clonedFunc->back().getTerminator()))) {
+    if (returnInst = dyn_cast<llvm::ReturnInst>(clonedFunc->back().getTerminator() )) {
         // Assuming you want to check the return value of the ReturnInst
         if (returnInst->getReturnValue() != nullptr) {
             // Check if the return value is a constant integer

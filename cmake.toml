@@ -1,0 +1,29 @@
+[cmake]
+version = "3.16"
+cmkr-include = "cmake/cmkr.cmake"
+
+[project]
+name = "Mergen"
+
+[variables]
+CMAKE_MODULE_PATH = "cmake"
+
+[find-package.LLVM]
+
+[subdir.linux-pe]
+
+[target.Zydis]
+type = "static"
+alias = "Zydis::Zydis"
+sources = ["Zydis-4.1.0/Zydis/Zydis.c"]
+headers = ["Zydis-4.1.0/Zydis/Zydis.h"]
+include-directories = ["Zydis-4.1.0"]
+private-include-directories = ["Zydis-4.1.0/Zydis"]
+compile-definitions = ["ZYCORE_STATIC_BUILD", "ZYDIS_STATIC_BUILD"]
+
+[target.lifter]
+type = "executable"
+sources = ["lifter/*.cpp"]
+headers = ["lifter/*.h"]
+link-libraries = ["Zydis::Zydis", "LLVM", "linux-pe"]
+compile-features = ["cxx_std_20"]

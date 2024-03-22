@@ -49,7 +49,7 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 }
 
 
-void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
+void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
 
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0);
 
@@ -80,7 +80,7 @@ Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 // instead of 1 variable
 // have multiple variables that correspond to the flags
 
-void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
+void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
 
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
@@ -177,18 +177,17 @@ Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, 
 	return highByteValue;
 }
 
-
 // this function will probably cause issues in the future
 void SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
 
 	for (int flag = FLAG_CF; flag++; flag < FLAGS_END) {
 		int shiftAmount = flag;
-		Value* shiftedFlagValue = builder.CreateLShr(value, ConstantInt::get(Type::getInt64Ty(context), shiftAmount) ); // Value >> flag
+		Value* shiftedFlagValue = builder.CreateLShr(value, ConstantInt::get(Type::getInt64Ty(context), shiftAmount)); // Value >> flag
 		auto flagValue = builder.CreateTrunc(shiftedFlagValue, Type::getInt1Ty(context)); // i64 ...0001 to 1
-		setFlag(context,builder,(Flag)flag,flagValue);
+		setFlag(context, builder, (Flag)flag, flagValue);
 		// shl and or flags to have one big flag
 	}
-	return ;
+	return;
 }
 
 Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
@@ -196,7 +195,7 @@ Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
 
 	for (int flag = FLAG_CF; flag++; flag < FLAGS_END) {
 		Value* flagValue = getFlag(context, builder, (Flag)flag);
-		int shiftAmount = flag; 
+		int shiftAmount = flag;
 		Value* shiftedFlagValue = builder.CreateShl(flagValue, ConstantInt::get(Type::getInt64Ty(context), shiftAmount));
 		rflags = builder.CreateOr(rflags, shiftedFlagValue);
 	}
@@ -224,6 +223,7 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
 		throw std::runtime_error("register not found"); exit(-1);
 	}
 	*/
+
 
 	return RegisterList[newKey];
 
@@ -318,7 +318,6 @@ void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value
 		value = SetValueToSubRegister2(context, builder, key, value);
 	}
 
-	
 	if (key == ZYDIS_REGISTER_RFLAGS) {
 		SetRFLAGSValue(context, builder, value);
 		return;
@@ -549,14 +548,12 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 					APInt readValue(byteSize * 8, tempValue);
 					Constant* newVal = ConstantInt::get(loadType, readValue);
-					if (newVal)
 					return newVal;
 				}
 
 				if (addr > 0 && addr < STACKP_VALUE) {
 
 					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
-					if (newval)
 					return newval;
 
 				}
@@ -630,12 +627,12 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 
 // responsible for setting a value in SSA Value map
 Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value) {
-
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
-			GetRegisterValue(context, builder, op.reg.value);
+			
 
 			SetRegisterValue(context, builder, op.reg.value, value);
+			return value;
 			break;
 
 		}case ZYDIS_OPERAND_TYPE_MEMORY:		{
@@ -707,9 +704,8 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 		break;
 
 		default: {
-            printf("kurwa: %d\n", op.type);
 			throw std::runtime_error("operand type not implemented"); exit(-1);
-            return nullptr;
+            		return nullptr;
 		}
 	}
 

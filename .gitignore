@@ -14,5 +14,9 @@
 *.iobj
 *\x64*
 *.exe*
-*.sln
-*vcxproj*
+
+# cmkr
+build*/
+cmake-build*/
+CMakerLists.txt
+CMakeLists.txt.user

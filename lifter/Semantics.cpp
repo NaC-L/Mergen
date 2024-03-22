@@ -814,10 +814,10 @@ namespace branches {
         auto Value = GetOperandValue(context, builder, dest, 64);
         auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
 
-        auto newRip = builder.CreateAdd(Value, ripval, "jns");
+        auto newRip = builder.CreateAdd(Value, ripval, "js");
 
 
-        branchHelper(context, builder, instruction, blockAddresses, sf, newRip, "jns", branchnumber);
+        branchHelper(context, builder, instruction, blockAddresses, sf, newRip, "js", branchnumber);
 
         branchnumber++;
 
