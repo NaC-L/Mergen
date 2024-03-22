@@ -49,7 +49,7 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 }
 
 
-void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
+void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0);
 
@@ -80,7 +80,7 @@ Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 // instead of 1 variable
 // have multiple variables that correspond to the flags
 
-void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
+void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
 
 
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
