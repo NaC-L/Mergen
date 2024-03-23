@@ -4,6 +4,10 @@ This tool is designed for:
 - The deobfuscation or devirtualization of obfuscated binary code
 - The enhancement of the reverse engineering process, making it more efficient and effective, especially for complex software systems.
 
+## Building
+
+To build the project, take a look at **docs/BUILDING.md**.
+
 ## Core Objectives:
 
 ### Deobfuscation
