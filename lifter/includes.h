@@ -5,6 +5,7 @@
 #ifndef ZYDIS_STATIC_BUILD
 #define ZYDIS_STATIC_BUILD
 #endif // ZYDIS_STATIC_BUILD
+#define NDEBUG
 #define _DEVELOPMENT
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)

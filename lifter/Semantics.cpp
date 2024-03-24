@@ -684,7 +684,8 @@ namespace branches {
         else if (ROP == REAL_return) {
 
             block->setName("real_ret");
-            builder.CreateRet(GetRegisterValue(context, builder, ZYDIS_REGISTER_RAX));
+            auto rax = GetRegisterValue(context, builder, ZYDIS_REGISTER_RAX);
+            builder.CreateRet(builder.CreateZExt(rax,Type::getInt64Ty(rax->getContext()) ));
             Function* originalFunc_finalnopt = builder.GetInsertBlock()->getParent();
 #ifdef _DEVELOPMENT
             std::string Filename_finalnopt = "output_finalnoopt.ll";
@@ -1222,20 +1223,39 @@ namespace arithmeticsAndLogical {
         auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
         Rvalue = builder.CreateNot(Rvalue, "not");
         SetOperandValue(context, builder, dest, Rvalue);
-
+        //  Flags Affected
+        // None
 
     }
 
     void lift_neg(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
         auto dest = instruction.operands[0];
-
         auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
-        Rvalue = builder.CreateNeg(Rvalue, "neg");
-        SetOperandValue(context, builder, dest, Rvalue);
 
+        auto cf = builder.CreateICmpNE(Rvalue, ConstantInt::get(Rvalue->getType(), 0), "cf");
+        auto result = builder.CreateNeg(Rvalue, "neg");
+        SetOperandValue(context, builder, dest, result);
 
+        auto sf = computeSignFlag(builder, result);
+        auto zf = computeZeroFlag(builder, result);
+        auto pf = computeParityFlag(builder, result);
+        auto af = builder.CreateICmpNE(builder.CreateAnd(Rvalue, 0xF), ConstantInt::get(Rvalue->getType(), 0), "af");
+
+        // OF is set if negating the most negative number
+        auto minValue = ConstantInt::getSigned(Rvalue->getType(), INT_MIN);
+        auto of = builder.CreateICmpEQ(Rvalue, minValue, "of");
+
+        // The CF flag set to 0 if the source operand is 0; otherwise it is set to 1. The OF, SF, ZF, AF, and PF flags are set 
+        // according to the result.
+        setFlag(context, builder, FLAG_CF, cf);
+        setFlag(context, builder, FLAG_SF, sf);
+        setFlag(context, builder, FLAG_ZF, zf);
+        setFlag(context, builder, FLAG_PF, pf);
+        setFlag(context, builder, FLAG_OF, of);
+        setFlag(context, builder, FLAG_AF, af);
     }
+
 
     /*
     
