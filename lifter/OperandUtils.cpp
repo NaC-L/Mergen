@@ -66,6 +66,7 @@ void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
 // responsible of operations on RFLAG
 Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
+
 	return FlagList[flag] = newValue;
 
 }
@@ -548,13 +549,15 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 					APInt readValue(byteSize * 8, tempValue);
 					Constant* newVal = ConstantInt::get(loadType, readValue);
-					return newVal;
+					if (newVal)
+						return newVal;
 				}
 
 				if (addr > 0 && addr < STACKP_VALUE) {
 
 					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
-					return newval;
+					if (newval)
+						return newval;
 
 				}
 
