@@ -28,28 +28,30 @@
 
 
 Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
-    // Extract least significant byte
-    Value* lsb = builder.CreateAnd(value, ConstantInt::get(value->getType(), 0xFF), "parity-and-lsb");
+    LLVMContext& context = value->getContext(); 
 
-    // Compute the parity using bitwise operations
-    lsb = builder.CreateXor(lsb, builder.CreateLShr(lsb, 4));
-    lsb = builder.CreateXor(lsb, builder.CreateLShr(lsb, 2));
-    lsb = builder.CreateXor(lsb, builder.CreateLShr(lsb, 1));
+    
+    Value* lsb = builder.CreateAnd(value, ConstantInt::get(value->getType(), 0xFF), "lsb");
+    Value* parity = ConstantInt::get(Type::getInt1Ty(context), 1);
+    for (int i = 0; i < 8; i++) {
+        // x ^ (x << i)
+        Value* bit = builder.CreateTrunc(builder.CreateLShr(lsb, i), Type::getInt1Ty(value->getContext()));
 
-    // Extract the least significant bit (this will be our PF flag)
-    Value* pf = builder.CreateAnd(lsb, ConstantInt::get(lsb->getType(), 1), "parityflag");
+        parity = builder.CreateXor(parity, bit);
 
-    // Return 1 - pf to match the semantics of the PF flag (1 if even set bits)
-    return builder.CreateSub(ConstantInt::get(pf->getType(), 1), pf);
+    }
+    return parity; // Returns 1 if even parity, 0 if odd
 }
 
-Value* computeZeroFlag(IRBuilder<>& builder, Value* value) {
+Value* computeZeroFlag(IRBuilder<>& builder, Value* value) { // x == 0 = zf
     return builder.CreateICmpEQ(value, ConstantInt::get(value->getType(), 0), "zf");
 }
 
-Value* computeSignFlag(IRBuilder<>& builder, Value* value) {
+Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x > 0 = sf
     return builder.CreateICmpSLT(value, ConstantInt::get(value->getType(), 0), "sf");
 }
+
+
 
 
 void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, Value* condition, Value* newRip, string instname, int numbered) {
@@ -682,7 +684,8 @@ namespace branches {
         else if (ROP == REAL_return) {
 
             block->setName("real_ret");
-            builder.CreateRet(GetRegisterValue(context, builder, ZYDIS_REGISTER_RAX));
+            auto rax = GetRegisterValue(context, builder, ZYDIS_REGISTER_RAX);
+            builder.CreateRet(builder.CreateZExt(rax,Type::getInt64Ty(rax->getContext()) ));
             Function* originalFunc_finalnopt = builder.GetInsertBlock()->getParent();
 #ifdef _DEVELOPMENT
             std::string Filename_finalnopt = "output_finalnoopt.ll";
@@ -1023,7 +1026,7 @@ namespace branches {
 
         // if 0, then jmp, if not then not jump
 
-        auto pf = getFlag(context, builder, FLAG_OF);
+        auto pf = getFlag(context, builder, FLAG_PF);
 
         auto dest = instruction.operands[0];
 
@@ -1031,9 +1034,18 @@ namespace branches {
         auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
 
         auto newRip = builder.CreateAdd(Value, ripval, "jnp");
-
-
+#ifdef _DEVELOPMENT
+        cout << "pf : ";
+        pf->print(outs());
+        cout << "\n";
+#endif
         pf = builder.CreateNot(pf);
+
+#ifdef _DEVELOPMENT
+        cout << "notpf : ";
+        pf->print(outs());
+        cout << "\n";
+#endif
         branchHelper(context, builder, instruction, blockAddresses, pf, newRip, "jnp", branchnumber);
 
         branchnumber++;
@@ -1211,20 +1223,39 @@ namespace arithmeticsAndLogical {
         auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
         Rvalue = builder.CreateNot(Rvalue, "not");
         SetOperandValue(context, builder, dest, Rvalue);
-
+        //  Flags Affected
+        // None
 
     }
 
     void lift_neg(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
         auto dest = instruction.operands[0];
-
         auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
-        Rvalue = builder.CreateNeg(Rvalue, "neg");
-        SetOperandValue(context, builder, dest, Rvalue);
 
+        auto cf = builder.CreateICmpNE(Rvalue, ConstantInt::get(Rvalue->getType(), 0), "cf");
+        auto result = builder.CreateNeg(Rvalue, "neg");
+        SetOperandValue(context, builder, dest, result);
 
+        auto sf = computeSignFlag(builder, result);
+        auto zf = computeZeroFlag(builder, result);
+        auto pf = computeParityFlag(builder, result);
+        auto af = builder.CreateICmpNE(builder.CreateAnd(Rvalue, 0xF), ConstantInt::get(Rvalue->getType(), 0), "af");
+
+        // OF is set if negating the most negative number
+        auto minValue = ConstantInt::getSigned(Rvalue->getType(), INT_MIN);
+        auto of = builder.CreateICmpEQ(Rvalue, minValue, "of");
+
+        // The CF flag set to 0 if the source operand is 0; otherwise it is set to 1. The OF, SF, ZF, AF, and PF flags are set 
+        // according to the result.
+        setFlag(context, builder, FLAG_CF, cf);
+        setFlag(context, builder, FLAG_SF, sf);
+        setFlag(context, builder, FLAG_ZF, zf);
+        setFlag(context, builder, FLAG_PF, pf);
+        setFlag(context, builder, FLAG_OF, of);
+        setFlag(context, builder, FLAG_AF, af);
     }
+
 
     /*
     
@@ -1499,7 +1530,6 @@ namespace arithmeticsAndLogical {
     }
 
 
-    // extract idiv and mul
     void lift_add_sub(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
         auto src = instruction.operands[1];
@@ -1508,17 +1538,89 @@ namespace arithmeticsAndLogical {
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
         Value* result = nullptr;
+        Value* cf = nullptr;
+        Value* af = nullptr;
+        Value* of = nullptr;
+        auto op1sign = builder.CreateICmpSLT(Lvalue, ConstantInt::get(Lvalue->getType(), 0));
+        auto op2sign = builder.CreateICmpSLT(Rvalue, ConstantInt::get(Rvalue->getType(), 0));
+
+        auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
+        auto op1LowerNibble = builder.CreateAnd(Lvalue, lowerNibbleMask, "lvalLowerNibble");
+        auto op2LowerNibble = builder.CreateAnd(Rvalue, lowerNibbleMask, "rvalLowerNibble");
+
+
         switch (instruction.info.mnemonic) {
-        case ZYDIS_MNEMONIC_ADD: {result = builder.CreateAdd(Lvalue, Rvalue, "realadd-" + to_string(instruction.runtime_address) + "-"); break; }
-        case ZYDIS_MNEMONIC_SUB: {result = builder.CreateSub(Lvalue, Rvalue, "realsub-" + to_string(instruction.runtime_address) + "-"); break; }
+        case ZYDIS_MNEMONIC_ADD: {
+            result = builder.CreateAdd(Lvalue, Rvalue, "realadd-" + to_string(instruction.runtime_address) + "-");
+            cf = builder.CreateOr(builder.CreateICmpULT(result, Lvalue), builder.CreateICmpULT(result, Rvalue));
+            auto resultLowerNibble = builder.CreateAnd(result, lowerNibbleMask, "resultLowerNibble");
+            auto sumLowerNibble = builder.CreateAdd(op1LowerNibble, op2LowerNibble);
+            af = builder.CreateICmpUGT(sumLowerNibble, lowerNibbleMask);
+            auto resultSign = builder.CreateICmpSLT(result, ConstantInt::get(Lvalue->getType(), 0));
+            auto inputSameSign = builder.CreateICmpEQ(op1sign, op2sign);
+            of = builder.CreateAnd(inputSameSign, builder.CreateICmpNE(op1sign, resultSign));
+
+            break;
+        }
+        case ZYDIS_MNEMONIC_SUB: {
+            result = builder.CreateSub(Lvalue, Rvalue, "realsub-" + to_string(instruction.runtime_address) + "-");
+
+
+
+            auto resultSign = builder.CreateICmpSLT(result, ConstantInt::get(Lvalue->getType(), 0));
+            auto inputDiffSign = builder.CreateICmpNE(op1sign, op2sign);
+            of = builder.CreateAnd(inputDiffSign, builder.CreateICmpNE(op1sign, resultSign));
+
+   
+            cf = builder.CreateICmpUGT(Rvalue, Lvalue);
+            auto resultLowerNibble = builder.CreateAnd(result, lowerNibbleMask, "resultLowerNibble");
+            af = builder.CreateICmpULT(op1LowerNibble, op2LowerNibble);
+            break;
+        }
+        }
+
+        /*
+        Flags Affected
+        The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
+        */
+        Value* sign_result = builder.CreateICmpSLT(result, ConstantInt::get(result->getType(), 0));
+
+        auto samesignforof = builder.CreateICmpEQ(op1sign, op2sign);
+        auto sf = computeSignFlag(builder,result);
+        auto zf = computeZeroFlag(builder,result);
+        auto pf = computeParityFlag(builder,result);
+
+        setFlag(context, builder, FLAG_OF, of);
+        setFlag(context, builder, FLAG_SF, sf);
+        setFlag(context, builder, FLAG_ZF, zf);
+        setFlag(context, builder, FLAG_AF, af);
+        setFlag(context, builder, FLAG_CF, cf);
+        setFlag(context, builder, FLAG_PF, pf);
+
+        SetOperandValue(context, builder, dest, result);
+
+        // 
+
+
+    }    
+        
+    void lift_mul_idiv(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+        auto dest = instruction.operands[0];
+        auto src = instruction.operands[1];
+
+        auto Rvalue = GetOperandValue(context, builder, src, dest.size);
+        auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
+
+        Value* result = nullptr;
+        switch (instruction.info.mnemonic) {
         case ZYDIS_MNEMONIC_IMUL: {result = builder.CreateMul(Lvalue, Rvalue); break; }
         case ZYDIS_MNEMONIC_IDIV: {
             result = builder.CreateSDiv(Lvalue, Rvalue);
             auto remained = builder.CreateSRem(Lvalue, Rvalue);
-
             SetOperandValue(context, builder, instruction.operands[2], remained);
             break; }
         }
+
         SetOperandValue(context, builder, dest, result);
 
 
@@ -1545,12 +1647,15 @@ namespace arithmeticsAndLogical {
         auto sf = computeSignFlag(builder, result);
         auto zf = computeZeroFlag(builder, result);
         auto pf = computeParityFlag(builder, result);
+        //  The OF and CF flags are cleared; the SF, ZF, and PF flags are set according to the result. The state of the AF flag is undefined.
 
 
-
-        Value* new_flags = setFlag(context, builder, FLAG_OF, sf);
+        Value* new_flags = setFlag(context, builder, FLAG_SF, sf);
         new_flags = setFlag(context, builder, FLAG_ZF, zf);
         new_flags = setFlag(context, builder, FLAG_PF, pf);
+
+        setFlag(context, builder, FLAG_OF, llvm::ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0));
+        setFlag(context, builder, FLAG_CF, llvm::ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0));
 
 
 
@@ -1578,7 +1683,7 @@ namespace arithmeticsAndLogical {
 
 
 
-        Value* new_flags = setFlag(context, builder, FLAG_OF, sf);
+        Value* new_flags = setFlag(context, builder, FLAG_SF, sf);
         new_flags = setFlag(context, builder, FLAG_ZF, zf);
         new_flags = setFlag(context, builder, FLAG_PF, pf);
 
@@ -1609,7 +1714,7 @@ namespace arithmeticsAndLogical {
 
 
 
-        Value* new_flags = setFlag(context, builder, FLAG_OF, sf);
+        Value* new_flags = setFlag(context, builder, FLAG_SF, sf);
         new_flags = setFlag(context, builder, FLAG_ZF, zf);
         new_flags = setFlag(context, builder, FLAG_PF, pf);
 
@@ -2841,7 +2946,10 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     }
 
     case ZYDIS_MNEMONIC_IMUL:
-    case ZYDIS_MNEMONIC_IDIV:
+    case ZYDIS_MNEMONIC_IDIV: {
+        arithmeticsAndLogical::lift_mul_idiv(context, builder, instruction);
+        break;
+    }
     case ZYDIS_MNEMONIC_SUB:
     case ZYDIS_MNEMONIC_ADD: {
         arithmeticsAndLogical::lift_add_sub(context, builder, instruction);
