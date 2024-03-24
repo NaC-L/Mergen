@@ -17,8 +17,8 @@ project(Mergen)
 # Packages
 find_package(LLVM REQUIRED)
 include_directories(${LLVM_INCLUDE_DIRS})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fsanitize=address")
-set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -g -fsanitize=address")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS}")
 
 # Subdirectory: linux-pe
 set(CMKR_CMAKE_FOLDER ${CMAKE_FOLDER})
