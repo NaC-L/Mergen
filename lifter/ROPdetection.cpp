@@ -94,6 +94,8 @@ public:
                                     }
                                 }
                             }
+                             
+                            // if not in binary & never referenced before, return ConstantInt::get(getIntSize(byteSize, context), 0);
                         }
                     }
                 }
@@ -157,12 +159,49 @@ public:
 };
 
 
-// add new pass for replacing argument %memory with a alloca %memory for the last run,
-// will only work for values < STACKP_VALUE
-// this will get rid of deadstores, doing it manually 4now, but need2doit
+namespace {
+    class NoStoreToZeroStorePass : public PassInfoMixin<NoStoreToZeroStorePass> {
+    public:
+        PreservedAnalyses run(Module& M, ModuleAnalysisManager&) {
+            bool hasChanged = false;
+            return PreservedAnalyses::none();
+            for (auto& F : M) {
+                if (F.isDeclaration()) continue;
+
+                for (auto& BB : F) {
+                    std::set<GetElementPtrInst*> storedGEPs;
+
+                    for (auto& I : BB) {
+                        if (auto* storeInst = dyn_cast<StoreInst>(&I)) {
+                            if (auto* GEP = dyn_cast<GetElementPtrInst>(storeInst->getPointerOperand())) {
+                                // Mark the GEP as having been stored to
+                                storedGEPs.insert(GEP);
+                            }
+                        }
+                        else if (auto* loadInst = dyn_cast<LoadInst>(&I)) {
+                            if (auto* GEP = dyn_cast<GetElementPtrInst>(loadInst->getPointerOperand())) {
+                                // If it's a load from a GEP that hasn't been stored to yet
+                                if (storedGEPs.find(GEP) == storedGEPs.end()) {
+                                    // Replace the load instruction with a constant 0
+                                    IRBuilder<> builder(loadInst);
+                                    auto* zeroValue = ConstantInt::get(loadInst->getType(), 0);
+                                    loadInst->replaceAllUsesWith(zeroValue);
+                                    // Optional: Remove the original load instruction if it's no longer needed
+                                    // loadInst->eraseFromParent();
+                                    hasChanged = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return hasChanged ? PreservedAnalyses::none() : PreservedAnalyses::all();
+        }
+    };
+}
 
 #endif // GEPLoadPass_H
-
 
 void initDetections(void* file_base, ZyanU8* data) {
     file_base_g = file_base;
@@ -365,6 +404,7 @@ void final_optpass(Function* clonedFuncx) {
         // Build and run the optimization pipeline
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
         modulePassManager.addPass(GEPLoadPass());
+        modulePassManager.addPass(NoStoreToZeroStorePass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.addPass(RemovePseudoStackPass());
 
@@ -480,6 +520,7 @@ opaque_info isOpaque(Function* function) {
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(GVNPass()));
 
         modulePassManager.addPass(GEPLoadPass());
+        modulePassManager.addPass(NoStoreToZeroStorePass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
 
@@ -518,8 +559,6 @@ opaque_info isOpaque(Function* function) {
                 }
             }
         }
-
-
 
     return result;
 }
@@ -616,6 +655,7 @@ ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(AggressiveInstCombinePass(  )));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(GVNPass()));
         modulePassManager.addPass(GEPLoadPass());
+        modulePassManager.addPass(NoStoreToZeroStorePass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
 
@@ -773,6 +813,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(AggressiveInstCombinePass()));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(GVNPass()));
         modulePassManager.addPass(GEPLoadPass());
+        modulePassManager.addPass(NoStoreToZeroStorePass());
 
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
