@@ -94,7 +94,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             //idk?
             bool run = 1;
 
-            //sanity check
+            //?
             if (!blockAddresses->empty()) {
                 last_value = get<0>(blockAddresses->back());
             }
@@ -119,8 +119,9 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
                     // Print current instruction.
 
 #ifdef _DEVELOPMENT
-                    cout << instruction.text << "\n";
-                    cout << "runtime: " << runtime_address << "\n";
+                    outs() << instruction.text << "\n";
+                    outs() << "runtime: " << runtime_address << "\n";
+                    outs().flush();
 #endif
                     instruction.runtime_address += instruction.info.length;
 
@@ -196,7 +197,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
-    argTypes.push_back(llvm::Type::getVoidTy(context)->getPointerTo()); // 1 off because rsp
+    argTypes.push_back(llvm::PointerType::get(context,0)); // 1 off because rsp
 
     auto functionType = llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 

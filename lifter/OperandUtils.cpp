@@ -66,7 +66,7 @@ void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
 // responsible of operations on RFLAG
 Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
-
+	newValue = builder.CreateTrunc(newValue, Type::getInt1Ty(context));
 	return FlagList[flag] = newValue;
 
 }
@@ -264,21 +264,37 @@ Value* SetValueToHighByteRegister(LLVMContext& context, IRBuilder<>& builder, in
 // --- eax = 0X123456FF
 Value* SetValueToSubRegister(LLVMContext& context, IRBuilder<>& builder, int reg, Value* value) {
 	// Convert key for sub-register to their 64-bit counterparts
-	int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
+	int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, static_cast<ZydisRegister>(reg));
 	Value* fullRegisterValue = RegisterList[fullRegKey];
+	fullRegisterValue = builder.CreateZExtOrTrunc(fullRegisterValue, Type::getInt64Ty(context));
+
+	// Determine mask based on sub-register size and position
+	uint64_t mask = 0xFFFFFFFFFFFFFFFFULL;
+	if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH || reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
+		mask = 0xFFFFFFFFFFFF00FFULL; // Mask for 8 high bits of the lower 16-bit part
+	}
+	else {
+		mask = 0xFFFFFFFFFFFFFF00ULL; // Mask for low 8 bits
+	}
+
+	Value* maskValue = ConstantInt::get(Type::getInt64Ty(context), mask);
+	Value* extendedValue = builder.CreateZExt(value, Type::getInt64Ty(context), "extendedValue");
 
 	// Mask the full register so that only the sub-register part is set to 0
-	Value* maskedFullReg = builder.CreateAnd(fullRegisterValue, 0xFFFFFFFFFFFFFF00,"maskedreg");
-	value = builder.CreateZExt(value, fullRegisterValue->getType());
+	Value* maskedFullReg = builder.CreateAnd(fullRegisterValue, maskValue, "maskedreg");
+
+	// Shift the value into the correct position if necessary
+	if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH || reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
+		extendedValue = builder.CreateShl(extendedValue, 8, "shiftedValue");
+	}
+
 	// Or the masked full register with the sub-register value to set the byte
-	Value* updatedReg = builder.CreateOr(maskedFullReg, value,"newreg");
+	Value* updatedReg = builder.CreateOr(maskedFullReg, extendedValue, "newreg");
 
 	// Store the updated value back to the full register (if necessary)
-	// e.g. RegisterList[fullRegKey] = updatedReg;
+	RegisterList[fullRegKey] = updatedReg;
 
 	return updatedReg;
-
-
 }
 
 // same as above but for 16 bits
@@ -305,14 +321,17 @@ Value* SetValueToSubRegister2(LLVMContext& context, IRBuilder<>& builder, int re
 void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value) {
     if (
         (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH || key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) { // handling all 8 sub-registers
+		// ah here
         value = SetValueToSubRegister(context, builder, key, value);
-
+		// ? 
+		// should be 0xXXFF
 
     }
 
 	if ( ( (key >= ZYDIS_REGISTER_R8B) && (key <= ZYDIS_REGISTER_R15B) ) || ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_BL)) || ((key >= ZYDIS_REGISTER_SPL) && (key <= ZYDIS_REGISTER_DIL))) {
-
+		// al here 
 		value = SetValueToSubRegister(context, builder, key, value);
+		// should be 0xXX 
 	}
 
 	if (((key >= ZYDIS_REGISTER_AX) && (key <= ZYDIS_REGISTER_R15W))) {
@@ -341,22 +360,34 @@ Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDeco
 	Value* baseValue = nullptr;
 	if (op.mem.base != ZYDIS_REGISTER_NONE) {
 		baseValue = GetRegisterValue(context, builder, op.mem.base);
-		baseValue = builder.CreateZExtOrTrunc(baseValue,getIntSize( ZydisRegisterGetWidth(ZYDIS_MACHINE_MODE_LONG_64,op.mem.base), context) );
+		baseValue = builder.CreateZExt(baseValue, Type::getInt64Ty(context));
+#ifdef _DEVELOPMENT
+		outs() << "	baseValue : ";
+		baseValue->print(outs());
+		outs() << "\n";
+		outs().flush();
+#endif
 	}
 
 	Value* indexValue = nullptr;
 	if (op.mem.index != ZYDIS_REGISTER_NONE) {
 		indexValue = GetRegisterValue(context, builder, op.mem.index);
+
+		indexValue = builder.CreateZExt(indexValue, Type::getInt64Ty(context)); 
+#ifdef _DEVELOPMENT
+			outs() << "	indexValue : ";
+			indexValue->print(outs());
+		outs() << "\n";
+		outs().flush();
+#endif
 		if (op.mem.scale > 1) {
 			Value* scaleValue = ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-			indexValue = builder.CreateZExt(indexValue, Type::getInt64Ty(context));
-			indexValue = builder.CreateMul(indexValue, scaleValue,"gea");
+			indexValue = builder.CreateMul(indexValue, scaleValue, "mul_ea");
 		}
 	}
 
 	if (baseValue && indexValue) {
-		indexValue = builder.CreateZExtOrTrunc(indexValue, baseValue->getType(),"indexValue");
-		effectiveAddress = builder.CreateAdd(baseValue, indexValue,"bvalueandindexvaluelea");
+		effectiveAddress = builder.CreateAdd(baseValue, indexValue, "bvalue_indexvalue_set");
 	}
 	else if (baseValue) {
 		effectiveAddress = baseValue;
@@ -368,13 +399,18 @@ Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDeco
 		effectiveAddress = ConstantInt::get(Type::getInt64Ty(context), 0);
 	}
 
-	if (op.mem.disp.has_displacement) {
+	if (op.mem.disp.value) {
+		Value* dispValue = ConstantInt::get(Type::getInt64Ty(context), op.mem.disp.value);
+		effectiveAddress = builder.CreateAdd(effectiveAddress, dispValue, "disp_set");
 
-		Value* dispValue = ConstantInt::get(Type::getInt64Ty(context), (int)(op.mem.disp.value));
-		effectiveAddress = builder.CreateAdd(effectiveAddress, dispValue,"effective_address");
 	}
-
-	return effectiveAddress;
+#ifdef _DEVELOPMENT
+	outs() << "	effectiveAddress : ";
+	effectiveAddress->print(outs());
+	outs() << "\n";
+	outs().flush();
+#endif
+	return builder.CreateZExtOrTrunc(effectiveAddress,getIntSize(possiblesize,context));
 }
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Value.h"
@@ -395,7 +431,7 @@ class lifterMemoryBuffer {
 public:
 	std::vector<ValueByteReference*> buffer; // Now storing pointers to ValueByteReference
 
-	lifterMemoryBuffer() : buffer(STACKP_VALUE+0x100, nullptr) {} // Initialize with a default size, all nullptrs
+	lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {} // Initialize with a default size, all nullptrs
 
 	~lifterMemoryBuffer() {
 		// Clean up dynamically allocated ValueByteReferences
@@ -420,7 +456,33 @@ public:
 	}
 
 	Value* retrieveCombinedValue(llvm::IRBuilder<>& builder, unsigned startAddress, unsigned byteCount) {
+		if (byteCount == 0) return nullptr;
+
+		// Early check for contiguous same-source bytes
+		Value* firstSource = nullptr;
+		bool contiguous = true;
+		for (unsigned i = 0; i < byteCount && contiguous; ++i) {
+			unsigned currentAddress = startAddress + i;
+			if (currentAddress >= buffer.size() || buffer[currentAddress] == nullptr) {
+				contiguous = false;
+				break;
+			}
+			if (i == 0) {
+				firstSource = buffer[currentAddress]->value;
+			}
+			else if (buffer[currentAddress]->value != firstSource || buffer[currentAddress]->byteOffset != i) {
+				contiguous = false;
+			}
+		}
+
+		// If all bytes are from the same source and correctly contiguous
+		if (contiguous && firstSource != nullptr && byteCount == firstSource->getType()->getIntegerBitWidth() / 8) {
+			return firstSource;
+		}
+
+
 		Value* result = nullptr;
+
 		for (unsigned i = 0; i < byteCount; i++) {
 			unsigned currentAddress = startAddress + i;
 			if (currentAddress < buffer.size() && buffer[currentAddress] != nullptr) {
@@ -442,6 +504,9 @@ public:
 private:
 	llvm::Value* extractByte(llvm::IRBuilder<>& builder, llvm::Value* value, unsigned byteOffset) {
 		// Assuming the value is a 32-bit integer, adjust the shift amount based on the byte offset
+		if (!value) {
+			return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
+		}
 		unsigned shiftAmount = byteOffset * 8;
 		llvm::Value* shiftedValue = builder.CreateLShr(value, llvm::APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
 		return builder.CreateTrunc(shiftedValue, Type::getInt8Ty(builder.getContext()));
@@ -452,16 +517,13 @@ private:
 lifterMemoryBuffer globalBuffer;
 
 // responsible for retrieving a value in SSA Value map
-Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize) {
+Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address = "") {
 
 	auto type = getIntSize(possiblesize, context);
 
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
 			Value* value = GetRegisterValue(context, builder, op.reg.value);
-
-
-
 			auto opBitWidth = op.size;
 			auto typeBitWidth = dyn_cast<IntegerType>(value->getType())->getBitWidth();
 			auto new_value =
@@ -488,17 +550,26 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			Value* baseValue = nullptr;
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
 				baseValue = GetRegisterValue(context, builder, op.mem.base);
-
-
-
 				baseValue = builder.CreateZExt(baseValue, Type::getInt64Ty(context));
+#ifdef _DEVELOPMENT
+				outs() << "	baseValue : ";
+				baseValue->print(outs());
+				outs() << "\n";
+				outs().flush();
+#endif
 			}
 
 
 			Value* indexValue = nullptr;
 			if (op.mem.index != ZYDIS_REGISTER_NONE) {
 				indexValue = GetRegisterValue(context,builder,op.mem.index);
-				indexValue = builder.CreateSExt(indexValue, Type::getInt64Ty(context));
+				indexValue = builder.CreateZExt(indexValue, Type::getInt64Ty(context));
+#ifdef _DEVELOPMENT
+				outs() << "	indexValue : ";
+				indexValue->print(outs());
+				outs() << "\n";
+				outs().flush();
+#endif
 				if (op.mem.scale > 1) {
 					Value* scaleValue = ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
 					indexValue = builder.CreateMul(indexValue, scaleValue);
@@ -522,7 +593,12 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 				Value* dispValue = ConstantInt::get(Type::getInt64Ty(context), (int) (op.mem.disp.value) );
 				effectiveAddress = builder.CreateAdd(effectiveAddress, dispValue,"memory_addr");
 			}
-
+#ifdef _DEVELOPMENT
+			outs() << "	effectiveAddress : ";
+			effectiveAddress->print(outs());
+			outs() << "\n";
+			outs().flush();
+#endif
 			// Load the value from the computed address.
 			Type* loadType = getIntSize(possiblesize,context); // Determine based on op.mem.size or some other attribute
 			//Value* pointer = builder.CreateIntToPtr(effectiveAddress, loadType->getPointerTo());
@@ -530,7 +606,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			std::vector<Value*> indices;
 			indices.push_back(effectiveAddress); // First index is always 0 in this context
 
-			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadxd-");
+			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadxd-" + address + "-");
 
 
 
@@ -554,10 +630,10 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 				}
 
 				if (addr > 0 && addr < STACKP_VALUE) {
-
 					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
 					if (newval)
 						return newval;
+					return ConstantInt::get(getIntSize(byteSize, context), 0);
 
 				}
 
@@ -629,16 +705,15 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 
 
 // responsible for setting a value in SSA Value map
-Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value) {
+Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address = "") {
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
-			
-
 			SetRegisterValue(context, builder, op.reg.value, value);
 			return value;
 			break;
 
-		}case ZYDIS_OPERAND_TYPE_MEMORY:		{
+		}
+		case ZYDIS_OPERAND_TYPE_MEMORY:		{
 			// Compute the effective address, as before.
 			Value* effectiveAddress = nullptr;
 
@@ -651,12 +726,25 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
 				baseValue = GetRegisterValue(context, builder, op.mem.base);
 				baseValue = builder.CreateZExt(baseValue, Type::getInt64Ty(context));
+#ifdef _DEVELOPMENT
+				outs() << "	baseValue : ";
+				baseValue->print(outs());
+				outs() << "\n";
+				outs().flush();
+#endif
+
 			}
 
 			Value* indexValue = nullptr;
 			if (op.mem.index != ZYDIS_REGISTER_NONE) {
 				indexValue = GetRegisterValue(context, builder, op.mem.index);
-				indexValue = builder.CreateSExt(indexValue, Type::getInt64Ty(context),"areyouok");
+				indexValue = builder.CreateZExt(indexValue, Type::getInt64Ty(context));
+#ifdef _DEVELOPMENT
+				outs() << "	indexValue : ";
+				indexValue->print(outs());
+				outs() << "\n";
+				outs().flush();
+#endif
 				if (op.mem.scale > 1) {
 					Value* scaleValue = ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
 					indexValue = builder.CreateMul(indexValue, scaleValue, "mul_ea");
@@ -687,9 +775,14 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			std::vector<Value*> indices;
 			indices.push_back(effectiveAddress); // First index is always 0 in this context
 
-			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,indices,"GEPSTORE");
+			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,indices,"GEPSTORE-"+ address + "-");
 			Value* store = builder.CreateStore(value, pointer);  // Ensure `valueToSet` matches the expected type
-
+#ifdef _DEVELOPMENT
+			outs() << "	effectiveAddress : ";
+			effectiveAddress->print(outs());
+			outs() << "\n";
+			outs().flush();
+#endif
 
 			if (isa<ConstantInt>(effectiveAddress) ) {
 

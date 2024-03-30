@@ -5,11 +5,11 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key);
 void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value);
 unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip);
 
-Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize);
+Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address = "");
 Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize);
 IntegerType* getIntSize(int size, LLVMContext& context);
 
-Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value);
+Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address = "");
 
 unordered_map<int, Value*> getRegisterList();
 
