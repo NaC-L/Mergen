@@ -8,7 +8,7 @@
 #ifndef NDEBUG
 #define NDEBUG
 #endif
-//#define _DEVELOPMENT
+#define _DEVELOPMENT
 
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)
@@ -234,7 +234,7 @@
 using namespace std;
 using namespace llvm;
 #define RIP 0x007FFFFFFF400000
-#define STACKP_VALUE 0x0000000000200000
+#define STACKP_VALUE 0x14FE98
 
 enum FlagOperation {
 	SET_VALUE,
@@ -277,7 +277,7 @@ enum Flag {
     FLAG_RES29 = 29, //  Reserved, typically not used by programs
     FLAG_AES = 30, // AES key schedule loaded flag
     FLAG_AI = 31, // Alternate Instruction Set enabled
-    FLAGS_END = 65
+    FLAGS_END = 64
 };
 
 
