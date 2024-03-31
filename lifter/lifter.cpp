@@ -197,7 +197,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
     argTypes.push_back(llvm::Type::getInt64Ty(context)); // 16 regs
-    argTypes.push_back(llvm::PointerType::get(context, 0)); // 1 off because rsp
+    argTypes.push_back(llvm::PointerType::get(context,0)); // 1 off because rsp
 
     auto functionType = llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 
@@ -216,26 +216,13 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
 
     ZydisDisassembledInstruction instruction;
 
-    /*
-    Function* memsetFunc = Intrinsic::getDeclaration(&lifting_module, Intrinsic::memset,
-        { PointerType::get(context,0) });
 
-    // Prepare arguments for the 'memset' call
-    Value* valToSet = builder.getInt8(0); // Value to set (0 for zeroing out)
-    Value* numBytes = builder.getInt64(STACKP_VALUE*2); // Number of bytes to set
-    Value* isVolatile = builder.getInt1(false); // 'memset' is not volatile
-
-    // Create the call to 'memset'
-    auto argsIt = function->arg_end();
-    --argsIt; // Move iterator back to point to the last argument
-    Value* memory = &*argsIt; // Get the last argument
-    builder.CreateCall(memsetFunc, { memory, valToSet, numBytes, isVolatile},"test");
-    */
 
     // this works, but its ugly.
     std::shared_ptr<std::vector<std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>> blockAddresses = std::make_shared<std::vector<std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>>();
 
     blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
+
     // WHERE MAGIC HAPPENS.
     asm_to_zydis_to_lift(context, builder, (uint8_t*)file_base, runtime_address, blockAddresses, function, file_base);
 
@@ -251,6 +238,8 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     }
 
     lifting_module.print(OS, nullptr);
+    // Close the output stream
+    OS.flush();
 
 
     return;
