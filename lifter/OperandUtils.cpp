@@ -13,8 +13,15 @@ void initBases2(void* file_base, ZyanU8* data) {
 	data_g_operand = data;
 }
 
-#ifdef TESTFOLDER
+#ifndef TESTFOLDER
 #define TESTFOLDER
+#define TESTFOLDER3
+#define TESTFOLDER4
+#define TESTFOLDER5
+#define TESTFOLDER6
+#define TESTFOLDER7
+#define TESTFOLDER8
+#define TESTFOLDER9
 #endif
 
 // use this or less *special* version of this to compute known bits. USEFUL!!!!!!!!!!!!!!!!!!! FOR FLAGS STUFF
@@ -42,7 +49,7 @@ Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* Fa
 	return builder.CreateSelect(C, True, False, Name);
 }
 Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
-#ifdef TESTFOLDER
+#ifdef TESTFOLDER3
 	// Simplify if either operand is 0
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
 		if (LHSConst->isZero()) return RHS; // LHS is 0
@@ -55,7 +62,7 @@ Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 }
 
 Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
-#ifdef TESTFOLDER
+#ifdef TESTFOLDER4
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isZero()) return LHS; // RHS is 0
 	}
@@ -64,7 +71,7 @@ Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 }
 
 Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
-#ifdef TESTFOLDER
+#ifdef TESTFOLDER5
 	// Simplify if either operand is 0
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
 		if (LHSConst->isZero()) return RHS; // LHS is 0
@@ -77,7 +84,7 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine&
 }
 
 Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
-#ifdef TESTFOLDER
+#ifdef TESTFOLDER6
 	// Simplify if either operand is 0
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
 		if (LHSConst->isZero()) return RHS; // LHS is 0
@@ -163,7 +170,7 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 }
 
 Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
-#ifdef TESTFOLDER
+#ifdef TESTFOLDER7
 	if (TruncInst* truncInst = dyn_cast<TruncInst>(V)) {
 		Value* originalValue = truncInst->getOperand(0);
 		// Directly truncate the original value to the target type
@@ -173,7 +180,7 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twi
 	return builder.CreateTrunc(V, DestTy, Name);
 }
 Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
-#ifdef TESTFOLDER
+#ifdef TESTFOLDER8
 	// Directly return V if it already has the destination type.
 	if (V->getType() == DestTy) {
 		return V;
@@ -197,14 +204,7 @@ Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twin
 		if (OriginalType->getIntegerBitWidth() == DestTy->getIntegerBitWidth()) {
 			return OriginalValue;
 		}
-		// iXX > iYY , trunc OG value then apply mask
-		if (OriginalType->getIntegerBitWidth() > DestTy->getIntegerBitWidth()) {
-			auto newval = createTruncFolder(builder, OriginalValue, DestTy, Name);
-			uint64_t MaskValue = (1ULL << V->getType()->getIntegerBitWidth()) - 1;
-			Value* Mask = ConstantInt::get(DestTy, MaskValue);
-			Value* MaskedValue = createAndFolder(builder, newval, Mask, Name);
-			return MaskedValue;
-		}
+
 		 
 	}
 
@@ -230,7 +230,7 @@ Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, con
 }
 
 Value* createSExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
-#ifdef TESTFOLDER
+#ifdef TESTFOLDER9
 	// Directly return V if it already has the destination type.
 	if (V->getType() == DestTy) {
 		return V;
