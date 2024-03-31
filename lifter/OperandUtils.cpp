@@ -22,11 +22,16 @@ void initBases2(void* file_base, ZyanU8* data) {
 #define TESTFOLDER4
 #define TESTFOLDER5
 #define TESTFOLDER6
+#define TESTFOLDERshl
+#define TESTFOLDERshr
 #endif
 
 // use this or less *special* version of this to compute known bits. USEFUL!!!!!!!!!!!!!!!!!!! FOR FLAGS STUFF
 KnownBits analyzeValueKnownBits(llvm::Value* value, const llvm::DataLayout& DL) {
 	KnownBits knownBits;
+	// doesnt work with i128 ? 
+	if (value->getType() == Type::getInt128Ty(value->getContext()))
+		return knownBits;
 	computeKnownBits(value, knownBits, DL, 0);
 	return knownBits;
 }
@@ -69,6 +74,137 @@ Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 #endif
 	return builder.CreateSub(LHS, RHS, Name);
 }
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Type.h"
+#include "llvm/Support/KnownBits.h"
+
+using namespace llvm;
+
+Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
+	// if xxxx???? >> 4 -> 0000xxxx
+	// so if we know first N bits where N is Size - Shift, we can fold into a constant
+	// we need to know RHS and partially know LHS
+	// Ensure RHS is a constant, not too wide, and LHS has known bits.
+	if (!RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
+		return nullptr;
+
+	APInt shiftAmount = RHS.getConstant();
+	unsigned shiftSize = shiftAmount.getZExtValue();
+
+	if (shiftSize >= LHS.getBitWidth())
+		return nullptr;
+
+	KnownBits result(LHS.getBitWidth());
+	result.One = LHS.One.lshr(shiftSize);
+	result.Zero = LHS.Zero.lshr(shiftSize) | APInt::getHighBitsSet(LHS.getBitWidth(), shiftSize);
+
+	if (!(result.Zero | result.One).isAllOnes()) {
+		return nullptr;
+	}
+
+	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), result.getConstant());
+}
+
+Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
+	if (!RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
+		return nullptr;
+
+	APInt shiftAmount = RHS.getConstant();
+	unsigned shiftSize = shiftAmount.getZExtValue();
+
+	if (shiftSize >= LHS.getBitWidth())
+		return nullptr;
+
+	KnownBits result(LHS.getBitWidth());
+	result.One = LHS.One.shl(shiftSize);
+	result.Zero = LHS.Zero.shl(shiftSize) | APInt::getLowBitsSet(LHS.getBitWidth(), shiftSize);
+
+	if (!result.isConstant()) {
+		return nullptr;
+	}
+
+	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), result.getConstant());
+}
+
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+#ifdef TESTFOLDERshl
+	// Simplify if either operand is 0
+
+	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+
+	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
+	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+
+	if (Value* knownBitsAnd = foldShlKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+		return knownBitsAnd;
+	}
+
+#endif
+
+
+
+	return builder.CreateShl(LHS, RHS, Name);
+}
+
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+#ifdef TESTFOLDERshr
+	// Simplify if either operand is 0
+
+	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+
+	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
+	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+	
+	if (Value* knownBitsAnd = foldLShrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+		return knownBitsAnd;
+	}
+	
+#endif
+
+
+
+	return builder.CreateLShr(LHS, RHS, Name);
+}
+
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name = "") {
+	return createShlFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS), Name);
+}
+
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name = "") {
+	return createShlFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS), Name);
+}
+
+
+
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name = "") {
+	return createLShrFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS), Name);
+}
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name = "") {
+	return createLShrFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS), Name);
+}
+
+
+Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
+	// Check if either operand is fully unknown, or if their bit widths do not match; default bitwidth is 1
+	if (LHS.isUnknown() || RHS.isUnknown() || LHS.getBitWidth() != RHS.getBitWidth() || !RHS.isConstant() || LHS.getBitWidth() <= 1 || RHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
+		return nullptr;
+	}
+
+	// if known is a constant then replace
+
+	KnownBits combined;
+	combined.One = LHS.One | RHS.One; // if 000? 0001 -> 0001    
+	combined.Zero = LHS.Zero & RHS.Zero;  // if 1010 10?? -> 101?
+	
+	if (!(combined.Zero | combined.One).isAllOnes() || combined.getBitWidth() <= 1) {
+		return nullptr;
+	}
+
+	APInt resultValue = combined.One;
+	return ConstantInt::get(Type::getIntNTy(context, combined.getBitWidth()), resultValue);
+}
+
 
 Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER5
@@ -79,9 +215,25 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine&
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isZero()) return LHS; // RHS is 0
 	}
+	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	
+	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
+	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+
+	if (Value* knownBitsAnd = foldOrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+		return knownBitsAnd;
+	}
+	if (Value* knownBitsAnd = foldOrKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
+		return knownBitsAnd;
+	}
+	
 #endif
+	
+
+		
 	return builder.CreateOr(LHS, RHS, Name);
 }
+
 
 Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER6
@@ -137,23 +289,17 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS, 
 
 Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
-	// use intersectWith maybe?
-	// xx11xx and xx00xx are not compareable
-	// xx11xx and 000000 are compareable
-	// check for xx00xx, and its auto xx00xx
-	// xx11xx and 001100 can return 001100
-	// xx10xx and 001100 can return 001000
-
-	// if its fully unknown or if its not a constant
-	if (RHS.isUnknown() || !RHS.isConstant() || LHS.getBitWidth() != RHS.getBitWidth()) {
+	if (LHS.isUnknown() || RHS.isUnknown() || !RHS.isConstant() || LHS.getBitWidth() != RHS.getBitWidth() || RHS.getBitWidth() <= 1 || LHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
 		return nullptr;
 	}
 
-    if ( (LHS.isUnknown()) ||  !((LHS.Zero | LHS.One) & RHS.One) == RHS.One) {
-        return nullptr;
-    }
-	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), (LHS.One & RHS.One));
+	if ( !((LHS.Zero | LHS.One) & RHS.One).eq(RHS.One)) {
+		return nullptr;
+	}
 
+	APInt resultValue = LHS.One & RHS.One;
+
+	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), resultValue);
 }
 
 Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
@@ -176,11 +322,11 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
-	if (Value* knownBitsAnd2 = foldAndKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-		return knownBitsAnd2;
+	if (Value* knownBitsAnd = foldAndKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+		return knownBitsAnd;
 	}
-	if (Value* knownBitsAnd3 = foldAndKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
-		return knownBitsAnd3;
+	if (Value* knownBitsAnd = foldAndKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
+		return knownBitsAnd;
 	}
 
 #endif
@@ -457,7 +603,7 @@ Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, 
 	Value* fullRegisterValue = RegisterList[ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,(ZydisRegister)reg) ];  // Assume we fetch the 64-bit RAX, RCX, etc.
 
 	// Right-shift to bring the high-byte to the least-significant position
-	Value* shiftedValue = builder.CreateLShr(fullRegisterValue, 8,"highreg");
+	Value* shiftedValue = createLShrFolder(builder,fullRegisterValue, 8,"highreg");
 
 	// Mask out other bits to extract the high byte
 	Value* FF = ConstantInt::get(shiftedValue->getType(), 0xff);
@@ -473,8 +619,8 @@ void SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
 #endif
 	for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
 		int shiftAmount = flag;
-		Value* shiftedFlagValue = builder.CreateLShr(value, ConstantInt::get(value->getType(), shiftAmount), "setflag"); // Value >> flag
-		auto flagValue = createTruncFolder(builder,shiftedFlagValue, Type::getInt1Ty(context)); // i64 ...0001 to 1
+		Value* shiftedFlagValue = createLShrFolder(builder,value, ConstantInt::get(value->getType(), shiftAmount), "setflag"); // Value >> flag
+		auto flagValue = createTruncFolder(builder,shiftedFlagValue, Type::getInt1Ty(context),"flagtrunc"); // i64 ...0001 to 1
 #ifdef _DEVELOPMENT
 		outs() << " Flag : " << flag << " : "; flagValue->print(outs()); outs() << "\n"; outs().flush();
 #endif
@@ -489,7 +635,7 @@ Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
 	for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
 		Value* flagValue = getFlag(context, builder, (Flag)flag);
 		int shiftAmount = flag;
-		Value* shiftedFlagValue = builder.CreateShl(createZExtFolder(builder,flagValue,Type::getInt64Ty(context)), ConstantInt::get(Type::getInt64Ty(context), shiftAmount));
+		Value* shiftedFlagValue = createShlFolder(builder,createZExtFolder(builder,flagValue,Type::getInt64Ty(context),"createrflag1"), ConstantInt::get(Type::getInt64Ty(context), shiftAmount), "createrflag2");
 		rflags = createOrFolder(builder,rflags, shiftedFlagValue,"creatingrflag");
 	}
 	return rflags;
@@ -537,7 +683,7 @@ Value* SetValueToHighByteRegister(LLVMContext& context, IRBuilder<>& builder, in
 
 	// Ensure the value being shifted is of the correct type
 	Value* eightBitValue = createAndFolder(builder,value, ConstantInt::get(value->getType(), 0xFF),"eight-bit");
-	Value* shiftedValue = builder.CreateShl(eightBitValue, ConstantInt::get(value->getType(), shiftValue),"shl");
+	Value* shiftedValue = createShlFolder(builder,eightBitValue, ConstantInt::get(value->getType(), shiftValue),"shl");
 
 	// Create mask and clear the high-byte portion
 	Value* mask = ConstantInt::get(Type::getInt64Ty(context), ~(0xFF << shiftValue));
@@ -578,7 +724,7 @@ Value* SetValueToSubRegister(LLVMContext& context, IRBuilder<>& builder, int reg
 
 	// Shift the value into the correct position if necessary
 	if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH || reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
-		extendedValue = builder.CreateShl(extendedValue, 8, "shiftedValue");
+		extendedValue = createShlFolder(builder,extendedValue, 8, "shiftedValue");
 	}
 
 	// Or the masked full register with the sub-register value to set the byte
@@ -788,7 +934,7 @@ public:
 					result = createZExtFolder(builder,byteValue, Type::getIntNTy(builder.getContext(), byteCount * 8));
 				}
 				else {
-					llvm::Value* shiftedByteValue = builder.CreateShl(createZExtFolder(builder,byteValue, Type::getIntNTy(builder.getContext(), byteCount*8) ), llvm::APInt(byteCount * 8, i * 8));
+					llvm::Value* shiftedByteValue = createShlFolder(builder, createZExtFolder(builder,byteValue, Type::getIntNTy(builder.getContext(), byteCount*8) ), llvm::APInt(byteCount * 8, i * 8));
 					result = createAddFolder(builder,result, shiftedByteValue,"extractbytesthing");
 				}
 			}
@@ -804,7 +950,7 @@ private:
 			return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
 		}
 		unsigned shiftAmount = byteOffset * 8;
-		llvm::Value* shiftedValue = builder.CreateLShr(value, llvm::APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
+		llvm::Value* shiftedValue = createLShrFolder(builder,value, llvm::APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
 		return createTruncFolder(builder,shiftedValue, Type::getInt8Ty(builder.getContext()));
 	}
 };
@@ -1125,7 +1271,7 @@ Value* getFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 	Value* position = ConstantInt::get(context, APInt(64, flag));
 	// Create the '1 << position' value
 	Value* one = ConstantInt::get(context, APInt(64, 1));
-	Value* bit_position = builder.CreateShl(one, position, "getflag-shl");
+	Value* bit_position = createShlFolder(builder,one, position, "getflag-shl");
 
 	// Return if the bit at 'position' is set
 	Value* and_result = createAndFolder(builder,rflag_var, bit_position, "getflag-and");
@@ -1137,7 +1283,7 @@ Value* setFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* ne
 	Value* position = ConstantInt::get(context, APInt(64, flag));
 	// Create the '1 << position' value
 	Value* one = ConstantInt::get(context, APInt(64, 1));
-	Value* bit_position = builder.CreateShl(one, position);
+	Value* bit_position = createShlFolder(builder,one, position);
 
 	Value* inverse_mask = builder.CreateNot(bit_position);
 
@@ -1145,7 +1291,7 @@ Value* setFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* ne
 	Value* cleared_rflag = createAndFolder(builder,rflag_var, inverse_mask,"setflag2");
 
 	// Shift the new value to the correct position
-	Value* shifted_newValue = builder.CreateShl(createZExtOrTruncFolder(builder,newValue, Type::getInt64Ty(context)), position, "flagsetweird");
+	Value* shifted_newValue = createShlFolder(builder,createZExtOrTruncFolder(builder,newValue, Type::getInt64Ty(context)), position, "flagsetweird");
 	shifted_newValue = createOrFolder(builder,cleared_rflag, shifted_newValue, "setflag-or");
 	SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, shifted_newValue);
 	return shifted_newValue;
@@ -1172,7 +1318,7 @@ void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& 
 		for (size_t j = 0; j < 8 && (i + j) < value.size(); ++j) {
 			Value* flag = value[i + j]; 
 			Value* extendedFlag = createZExtFolder(builder,flag, Type::getInt8Ty(context),"pushflag1");
-			Value* shiftedFlag = builder.CreateShl(extendedFlag, j,"pushflag2");
+			Value* shiftedFlag = createShlFolder(builder,extendedFlag, j,"pushflag2");
 			byteVal = createOrFolder(builder, byteVal, shiftedFlag,"pushflagbyteval");
 		}
 
