@@ -782,6 +782,12 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
 
 
 
+#ifdef _DEVELOPMENT
+    std::string Filename2 = "output_afterJMP.ll";
+    std::error_code EC2;
+    llvm::raw_fd_ostream OS2(Filename2, EC2);
+    clonedFunc->print(OS2);
+#endif
     //clonedFunc->print(outs());
 
     //we need to modify here when adding branches
@@ -798,12 +804,6 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
     }
 
 
-#ifdef _DEVELOPMENT
-    std::string Filename2 = "output_afterJMP.ll";
-    std::error_code EC2;
-    llvm::raw_fd_ostream OS2(Filename2, EC2);
-    clonedFunc->print(OS2);
-#endif
 
     clonedFunc->eraseFromParent();
     return result;

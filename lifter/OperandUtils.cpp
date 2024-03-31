@@ -7,6 +7,9 @@ ZyanU8* data_g_operand;
 #define printvalue(x) \
     outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
 
+#define printvalue2(x) \
+    outs() << " " #x " : " << x << "\n";  outs().flush();
+
 
 void initBases2(void* file_base, ZyanU8* data) {
 	file_base_g_operand = file_base;
@@ -19,9 +22,6 @@ void initBases2(void* file_base, ZyanU8* data) {
 #define TESTFOLDER4
 #define TESTFOLDER5
 #define TESTFOLDER6
-#define TESTFOLDER7
-#define TESTFOLDER8
-#define TESTFOLDER9
 #endif
 
 // use this or less *special* version of this to compute known bits. USEFUL!!!!!!!!!!!!!!!!!!! FOR FLAGS STUFF
@@ -96,10 +96,43 @@ Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	return builder.CreateXor(LHS, RHS, Name);
 }
 
-// TODO, also do signed version of dis
-Value* compareKnownBitsUnsigned(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-	//  LHS.countMinLeadingOnes() > RHS.countMinLeadingOnes()
-	return nullptr;
+std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS, KnownBits RHS) {
+	switch (P) {
+		case CmpInst::ICMP_EQ:
+			return KnownBits::eq(LHS, RHS);
+		case CmpInst::ICMP_NE:
+			return KnownBits::ne(LHS, RHS);
+		case CmpInst::ICMP_UGT:
+			return KnownBits::ugt(LHS, RHS);
+		case CmpInst::ICMP_UGE:
+			return KnownBits::uge(LHS, RHS);
+		case CmpInst::ICMP_ULT:
+			return KnownBits::ult(LHS, RHS);
+		case CmpInst::ICMP_ULE:
+			return KnownBits::ule(LHS, RHS);
+		case CmpInst::ICMP_SGT:
+			return KnownBits::sgt(LHS, RHS);
+		case CmpInst::ICMP_SGE:
+			return KnownBits::sge(LHS, RHS);
+		case CmpInst::ICMP_SLT:
+			return KnownBits::slt(LHS, RHS);
+		case CmpInst::ICMP_SLE:
+			return KnownBits::sle(LHS, RHS);
+	}
+
+	return 0;
+}
+
+Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS, Value* RHS, const Twine& Name = "") {
+	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
+	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+
+	if (std::optional<bool> v = foldKnownBits(P, KnownLHS, KnownRHS)) {
+		return ConstantInt::get(Type::getInt1Ty(builder.getContext()), v.value());
+	}
+
+	return builder.CreateICmp(P,LHS,RHS,Name);
 }
 
 Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -110,17 +143,22 @@ Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	// check for xx00xx, and its auto xx00xx
 	// xx11xx and 001100 can return 001100
 	// xx10xx and 001100 can return 001000
-	if (!RHS.isConstant() && !((LHS.Zero | LHS.One) & (RHS.One)) == RHS.One) {
+
+	// if its fully unknown or if its not a constant
+	if (RHS.isUnknown() || !RHS.isConstant() || LHS.getBitWidth() != RHS.getBitWidth()) {
 		return nullptr;
 	}
 
+    if ( (LHS.isUnknown()) ||  !((LHS.Zero | LHS.One) & RHS.One) == RHS.One) {
+        return nullptr;
+    }
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), (LHS.One & RHS.One));
 
 }
 
 Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER
-	// Simplify if either operand is 0
+	/*
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
 		if (LHSConst->isZero()) return ConstantInt::get(RHS->getType(), 0); // LHS is 0
 	}
@@ -133,39 +171,19 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isMinusOne()) return LHS; // RHS is 0
 	}
-	// looks correct ? .... try to understand when sober
-	if (auto* LHSAndInst = dyn_cast<Instruction>(LHS)) {
-		if (LHSAndInst->getOpcode() == Instruction::And) {
-			Value* LHSOfLHS = LHSAndInst->getOperand(0);
-			Value* RHSOfLHS = LHSAndInst->getOperand(1);
-			// Check if RHSOfLHS is a constant, and RHS is also a constant.
-			if (auto* RHSOfLHSConst = dyn_cast<ConstantInt>(RHSOfLHS)) {
-				if (auto* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-					// Combine the masks and apply to LHSOfLHS
-					auto CombinedMask = ConstantInt::get(RHS->getType(), RHSOfLHSConst->getValue() & RHSConst->getValue());
-					return builder.CreateAnd(LHSOfLHS, CombinedMask, Name);
-				}
-			}
-			if (auto* LHSOfLHSConst = dyn_cast<ConstantInt>(LHSOfLHS)) {
-				if (auto* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-					// Combine the masks and apply to LHSOfLHS
-					auto CombinedMask = ConstantInt::get(RHS->getType(), LHSOfLHSConst->getValue() & RHSConst->getValue());
-					return builder.CreateAnd(RHSOfLHS, CombinedMask, Name);
-				}
-			}
-		}
-	}
-#endif
-	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent()); // Assume 'module' is your llvm::Module*
+	*/
+	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
+	if (Value* knownBitsAnd2 = foldAndKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+		return knownBitsAnd2;
+	}
+	if (Value* knownBitsAnd3 = foldAndKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
+		return knownBitsAnd3;
+	}
 
-	if (Value* knownBitsAnd = foldAndKnownBits(builder.getContext(), KnownLHS, KnownRHS))
-		return knownBitsAnd;
-	if (Value* knownBitsAnd = foldAndKnownBits(builder.getContext(), KnownRHS, KnownLHS))
-		return knownBitsAnd;
-
+#endif
 	return builder.CreateAnd(LHS, RHS, Name);
 }
 
@@ -443,7 +461,7 @@ Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, 
 
 	// Mask out other bits to extract the high byte
 	Value* FF = ConstantInt::get(shiftedValue->getType(), 0xff);
-	Value* highByteValue = createAndFolder(builder,shiftedValue, FF);
+	Value* highByteValue = createAndFolder(builder,shiftedValue, FF, "highByte");
 
 	return highByteValue;
 }
@@ -1124,7 +1142,7 @@ Value* setFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* ne
 	Value* inverse_mask = builder.CreateNot(bit_position);
 
 	// Clear the flag at 'position' in the rflag_var
-	Value* cleared_rflag = createAndFolder(builder,rflag_var, inverse_mask);
+	Value* cleared_rflag = createAndFolder(builder,rflag_var, inverse_mask,"setflag2");
 
 	// Shift the new value to the correct position
 	Value* shifted_newValue = builder.CreateShl(createZExtOrTruncFolder(builder,newValue, Type::getInt64Ty(context)), position, "flagsetweird");

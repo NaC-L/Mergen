@@ -18,18 +18,18 @@ Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
         // x ^ (x << i)
         Value* bit = builder.CreateTrunc(builder.CreateLShr(lsb, i), Type::getInt1Ty(value->getContext()),"parityflagbits");
 
-        parity = createXorFolder(builder,parity, bit);
+        parity = createXorFolder(builder,parity, bit,"parityXOR");
 
     }
     return parity; // Returns 1 if even parity, 0 if odd
 }
 
 Value* computeZeroFlag(IRBuilder<>& builder, Value* value) { // x == 0 = zf
-    return builder.CreateICmpEQ(value, ConstantInt::get(value->getType(), 0), "zeroflag");
+    return createICMPFolder(builder, CmpInst::ICMP_EQ,value, ConstantInt::get(value->getType(), 0), "zeroflag");
 }
 
 Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x > 0 = sf
-    return builder.CreateICmpSLT(value, ConstantInt::get(value->getType(), 0), "signflag");
+    return createICMPFolder(builder, CmpInst::ICMP_SLT,value, ConstantInt::get(value->getType(), 0), "signflag");
 }
 
 
@@ -294,7 +294,7 @@ void lift_cmovnz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIn
     auto src = instruction.operands[1];
 
     Value* zf = getFlag(context, builder, FLAG_ZF);
-    zf = builder.CreateICmpEQ(zf, ConstantInt::get(Type::getInt1Ty(context), 0));
+    zf = createICMPFolder(builder, CmpInst::ICMP_EQ,zf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
@@ -314,7 +314,7 @@ void lift_cmovl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIns
     Value* of = getFlag(context, builder, FLAG_OF);
 
     // The condition is true if SF is not equal to OF
-    Value* condition = builder.CreateICmpNE(sf, of);
+    Value* condition = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
 
     // Retrieve the values for source and destination operands
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
@@ -337,7 +337,7 @@ void lift_cmovb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIns
     Value* cf = getFlag(context, builder, FLAG_CF);
 
     // The condition is true if CF is set (i.e., 1)
-    Value* condition = builder.CreateICmpEQ(cf, ConstantInt::get(Type::getInt1Ty(context), 1));
+    Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ,cf, ConstantInt::get(Type::getInt1Ty(context), 1));
 
     // Retrieve the values for source and destination operands
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
@@ -380,7 +380,7 @@ void lift_cmovns(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIn
     Value* sf = getFlag(context, builder, FLAG_SF);
 
     // Check if SF is clear (i.e., 0)
-    Value* condition = builder.CreateICmpEQ(sf, ConstantInt::get(Type::getInt1Ty(context), 0));
+    Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
     // Retrieve the values for source and destination operands
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
@@ -400,7 +400,7 @@ void lift_cmovnl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIn
 
     // Get the current value of the ZF flag from RFLAGS register
     Value* sf = getFlag(context, builder, FLAG_SF);
-    sf = builder.CreateICmpEQ(sf, ConstantInt::get(Type::getInt1Ty(context), 0));
+    sf = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
     // Get values for source and destination operands
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
@@ -445,7 +445,7 @@ void lift_cmovnle(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
     // The condition for CMOVNLE is (ZF = 0 AND SF = OF)
     Value* condition = createAndFolder(builder,
         builder.CreateNot(zf, "notZF"),
-        builder.CreateICmpEQ(sf, of, "sf_eq_of"),
+        createICMPFolder(builder, CmpInst::ICMP_EQ,sf, of, "sf_eq_of"),
         "cmovnle_cond"
     );
 
@@ -471,7 +471,7 @@ void lift_cmovle(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIn
     Value* of = getFlag(context, builder, FLAG_OF);
 
     // Compute the condition (ZF = 1) or (SF != OF)
-    Value* sf_neq_of = builder.CreateICmpNE(sf, of);
+    Value* sf_neq_of = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
     Value* condition = createOrFolder(builder,zf, sf_neq_of, "cmovle-or");
 
     // Get values for source and destination operands
@@ -815,7 +815,7 @@ namespace branches {
 #ifdef _DEVELOPMENT
         printvalue(zf);
 #endif
-        zf = builder.CreateICmpEQ(zf, ConstantInt::get(Type::getInt1Ty(context), 0));
+        zf = createICMPFolder(builder, CmpInst::ICMP_EQ,zf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
         branchHelper(context, builder, instruction, blockAddresses, zf, newRip, "jnz", branchnumber);
 
@@ -1163,19 +1163,19 @@ namespace arithmeticsAndLogical {
         SetOperandValue(context, builder, dest, tmpResult);
 
 
-        Value* newCF = builder.CreateICmpULT(Lvalue, srcPlusCF, "newCF");
+        Value* newCF = createICMPFolder(builder, CmpInst::ICMP_ULT,Lvalue, srcPlusCF, "newCF");
         Value* sf = computeSignFlag(builder, tmpResult);
         Value* zf = computeZeroFlag(builder, tmpResult);
         Value* pf = computeParityFlag(builder, tmpResult);
         Value* fifteen = ConstantInt::get(Lvalue->getType(), 0xf);
-        Value* sub = createSubFolder(builder,createAndFolder(builder,Lvalue, fifteen), createAndFolder(builder,srcPlusCF, fifteen)); // ex: eax = 0xf, CF = 1; sbb eax, 0xf; then AF = 1al
+        Value* sub = createSubFolder(builder,createAndFolder(builder,Lvalue, fifteen,"sbbsub1"), createAndFolder(builder, srcPlusCF, fifteen,"sbbsub2")); // ex: eax = 0xf, CF = 1; sbb eax, 0xf; then AF = 1al
         Value* add = createAddFolder(builder,sub, cf);
-        Value* af = builder.CreateICmpUGT(add, ConstantInt::get(add->getType(), 0xf));
+        Value* af = createICMPFolder(builder, CmpInst::ICMP_UGT,add, ConstantInt::get(add->getType(), 0xf));
 
-        Value* signDest = builder.CreateICmpSLT(Lvalue, ConstantInt::get(Lvalue->getType(), 0), "signDest");
-        Value* signSrc = builder.CreateICmpSLT(Rvalue, ConstantInt::get(Rvalue->getType(), 0));
-        Value* signResult = builder.CreateICmpSLT(tmpResult, ConstantInt::get(tmpResult->getType(), 0));
-        Value* signSrcPlusCF = builder.CreateICmpSLT(srcPlusCF, ConstantInt::get(srcPlusCF->getType(), 0), "signSrcPlusCF");
+        Value* signDest = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0), "signDest");
+        Value* signSrc = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
+        Value* signResult = createICMPFolder(builder, CmpInst::ICMP_SLT,tmpResult, ConstantInt::get(tmpResult->getType(), 0));
+        Value* signSrcPlusCF = createICMPFolder(builder, CmpInst::ICMP_SLT,srcPlusCF, ConstantInt::get(srcPlusCF->getType(), 0), "signSrcPlusCF");
 
         // Overflow occurs if: (signDest != signSrcPlusCF) AND (signDest != signResult)
         Value* overflowCond1 = createXorFolder(builder,signDest, signSrcPlusCF, "overflowCond1");
@@ -1244,7 +1244,7 @@ namespace arithmeticsAndLogical {
         auto* newCF = builder.CreateTrunc(builder.CreateLShr(rotated, newCFBitPosition), Type::getInt1Ty(context),"rclnewcf");
 
         auto* msbAfterRotate = builder.CreateTrunc(builder.CreateLShr(result, dest.size - 1), Type::getInt1Ty(context),"rclmsbafterrotate");
-        auto* newOF = createSelectFolder(builder,builder.CreateICmpEQ(actualCount, ConstantInt::get(actualCount->getType(), 1)), createXorFolder(builder,newCF, msbAfterRotate), getFlag(context, builder, FLAG_OF));
+        auto* newOF = createSelectFolder(builder,createICMPFolder(builder, CmpInst::ICMP_EQ,actualCount, ConstantInt::get(actualCount->getType(), 1)), createXorFolder(builder,newCF, msbAfterRotate), getFlag(context, builder, FLAG_OF));
 
         SetOperandValue(context, builder, dest, result);
         setFlag(context, builder, FLAG_CF, newCF);
@@ -1305,7 +1305,7 @@ namespace arithmeticsAndLogical {
         auto* newCF = builder.CreateTrunc(builder.CreateLShr(rotated, newCFBitPosition), Type::getInt1Ty(context),"rcrcf");
 
         auto* msbAfterRotate = builder.CreateTrunc(builder.CreateLShr(result, dest.size - 1), Type::getInt1Ty(context),"rcrmsb");
-        auto* newOF = createSelectFolder(builder,builder.CreateICmpEQ(actualCount, ConstantInt::get(actualCount->getType(), 1)), createXorFolder(builder,newCF, msbAfterRotate), getFlag(context, builder, FLAG_OF));
+        auto* newOF = createSelectFolder(builder,createICMPFolder(builder, CmpInst::ICMP_EQ,actualCount, ConstantInt::get(actualCount->getType(), 1)), createXorFolder(builder,newCF, msbAfterRotate), getFlag(context, builder, FLAG_OF));
 
         SetOperandValue(context, builder, dest, result);
         setFlag(context, builder, FLAG_CF, newCF);
@@ -1330,7 +1330,7 @@ namespace arithmeticsAndLogical {
         auto dest = instruction.operands[0];
         auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
 
-        auto cf = builder.CreateICmpNE(Rvalue, ConstantInt::get(Rvalue->getType(), 0), "cf");
+        auto cf = createICMPFolder(builder, CmpInst::ICMP_NE,Rvalue, ConstantInt::get(Rvalue->getType(), 0), "cf");
         auto result = builder.CreateNeg(Rvalue, "neg");
         SetOperandValue(context, builder, dest, result);
 
@@ -1338,7 +1338,7 @@ namespace arithmeticsAndLogical {
         auto zf = computeZeroFlag(builder, result);
         auto pf = computeParityFlag(builder, result);
         Value* fifteen = ConstantInt::get(Rvalue->getType(), 0xf);
-        auto af = builder.CreateICmpNE(createAndFolder(builder,Rvalue, fifteen), ConstantInt::get(Rvalue->getType(), 0), "af");
+        auto af = createICMPFolder(builder, CmpInst::ICMP_NE,createAndFolder(builder,Rvalue, fifteen), ConstantInt::get(Rvalue->getType(), 0), "af");
 
         // OF is cleared nvm
         auto of = ConstantInt::getSigned(Rvalue->getType(), 0);
@@ -1450,9 +1450,9 @@ namespace arithmeticsAndLogical {
         Value* cfValue = builder.CreateTrunc(builder.CreateLShr(Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"shrcf"), builder.getInt1Ty());
 
         // Calculate OF (only on the first shift, OF is the MSB of original value)
-        Value* isCountOne = builder.CreateICmpEQ(clampedCount, ConstantInt::get(clampedCount->getType(), 1));
+        Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,clampedCount, ConstantInt::get(clampedCount->getType(), 1));
         Value* msbOfOriginal = builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),"shrmsb");
-        msbOfOriginal = createAndFolder(builder,builder.CreateTrunc(msbOfOriginal, Type::getInt1Ty(context)), ConstantInt::get(builder.getInt1Ty(), 1));
+        msbOfOriginal = createAndFolder(builder,builder.CreateTrunc(msbOfOriginal, Type::getInt1Ty(context)), ConstantInt::get(builder.getInt1Ty(), 1),"shrmsb");
         Value* of = createSelectFolder(builder,isCountOne, msbOfOriginal, getFlag(context, builder, FLAG_OF));
 
 
@@ -1481,7 +1481,7 @@ namespace arithmeticsAndLogical {
         unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
         auto bitWidthValue = ConstantInt::get(countValue->getType(), bitWidth);
 
-        Value* clampedCountValue = createAndFolder(builder,countValue, ConstantInt::get(countValue->getType(), bitWidth - 1));
+        Value* clampedCountValue = createAndFolder(builder,countValue, ConstantInt::get(countValue->getType(), bitWidth - 1),"shlclamp");
 
         // Perform the logical left shift
         Value* shiftedValue = builder.CreateShl(Lvalue, clampedCountValue, "shl-shift");
@@ -1489,14 +1489,14 @@ namespace arithmeticsAndLogical {
         // Calculate CF (last bit shifted out)
         Value* cfValue = builder.CreateLShr(Lvalue, createSubFolder(builder,bitWidthValue, clampedCountValue),"shlcf");
         Value* one = ConstantInt::get(cfValue->getType(), 1);
-        cfValue = createAndFolder(builder,cfValue, one);
+        cfValue = createAndFolder(builder,cfValue, one,"shlcf");
         cfValue = builder.CreateTrunc(cfValue, Type::getInt1Ty(context));
 
         // Calculate OF (only if count is 1)
-        Value* isCountOne = builder.CreateICmpEQ(clampedCountValue, ConstantInt::get(clampedCountValue->getType(), 1));
+        Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,clampedCountValue, ConstantInt::get(clampedCountValue->getType(), 1));
 
         Value* originalMSB = builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlmsb");
-        originalMSB = createAndFolder(builder,originalMSB, ConstantInt::get(Lvalue->getType(), 1));
+        originalMSB = createAndFolder(builder,originalMSB, ConstantInt::get(Lvalue->getType(), 1),"shlmsb");
         originalMSB = builder.CreateTrunc(originalMSB, Type::getInt1Ty(context));
 
         // For a 1-bit shift, CF is effectively the original MSB.
@@ -1633,13 +1633,13 @@ namespace arithmeticsAndLogical {
         auto shiftedSource = builder.CreateLShr(sourceValue, complementCount, "shiftedSource");
         auto resultValue = createOrFolder(builder,shiftedDest, shiftedSource, "shldResult");
 
-        auto countIsNotZero = builder.CreateICmpNE(effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 0));
+        auto countIsNotZero = createICMPFolder(builder, CmpInst::ICMP_NE,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 0));
         auto lastShiftedBitPosition = createSubFolder(builder,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
         auto lastShiftedBit = createAndFolder(builder,builder.CreateLShr(Lvalue, lastShiftedBitPosition), ConstantInt::get(Lvalue->getType(), 1),"shldresultmsb");
         auto cf = createSelectFolder(builder,countIsNotZero, builder.CreateTrunc(lastShiftedBit, Type::getInt1Ty(context)), getFlag(context, builder, FLAG_CF));
 
         // OF calculation, only valid if shift count is 1
-        auto isOne = builder.CreateICmpEQ(effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
+        auto isOne = createICMPFolder(builder, CmpInst::ICMP_EQ,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
         auto newOF = createXorFolder(builder,builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1)), builder.CreateLShr(resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1)));
         auto of = createSelectFolder(builder,isOne, builder.CreateTrunc(newOF,Type::getInt1Ty(context)), getFlag(context, builder, FLAG_OF));
 
@@ -1671,15 +1671,15 @@ namespace arithmeticsAndLogical {
          // Calculate CF
          auto cfBitPosition = createSubFolder(builder,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
          Value* cf = builder.CreateLShr(Lvalue, cfBitPosition);
-         cf = createAndFolder(builder,cf, ConstantInt::get(cf->getType(), 1));
+         cf = createAndFolder(builder,cf, ConstantInt::get(cf->getType(), 1),"shrdcf");
          cf = builder.CreateTrunc(cf, Type::getInt1Ty(context));
 
          // Calculate OF, only when count is 1
-         Value* isCountOne = builder.CreateICmpEQ(effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
+         Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
          Value* mostSignificantBitOfDest = builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1));
-         mostSignificantBitOfDest = createAndFolder(builder,mostSignificantBitOfDest, ConstantInt::get(mostSignificantBitOfDest->getType(), 1));
+         mostSignificantBitOfDest = createAndFolder(builder,mostSignificantBitOfDest, ConstantInt::get(mostSignificantBitOfDest->getType(), 1),"shrdmsb");
          Value* mostSignificantBitOfResult = builder.CreateLShr(resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1));
-         mostSignificantBitOfResult = createAndFolder(builder,mostSignificantBitOfResult, ConstantInt::get(mostSignificantBitOfResult->getType(), 1));
+         mostSignificantBitOfResult = createAndFolder(builder,mostSignificantBitOfResult, ConstantInt::get(mostSignificantBitOfResult->getType(), 1),"shrdmsb2");
          Value* of = createXorFolder(builder,mostSignificantBitOfDest, mostSignificantBitOfResult);
          of = builder.CreateTrunc(of, Type::getInt1Ty(context));
          of = createSelectFolder(builder,isCountOne, of, ConstantInt::getFalse(context));
@@ -1721,8 +1721,8 @@ namespace arithmeticsAndLogical {
         Value* cf = nullptr;
         Value* af = nullptr;
         Value* of = nullptr;
-        auto op1sign = builder.CreateICmpSLT(Lvalue, ConstantInt::get(Lvalue->getType(), 0));
-        auto op2sign = builder.CreateICmpSLT(Rvalue, ConstantInt::get(Rvalue->getType(), 0));
+        auto op1sign = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
+        auto op2sign = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
 
         auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
         auto op1LowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask, "lvalLowerNibble");
@@ -1732,29 +1732,24 @@ namespace arithmeticsAndLogical {
         switch (instruction.info.mnemonic) {
         case ZYDIS_MNEMONIC_ADD: {
             result = createAddFolder(builder,Lvalue, Rvalue, "realadd-" + to_string(instruction.runtime_address) + "-");
-            cf = createOrFolder(builder,builder.CreateICmpULT(result, Lvalue), builder.CreateICmpULT(result, Rvalue));
-            auto resultLowerNibble = createAndFolder(builder,result, lowerNibbleMask, "resultLowerNibble");
-            auto sumLowerNibble = createAddFolder(builder,op1LowerNibble, op2LowerNibble);
-            af = builder.CreateICmpUGT(sumLowerNibble, lowerNibbleMask);
-            auto resultSign = builder.CreateICmpSLT(result, ConstantInt::get(Lvalue->getType(), 0));
-            auto inputSameSign = builder.CreateICmpEQ(op1sign, op2sign);
-            of = createAndFolder(builder,inputSameSign, builder.CreateICmpNE(op1sign, resultSign));
+            cf = createOrFolder(builder,createICMPFolder(builder, CmpInst::ICMP_ULT,result, Lvalue, "add_cf1"), createICMPFolder(builder, CmpInst::ICMP_ULT,result, Rvalue, "add_cf2"), "add_cf");
+            auto sumLowerNibble = createAddFolder(builder,op1LowerNibble, op2LowerNibble, "add_sumLowerNibble");
+            af = createICMPFolder(builder, CmpInst::ICMP_UGT,sumLowerNibble, lowerNibbleMask, "add_af");
+            auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT,result, ConstantInt::get(Lvalue->getType(), 0));
+            auto inputSameSign = createICMPFolder(builder, CmpInst::ICMP_EQ,op1sign, op2sign, "inputsamesign");
+            of = createAndFolder(builder,inputSameSign, createICMPFolder(builder, CmpInst::ICMP_NE,op1sign, resultSign),"addof");
 
             break;
         }
         case ZYDIS_MNEMONIC_SUB: {
             result = createSubFolder(builder,Lvalue, Rvalue, "realsub-" + to_string(instruction.runtime_address) + "-");
 
+            auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT,result, ConstantInt::get(Lvalue->getType(), 0), "resultsign");
+            auto inputDiffSign = createICMPFolder(builder, CmpInst::ICMP_NE,op1sign, op2sign,"inputdiffsign");
+            of = createAndFolder(builder,inputDiffSign, createICMPFolder(builder, CmpInst::ICMP_NE,op1sign, resultSign),"subof");
 
-
-            auto resultSign = builder.CreateICmpSLT(result, ConstantInt::get(Lvalue->getType(), 0));
-            auto inputDiffSign = builder.CreateICmpNE(op1sign, op2sign);
-            of = createAndFolder(builder,inputDiffSign, builder.CreateICmpNE(op1sign, resultSign));
-
-   
-            cf = builder.CreateICmpUGT(Rvalue, Lvalue);
-            auto resultLowerNibble = createAndFolder(builder,result, lowerNibbleMask, "resultLowerNibble");
-            af = builder.CreateICmpULT(op1LowerNibble, op2LowerNibble);
+            cf = createICMPFolder(builder, CmpInst::ICMP_UGT,Rvalue, Lvalue,"add_cf");
+            af = createICMPFolder(builder, CmpInst::ICMP_ULT,op1LowerNibble, op2LowerNibble, "add_af");
             break;
         }
         }
@@ -1765,9 +1760,9 @@ namespace arithmeticsAndLogical {
         Flags Affected
         The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
         */
-        Value* sign_result = builder.CreateICmpSLT(result, ConstantInt::get(result->getType(), 0));
+        Value* sign_result = createICMPFolder(builder, CmpInst::ICMP_SLT,result, ConstantInt::get(result->getType(), 0));
 
-        auto samesignforof = builder.CreateICmpEQ(op1sign, op2sign);
+        auto samesignforof = createICMPFolder(builder, CmpInst::ICMP_EQ,op1sign, op2sign);
         auto sf = computeSignFlag(builder,result);
         auto zf = computeZeroFlag(builder,result);
         auto pf = computeParityFlag(builder,result);
@@ -1803,7 +1798,7 @@ namespace arithmeticsAndLogical {
         auto resultType = result->getType();
         auto bitWidth = resultType->getIntegerBitWidth();
         Value* highResult = builder.CreateLShr(result, bitWidth / 2);
-        Value* cf = builder.CreateICmpNE(highResult, ConstantInt::get(resultType, 0));
+        Value* cf = createICMPFolder(builder, CmpInst::ICMP_NE,highResult, ConstantInt::get(resultType, 0));
         Value* of = cf;
 
         setFlag(context, builder, FLAG_CF, cf);
@@ -1942,7 +1937,9 @@ namespace arithmeticsAndLogical {
         auto src = instruction.operands[1];
         auto Rvalue = GetOperandValue(context, builder, src, dest.size);
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
-        auto result = createAndFolder(builder,Lvalue, Rvalue);
+
+
+        auto result = createAndFolder(builder,Lvalue, Rvalue,"realand");
 
         //Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
 
@@ -2005,15 +2002,15 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     Value* result = createOrFolder(builder,shiftedLeft, shiftedRight);
 
     // Calculate CF based on the last bit shifted out
-    Value* lastBit = createAndFolder(builder,builder.CreateLShr(Lvalue, createSubFolder(builder,ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue)), ConstantInt::get(Lvalue->getType(), 1));
+    Value* lastBit = createAndFolder(builder,builder.CreateLShr(Lvalue, createSubFolder(builder,ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue)), ConstantInt::get(Lvalue->getType(), 1),"rollastbit");
     Value* cf = builder.CreateTrunc(lastBit, Type::getInt1Ty(context));
 
     // Calculate OF, which is the XOR of CF and the new MSB of the result
-    Value* newMSB = createAndFolder(builder,result, ConstantInt::get(result->getType(), 1ULL << (bitWidth - 1)));
+    Value* newMSB = createAndFolder(builder,result, ConstantInt::get(result->getType(), 1ULL << (bitWidth - 1)),"rolmsb");
     Value* of = createXorFolder(builder,cf, builder.CreateTrunc(newMSB, Type::getInt1Ty(context)));
 
     // Use Select to conditionally update OF based on whether the shift amount is 1
-    Value* isOneBitRotation = builder.CreateICmpEQ(Rvalue, ConstantInt::get(Rvalue->getType(), 1));
+    Value* isOneBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(Rvalue->getType(), 1));
     Value* ofCurrent = getFlag(context, builder, FLAG_OF);
     of = createSelectFolder(builder,isOneBitRotation, of, ofCurrent);
 
@@ -2059,14 +2056,14 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
         Value* secondMsb = builder.CreateLShr(result, createSubFolder(builder,size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 2))));
         auto ofDefined = builder.CreateTrunc(createXorFolder(builder,msb, secondMsb), cf->getType());
-        auto isOneBitRotation = builder.CreateICmpEQ(Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1)));
+        auto isOneBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1)));
         Value* ofCurrent = getFlag(context, builder, FLAG_OF);
         Value* of = createSelectFolder(builder,isOneBitRotation, ofDefined, ofCurrent, "ror-of");
 
         setFlag(context, builder, FLAG_CF, cf);
         setFlag(context, builder, FLAG_OF, of);
 
-        auto isZeroBitRotation = builder.CreateICmpEQ(Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 0)), "iszerobit");
+        auto isZeroBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 0)), "iszerobit");
         result = createSelectFolder(builder,isZeroBitRotation, Lvalue, result, "ror-result");
 
         SetOperandValue(context, builder, dest, result);
@@ -2087,8 +2084,8 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
             result = createAddFolder(builder,originalValue, one, "inc-" + to_string(instruction.runtime_address) + "-");
             auto* xorResOrig = createXorFolder(builder,originalValue, result);
             auto* xorOrigOne = createXorFolder(builder,originalValue, one);
-            auto* ofAnd = createAndFolder(builder,xorResOrig, xorOrigOne);
-            of = builder.CreateICmpSLT(ofAnd, ConstantInt::get(ofAnd->getType(), 0));
+            auto* ofAnd = createAndFolder(builder,xorResOrig, xorOrigOne,"incof");
+            of = createICMPFolder(builder, CmpInst::ICMP_SLT,ofAnd, ConstantInt::get(ofAnd->getType(), 0));
 
         }
         else {
@@ -2096,8 +2093,8 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
             result = createSubFolder(builder,originalValue, one, "dec-" + to_string(instruction.runtime_address) + "-");        
             auto* xorResOrig = createXorFolder(builder,originalValue, result);
             auto* xorOrigMinusOne = createXorFolder(builder,originalValue, ConstantInt::get(originalValue->getType(), 1));
-            auto* ofAnd = createAndFolder(builder,xorResOrig, xorOrigMinusOne);
-            of = builder.CreateICmpSLT(ofAnd, ConstantInt::get(ofAnd->getType(), 0));
+            auto* ofAnd = createAndFolder(builder,xorResOrig, xorOrigMinusOne,"decof");
+            of = createICMPFolder(builder, CmpInst::ICMP_SLT,ofAnd, ConstantInt::get(ofAnd->getType(), 0));
             
 
         }
@@ -2215,22 +2212,22 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         printvalue(result)
         
 #endif
-        auto cfAfterFirstAdd = createOrFolder(builder,builder.CreateICmpULT(tempResult, Lvalue), builder.CreateICmpULT(tempResult, Rvalue));
-        auto cfFinal = createOrFolder(builder,cfAfterFirstAdd, builder.CreateICmpULT(result, cf));
+        auto cfAfterFirstAdd = createOrFolder(builder,createICMPFolder(builder, CmpInst::ICMP_ULT,tempResult, Lvalue), createICMPFolder(builder, CmpInst::ICMP_ULT,tempResult, Rvalue));
+        auto cfFinal = createOrFolder(builder,cfAfterFirstAdd, createICMPFolder(builder, CmpInst::ICMP_ULT,result, cf));
 
         // Adjust flag
         auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-        auto destLowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask);
-        auto srcLowerNibble = createAndFolder(builder,Rvalue, lowerNibbleMask);
+        auto destLowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask,"adcdst");
+        auto srcLowerNibble = createAndFolder(builder,Rvalue, lowerNibbleMask,"adcsrc");
         auto sumLowerNibble = createAddFolder(builder,destLowerNibble, srcLowerNibble);
-        auto af = builder.CreateICmpUGT(sumLowerNibble, lowerNibbleMask);
+        auto af = createICMPFolder(builder, CmpInst::ICMP_UGT,sumLowerNibble, lowerNibbleMask);
 
         // Overflow flag
-        auto resultSign = builder.CreateICmpSLT(result, ConstantInt::get(Lvalue->getType(), 0));
-        auto destSign = builder.CreateICmpSLT(Lvalue, ConstantInt::get(Lvalue->getType(), 0));
-        auto srcSign = builder.CreateICmpSLT(Rvalue, ConstantInt::get(Rvalue->getType(), 0));
-        auto inputSameSign = builder.CreateICmpEQ(destSign, srcSign);
-        auto of = createAndFolder(builder,inputSameSign, builder.CreateICmpNE(destSign, resultSign));
+        auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT,result, ConstantInt::get(Lvalue->getType(), 0));
+        auto destSign = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
+        auto srcSign = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
+        auto inputSameSign = createICMPFolder(builder, CmpInst::ICMP_EQ,destSign, srcSign);
+        auto of = createAndFolder(builder,inputSameSign, createICMPFolder(builder, CmpInst::ICMP_NE,destSign, resultSign),"adcof");
 
 
 
@@ -2278,21 +2275,21 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         printvalue(Rvalue)
         printvalue(sumValue)
 #endif
-        auto cf = createOrFolder(builder,builder.CreateICmpULT(sumValue, Lvalue), builder.CreateICmpULT(sumValue, Rvalue));
+        auto cf = createOrFolder(builder,createICMPFolder(builder, CmpInst::ICMP_ULT,sumValue, Lvalue), createICMPFolder(builder, CmpInst::ICMP_ULT,sumValue, Rvalue));
 
         // Adjust flag
         auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-        auto destLowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask);
-        auto srcLowerNibble = createAndFolder(builder,Rvalue, lowerNibbleMask);
+        auto destLowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask,"xadddst");
+        auto srcLowerNibble = createAndFolder(builder,Rvalue, lowerNibbleMask,"xaddsrc");
         auto sumLowerNibble = createAddFolder(builder,destLowerNibble, srcLowerNibble);
-        auto af = builder.CreateICmpUGT(sumLowerNibble, lowerNibbleMask);
+        auto af = createICMPFolder(builder, CmpInst::ICMP_UGT,sumLowerNibble, lowerNibbleMask);
 
         // Overflow flag
-        auto resultSign = builder.CreateICmpSLT(sumValue, ConstantInt::get(Lvalue->getType(), 0));
-        auto destSign = builder.CreateICmpSLT(Lvalue, ConstantInt::get(Lvalue->getType(), 0));
-        auto srcSign = builder.CreateICmpSLT(Rvalue, ConstantInt::get(Rvalue->getType(), 0));
-        auto inputSameSign = builder.CreateICmpEQ(destSign, srcSign);
-        auto of = createAndFolder(builder,inputSameSign, builder.CreateICmpNE(destSign, resultSign));
+        auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT,sumValue, ConstantInt::get(Lvalue->getType(), 0));
+        auto destSign = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
+        auto srcSign = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
+        auto inputSameSign = createICMPFolder(builder, CmpInst::ICMP_EQ,destSign, srcSign);
+        auto of = createAndFolder(builder,inputSameSign, createICMPFolder(builder, CmpInst::ICMP_NE,destSign, resultSign),"xaddof");
 
 
         Value* sf = computeSignFlag(builder, sumValue);
@@ -2321,8 +2318,8 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         Value* cf = ConstantInt::get(Type::getInt64Ty(context), 0, "cf");
 
         // Calculate SF, ZF, and PF based on testResult
-        Value* sf = builder.CreateICmpSLT(testResult, ConstantInt::get(testResult->getType(), 0), "sf");
-        Value* zf = builder.CreateICmpEQ(testResult, ConstantInt::get(testResult->getType(), 0), "zf");
+        Value* sf = createICMPFolder(builder, CmpInst::ICMP_SLT,testResult, ConstantInt::get(testResult->getType(), 0), "sf");
+        Value* zf = createICMPFolder(builder, CmpInst::ICMP_EQ,testResult, ConstantInt::get(testResult->getType(), 0), "zf");
         Value* pf = computeParityFlag(builder, testResult);
 
         //Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
@@ -2344,9 +2341,9 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
         Value* cmpResult = createSubFolder(builder,Lvalue, Rvalue);
         // Calculate flags based on cmpResult
-        Value* signL = builder.CreateICmpSLT(Lvalue, ConstantInt::get(Lvalue->getType(), 0));
-        Value* signR = builder.CreateICmpSLT(Rvalue, ConstantInt::get(Rvalue->getType(), 0));
-        Value* signResult = builder.CreateICmpSLT(cmpResult, ConstantInt::get(cmpResult->getType(), 0));
+        Value* signL = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
+        Value* signR = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
+        Value* signResult = createICMPFolder(builder, CmpInst::ICMP_SLT,cmpResult, ConstantInt::get(cmpResult->getType(), 0));
 
         // Overflow flag: (Lsign and not Rsign and not ResultSign) or (not Lsign and Rsign and ResultSign)
         Value* of = createOrFolder(builder,
@@ -2354,9 +2351,9 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
             createAndFolder(builder,builder.CreateNot(signL), createAndFolder(builder,signR, signResult), "cmp-and2-"), "cmp-OF-or"
         );
 
-        Value* cf = builder.CreateICmpULT(Lvalue, Rvalue);
-        Value* zf = builder.CreateICmpEQ(cmpResult, ConstantInt::get(cmpResult->getType(), 0));
-        Value* sf = builder.CreateICmpSLT(cmpResult, ConstantInt::get(cmpResult->getType(), 0));
+        Value* cf = createICMPFolder(builder, CmpInst::ICMP_ULT,Lvalue, Rvalue);
+        Value* zf = createICMPFolder(builder, CmpInst::ICMP_EQ,cmpResult, ConstantInt::get(cmpResult->getType(), 0));
+        Value* sf = createICMPFolder(builder, CmpInst::ICMP_SLT,cmpResult, ConstantInt::get(cmpResult->getType(), 0));
         Value* pf = computeParityFlag(builder, cmpResult);
 
         //Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
@@ -2428,7 +2425,7 @@ namespace flagOperation {
         Value* cf = getFlag(context, builder, FLAG_CF);
 
         // Check for CF being 0 (because SETNB sets byte to 1 if CF = 0)
-        Value* result = builder.CreateICmpEQ(cf, ConstantInt::get(Type::getInt1Ty(context), 0));
+        Value* result = createICMPFolder(builder, CmpInst::ICMP_EQ,cf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
         // Zero extend the result to byte size, since SETNB works on bytes
         Value* byteResult = createZExtFolder(builder,result, Type::getInt8Ty(context));
@@ -2477,7 +2474,7 @@ namespace flagOperation {
         Value* sf = getFlag(context, builder, FLAG_SF);
 
         // Check for SF being 0 (because SETNS sets byte to 1 if SF = 0)
-        Value* result = builder.CreateICmpEQ(sf, ConstantInt::get(Type::getInt1Ty(context), 0));
+        Value* result = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
         // Zero extend the result to byte size, since SETNS works on bytes
         Value* byteResult = createZExtFolder(builder,result, Type::getInt8Ty(context));
@@ -2568,10 +2565,10 @@ namespace flagOperation {
         Value* of = getFlag(context, builder, FLAG_OF);
 
         // Check for ZF being 0
-        Value* zfNotSet = builder.CreateICmpEQ(zf, ConstantInt::get(Type::getInt1Ty(context), 0));
+        Value* zfNotSet = createICMPFolder(builder, CmpInst::ICMP_EQ,zf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
         // Check for SF=OF
-        Value* sfEqualsOf = builder.CreateICmpEQ(sf, of);
+        Value* sfEqualsOf = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, of);
 
 #ifdef _DEVELOPMENT //ZF=0 and SF=OF
         printvalue(zf)
@@ -2595,7 +2592,7 @@ namespace flagOperation {
         Value* of = getFlag(context, builder, FLAG_OF);
 
         // Compute the condition (ZF=1) OR (SF != OF)
-        Value* sf_ne_of = builder.CreateICmpNE(sf, of);
+        Value* sf_ne_of = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
         Value* condition = createOrFolder(builder,zf, sf_ne_of, "setle-or");
 
         // Convert the condition from i1 to i8
@@ -2612,7 +2609,7 @@ namespace flagOperation {
         Value* of = getFlag(context, builder, FLAG_OF);
 
         // Compute the condition (SF = OF)
-        Value* condition = builder.CreateICmpEQ(sf, of);
+        Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, of);
 
         // Convert the condition from i1 to i8
         Value* result = createZExtFolder(builder,condition, Type::getInt8Ty(context));
@@ -2628,7 +2625,7 @@ namespace flagOperation {
         Value* of = getFlag(context, builder, FLAG_OF);
 
         // Compute the condition (SF != OF)
-        Value* condition = builder.CreateICmpNE(sf, of);
+        Value* condition = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
 
         // Convert the condition from i1 to i8
         Value* result = createZExtFolder(builder,condition, Type::getInt8Ty(context));
@@ -2659,7 +2656,7 @@ namespace flagOperation {
         auto testValue = createAndFolder(builder,Lvalue, mask, "bt");
 
         // Check if the bit is set. This will be a non-zero value if the bit was set.
-        auto isBitSet = builder.CreateICmpNE(testValue, ConstantInt::get(Lvalue->getType(), 0), "btisbitset");
+        auto isBitSet = createICMPFolder(builder, CmpInst::ICMP_NE,testValue, ConstantInt::get(Lvalue->getType(), 0), "btisbitset");
 
     }
 
@@ -2746,14 +2743,14 @@ namespace flagOperation {
             Value* mask = builder.CreateShl(oneVal, index);
 
             // Test if the bit is set
-            Value* test = createAndFolder(builder, Rvalue, mask);
-            Value* isBitSet = builder.CreateICmpNE(test, zeroVal);
+            Value* test = createAndFolder(builder, Rvalue, mask,"bsrtest");
+            Value* isBitSet = createICMPFolder(builder, CmpInst::ICMP_NE,test, zeroVal);
 
             // Use the first bit set as the result and break the loop
             Value* tmpPosition = createSelectFolder(builder, isBitSet, index, bitPosition);
 
             // Only update bitPosition if it has not been set yet (-1)
-            Value* isPositionUnset = builder.CreateICmpEQ(bitPosition, ConstantInt::get(Rvalue->getType(), -1));
+            Value* isPositionUnset = createICMPFolder(builder, CmpInst::ICMP_EQ,bitPosition, ConstantInt::get(Rvalue->getType(), -1));
             bitPosition = createSelectFolder(builder, isPositionUnset, tmpPosition, bitPosition);
 
             // Decrement index for next iteration
@@ -2772,7 +2769,7 @@ namespace flagOperation {
         Value* Rvalue = GetOperandValue(context, builder, src, src.size);
 
         // Check if source is zero and set the zero flag accordingly
-        Value* isZero = builder.CreateICmpEQ(Rvalue, ConstantInt::get(Rvalue->getType(), 0));
+        Value* isZero = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
         setFlag(context, builder, FLAG_ZF, isZero);
 
         Type* intType = Rvalue->getType();
@@ -2784,13 +2781,13 @@ namespace flagOperation {
         Value* continuecounting = ConstantInt::get(Type::getInt1Ty(context), 1);
         for (uint64_t i = 0; i < intWidth; ++i) {
             Value* bitMask = builder.CreateShl(one, ConstantInt::get(intType, i));
-            Value* bitSet = createAndFolder(builder,Rvalue, bitMask);
-            Value* isBitZero = builder.CreateICmpEQ(bitSet, ConstantInt::get(intType, 0));
+            Value* bitSet = createAndFolder(builder,Rvalue, bitMask,"bsfbitset");
+            Value* isBitZero = createICMPFolder(builder, CmpInst::ICMP_EQ,bitSet, ConstantInt::get(intType, 0));
             // continue until isBitZero is 1
             // 0010
             // if continuecounting, select
             Value* possibleResult = ConstantInt::get(intType, i);
-            Value* condition = createAndFolder(builder, continuecounting, isBitZero);
+            Value* condition = createAndFolder(builder, continuecounting, isBitZero,"bsfcondition");
             continuecounting = builder.CreateNot(isBitZero);
             result = createSelectFolder(builder, condition, result, possibleResult, "updateResultOnFirstNonZeroBit");
         }
@@ -2822,7 +2819,7 @@ namespace flagOperation {
 
         // Test the bit by performing bitwise AND
         auto testValue = createAndFolder(builder,Lvalue, mask, "btc-and");
-        auto isBitSet = builder.CreateICmpNE(testValue, ConstantInt::get(Lvalue->getType(), 0));
+        auto isBitSet = createICMPFolder(builder, CmpInst::ICMP_NE,testValue, ConstantInt::get(Lvalue->getType(), 0));
 
         // Toggle the bit by using XOR
         auto resultValue = createXorFolder(builder,Lvalue, mask, "btc-xor");
@@ -2982,7 +2979,7 @@ namespace flagOperation {
         // If AX was positive or zero, signBit is now 0; if negative, signBit is now 1.
         // Use signBit to set DX to either 0x0000 (for 0) or 0xFFFF (for 1).
         Value* dx = createSelectFolder(builder,
-            builder.CreateICmpEQ(signBit, ConstantInt::get(Type::getInt16Ty(context), 0)),
+            createICMPFolder(builder, CmpInst::ICMP_EQ,signBit, ConstantInt::get(Type::getInt16Ty(context), 0)),
             ConstantInt::get(Type::getInt16Ty(context), 0),
             ConstantInt::get(Type::getInt16Ty(context), 0xFFFF),
             "setDX");
