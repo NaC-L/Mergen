@@ -16,7 +16,7 @@ Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
     Value* parity = ConstantInt::get(Type::getInt1Ty(context), 1);
     for (int i = 0; i < 8; i++) {
         // x ^ (x << i)
-        Value* bit = builder.CreateTrunc(builder.CreateLShr(lsb, i), Type::getInt1Ty(value->getContext()),"parityflagbits");
+        Value* bit = builder.CreateTrunc(createLShrFolder(builder,lsb, i), Type::getInt1Ty(value->getContext()),"parityflagbits");
 
         parity = createXorFolder(builder,parity, bit,"parityXOR");
 
@@ -1230,20 +1230,20 @@ namespace arithmeticsAndLogical {
         auto* actualCount = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), dest.size), "actualCount");
         auto* wideType = Type::getIntNTy(context, dest.size * 2);
         auto* wideLvalue = createZExtFolder(builder,Lvalue, wideType);
-        auto* shiftedInCF = builder.CreateShl(createZExtFolder(builder,carryFlag, wideType), dest.size,"shiftedincf");
+        auto* shiftedInCF = createShlFolder(builder,createZExtFolder(builder,carryFlag, wideType), dest.size,"shiftedincf");
         wideLvalue = createOrFolder(builder,wideLvalue, createZExtFolder(builder,shiftedInCF, wideType, "shiftedInCFExtended"));
 
-        auto* leftShifted = builder.CreateShl(wideLvalue, createZExtFolder(builder,actualCount, wideType, "actualCountExtended"),"leftshifted");
+        auto* leftShifted = createShlFolder(builder,wideLvalue, createZExtFolder(builder,actualCount, wideType, "actualCountExtended"),"leftshifted");
         auto* rightShiftAmount = createSubFolder(builder,ConstantInt::get(actualCount->getType(), dest.size), actualCount,"rightshiftamount");
-        auto* rightShifted = builder.CreateLShr(wideLvalue, createZExtFolder(builder,rightShiftAmount, wideType),"rightshifted");
+        auto* rightShifted = createLShrFolder(builder,wideLvalue, createZExtFolder(builder,rightShiftAmount, wideType),"rightshifted");
         auto* rotated = createOrFolder(builder,leftShifted, createZExtFolder(builder,rightShifted, wideType, "rightShiftedExtended"));
 
         auto* result = builder.CreateTrunc(rotated, Lvalue->getType());
 
         auto* newCFBitPosition = ConstantInt::get(rotated->getType(), dest.size - 1);
-        auto* newCF = builder.CreateTrunc(builder.CreateLShr(rotated, newCFBitPosition), Type::getInt1Ty(context),"rclnewcf");
+        auto* newCF = builder.CreateTrunc(createLShrFolder(builder,rotated, newCFBitPosition), Type::getInt1Ty(context),"rclnewcf");
 
-        auto* msbAfterRotate = builder.CreateTrunc(builder.CreateLShr(result, dest.size - 1), Type::getInt1Ty(context),"rclmsbafterrotate");
+        auto* msbAfterRotate = builder.CreateTrunc(createLShrFolder(builder,result, dest.size - 1), Type::getInt1Ty(context),"rclmsbafterrotate");
         auto* newOF = createSelectFolder(builder,createICMPFolder(builder, CmpInst::ICMP_EQ,actualCount, ConstantInt::get(actualCount->getType(), 1)), createXorFolder(builder,newCF, msbAfterRotate), getFlag(context, builder, FLAG_OF));
 
         SetOperandValue(context, builder, dest, result);
@@ -1291,20 +1291,20 @@ namespace arithmeticsAndLogical {
         auto* actualCount = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), dest.size), "actualCount");
         auto* wideType = Type::getIntNTy(context, dest.size * 2);
         auto* wideLvalue = createZExtFolder(builder,Lvalue, wideType);
-        auto* shiftedInCF = builder.CreateShl(createZExtFolder(builder,carryFlag, wideType), dest.size);
+        auto* shiftedInCF = createShlFolder(builder,createZExtFolder(builder,carryFlag, wideType), dest.size);
         wideLvalue = createOrFolder(builder,wideLvalue, createZExtFolder(builder,shiftedInCF, wideType, "shiftedInCFExtended"));
 
-        auto* rightShifted = builder.CreateLShr(wideLvalue, createZExtFolder(builder,actualCount, wideType, "actualCountExtended"),"rightshifted");
+        auto* rightShifted = createLShrFolder(builder,wideLvalue, createZExtFolder(builder,actualCount, wideType, "actualCountExtended"),"rightshifted");
         auto* leftShiftAmount = createSubFolder(builder,ConstantInt::get(actualCount->getType(), dest.size), actualCount);
-        auto* leftShifted = builder.CreateShl(wideLvalue, createZExtFolder(builder,leftShiftAmount, wideType, "leftShiftAmountExtended"));
+        auto* leftShifted = createShlFolder(builder,wideLvalue, createZExtFolder(builder,leftShiftAmount, wideType, "leftShiftAmountExtended"));
         auto* rotated = createOrFolder(builder,rightShifted, leftShifted);
 
         auto* result = builder.CreateTrunc(rotated, Lvalue->getType());
 
         auto* newCFBitPosition = ConstantInt::get(rotated->getType(), dest.size - 1);
-        auto* newCF = builder.CreateTrunc(builder.CreateLShr(rotated, newCFBitPosition), Type::getInt1Ty(context),"rcrcf");
+        auto* newCF = builder.CreateTrunc(createLShrFolder(builder,rotated, newCFBitPosition), Type::getInt1Ty(context),"rcrcf");
 
-        auto* msbAfterRotate = builder.CreateTrunc(builder.CreateLShr(result, dest.size - 1), Type::getInt1Ty(context),"rcrmsb");
+        auto* msbAfterRotate = builder.CreateTrunc(createLShrFolder(builder,result, dest.size - 1), Type::getInt1Ty(context),"rcrmsb");
         auto* newOF = createSelectFolder(builder,createICMPFolder(builder, CmpInst::ICMP_EQ,actualCount, ConstantInt::get(actualCount->getType(), 1)), createXorFolder(builder,newCF, msbAfterRotate), getFlag(context, builder, FLAG_OF));
 
         SetOperandValue(context, builder, dest, result);
@@ -1318,7 +1318,7 @@ namespace arithmeticsAndLogical {
         auto dest = instruction.operands[0];
 
         auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
-        Rvalue = builder.CreateNot(Rvalue, "not");
+        Rvalue = builder.CreateNot(Rvalue, "realnot-" + to_string(instruction.runtime_address) + "-");
         SetOperandValue(context, builder, dest, Rvalue);
         //  Flags Affected
         // None
@@ -1422,7 +1422,7 @@ namespace arithmeticsAndLogical {
         Value* shiftedValue = builder.CreateAShr(Lvalue, clampedCount, "sar-ashr");
 
         // Calculate CF (last bit shifted out)
-        auto cfValue = builder.CreateTrunc(builder.CreateLShr(Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"sarcf"), builder.getInt1Ty());
+        auto cfValue = builder.CreateTrunc(createLShrFolder(builder,Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"sarcf"), builder.getInt1Ty());
         setFlag(context, builder, FLAG_CF, cfValue);
         Value* sf = computeSignFlag(builder, shiftedValue);
         Value* zf = computeZeroFlag(builder, shiftedValue);
@@ -1444,14 +1444,14 @@ namespace arithmeticsAndLogical {
         Value* countValue = GetOperandValue(context, builder, count, dest.size);
         unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
         Value* clampedCount = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), bitWidth), "clampedCount");
-        Value* shiftedValue = builder.CreateLShr(Lvalue, clampedCount, "shr-lshr");
+        Value* shiftedValue = createLShrFolder(builder,Lvalue, clampedCount, "shr-lshr-" + to_string(instruction.runtime_address) + "-");
 
         // Calculate CF (last bit shifted out)
-        Value* cfValue = builder.CreateTrunc(builder.CreateLShr(Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"shrcf"), builder.getInt1Ty());
+        Value* cfValue = builder.CreateTrunc(createLShrFolder(builder,Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"shrcf"), builder.getInt1Ty());
 
         // Calculate OF (only on the first shift, OF is the MSB of original value)
         Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,clampedCount, ConstantInt::get(clampedCount->getType(), 1));
-        Value* msbOfOriginal = builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),"shrmsb");
+        Value* msbOfOriginal = createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),"shrmsb");
         msbOfOriginal = createAndFolder(builder,builder.CreateTrunc(msbOfOriginal, Type::getInt1Ty(context)), ConstantInt::get(builder.getInt1Ty(), 1),"shrmsb");
         Value* of = createSelectFolder(builder,isCountOne, msbOfOriginal, getFlag(context, builder, FLAG_OF));
 
@@ -1484,10 +1484,10 @@ namespace arithmeticsAndLogical {
         Value* clampedCountValue = createAndFolder(builder,countValue, ConstantInt::get(countValue->getType(), bitWidth - 1),"shlclamp");
 
         // Perform the logical left shift
-        Value* shiftedValue = builder.CreateShl(Lvalue, clampedCountValue, "shl-shift");
+        Value* shiftedValue = createShlFolder(builder,Lvalue, clampedCountValue, "shl-shift");
 
         // Calculate CF (last bit shifted out)
-        Value* cfValue = builder.CreateLShr(Lvalue, createSubFolder(builder,bitWidthValue, clampedCountValue),"shlcf");
+        Value* cfValue = createLShrFolder(builder,Lvalue, createSubFolder(builder,bitWidthValue, clampedCountValue),"shlcf");
         Value* one = ConstantInt::get(cfValue->getType(), 1);
         cfValue = createAndFolder(builder,cfValue, one,"shlcf");
         cfValue = builder.CreateTrunc(cfValue, Type::getInt1Ty(context));
@@ -1495,15 +1495,15 @@ namespace arithmeticsAndLogical {
         // Calculate OF (only if count is 1)
         Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,clampedCountValue, ConstantInt::get(clampedCountValue->getType(), 1));
 
-        Value* originalMSB = builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlmsb");
+        Value* originalMSB = createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlmsb");
         originalMSB = createAndFolder(builder,originalMSB, ConstantInt::get(Lvalue->getType(), 1),"shlmsb");
         originalMSB = builder.CreateTrunc(originalMSB, Type::getInt1Ty(context));
 
         // For a 1-bit shift, CF is effectively the original MSB.
-        Value* cfAsMSB = builder.CreateTrunc(builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlcfasmsb"), Type::getInt1Ty(context));
+        Value* cfAsMSB = builder.CreateTrunc(createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlcfasmsb"), Type::getInt1Ty(context));
 
         // The MSB of the result after the shift.
-        Value* resultMSB = builder.CreateTrunc(builder.CreateLShr(shiftedValue, ConstantInt::get(shiftedValue->getType(), bitWidth - 1), "shlresultmsb"), Type::getInt1Ty(context));
+        Value* resultMSB = builder.CreateTrunc(createLShrFolder(builder,shiftedValue, ConstantInt::get(shiftedValue->getType(), bitWidth - 1), "shlresultmsb"), Type::getInt1Ty(context));
 
         // Calculate OF = MSB(result) XOR Original MSB (for 1-bit shifts only).
         Value* ofValue = createSelectFolder(builder,isCountOne, createXorFolder(builder,resultMSB, cfAsMSB), getFlag(context, builder, FLAG_OF));
@@ -1547,11 +1547,11 @@ namespace arithmeticsAndLogical {
             // b = 0x56
             // nb |= b << 16
             // nb = 0x78560000
-            auto byte = builder.CreateLShr(createAndFolder(builder,Lvalue, mask), i * 8, "shlresultmsb");
+            auto byte = createLShrFolder(builder,createAndFolder(builder,Lvalue, mask), i * 8, "shlresultmsb");
             auto shiftby = Lvalue->getType()->getIntegerBitWidth() - (i + 1) * 8;
-            auto newposbyte = builder.CreateShl(byte, shiftby);
+            auto newposbyte = createShlFolder(builder,byte, shiftby);
             newswappedvalue = createOrFolder(builder,newswappedvalue, newposbyte);
-            mask = builder.CreateShl(mask, 8);
+            mask = createShlFolder(builder,mask, 8);
         }
 
 
@@ -1628,19 +1628,19 @@ namespace arithmeticsAndLogical {
         unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
         auto effectiveCountValue = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), bitWidth), "effectiveShiftCount");
 
-        auto shiftedDest = builder.CreateShl(Lvalue, effectiveCountValue, "shiftedDest");
+        auto shiftedDest = createShlFolder(builder,Lvalue, effectiveCountValue, "shiftedDest");
         auto complementCount = createSubFolder(builder,ConstantInt::get(countValue->getType(), bitWidth), effectiveCountValue, "complementCount");
-        auto shiftedSource = builder.CreateLShr(sourceValue, complementCount, "shiftedSource");
+        auto shiftedSource = createLShrFolder(builder,sourceValue, complementCount, "shiftedSource");
         auto resultValue = createOrFolder(builder,shiftedDest, shiftedSource, "shldResult");
 
         auto countIsNotZero = createICMPFolder(builder, CmpInst::ICMP_NE,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 0));
         auto lastShiftedBitPosition = createSubFolder(builder,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
-        auto lastShiftedBit = createAndFolder(builder,builder.CreateLShr(Lvalue, lastShiftedBitPosition), ConstantInt::get(Lvalue->getType(), 1),"shldresultmsb");
+        auto lastShiftedBit = createAndFolder(builder,createLShrFolder(builder,Lvalue, lastShiftedBitPosition), ConstantInt::get(Lvalue->getType(), 1),"shldresultmsb");
         auto cf = createSelectFolder(builder,countIsNotZero, builder.CreateTrunc(lastShiftedBit, Type::getInt1Ty(context)), getFlag(context, builder, FLAG_CF));
 
         // OF calculation, only valid if shift count is 1
         auto isOne = createICMPFolder(builder, CmpInst::ICMP_EQ,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
-        auto newOF = createXorFolder(builder,builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1)), builder.CreateLShr(resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1)));
+        auto newOF = createXorFolder(builder,createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1)), createLShrFolder(builder,resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1)));
         auto of = createSelectFolder(builder,isOne, builder.CreateTrunc(newOF,Type::getInt1Ty(context)), getFlag(context, builder, FLAG_OF));
 
         setFlag(context, builder, FLAG_CF, cf);
@@ -1663,22 +1663,22 @@ namespace arithmeticsAndLogical {
          unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
          auto effectiveCountValue = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), bitWidth), "effectiveShiftCount");
 
-         auto shiftedDest = builder.CreateLShr(Lvalue, effectiveCountValue, "shiftedDest");
+         auto shiftedDest = createLShrFolder(builder,Lvalue, effectiveCountValue, "shiftedDest");
          auto complementCount = createSubFolder(builder,ConstantInt::get(countValue->getType(), bitWidth), effectiveCountValue, "complementCount");
-         auto shiftedSource = builder.CreateShl(sourceValue, complementCount, "shiftedSource");
+         auto shiftedSource = createShlFolder(builder,sourceValue, complementCount, "shiftedSource");
          auto resultValue = createOrFolder(builder,shiftedDest, shiftedSource, "shrdResult");
 
          // Calculate CF
          auto cfBitPosition = createSubFolder(builder,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
-         Value* cf = builder.CreateLShr(Lvalue, cfBitPosition);
+         Value* cf = createLShrFolder(builder,Lvalue, cfBitPosition);
          cf = createAndFolder(builder,cf, ConstantInt::get(cf->getType(), 1),"shrdcf");
          cf = builder.CreateTrunc(cf, Type::getInt1Ty(context));
 
          // Calculate OF, only when count is 1
          Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
-         Value* mostSignificantBitOfDest = builder.CreateLShr(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1));
+         Value* mostSignificantBitOfDest = createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1));
          mostSignificantBitOfDest = createAndFolder(builder,mostSignificantBitOfDest, ConstantInt::get(mostSignificantBitOfDest->getType(), 1),"shrdmsb");
-         Value* mostSignificantBitOfResult = builder.CreateLShr(resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1));
+         Value* mostSignificantBitOfResult = createLShrFolder(builder,resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1));
          mostSignificantBitOfResult = createAndFolder(builder,mostSignificantBitOfResult, ConstantInt::get(mostSignificantBitOfResult->getType(), 1),"shrdmsb2");
          Value* of = createXorFolder(builder,mostSignificantBitOfDest, mostSignificantBitOfResult);
          of = builder.CreateTrunc(of, Type::getInt1Ty(context));
@@ -1797,7 +1797,7 @@ namespace arithmeticsAndLogical {
         // Flags
         auto resultType = result->getType();
         auto bitWidth = resultType->getIntegerBitWidth();
-        Value* highResult = builder.CreateLShr(result, bitWidth / 2);
+        Value* highResult = createLShrFolder(builder,result, bitWidth / 2);
         Value* cf = createICMPFolder(builder, CmpInst::ICMP_NE,highResult, ConstantInt::get(resultType, 0));
         Value* of = cf;
 
@@ -1835,7 +1835,7 @@ namespace arithmeticsAndLogical {
 
         // Combine the high and low parts of the dividend
         auto bitWidth = dividendLow->getType()->getIntegerBitWidth();
-        dividend = createOrFolder(builder,builder.CreateShl(dividendHigh, bitWidth), dividendLow);
+        dividend = createOrFolder(builder,createShlFolder(builder,dividendHigh, bitWidth), dividendLow);
 
         // Perform division
         Value* quotient = builder.CreateSDiv(dividend, Rvalue);
@@ -1997,12 +1997,12 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
     Rvalue = createAndFolder(builder,Rvalue, ConstantInt::get(Rvalue->getType(), bitWidth - 1), "maskRvalue");
 
-    Value* shiftedLeft = builder.CreateShl(Lvalue, Rvalue);
-    Value* shiftedRight = builder.CreateLShr(Lvalue, createSubFolder(builder,ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue));
+    Value* shiftedLeft = createShlFolder(builder,Lvalue, Rvalue);
+    Value* shiftedRight = createLShrFolder(builder,Lvalue, createSubFolder(builder,ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue));
     Value* result = createOrFolder(builder,shiftedLeft, shiftedRight);
 
     // Calculate CF based on the last bit shifted out
-    Value* lastBit = createAndFolder(builder,builder.CreateLShr(Lvalue, createSubFolder(builder,ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue)), ConstantInt::get(Lvalue->getType(), 1),"rollastbit");
+    Value* lastBit = createAndFolder(builder,createLShrFolder(builder,Lvalue, createSubFolder(builder,ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue)), ConstantInt::get(Lvalue->getType(), 1),"rollastbit");
     Value* cf = builder.CreateTrunc(lastBit, Type::getInt1Ty(context));
 
     // Calculate OF, which is the XOR of CF and the new MSB of the result
@@ -2049,12 +2049,12 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         auto size = ConstantInt::getSigned(Lvalue->getType(), Lvalue->getType()->getIntegerBitWidth());
         Rvalue = builder.CreateURem(Rvalue, size);
 
-        Value* result = createOrFolder(builder,builder.CreateLShr(Lvalue, Rvalue), builder.CreateShl(Lvalue, createSubFolder(builder,size, Rvalue)), "ror-" + std::to_string(instruction.runtime_address) + "-");
+        Value* result = createOrFolder(builder,createLShrFolder(builder,Lvalue, Rvalue), createShlFolder(builder,Lvalue, createSubFolder(builder,size, Rvalue)), "ror-" + std::to_string(instruction.runtime_address) + "-");
 
-        Value* msb = builder.CreateLShr(result, createSubFolder(builder,size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1))));
+        Value* msb = createLShrFolder(builder,result, createSubFolder(builder,size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1))));
         Value* cf = builder.CreateTrunc(msb, Type::getInt1Ty(context), "ror-cf");
 
-        Value* secondMsb = builder.CreateLShr(result, createSubFolder(builder,size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 2))));
+        Value* secondMsb = createLShrFolder(builder,result, createSubFolder(builder,size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 2))));
         auto ofDefined = builder.CreateTrunc(createXorFolder(builder,msb, secondMsb), cf->getType());
         auto isOneBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1)));
         Value* ofCurrent = getFlag(context, builder, FLAG_OF);
@@ -2370,7 +2370,7 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     // maybe will edit
     void lift_rdtsc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto rdtscCall = builder.CreateIntrinsic(llvm::Intrinsic::readcyclecounter, {}, {});
-        auto edxPart = builder.CreateLShr(rdtscCall, 32, "to_edx");
+        auto edxPart = createLShrFolder(builder,rdtscCall, 32, "to_edx");
         auto eaxPart = builder.CreateTrunc(rdtscCall, llvm::Type::getInt32Ty(context), "to_eax");
         SetRegisterValue(context, builder, ZYDIS_REGISTER_EDX, edxPart);
         SetRegisterValue(context, builder, ZYDIS_REGISTER_EAX, eaxPart);
@@ -2649,7 +2649,7 @@ namespace flagOperation {
         auto adjustedBitIndexValue = builder.CreateURem(bitIndexValue, ConstantInt::get(bitIndexValue->getType(), Lvalue->getType()->getIntegerBitWidth()));
 
         // Create a mask to test the bit
-        auto mask = builder.CreateShl(ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue);
+        auto mask = createShlFolder(builder,ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue);
 
 
         // Test the bit by performing bitwise AND
@@ -2678,7 +2678,7 @@ namespace flagOperation {
         // Create a mask to test the bit
 
         // Create a mask to clear the bit
-        auto mask = builder.CreateShl(ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue, "btr-mask");
+        auto mask = createShlFolder(builder,ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue, "btr-mask");
         mask = builder.CreateNot(mask, "btr-not");
 
         // Clear the bit
@@ -2740,7 +2740,7 @@ namespace flagOperation {
         // Loop through each bit from MSB to LSB
         for (unsigned i = 0; i < bitWidth; ++i) {
             // Create mask for current bit
-            Value* mask = builder.CreateShl(oneVal, index);
+            Value* mask = createShlFolder(builder,oneVal, index);
 
             // Test if the bit is set
             Value* test = createAndFolder(builder, Rvalue, mask,"bsrtest");
@@ -2780,7 +2780,7 @@ namespace flagOperation {
 
         Value* continuecounting = ConstantInt::get(Type::getInt1Ty(context), 1);
         for (uint64_t i = 0; i < intWidth; ++i) {
-            Value* bitMask = builder.CreateShl(one, ConstantInt::get(intType, i));
+            Value* bitMask = createShlFolder(builder,one, ConstantInt::get(intType, i));
             Value* bitSet = createAndFolder(builder,Rvalue, bitMask,"bsfbitset");
             Value* isBitZero = createICMPFolder(builder, CmpInst::ICMP_EQ,bitSet, ConstantInt::get(intType, 0));
             // continue until isBitZero is 1
@@ -2815,7 +2815,7 @@ namespace flagOperation {
         adjustedBitIndexValue = createZExtOrTruncFolder(builder,adjustedBitIndexValue, Lvalue->getType(), "castedBitIndex");
 
         // Create a mask to test the bit
-        auto mask = builder.CreateShl(ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue, "btc-mask");
+        auto mask = createShlFolder(builder,ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue, "btc-mask");
 
         // Test the bit by performing bitwise AND
         auto testValue = createAndFolder(builder,Lvalue, mask, "btc-and");
@@ -2843,13 +2843,13 @@ namespace flagOperation {
         auto cf = getFlag(context, builder, FLAG_CF);
 
         Value* Rvalue = createOrFolder(builder,
-            builder.CreateShl(sf, 7),
+            createShlFolder(builder,sf, 7),
             createOrFolder(builder,
-                builder.CreateShl(zf, 6),
+                createShlFolder(builder,zf, 6),
                 createOrFolder(builder,
-                    builder.CreateShl(af, 4),
+                    createShlFolder(builder,af, 4),
                     createOrFolder(builder,
-                        builder.CreateShl(pf, 2), cf, "lahf-or-3"), "lahf-or-2"), "lahf-or1"), "lahf-or");
+                        createShlFolder(builder,pf, 2), cf, "lahf-or-3"), "lahf-or-2"), "lahf-or1"), "lahf-or");
 
 
         SetRegisterValue(context, builder, ZYDIS_REGISTER_AH, Rvalue);
@@ -2953,7 +2953,7 @@ namespace flagOperation {
 
         // Extract the bit from the base operand
         Value* baseVal = GetOperandValue(context, builder, base, base.size);
-        Value* bit = builder.CreateLShr(baseVal, bitOffsetMasked, "bts-lshr-" + to_string(instruction.runtime_address) + "-");
+        Value* bit = createLShrFolder(builder,baseVal, bitOffsetMasked, "bts-lshr-" + to_string(instruction.runtime_address) + "-");
         Value* one = ConstantInt::get(bit->getType(), 1);
         bit = createAndFolder(builder,bit, one, "bts-and");
 
@@ -2963,7 +2963,7 @@ namespace flagOperation {
         //SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, eflags);
 
         // Set the bit in the base operand
-        Value* mask = builder.CreateShl(ConstantInt::get(baseVal->getType(), 1), bitOffsetMasked, "bts-shl");
+        Value* mask = createShlFolder(builder,ConstantInt::get(baseVal->getType(), 1), bitOffsetMasked, "bts-shl");
         baseVal = createOrFolder(builder,baseVal, mask, "bts-or-" + to_string(instruction.runtime_address) + "-");
         SetOperandValue(context, builder, base, baseVal);
     }
@@ -2992,7 +2992,7 @@ namespace flagOperation {
         Value* rax = GetRegisterValue(context, builder, ZYDIS_REGISTER_RAX);
 
         // Extract the sign bit (MSB) of RAX
-        Value* msb = builder.CreateLShr( createZExtFolder(builder,rax,Type::getInt64Ty(context) ), 63, "cqo-msb");  // 63 for a 64-bit register
+        Value* msb = createLShrFolder(builder, createZExtFolder(builder,rax,Type::getInt64Ty(context) ), 63, "cqo-msb");  // 63 for a 64-bit register
         Value* one = ConstantInt::get(msb->getType(), 1);
         msb = createAndFolder(builder,msb, one, "cqo-and");
         

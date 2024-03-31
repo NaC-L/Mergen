@@ -22,9 +22,13 @@ Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, con
 Value* createSExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "");
 Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "");
 
-
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "");
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name = "");
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name = "");
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "");
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name = "");
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name = "");
 Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key);
-
 void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value);
 unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip);
 
