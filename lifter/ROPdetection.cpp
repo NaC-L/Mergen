@@ -159,6 +159,48 @@ public:
 };
 
 
+namespace {
+    class NoStoreToZeroStorePass : public PassInfoMixin<NoStoreToZeroStorePass> {
+    public:
+        PreservedAnalyses run(Module& M, ModuleAnalysisManager&) {
+            bool hasChanged = false;
+            return PreservedAnalyses::none();
+            for (auto& F : M) {
+                if (F.isDeclaration()) continue;
+
+                for (auto& BB : F) {
+                    std::set<GetElementPtrInst*> storedGEPs;
+
+                    for (auto& I : BB) {
+                        if (auto* storeInst = dyn_cast<StoreInst>(&I)) {
+                            if (auto* GEP = dyn_cast<GetElementPtrInst>(storeInst->getPointerOperand())) {
+                                // Mark the GEP as having been stored to
+                                storedGEPs.insert(GEP);
+                            }
+                        }
+                        else if (auto* loadInst = dyn_cast<LoadInst>(&I)) {
+                            if (auto* GEP = dyn_cast<GetElementPtrInst>(loadInst->getPointerOperand())) {
+                                // If it's a load from a GEP that hasn't been stored to yet
+                                if (storedGEPs.find(GEP) == storedGEPs.end()) {
+                                    // Replace the load instruction with a constant 0
+                                    IRBuilder<> builder(loadInst);
+                                    auto* zeroValue = ConstantInt::get(loadInst->getType(), 0);
+                                    loadInst->replaceAllUsesWith(zeroValue);
+                                    // Optional: Remove the original load instruction if it's no longer needed
+                                    // loadInst->eraseFromParent();
+                                    hasChanged = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return hasChanged ? PreservedAnalyses::none() : PreservedAnalyses::all();
+        }
+    };
+}
+
 #endif // GEPLoadPass_H
 
 void initDetections(void* file_base, ZyanU8* data) {
@@ -321,6 +363,7 @@ void test_optxd(Function* clonedFuncx) {
     } while (changed);
 }
 
+// lol idk, i got frustrated
 void final_optpass(Function* clonedFuncx) {
     llvm::PassBuilder passBuilder;
 
@@ -351,6 +394,7 @@ void final_optpass(Function* clonedFuncx) {
 
     llvm::Module* module = clonedFuncx->getParent();
 
+
     bool changed;
     do {
         changed = false;
@@ -360,6 +404,7 @@ void final_optpass(Function* clonedFuncx) {
         // Build and run the optimization pipeline
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
         modulePassManager.addPass(GEPLoadPass());
+        modulePassManager.addPass(NoStoreToZeroStorePass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.addPass(RemovePseudoStackPass());
 
@@ -475,7 +520,7 @@ opaque_info isOpaque(Function* function) {
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(GVNPass()));
 
         modulePassManager.addPass(GEPLoadPass());
-        
+        modulePassManager.addPass(NoStoreToZeroStorePass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
 
@@ -520,7 +565,7 @@ opaque_info isOpaque(Function* function) {
 
 
 // doesReturnRsp, but zesty
-ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
+ROP_info isROP(Function* clonedFunc, BasicBlock& clonedBB, uintptr_t &dest) {
     //create clone of module/function then analyze it.
 
    
@@ -529,8 +574,8 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
     auto data = data_g;
 
     ROP_info result = ROP_return;
-    llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
+    llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(clonedBB.getTerminator());
     IRBuilder<> builder(&clonedBB);
     Value* rspvalue = GetRegisterValue(clonedBB.getContext(), builder, ZYDIS_REGISTER_RSP);
     // Check if the integer operand is a constant integer
@@ -578,21 +623,9 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
         return false;
     });
 
-    llvm::ValueToValueMapTy VMap;
-    llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
-    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", function->getContext());
-    clonedFunctmp->removeFromParent();
-    // Add the cloned function to the destination module
-    destinationModule->getFunctionList().push_back(clonedFunctmp);
-    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
+
     llvm::Module* module = clonedFunc->getParent();
 
-#ifdef _DEVELOPMENT
-    std::string Filename = "output_ret_noopt.ll";
-    std::error_code EC;
-    llvm::raw_fd_ostream OS(Filename, EC);
-    clonedFunc->print(OS);
-#endif
     bool changed;
 
     do {
@@ -622,7 +655,7 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(AggressiveInstCombinePass(  )));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(GVNPass()));
         modulePassManager.addPass(GEPLoadPass());
-        
+        modulePassManager.addPass(NoStoreToZeroStorePass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
 
@@ -649,9 +682,15 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
     } while (changed);
 
 
+    // create a pass that acatually works to promote memory to register
+    // basically search for loads, if we stored a value to that load replace that value
+    // problem 1:
+    // multiple branches
+    // we should fix control flow, then if we get the condition, since its SSA we can use the condition for branches and we create a select.
+    //
 
 
-    // is this needed anymore? rsp is (almost) always a constant
+        // Check if the integer operand is a constant integer
     if (llvm::ConstantInt* constInt = llvm::dyn_cast<llvm::ConstantInt>(rspvalue)) {
         int64_t rspval = constInt->getSExtValue();
         //cout << "rspval = " << rspval << "\n";
@@ -660,7 +699,19 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
             return result;
        }
     }
-    returnInst = dyn_cast<llvm::ReturnInst>(clonedFunc->back().getTerminator());
+
+    if (returnInst->getReturnValue() != nullptr) {
+        // Get the value that is being returned
+        llvm::Value* returnValue = returnInst->getReturnValue();
+        if (llvm::ConstantInt* constInt = llvm::dyn_cast<llvm::ConstantInt>(returnValue)) {
+            dest = constInt->getZExtValue();
+           
+        }
+    }
+
+
+
+    // Assuming you want to check the return value of the ReturnInst
     if (returnInst->getReturnValue() != nullptr) {
         // Get the value that is being returned
         llvm::Value* returnValue = returnInst->getReturnValue();
@@ -668,8 +719,6 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
             dest = constInt->getZExtValue();
         }
     }
-
-
 
 
 
@@ -764,7 +813,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(AggressiveInstCombinePass()));
         modulePassManager.addPass(createModuleToFunctionPassAdaptor(GVNPass()));
         modulePassManager.addPass(GEPLoadPass());
-        
+        modulePassManager.addPass(NoStoreToZeroStorePass());
 
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
