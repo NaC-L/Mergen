@@ -1,14 +1,8 @@
 #include "includes.h"
-// this file is where helper functions reside.
+
 
 void* file_base_g_operand;
 ZyanU8* data_g_operand;
-
-#define printvalue(x) \
-    outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
-
-#define printvalue2(x) \
-    outs() << " " #x " : " << x << "\n";  outs().flush();
 
 
 void initBases2(void* file_base, ZyanU8* data) {
@@ -26,27 +20,26 @@ void initBases2(void* file_base, ZyanU8* data) {
 #define TESTFOLDERshr
 #endif
 
-// use this or less *special* version of this to compute known bits. USEFUL!!!!!!!!!!!!!!!!!!! FOR FLAGS STUFF
 KnownBits analyzeValueKnownBits(llvm::Value* value, const llvm::DataLayout& DL) {
 	KnownBits knownBits;
-	// doesnt work with i128 ? 
+
 	if (value->getType() == Type::getInt128Ty(value->getContext()))
 		return knownBits;
 	computeKnownBits(value, knownBits, DL, 0);
 	return knownBits;
 }
 
-// apperantly its only used in optimization pass https://github.com/llvm/llvm-project/blob/main/llvm/lib/Analysis/InstructionSimplify.cpp#L4765 
+
 Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* False, const Twine& Name = "") {
 #ifdef TESTFOLDER
 	if (auto* CConst = dyn_cast<Constant>(C)) {
-		// get C, if C is true, return True, if not False, if C is unknown, return createselect)
+
 		if (auto* CBool = dyn_cast<ConstantInt>(CConst)) {
 			if (CBool->isOne()) {
-				return True; // C is true
+				return True;
 			}
 			else if (CBool->isZero()) {
-				return False; // C is false
+				return False;
 			}
 		}
 	}
@@ -55,12 +48,12 @@ Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* Fa
 }
 Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER3
-	// Simplify if either operand is 0
+
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-		if (LHSConst->isZero()) return RHS; // LHS is 0
+		if (LHSConst->isZero()) return RHS;
 	}
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-		if (RHSConst->isZero()) return LHS; // RHS is 0
+		if (RHSConst->isZero()) return LHS;
 	}
 #endif
 	return builder.CreateAdd(LHS, RHS, Name);
@@ -69,7 +62,7 @@ Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER4
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-		if (RHSConst->isZero()) return LHS; // RHS is 0
+		if (RHSConst->isZero()) return LHS;
 	}
 #endif
 	return builder.CreateSub(LHS, RHS, Name);
@@ -82,11 +75,11 @@ Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 using namespace llvm;
 
 Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-	// if xxxx???? >> 4 -> 0000xxxx
-	// so if we know first N bits where N is Size - Shift, we can fold into a constant
-	// we need to know RHS and partially know LHS
-	// Ensure RHS is a constant, not too wide, and LHS has known bits.
-	if (!RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
+
+
+
+
+	if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
 		return nullptr;
 
 	APInt shiftAmount = RHS.getConstant();
@@ -107,7 +100,7 @@ Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 }
 
 Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-	if (!RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
+	if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
 		return nullptr;
 
 	APInt shiftAmount = RHS.getConstant();
@@ -120,7 +113,7 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	result.One = LHS.One.shl(shiftSize);
 	result.Zero = LHS.Zero.shl(shiftSize) | APInt::getLowBitsSet(LHS.getBitWidth(), shiftSize);
 
-	if (!result.isConstant()) {
+	if (result.hasConflict() || !result.isConstant()) {
 		return nullptr;
 	}
 
@@ -129,7 +122,7 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDERshl
-	// Simplify if either operand is 0
+
 
 	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 
@@ -149,17 +142,17 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 
 Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDERshr
-	// Simplify if either operand is 0
+
 
 	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
-	
+
 	if (Value* knownBitsAnd = foldLShrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
 		return knownBitsAnd;
 	}
-	
+
 #endif
 
 
@@ -186,17 +179,17 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine
 
 
 Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-	// Check if either operand is fully unknown, or if their bit widths do not match; default bitwidth is 1
-	if (LHS.isUnknown() || RHS.isUnknown() || LHS.getBitWidth() != RHS.getBitWidth() || !RHS.isConstant() || LHS.getBitWidth() <= 1 || RHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
+
+	if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() || RHS.isUnknown() || LHS.getBitWidth() != RHS.getBitWidth() || !RHS.isConstant() || LHS.getBitWidth() <= 1 || RHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
 		return nullptr;
 	}
 
-	// if known is a constant then replace
+
 
 	KnownBits combined;
-	combined.One = LHS.One | RHS.One; // if 000? 0001 -> 0001    
-	combined.Zero = LHS.Zero & RHS.Zero;  // if 1010 10?? -> 101?
-	
+	combined.One = LHS.One | RHS.One;
+	combined.Zero = LHS.Zero & RHS.Zero;
+
 	if (!(combined.Zero | combined.One).isAllOnes() || combined.getBitWidth() <= 1) {
 		return nullptr;
 	}
@@ -208,15 +201,15 @@ Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER5
-	// Simplify if either operand is 0
+
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-		if (LHSConst->isZero()) return RHS; // LHS is 0
+		if (LHSConst->isZero()) return RHS;
 	}
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-		if (RHSConst->isZero()) return LHS; // RHS is 0
+		if (RHSConst->isZero()) return LHS;
 	}
 	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-	
+
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
@@ -226,53 +219,54 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine&
 	if (Value* knownBitsAnd = foldOrKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
 		return knownBitsAnd;
 	}
-	
-#endif
-	
 
-		
+#endif
+
+
+
 	return builder.CreateOr(LHS, RHS, Name);
 }
 
 
 Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER6
-	// Simplify if either operand is 0
+
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-		if (LHSConst->isZero()) return RHS; // LHS is 0
+		if (LHSConst->isZero()) return RHS;
 	}
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-		if (RHSConst->isZero()) return LHS; // RHS is 0
+		if (RHSConst->isZero()) return LHS;
 	}
 #endif
 	return builder.CreateXor(LHS, RHS, Name);
 }
 
 std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS, KnownBits RHS) {
+
 	switch (P) {
-		case CmpInst::ICMP_EQ:
-			return KnownBits::eq(LHS, RHS);
-		case CmpInst::ICMP_NE:
-			return KnownBits::ne(LHS, RHS);
-		case CmpInst::ICMP_UGT:
-			return KnownBits::ugt(LHS, RHS);
-		case CmpInst::ICMP_UGE:
-			return KnownBits::uge(LHS, RHS);
-		case CmpInst::ICMP_ULT:
-			return KnownBits::ult(LHS, RHS);
-		case CmpInst::ICMP_ULE:
-			return KnownBits::ule(LHS, RHS);
-		case CmpInst::ICMP_SGT:
-			return KnownBits::sgt(LHS, RHS);
-		case CmpInst::ICMP_SGE:
-			return KnownBits::sge(LHS, RHS);
-		case CmpInst::ICMP_SLT:
-			return KnownBits::slt(LHS, RHS);
-		case CmpInst::ICMP_SLE:
-			return KnownBits::sle(LHS, RHS);
+	case CmpInst::ICMP_EQ:
+		return KnownBits::eq(LHS, RHS);
+	case CmpInst::ICMP_NE:
+		return KnownBits::ne(LHS, RHS);
+	case CmpInst::ICMP_UGT:
+		return KnownBits::ugt(LHS, RHS);
+	case CmpInst::ICMP_UGE:
+		return KnownBits::uge(LHS, RHS);
+	case CmpInst::ICMP_ULT:
+		return KnownBits::ult(LHS, RHS);
+	case CmpInst::ICMP_ULE:
+		return KnownBits::ule(LHS, RHS);
+	case CmpInst::ICMP_SGT:
+		return KnownBits::sgt(LHS, RHS);
+	case CmpInst::ICMP_SGE:
+		return KnownBits::sge(LHS, RHS);
+	case CmpInst::ICMP_SLT:
+		return KnownBits::slt(LHS, RHS);
+	case CmpInst::ICMP_SLE:
+		return KnownBits::sle(LHS, RHS);
 	}
 
-	return 0;
+	return nullopt;
 }
 
 Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS, Value* RHS, const Twine& Name = "") {
@@ -284,19 +278,18 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS, 
 		return ConstantInt::get(Type::getInt1Ty(builder.getContext()), v.value());
 	}
 
-	return builder.CreateICmp(P,LHS,RHS,Name);
+	return builder.CreateICmp(P, LHS, RHS, Name);
 }
 
 Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
-	if (LHS.isUnknown() || RHS.isUnknown() || !RHS.isConstant() || LHS.getBitWidth() != RHS.getBitWidth() || RHS.getBitWidth() <= 1 || LHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
+	if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() || RHS.isUnknown() || !RHS.isConstant() || LHS.getBitWidth() != RHS.getBitWidth() || RHS.getBitWidth() <= 1 || LHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
 		return nullptr;
 	}
 
-	if ( !((LHS.Zero | LHS.One) & RHS.One).eq(RHS.One)) {
+	if (!((LHS.Zero | LHS.One) & RHS.One).eq(RHS.One)) {
 		return nullptr;
 	}
-
 	APInt resultValue = LHS.One & RHS.One;
 
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), resultValue);
@@ -306,16 +299,16 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 #ifdef TESTFOLDER
 	/*
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-		if (LHSConst->isZero()) return ConstantInt::get(RHS->getType(), 0); // LHS is 0
+		if (LHSConst->isZero()) return ConstantInt::get(RHS->getType(), 0);
 	}
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-		if (RHSConst->isZero()) return  ConstantInt::get(LHS->getType(), 0); // RHS is 0
+		if (RHSConst->isZero()) return  ConstantInt::get(LHS->getType(), 0);
 	}
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-		if (LHSConst->isMinusOne()) return RHS; // LHS is 0
+		if (LHSConst->isMinusOne()) return RHS;
 	}
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-		if (RHSConst->isMinusOne()) return LHS; // RHS is 0
+		if (RHSConst->isMinusOne()) return LHS;
 	}
 	*/
 	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
@@ -333,43 +326,47 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	return builder.CreateAnd(LHS, RHS, Name);
 }
 
+// - probably not needed anymore
 Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
 #ifdef TESTFOLDER7
 	if (TruncInst* truncInst = dyn_cast<TruncInst>(V)) {
 		Value* originalValue = truncInst->getOperand(0);
-		// Directly truncate the original value to the target type
+
 		return builder.CreateTrunc(originalValue, DestTy, Name);
 	}
 #endif
 	return builder.CreateTrunc(V, DestTy, Name);
 }
+
+// - probably not needed anymore
 Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
+
 #ifdef TESTFOLDER8
-	// Directly return V if it already has the destination type.
+
 	if (V->getType() == DestTy) {
 		return V;
 	}
-	// assume we have this
-	// %trunc2 = trunc iXX %r15 to i8
-	// %zext = zext i8 %trunc2 to iYY
 
-	// we want to simplify it to
 
-	// %trunc2 = iXX %trunc2 to iYY
-	// %value =  and %trunc2, 0xff
+
+
+
+
+
+
 
 
 
 
 	if (auto* TruncInsts = dyn_cast<TruncInst>(V)) {
-		Value* OriginalValue = TruncInsts->getOperand(0); // %trunc2
-		Type* OriginalType = OriginalValue->getType(); // iXX
-		// iXX == iYY , return OG value
+		Value* OriginalValue = TruncInsts->getOperand(0);
+		Type* OriginalType = OriginalValue->getType();
+
 		if (OriginalType->getIntegerBitWidth() == DestTy->getIntegerBitWidth()) {
 			return OriginalValue;
 		}
 
-		 
+
 	}
 
 	if (auto* ConstInt = dyn_cast<ConstantInt>(V)) {
@@ -378,7 +375,7 @@ Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twin
 
 	if (auto* ZExtInsts = dyn_cast<ZExtInst>(V)) {
 		return builder.CreateZExt(ZExtInsts->getOperand(0), DestTy, Name);
-	}
+}
 #endif
 	return builder.CreateZExt(V, DestTy, Name);
 }
@@ -387,41 +384,41 @@ Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twin
 Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
 	Type* VTy = V->getType();
 	if (VTy->getScalarSizeInBits() < DestTy->getScalarSizeInBits())
-		return createZExtFolder(builder,V, DestTy, Name);
+		return createZExtFolder(builder, V, DestTy, Name);
 	if (VTy->getScalarSizeInBits() > DestTy->getScalarSizeInBits())
-		return createTruncFolder(builder,V, DestTy, Name);
+		return createTruncFolder(builder, V, DestTy, Name);
 	return V;
 }
 
 Value* createSExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
 #ifdef TESTFOLDER9
-	// Directly return V if it already has the destination type.
+
 	if (V->getType() == DestTy) {
 		return V;
 	}
 
-	// Optimize an SExt following a Trunc from a signed type.
+
 	if (auto* TruncInsts = dyn_cast<TruncInst>(V)) {
 		Value* OriginalValue = TruncInsts->getOperand(0);
 		Type* OriginalType = OriginalValue->getType();
 
-		// If SExt reverses the Trunc, return the original value directly.
+
 		if (OriginalType == DestTy) {
 			return OriginalValue;
 		}
 	}
 
-	// Simplify SExt of a constant integer.
+
 	if (auto* ConstInt = dyn_cast<ConstantInt>(V)) {
 		return ConstantInt::get(DestTy, ConstInt->getValue().sextOrTrunc(DestTy->getIntegerBitWidth()));
 	}
 
-	// For an SExt of an SExt, use the wider type directly.
+
 	if (auto* SExtInsts = dyn_cast<SExtInst>(V)) {
 		return builder.CreateSExt(SExtInsts->getOperand(0), DestTy, Name);
 	}
 #endif
-	// Default to creating an SExt operation.
+
 	return builder.CreateSExt(V, DestTy, Name);
 }
 
@@ -436,7 +433,8 @@ Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, con
 
 
 
-// create something for trunc and s/z ext, if i8 %val is zext to i64 %val64, then only 1 byte is important, if that is cleared too with an and/shr, then its empty. ex:
+
+
 /*
 %extendedValue13 = zext i8 %trunc11 to i64
 %maskedreg14 = and i64 %newreg9, -256
@@ -483,6 +481,7 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
 	auto zero = ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0);
+	auto one = ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 1);
 
 	FlagList[FLAG_CF] = zero;
 	FlagList[FLAG_PF] = zero;
@@ -493,11 +492,25 @@ void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 	FlagList[FLAG_IF] = zero;
 	FlagList[FLAG_DF] = zero;
 	FlagList[FLAG_OF] = zero;
+
+	FlagList[FLAG_RESERVED1] = one; 
 }
 
-// responsible of operations on RFLAG
+
 Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
 	newValue = createTruncFolder(builder,newValue, Type::getInt1Ty(context));
+#ifdef _DEVELOPMENT
+	outs() << "flag set: " << flag << " "; newValue->print(outs()); outs() << "\n"; outs().flush();
+#endif
+	if (flag == FLAG_RESERVED1 
+		|| flag == FLAG_RESERVED5
+		|| flag == FLAG_IF
+		|| flag == FLAG_DF
+		)
+		return nullptr;
+
+	auto one = ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 1);
+
 	return FlagList[flag] = newValue;
 
 }
@@ -511,14 +524,14 @@ Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 
 
 
-// instead of 1 variable
-// have multiple variables that correspond to the flags
+
+
 
 void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
 
 
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
-	auto value = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 2); // 2nd bit is reserved and always true
+	auto value = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 2); 
 
 	auto flags = RegisterList[ZYDIS_REGISTER_RFLAGS];
 
@@ -528,12 +541,12 @@ void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
 }
 
 
-//...
+
 unordered_map<int, Value*> getRegisterList() {
 	return RegisterList;
 }
 
-//...
+
 void setRegisterList(unordered_map<int, Value*> newRegisterList) {
 	RegisterList = newRegisterList;
 }
@@ -548,20 +561,20 @@ void initMemoryAlloc(Value* allocArg) {
 
 unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip) {
 
-	int zydisRegister = ZYDIS_REGISTER_RAX; // Replace with desired key
+	int zydisRegister = ZYDIS_REGISTER_RAX; 
 
 	auto argEnd = function->arg_end();
 	for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
 
 		if ((zydisRegister == ZYDIS_REGISTER_RSP) || (zydisRegister == ZYDIS_REGISTER_ESP)) {
-			// we dont want to register Stack Pointer register as an argument, because then it confuses llvm
+			
 			zydisRegister++;
 			continue;
 		}
 
 		llvm::Argument* arg = &*argIt;
 		arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
-		// Check if it's the last argument, if its last argument, create a FLAGS argument where we store flags. probably create a struct for it instead
+		
 		if (std::next(argIt) == argEnd) {
 			arg->setName("memory");
 			memoryAlloc = arg;
@@ -572,7 +585,7 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 		}
 	}
 
-	// Initialize flag value, it will be always 2
+	
 	Init_Flags(context,builder);
 
 
@@ -580,58 +593,58 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
 	auto value = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), rip);
 
-	// initialize xIP value, should be function start, its here for stuff like getting .data or calling functions
+	
 	auto new_rip = createAddFolder(builder,zero, value);
-	// move initialized value into map
+	
 	RegisterList[ZYDIS_REGISTER_RIP] = new_rip;
 
 
-	// initialize xSP value, as said, when xSP is not a defined value, optimizations get messy.
+	
 	auto stackvalue = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), STACKP_VALUE);
 	auto new_stack_pointer = createAddFolder(builder,stackvalue, zero);
-	// move initialized value into map
+	
 	RegisterList[ZYDIS_REGISTER_RSP] = new_stack_pointer;
 
 	return RegisterList;
 }
 
-// get the highest byte
-// basically should be 0xFF00
+
+
 Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, int reg) {
 
 
-	Value* fullRegisterValue = RegisterList[ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,(ZydisRegister)reg) ];  // Assume we fetch the 64-bit RAX, RCX, etc.
+	Value* fullRegisterValue = RegisterList[ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,(ZydisRegister)reg) ];  
 
-	// Right-shift to bring the high-byte to the least-significant position
+	
 	Value* shiftedValue = createLShrFolder(builder,fullRegisterValue, 8,"highreg");
 
-	// Mask out other bits to extract the high byte
+	
 	Value* FF = ConstantInt::get(shiftedValue->getType(), 0xff);
 	Value* highByteValue = createAndFolder(builder,shiftedValue, FF, "highByte");
 
 	return highByteValue;
 }
 
-// this function will probably cause issues in the future
+
 void SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
 #ifdef _DEVELOPMENT
 	outs() << " value : "; value->print(outs()); outs() << "\n"; outs().flush();
 #endif
 	for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
 		int shiftAmount = flag;
-		Value* shiftedFlagValue = createLShrFolder(builder,value, ConstantInt::get(value->getType(), shiftAmount), "setflag"); // Value >> flag
-		auto flagValue = createTruncFolder(builder,shiftedFlagValue, Type::getInt1Ty(context),"flagtrunc"); // i64 ...0001 to 1
+		Value* shiftedFlagValue = createLShrFolder(builder,value, ConstantInt::get(value->getType(), shiftAmount), "setflag"); 
+		auto flagValue = createTruncFolder(builder,shiftedFlagValue, Type::getInt1Ty(context),"flagtrunc"); 
 #ifdef _DEVELOPMENT
 		outs() << " Flag : " << flag << " : "; flagValue->print(outs()); outs() << "\n"; outs().flush();
 #endif
 		setFlag(context, builder, (Flag)flag, flagValue);
-		// shl and or flags to have one big flag
+		
 	}
 	return;
 }
-// causes alot of calculations? maybe
+
 Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
-	Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0); // Assuming a 64-bit value for simplicity
+	Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0); 
 	for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
 		Value* flagValue = getFlag(context, builder, (Flag)flag);
 		int shiftAmount = flag;
@@ -642,9 +655,7 @@ Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
 }
 
 
-// responsible for retrieving latest llvm SSA value from a asm register
 Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
-	// ZYDIS_REGISTER_RFLAGS is bugged and it will return ZYDIS_REGISTER_NONE
 
 	if (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH || key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH) {
 		return GetValueFromHighByteRegister(context, builder, key);
@@ -677,102 +688,111 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
 Value* SetValueToHighByteRegister(LLVMContext& context, IRBuilder<>& builder, int reg, Value* value) {
 	int shiftValue = 8;
 
-	// Convert key for high-byte registers to their 64-bit counterparts
+	
 	int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
 	Value* fullRegisterValue = RegisterList[fullRegKey];
 
-	// Ensure the value being shifted is of the correct type
+	
 	Value* eightBitValue = createAndFolder(builder,value, ConstantInt::get(value->getType(), 0xFF),"eight-bit");
 	Value* shiftedValue = createShlFolder(builder,eightBitValue, ConstantInt::get(value->getType(), shiftValue),"shl");
 
-	// Create mask and clear the high-byte portion
+	
 	Value* mask = ConstantInt::get(Type::getInt64Ty(context), ~(0xFF << shiftValue));
 	Value* clearedRegister = createAndFolder(builder,fullRegisterValue, mask,"clear-reg");
 
 	shiftedValue = createZExtFolder(builder,shiftedValue, fullRegisterValue->getType() );
-	// Set the high-byte portion of the register
+	
 	Value* newRegisterValue = createOrFolder(builder,clearedRegister, shiftedValue,"high_byte");
 
 	return newRegisterValue;
 }
 
-// I dont remember the logic, however it should be related to this snippet:
-// mov eax, 0x12345678
-//--- eax = 0x12345678
-//mov al,  0xFF
-// --- eax = 0X123456FF
+
+
+
+
+
 Value* SetValueToSubRegister(LLVMContext& context, IRBuilder<>& builder, int reg, Value* value) {
-	// Convert key for sub-register to their 64-bit counterparts
+	
 	int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, static_cast<ZydisRegister>(reg));
 	Value* fullRegisterValue = RegisterList[fullRegKey];
 	fullRegisterValue = createZExtOrTruncFolder(builder,fullRegisterValue, Type::getInt64Ty(context));
 
-	// Determine mask based on sub-register size and position
+	
 	uint64_t mask = 0xFFFFFFFFFFFFFFFFULL;
 	if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH || reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
-		mask = 0xFFFFFFFFFFFF00FFULL; // Mask for 8 high bits of the lower 16-bit part
+		mask = 0xFFFFFFFFFFFF00FFULL; 
 	}
 	else {
-		mask = 0xFFFFFFFFFFFFFF00ULL; // Mask for low 8 bits
+		mask = 0xFFFFFFFFFFFFFF00ULL; 
 	}
 
 	Value* maskValue = ConstantInt::get(Type::getInt64Ty(context), mask);
 	Value* extendedValue = createZExtFolder(builder,value, Type::getInt64Ty(context), "extendedValue");
 
-	// Mask the full register so that only the sub-register part is set to 0
+	
 	Value* maskedFullReg = createAndFolder(builder,fullRegisterValue, maskValue, "maskedreg");
 
-	// Shift the value into the correct position if necessary
+	
 	if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH || reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
 		extendedValue = createShlFolder(builder,extendedValue, 8, "shiftedValue");
 	}
 
-	// Or the masked full register with the sub-register value to set the byte
+
+	
 	Value* updatedReg = createOrFolder(builder,maskedFullReg, extendedValue, "newreg");
 
-	// Store the updated value back to the full register (if necessary)
+
+	printvalue(fullRegisterValue)
+	printvalue(maskValue)
+	printvalue(maskedFullReg)
+	printvalue(extendedValue)
+	printvalue(updatedReg)
+
+
+	
 	RegisterList[fullRegKey] = updatedReg;
 
 	return updatedReg;
 }
 
-// same as above but for 16 bits
+
 Value* SetValueToSubRegister2(LLVMContext& context, IRBuilder<>& builder, int reg, Value* value) {
-	// Convert key for sub-register to their 64-bit counterparts
+	
 	int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
 	Value* fullRegisterValue = RegisterList[fullRegKey];
 
-	// Mask the full register so that only the sub-register part is set to 0
+	
 
 	Value* last4cleared = ConstantInt::get(fullRegisterValue->getType(), 0xFFFFFFFFFFFF0000);
 	Value* maskedFullReg = createAndFolder(builder,fullRegisterValue, last4cleared, "maskedreg");
 	value = createZExtFolder(builder,value, fullRegisterValue->getType());
-	// Or the masked full register with the sub-register value to set the byte
+	
 	Value* updatedReg = createOrFolder(builder,maskedFullReg, value, "newreg");
 
-	// Store the updated value back to the full register (if necessary)
-	// e.g. RegisterList[fullRegKey] = updatedReg;
+	
+	
 
 	return updatedReg;
 
 
 }
 
-// responsible for setting a LLVM SSA Value
+
 void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value) {
     if (
-        (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH || key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) { // handling all 8 sub-registers
-		// ah here
+        (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH || key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) { 
+		
         value = SetValueToSubRegister(context, builder, key, value);
-		// ? 
-		// should be 0xXXFF
+		
+		
 
     }
 
 	if ( ( (key >= ZYDIS_REGISTER_R8B) && (key <= ZYDIS_REGISTER_R15B) ) || ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_BL)) || ((key >= ZYDIS_REGISTER_SPL) && (key <= ZYDIS_REGISTER_DIL))) {
-		// al here 
+		
 		value = SetValueToSubRegister(context, builder, key, value);
-		// should be 0xXX 
+		
 	}
 
 	if (((key >= ZYDIS_REGISTER_AX) && (key <= ZYDIS_REGISTER_R15W))) {
@@ -790,13 +810,13 @@ void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value
 }
 
 
-// responsible for finding values of addresses ( [] )
+
 Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize) {
-	// First, compute the effective address.
+	
 	Value* effectiveAddress = nullptr;
 
-	// Assuming op.mem.base is the base register and op.mem.index is the index register.
-	// Also assuming op.mem.scale is the scale factor and op.mem.disp is the displacement.
+	
+	
 
 	Value* baseValue = nullptr;
 	if (op.mem.base != ZYDIS_REGISTER_NONE) {
@@ -870,28 +890,28 @@ public:
 
 class lifterMemoryBuffer {
 public:
-	std::vector<ValueByteReference*> buffer; // Now storing pointers to ValueByteReference
+	std::vector<ValueByteReference*> buffer; 
 
-	lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {} // Initialize with a default size, all nullptrs
+	lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {} 
 
 	~lifterMemoryBuffer() {
-		// Clean up dynamically allocated ValueByteReferences
+		
 		for (auto* ref : buffer) {
 			delete ref;
 		}
 	}
 
-	// addValueReference v = 0x12345678 at 0x0
-	// v0 v1 v2 v3 =
-	// when retrieved
-	// v & 0xff + v & 0xff00 + v & 0xff0000 + v & 0xff000000
+	
+	
+	
+	
 
 	void addValueReference(Value* value, unsigned address) {
 		unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
 		for (unsigned i = 0; i < valueSizeInBytes; i++) {
-			// Ensure the buffer is large enough
+			
 			delete buffer[address + i];
-			// Create a new reference for each byte
+			
 			buffer[address + i] = new ValueByteReference(value, i);
 		}
 	}
@@ -899,7 +919,7 @@ public:
 	Value* retrieveCombinedValue(llvm::IRBuilder<>& builder, unsigned startAddress, unsigned byteCount) {
 		if (byteCount == 0) return nullptr;
 
-		// Early check for contiguous same-source bytes
+		
 		Value* firstSource = nullptr;
 		bool contiguous = true;
 
@@ -917,7 +937,7 @@ public:
 			}
 		}
 
-		// If all bytes are from the same source and correctly contiguous
+		
 		if (contiguous && firstSource != nullptr && byteCount == firstSource->getType()->getIntegerBitWidth() / 8) {
 			return firstSource;
 		}
@@ -945,7 +965,7 @@ public:
 
 private:
 	llvm::Value* extractByte(llvm::IRBuilder<>& builder, llvm::Value* value, unsigned byteOffset) {
-		// Assuming the value is a 32-bit integer, adjust the shift amount based on the byte offset
+		
 		if (!value) {
 			return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
 		}
@@ -958,7 +978,7 @@ private:
 
 lifterMemoryBuffer globalBuffer;
 
-// responsible for retrieving a value in SSA Value map
+
 Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address = "") {
 
 	auto type = getIntSize(possiblesize, context);
@@ -983,11 +1003,11 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			return val;
 		}
 		case ZYDIS_OPERAND_TYPE_MEMORY: {
-			// First, compute the effective address.
+			
 			Value* effectiveAddress = nullptr;
 
-			// Assuming op.mem.base is the base register and op.mem.index is the index register.
-			// Also assuming op.mem.scale is the scale factor and op.mem.disp is the displacement.
+			
+			
 
 			Value* baseValue = nullptr;
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
@@ -1041,12 +1061,12 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			outs() << "\n";
 			outs().flush();
 #endif
-			// Load the value from the computed address.
-			Type* loadType = getIntSize(possiblesize,context); // Determine based on op.mem.size or some other attribute
-			//Value* pointer = builder.CreateIntToPtr(effectiveAddress, loadType->getPointerTo());
+			
+			Type* loadType = getIntSize(possiblesize,context); 
+			
 
 			std::vector<Value*> indices;
-			indices.push_back(effectiveAddress); // First index is always 0 in this context
+			indices.push_back(effectiveAddress); 
 
 			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadxd-" + address + "-");
 
@@ -1085,14 +1105,14 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			/*
 			if (isa<ConstantExpr>(pointer)) {
-				if (Value* MapValue = GetMemoryValueFromMap(pointer)) { // MMap
+				if (Value* MapValue = GetMemoryValueFromMap(pointer)) { 
 					 return createZExtOrTruncFolder(builder,MapValue, loadType);
 				}
-				if (Operator* op = dyn_cast<Operator>(pointer)) { // Binary
+				if (Operator* op = dyn_cast<Operator>(pointer)) { 
 					if (ConstantInt* CI = dyn_cast<ConstantInt>(op->getOperand(0))) {
 						uintptr_t addr = CI->getZExtValue();
 						uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
-						//cout << "mapppedaddr: " << mappedAddr << " addr: " << addr << "\n";
+						
 						if (mappedAddr > 0) {
 							unsigned byteSize = loadType->getIntegerBitWidth() / 8;
 
@@ -1119,34 +1139,34 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 }
 
-// overwrite the first value with second
+
 Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, Value* newValue) {
-	// Get the bit width of the existing and new values
+	
 	unsigned existingBitWidth = existingValue->getType()->getIntegerBitWidth();
 	unsigned newBitWidth = newValue->getType()->getIntegerBitWidth();
 
 	if (newBitWidth >= existingBitWidth) {
-		// If the new value is the same size or larger, completely overwrite the existing value
+		
 		return newValue;
 	}
-	// If the new value is smaller, create a mask for the existing value and overwrite it
-	// Calculate the mask to keep the upper bits of the existing value
+	
+	
 	llvm::APInt maskAPInt = llvm::APInt::getHighBitsSet(existingBitWidth, existingBitWidth - newBitWidth);
 	Value* mask = llvm::ConstantInt::get(context, maskAPInt);
 
-	// Apply the mask to the existing value
+	
 	Value* maskedExistingValue = createAndFolder(builder,existingValue, mask, "maskedExistingValue");
 
-	// Extend the new value to match the bit width of the existing value
+	
 	Value* extendedNewValue = createZExtFolder(builder,newValue, existingValue->getType(), "extendedNewValue");
 
-	// Combine the masked existing value with the extended new value
+	
 	return createOrFolder(builder,maskedExistingValue, extendedNewValue, "mergedValue");
 
 }
 
 
-// responsible for setting a value in SSA Value map
+
 Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address = "") {
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
@@ -1156,14 +1176,14 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 		}
 		case ZYDIS_OPERAND_TYPE_MEMORY:		{
-			// Compute the effective address, as before.
+			
 			Value* effectiveAddress = nullptr;
 
-			// Assuming op.mem.base is the base register and op.mem.index is the index register.
-			// Also assuming op.mem.scale is the scale factor and op.mem.disp is the displacement.
-			// base = zext
-			// index = sext
-			// imm = sext
+			
+			
+			
+			
+			
 			Value* baseValue = nullptr;
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
 				baseValue = GetRegisterValue(context, builder, op.mem.base);
@@ -1211,14 +1231,14 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 				effectiveAddress = createAddFolder(builder,effectiveAddress, dispValue,"disp_set");
 			}
 
-			// Store the value to the computed address.
-			Type* storeType = getIntSize(op.size, context); // Determine based on op.mem.size or some other attribute
-			//Value* pointer = builder.CreateIntToPtr(effectiveAddress, storeType->getPointerTo());
+			
+			Type* storeType = getIntSize(op.size, context); 
+			
 			std::vector<Value*> indices;
-			indices.push_back(effectiveAddress); // First index is always 0 in this context
+			indices.push_back(effectiveAddress); 
 
 			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,indices,"GEPSTORE-"+ address + "-");
-			Value* store = builder.CreateStore(value, pointer);  // Ensure `valueToSet` matches the expected type
+			Value* store = builder.CreateStore(value, pointer);  
 #ifdef _DEVELOPMENT
 			outs() << "	effectiveAddress : ";
 			effectiveAddress->print(outs());
@@ -1229,11 +1249,8 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			if (isa<ConstantInt>(effectiveAddress) ) {
 
 				ConstantInt* effectiveAddressInt = cast<ConstantInt>(effectiveAddress);
-				ConstantInt* valueInt = cast<ConstantInt>(value);
-				unsigned bitWidth = valueInt->getBitWidth();
-				uint64_t dataValue = valueInt->getZExtValue();
 
-				globalBuffer.addValueReference(valueInt, effectiveAddressInt->getZExtValue());
+				globalBuffer.addValueReference(value, effectiveAddressInt->getZExtValue());
 			}
 
 
@@ -1252,10 +1269,10 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
 
-	Type* storeType = value->getType(); // Determine based on op.mem.size or some other attribute
-	//Value* pointer = builder.CreateIntToPtr(effectiveAddress, storeType->getPointerTo());
+	Type* storeType = value->getType(); 
+	
 	std::vector<Value*> indices;
-	indices.push_back(value); // First index is always 0 in this context
+	indices.push_back(value); 
 
 	Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPSTOREVALUE");
 
@@ -1269,11 +1286,11 @@ Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* val
 Value* getFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 	Value* rflag_var = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
 	Value* position = ConstantInt::get(context, APInt(64, flag));
-	// Create the '1 << position' value
+	
 	Value* one = ConstantInt::get(context, APInt(64, 1));
 	Value* bit_position = createShlFolder(builder,one, position, "getflag-shl");
 
-	// Return if the bit at 'position' is set
+	
 	Value* and_result = createAndFolder(builder,rflag_var, bit_position, "getflag-and");
 	return builder.CreateICmpNE(and_result, ConstantInt::get(context, APInt(64, 0)), "getflag-cmpne");
 }
@@ -1281,16 +1298,16 @@ Value* getFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 Value* setFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue) {
 	Value* rflag_var = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
 	Value* position = ConstantInt::get(context, APInt(64, flag));
-	// Create the '1 << position' value
+	
 	Value* one = ConstantInt::get(context, APInt(64, 1));
 	Value* bit_position = createShlFolder(builder,one, position);
 
 	Value* inverse_mask = builder.CreateNot(bit_position);
 
-	// Clear the flag at 'position' in the rflag_var
+	
 	Value* cleared_rflag = createAndFolder(builder,rflag_var, inverse_mask,"setflag2");
 
-	// Shift the new value to the correct position
+	
 	Value* shifted_newValue = createShlFolder(builder,createZExtOrTruncFolder(builder,newValue, Type::getInt64Ty(context)), position, "flagsetweird");
 	shifted_newValue = createOrFolder(builder,cleared_rflag, shifted_newValue, "setflag-or");
 	SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, shifted_newValue);
@@ -1313,7 +1330,7 @@ void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& 
 	auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
 
 
-	for (size_t i = 0; i < value.size(); i += 8) { // merge 8 flags to 1 byte, we can only store i8 (we can, but need to implement some stuff)
+	for (size_t i = 0; i < value.size(); i += 8) { 
 		Value* byteVal = ConstantInt::get(Type::getInt8Ty(context), 0); 
 		for (size_t j = 0; j < 8 && (i + j) < value.size(); ++j) {
 			Value* flag = value[i + j]; 
@@ -1328,7 +1345,7 @@ void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& 
 		indices.push_back(rsp);
 		Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPSTORE-" + address + "-");
 
-		// Store the byte
+		
 		auto store = builder.CreateStore(byteVal, pointer,"storebyte");
 #ifdef _DEVELOPMENT
 			printvalue(rsp)
