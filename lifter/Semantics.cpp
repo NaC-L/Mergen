@@ -2,6 +2,7 @@
 #include "OperandUtils.h"
 #include "ROPdetection.h"
 
+// probably move this stuff somewhere else
 
 Value* computeOverflowFlagAdc(IRBuilder<>& builder, Value* Lvalue, Value* Rvalue, Value* cf, Value* add ) {
     auto cfc = builder.CreateZExtOrTrunc(cf, add->getType());
@@ -62,9 +63,36 @@ Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x < 0 = sf
 }
 
 
+// this function is used for jumps that are related to user, ex: vms using different handlers, jmptables, etc.
+void jumpHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
+
+    // TODO: 
+    // save the current state of memory, registers etc., 
+    // after execution is finished, return to latest state ask if want to continue execution, then execute from new address
+
+    cout << "Which address do you want do jump?, check output_condition.ll file: ";
+    long long address;
+    cin >> address;
+
+    string block_name = "jumpsomewhere-" + to_string(instruction.runtime_address) + "-";;
+    auto bb = BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
+
+
+    SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, ConstantInt::get(Type::getInt64Ty(context), address) );
+    builder.CreateBr(bb);
+
+    blockAddresses->push_back(make_tuple(address, bb, getRegisterList()));
+    return;
+
+}
 
 
 void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, Value* condition, Value* newRip, string instname, int numbered) {
+
+    // TODO:  
+    // save the current state of memory, registers etc., 
+    // after execution is finished, return to latest state and continue execution from the other branch
+   
 
     auto block = builder.GetInsertBlock();
     block->setName(instname + to_string(numbered));
@@ -538,7 +566,7 @@ namespace branches {
 
         auto RspValue = GetOperandValue(context, builder, rsp, rsp.size);
 
-        auto val = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
+        auto val = ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
         auto result = createSubFolder(builder,RspValue, val, "pushing_newrsp");
 
         SetOperandValue(context, builder, rsp, result, to_string(instruction.runtime_address)); // sub rsp 8 first,
@@ -648,7 +676,7 @@ namespace branches {
 
                     // TODO help exploring branches for other stuff
                     // this will be used to explore branches
-                    cout << "check output_condition.ll file: ";
+                    jumpHelper(context, builder, instruction, blockAddresses);
                 
             }
 
@@ -660,7 +688,7 @@ namespace branches {
             string block_name = "jmp_ret-" + to_string(destination) + "-";
             auto bb = BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
 
-            auto val = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
+            auto val = ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
             auto result = createAddFolder(builder,rspvalue, val, "ret-new-rsp-" + to_string(instruction.runtime_address) + "-");
 
             if (instruction.operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
@@ -719,9 +747,6 @@ namespace branches {
         auto newRip = createAddFolder(builder,Value, ripval, "jump-xd-" + to_string(instruction.runtime_address) + "-");
 
         jmpcount++;
-        if (jmpcount == 3046) {
-            cout << "jmpcount : " << jmpcount << endl;
-        }
         if (dest.type == ZYDIS_OPERAND_TYPE_REGISTER) {
             auto rspvalue = GetOperandValue(context, builder, dest, 64);
             auto trunc = createZExtOrTruncFolder(builder,rspvalue, Type::getInt64Ty(context), "jmp-register");
@@ -792,7 +817,7 @@ namespace branches {
 
                 // TODO help exploring branches for other stuff
                 // this will be used to explore branches
-                cout << "check output_condition.ll file: ";
+                jumpHelper(context, builder, instruction, blockAddresses);
             }
             (*run) = 0;
 
@@ -2170,7 +2195,7 @@ printvalue(result)
         auto Rvalue = GetOperandValue(context, builder, src, dest.size);
         auto RspValue = GetOperandValue(context, builder, rsp, dest.size);
 
-        auto val = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
+        auto val = ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
         auto result = createSubFolder(builder,RspValue, val, "pushing_newrsp-" + to_string(instruction.runtime_address) + "-");
 
         SetOperandValue(context, builder, rsp, result, to_string(instruction.runtime_address)); // sub rsp 8 first,
@@ -2209,7 +2234,7 @@ printvalue(result)
         auto Rvalue = GetOperandValue(context, builder, src, dest.size, to_string(instruction.runtime_address));
         auto RspValue = GetOperandValue(context, builder, rsp, dest.size, to_string(instruction.runtime_address));
 
-        auto val = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
+        auto val = ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
         auto result = createAddFolder(builder,RspValue, val, "popping_new_rsp-" + to_string(instruction.runtime_address) + "-");
 #ifdef _DEVELOPMENT
         printvalue(Rvalue)
@@ -2230,7 +2255,7 @@ printvalue(result)
         auto Rvalue = GetOperandValue(context, builder, src, dest.size, to_string(instruction.runtime_address));
         auto RspValue = GetOperandValue(context, builder, rsp, dest.size, to_string(instruction.runtime_address));
 
-        auto val = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
+        auto val = ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
         auto result = createAddFolder(builder,RspValue, val, "popfq-" + to_string(instruction.runtime_address) + "-");
 
         SetOperandValue(context, builder, dest, Rvalue, to_string(instruction.runtime_address));  // mov val, rsp first
@@ -3153,7 +3178,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     }
     // branches
 
-    case ZYDIS_MNEMONIC_RET: // implement to check if its a real ret or not
+    case ZYDIS_MNEMONIC_RET: 
     {
         branches::lift_ret(context, builder, instruction, blockAddresses, run);
         break; }
