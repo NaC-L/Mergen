@@ -2,11 +2,40 @@
 #include "OperandUtils.h"
 #include "ROPdetection.h"
 
-#define printvalue(x) \
-    outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
 
+Value* computeOverflowFlagAdc(IRBuilder<>& builder, Value* Lvalue, Value* Rvalue, Value* cf, Value* add ) {
+    auto cfc = builder.CreateZExtOrTrunc(cf, add->getType());
+    auto ofAdd = builder.CreateAdd(add, cfc);
+    auto xor0 = builder.CreateXor(Lvalue, ofAdd);
+    auto xor1 = builder.CreateXor(Rvalue, ofAdd);
+    auto ofAnd = builder.CreateAnd(xor0, xor1);
+    return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd, llvm::ConstantInt::get(ofAnd->getType(), 0));
+}
 
+Value* computeOverflowFlagAdd(IRBuilder<>& builder, Value* Lvalue, Value* Rvalue, Value* add) {
+    auto xor0 = builder.CreateXor(Lvalue, add);
+    auto xor1 = builder.CreateXor(Rvalue, add);
+    auto ofAnd = builder.CreateAnd(xor0, xor1);
+    return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd, ConstantInt::get(ofAnd->getType(), 0));
+}
 
+llvm::Value* computeOverflowFlagSub(IRBuilder<>& builder, Value* Lvalue, Value* Rvalue, Value* sub)
+{
+    auto xor0 = builder.CreateXor(Lvalue, Rvalue);
+    auto xor1 = builder.CreateXor(Lvalue, sub);
+    auto ofAnd = builder.CreateAnd(xor0, xor1);
+    return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd, ConstantInt::get(ofAnd->getType(), 0));
+}
+
+llvm::Value* computeOverflowFlagSbb(IRBuilder<>& builder, Value* Lvalue, Value* Rvalue, Value* cf, Value* sub)
+{
+    auto cfc = builder.CreateZExtOrTrunc(cf, sub->getType());
+    auto ofSub = builder.CreateSub(sub, cfc);
+    auto xor0 = builder.CreateXor(Lvalue, Rvalue);
+    auto xor1 = builder.CreateXor(Lvalue, ofSub);
+    auto ofAnd = builder.CreateAnd(xor0, xor1);
+    return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd, ConstantInt::get(ofAnd->getType(), 0));
+}
 
 Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
     LLVMContext& context = value->getContext(); 
@@ -28,7 +57,7 @@ Value* computeZeroFlag(IRBuilder<>& builder, Value* value) { // x == 0 = zf
     return createICMPFolder(builder, CmpInst::ICMP_EQ,value, ConstantInt::get(value->getType(), 0), "zeroflag");
 }
 
-Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x > 0 = sf
+Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x < 0 = sf
     return createICMPFolder(builder, CmpInst::ICMP_SLT,value, ConstantInt::get(value->getType(), 0), "signflag");
 }
 
@@ -48,10 +77,6 @@ void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
     opaque_info opaque = isOpaque(function);
 
     
-
-    // i want to create a opaque detector here
-    // if opaque, return 1 or 2
-    // if not, return 0
 
     auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
     auto result = newRip;
@@ -113,6 +138,8 @@ void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
         //builder.CreateRet(placeholder);
         //result = createSelectFolder(builder,condition, newRip, ripval);
 
+        // TODO help exploring branches for other stuff
+        // this will be used to explore branches
         cout << "Enter choice (1 for True path, 0 for False path), check output_condition.ll file: ";
         int choice;
         cin >> choice;
@@ -150,27 +177,21 @@ namespace mov {
 
     void lift_movsb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
-        // Fetch values from SI/ESI/RSI and DI/EDI/RDI
-        Value* sourceValue = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSI); // Adjust based on operand size  
+        Value* sourceValue = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSI); 
         Value* Lvalue = GetRegisterValue(context, builder, ZYDIS_REGISTER_RDI);
 
-        // Fetch the byte from source
         Value* byteToMove = builder.CreateLoad(Type::getInt8Ty(context), getMemoryFromValue(context,builder, sourceValue));
 
-        // Store the byte to destination
         builder.CreateStore(byteToMove, getMemoryFromValue(context, builder, Lvalue));
 
-        // Check the direction flag
         Value* df = getFlag(context, builder, FLAG_DF);
 
-        // Create the value to increment or decrement based on DF
         Value* offset = createSelectFolder(builder,df, ConstantInt::get(sourceValue->getType(), -1), ConstantInt::get(sourceValue->getType(), 1));
 
-        // Update SI/ESI/RSI and DI/EDI/RDI
         Value* updatedSource = createAddFolder(builder,sourceValue, offset);
         Value* updatedDest = createAddFolder(builder,Lvalue, offset);
 
-        SetRegisterValue(context, builder, ZYDIS_REGISTER_RSI, updatedSource); // Adjust based on operand size
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RSI, updatedSource);
         SetRegisterValue(context, builder, ZYDIS_REGISTER_RDI, updatedDest);
     }
 
@@ -218,24 +239,19 @@ namespace cmov {
 
 
 
-// cmovbe = cmovbz
 void lift_cmovbz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the ZF and CF flags from RFLAGS register
     Value* zf = getFlag(context, builder, FLAG_ZF);
     Value* cf = getFlag(context, builder, FLAG_CF);
 
-    // Check if either ZF or CF is set
     Value* condition = createOrFolder(builder,zf, cf, "cmovbz-or");
 
-    // Get values for source and destination operands
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
     Value* result = createSelectFolder(builder,condition, Rvalue, Lvalue);
 
     SetOperandValue(context, builder, dest, result);
@@ -245,21 +261,16 @@ void lift_cmovnbz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Retrieve the values
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
     Value* Rvalue = GetOperandValue(context, builder, src, src.size);
 
-    // Retrieve the carry flag (CF) and zero flag (ZF) from the EFLAGS/RFLAGS register
     Value* cf = getFlag(context, builder, FLAG_CF);
     Value* zf = getFlag(context, builder, FLAG_ZF);
 
-    // Check if neither CF nor ZF is set
     Value* nbeCondition = createAndFolder(builder,builder.CreateNot(cf), builder.CreateNot(zf), "nbeCondition");
 
-    // If nbeCondition is true, then the result is the Rvalue; otherwise, it's the Lvalue
     Value* resultValue = createSelectFolder(builder,nbeCondition, Rvalue, Lvalue, "cmovnbe");
 
-    // Update the operand with the result
     SetOperandValue(context, builder, dest, resultValue);
 }
 
@@ -271,23 +282,18 @@ void lift_cmovz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIns
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Retrieve the values
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
     Value* Rvalue = GetOperandValue(context, builder, src, src.size);
 
-    // Retrieve the zero flag (ZF) from the EFLAGS/RFLAGS register
     Value* zf = getFlag(context, builder, FLAG_ZF);
 
-    // If ZF is set, then the result is the Rvalue; otherwise, it's the Lvalue
     Value* resultValue = createSelectFolder(builder,zf, Rvalue, Lvalue, "cmovz");
 
-    // Update the operand with the result
     SetOperandValue(context, builder, dest, resultValue);
 }
 
 
 
-// cmovnz = cmovne
 void lift_cmovnz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
     auto dest = instruction.operands[0];
@@ -299,7 +305,6 @@ void lift_cmovnz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIn
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
     Value* result = createSelectFolder(builder,zf, Rvalue, Lvalue);
 
     SetOperandValue(context, builder, dest, result);
@@ -309,21 +314,16 @@ void lift_cmovl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIns
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current values of the SF and OF flags from RFLAGS register
     Value* sf = getFlag(context, builder, FLAG_SF);
     Value* of = getFlag(context, builder, FLAG_OF);
 
-    // The condition is true if SF is not equal to OF
     Value* condition = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
 
-    // Retrieve the values for source and destination operands
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Conditionally move the value based on the condition
     Value* result = createSelectFolder(builder,condition, Rvalue, Lvalue);
 
-    // Store the result into the destination operand
     SetOperandValue(context, builder, dest, result);
 }
 
@@ -333,20 +333,15 @@ void lift_cmovb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIns
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the CF flag from RFLAGS register
     Value* cf = getFlag(context, builder, FLAG_CF);
 
-    // The condition is true if CF is set (i.e., 1)
     Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ,cf, ConstantInt::get(Type::getInt1Ty(context), 1));
 
-    // Retrieve the values for source and destination operands
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Conditionally move the value based on the condition
     Value* result = createSelectFolder(builder,condition, Rvalue, Lvalue);
 
-    // Store the result into the destination operand
     SetOperandValue(context, builder, dest, result);
 }
 
@@ -355,17 +350,13 @@ void lift_cmovnb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIn
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Retrieve the values
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
     Value* Rvalue = GetOperandValue(context, builder, src, src.size);
 
-    // Retrieve the carry flag (CF) from the EFLAGS/RFLAGS register
     Value* cf = getFlag(context, builder, FLAG_CF);
 
-    // If CF is not set, then the result is the Rvalue; otherwise, it's the Lvalue
     Value* resultValue = createSelectFolder(builder,builder.CreateNot(cf), Rvalue, Lvalue, "cmovnb");
 
-    // Update the operand with the result
     SetOperandValue(context, builder, dest, resultValue);
 }
 
@@ -376,20 +367,15 @@ void lift_cmovns(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIn
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the SF flag from RFLAGS register
     Value* sf = getFlag(context, builder, FLAG_SF);
 
-    // Check if SF is clear (i.e., 0)
     Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
-    // Retrieve the values for source and destination operands
     Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Conditionally move the value based on the condition
     Value* result = createSelectFolder(builder,condition, Rvalue, Lvalue);
 
-    // Store the result into the destination operand
     SetOperandValue(context, builder, dest, result);
 }
 //cmovnl = cmovge
@@ -398,183 +384,141 @@ void lift_cmovnl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledIn
     auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the ZF flag from RFLAGS register
-    Value* sf = getFlag(context, builder, FLAG_SF);
+        Value* sf = getFlag(context, builder, FLAG_SF);
     sf = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
-    // Get values for source and destination operands
-    Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
+        Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
-    Value* result = createSelectFolder(builder,sf, Rvalue, Lvalue);
+        Value* result = createSelectFolder(builder,sf, Rvalue, Lvalue);
 
     SetOperandValue(context, builder, dest, result);
 }
 void lift_cmovs(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-    // Assuming the first operand is the destination and the second is the source
-    auto dest = instruction.operands[0];
+        auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the SF flag from RFLAGS register
-    Value* sf = getFlag(context, builder, FLAG_SF);
+        Value* sf = getFlag(context, builder, FLAG_SF);
 
-    // Get values for source and destination operands
-    Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
+        Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
-    // If SF is set, use Rvalue, otherwise keep Lvalue
-    Value* result = createSelectFolder(builder,sf, Rvalue, Lvalue);
+            Value* result = createSelectFolder(builder,sf, Rvalue, Lvalue);
 
-    // Store the result back to the destination operand
-    SetOperandValue(context, builder, dest, result);
+        SetOperandValue(context, builder, dest, result);
 }
 
 void lift_cmovnle(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
-    // Operands: the first one is the destination, and the second one is the source
-    auto dest = instruction.operands[0];
+        auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the ZF, SF, and OF flags from RFLAGS register
-    Value* zf = getFlag(context, builder, FLAG_ZF);
+        Value* zf = getFlag(context, builder, FLAG_ZF);
     Value* sf = getFlag(context, builder, FLAG_SF);
     Value* of = getFlag(context, builder, FLAG_OF);
 
-    // The condition for CMOVNLE is (ZF = 0 AND SF = OF)
-    Value* condition = createAndFolder(builder,
+        Value* condition = createAndFolder(builder,
         builder.CreateNot(zf, "notZF"),
         createICMPFolder(builder, CmpInst::ICMP_EQ,sf, of, "sf_eq_of"),
         "cmovnle_cond"
     );
 
-    // Get values for source and destination operands
-    Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
+        Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
-    Value* result = createSelectFolder(builder,condition, Rvalue, Lvalue);
+        Value* result = createSelectFolder(builder,condition, Rvalue, Lvalue);
 
-    // Store the result into the destination operand
-    SetOperandValue(context, builder, dest, result);
+        SetOperandValue(context, builder, dest, result);
 }
 
 void lift_cmovle(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-    // Assuming the first operand is the destination and the second is the source
-    auto dest = instruction.operands[0];
+        auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Fetch the ZF, SF, and OF flags
-    Value* zf = getFlag(context, builder, FLAG_ZF);
+        Value* zf = getFlag(context, builder, FLAG_ZF);
     Value* sf = getFlag(context, builder, FLAG_SF);
     Value* of = getFlag(context, builder, FLAG_OF);
 
-    // Compute the condition (ZF = 1) or (SF != OF)
-    Value* sf_neq_of = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
+        Value* sf_neq_of = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
     Value* condition = createOrFolder(builder,zf, sf_neq_of, "cmovle-or");
 
-    // Get values for source and destination operands
-    Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
+        Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
-    Value* result = createSelectFolder(builder,condition, Rvalue, Lvalue);
+        Value* result = createSelectFolder(builder,condition, Rvalue, Lvalue);
 
-    // Update the destination operand with the result
-    SetOperandValue(context, builder, dest, result);
+        SetOperandValue(context, builder, dest, result);
 }
 
 
 void lift_cmovo(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-    // Assuming the first operand is the destination and the second is the source
-    auto dest = instruction.operands[0];
+        auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the OF flag from RFLAGS register
-    Value* of = getFlag(context, builder, FLAG_OF);
+        Value* of = getFlag(context, builder, FLAG_OF);
 
-    // Get values for source and destination operands
-    Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
+        Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
-    // If OF is set, use Rvalue, otherwise keep Lvalue
-    Value* result = createSelectFolder(builder,of, Rvalue, Lvalue);
+            Value* result = createSelectFolder(builder,of, Rvalue, Lvalue);
 
-    // Store the result back to the destination operand
-    SetOperandValue(context, builder, dest, result);
+        SetOperandValue(context, builder, dest, result);
 }
 void lift_cmovno(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-    // Assuming the first operand is the destination and the second is the source
-    auto dest = instruction.operands[0];
+        auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the OF flag from RFLAGS register
-    Value* of = getFlag(context, builder, FLAG_OF);
+        Value* of = getFlag(context, builder, FLAG_OF);
 
-    // Negate the condition since we want the opposite of OF
-    of = builder.CreateNot(of, "negateOF");
+    printvalue(of)
+        of = builder.CreateNot(of, "negateOF");
 
-    // Get values for source and destination operands
-    Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
+        Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
-    // If OF is not set (after negation), use Rvalue, otherwise keep Lvalue
-    Value* result = createSelectFolder(builder,of, Rvalue, Lvalue);
+            Value* result = createSelectFolder(builder,of, Rvalue, Lvalue);
 
-    // Store the result back to the destination operand
-    SetOperandValue(context, builder, dest, result);
+    printvalue(Lvalue)
+    printvalue(Rvalue)
+    printvalue(result)
+        SetOperandValue(context, builder, dest, result);
 }
 
 
 
 void lift_cmovp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-    // Assuming the first operand is the destination and the second is the source
-    auto dest = instruction.operands[0];
+        auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the PF flag from RFLAGS register
-    Value* pf = getFlag(context, builder, FLAG_PF);
+        Value* pf = getFlag(context, builder, FLAG_PF);
 
 
-    // Get values for source and destination operands
-    Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
+        Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 #ifdef _DEVELOPMENT //ZF=0 and SF=OF
     outs() << " pf : "; pf->print(outs()); outs() << "\n";  outs().flush();
     outs() << " Lvalue : "; Rvalue->print(outs()); outs() << "\n";  outs().flush();
     outs() << " Rvalue : "; Lvalue->print(outs()); outs() << "\n";  outs().flush();
 #endif
-    // Use the select instruction to conditionally move the value
-    // If PF is not set (after negation), use Rvalue, otherwise keep Lvalue
-    Value* result = createSelectFolder(builder,pf, Rvalue, Lvalue);
+            Value* result = createSelectFolder(builder,pf, Rvalue, Lvalue);
 
-    // Store the result back to the destination operand
-    SetOperandValue(context, builder, dest, result);
+        SetOperandValue(context, builder, dest, result);
 }
 
 void lift_cmovnp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-    // Assuming the first operand is the destination and the second is the source
-    auto dest = instruction.operands[0];
+        auto dest = instruction.operands[0];
     auto src = instruction.operands[1];
 
-    // Get the current value of the PF flag from RFLAGS register
-    Value* pf = getFlag(context, builder, FLAG_PF);
+        Value* pf = getFlag(context, builder, FLAG_PF);
 
-    // Negate the PF flag since we are interested in the not parity condition
-    pf = builder.CreateNot(pf, "negatePF");
+        pf = builder.CreateNot(pf, "negatePF");
 
-    // Get values for source and destination operands
-    Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
+        Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
     Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
-    // Use the select instruction to conditionally move the value
-    // If PF is not set (after negation), use Rvalue, otherwise keep Lvalue
-    Value* result = createSelectFolder(builder,pf, Rvalue, Lvalue);
+            Value* result = createSelectFolder(builder,pf, Rvalue, Lvalue);
 
-    // Store the result back to the destination operand
+    
     SetOperandValue(context, builder, dest, result);
 }
 }
@@ -671,6 +615,46 @@ namespace branches {
 #endif
         if (ROP == ROP_return) {
 
+            if (destination == 0) {
+                    // find first select -> go far back until a lib call/ operand -> print the instruction so we can analyse -> after analysing prompt option to select 0 or 1
+                    llvm::ValueToValueMapTy VMap;
+                    llvm::Function* conditionFunction = llvm::CloneFunction(function, VMap);
+                    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", function->getContext());
+                    conditionFunction->removeFromParent();
+
+                    destinationModule->getFunctionList().push_back(conditionFunction);
+#ifdef _DEVELOPMENT
+                    std::string Filename_cond = "output_condition_noopt.ll";
+                    std::error_code EC_cond;
+                    raw_fd_ostream OS_cond(Filename_cond, EC_cond);
+                    destinationModule->print(OS_cond, nullptr);
+#endif
+                    final_optpass(conditionFunction);
+                    std::string Filename = "output_condition.ll";
+                    std::error_code EC;
+                    raw_fd_ostream OS(Filename, EC);
+                    destinationModule->print(OS, nullptr);
+
+                    lastinst->eraseFromParent();
+
+                    block->setName("previousjmp-" + to_string(instruction.runtime_address) + "-");
+                    // if false, continue from runtime_address
+                    // if true, continue from runtime_address + dest.imm.value.s
+
+                    //builder.CreateCondBr(condition, bb, bb2);
+                    //auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
+                    //builder.CreateRet(placeholder);
+                    //result = createSelectFolder(builder,condition, newRip, ripval);
+
+                    // TODO help exploring branches for other stuff
+                    // this will be used to explore branches
+                    cout << "check output_condition.ll file: ";
+                
+            }
+
+            // TODO help exploring branches for other stuff
+            // where ROP_return but destination is unknown
+
             block->setName("fake_ret");
 
             string block_name = "jmp_ret-" + to_string(destination) + "-";
@@ -757,17 +741,17 @@ namespace branches {
 #endif
 
             uintptr_t destination;
-            JMP_info ROP = isJOP(function, destination);
+            JMP_info JOP = isJOP(function, destination);
 
 
             ValueToValueMapTy VMap_test;
 
-            lastinst->eraseFromParent();
 
             block->setName("previousjmp_block-" + to_string(destination) + "-");
-            //cout << "isJOP:" << ROP << "\n";
-            if (ROP == JOP_jmp) {
+            //cout << "isJOP:" << JOP << "\n";
+            if (JOP == JOP_jmp) {
 
+                lastinst->eraseFromParent();
                 string block_name = "jmp-" + to_string(destination) + "-";
                 auto bb = BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
 
@@ -776,11 +760,46 @@ namespace branches {
                 blockAddresses->push_back(make_tuple(destination, bb, getRegisterList()));
                 (*run) = 0;
             }
+            if (JOP == JOP_jmp_unsolved) {
+                llvm::ValueToValueMapTy VMap;
+                llvm::Function* conditionFunction = llvm::CloneFunction(function, VMap);
+                std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", function->getContext());
+                conditionFunction->removeFromParent();
+
+                destinationModule->getFunctionList().push_back(conditionFunction);
+#ifdef _DEVELOPMENT
+                std::string Filename_cond = "output_condition_noopt.ll";
+                std::error_code EC_cond;
+                raw_fd_ostream OS_cond(Filename_cond, EC_cond);
+                destinationModule->print(OS_cond, nullptr);
+#endif
+                final_optpass(conditionFunction);
+                std::string Filename = "output_condition.ll";
+                std::error_code EC;
+                raw_fd_ostream OS(Filename, EC);
+                destinationModule->print(OS, nullptr);
+
+                lastinst->eraseFromParent();
+
+                block->setName("previousjmp-" + to_string(instruction.runtime_address) + "-");
+                // if false, continue from runtime_address
+                // if true, continue from runtime_address + dest.imm.value.s
+
+                //builder.CreateCondBr(condition, bb, bb2);
+                //auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
+                //builder.CreateRet(placeholder);
+                //result = createSelectFolder(builder,condition, newRip, ripval);
+
+                // TODO help exploring branches for other stuff
+                // this will be used to explore branches
+                cout << "check output_condition.ll file: ";
+            }
             (*run) = 0;
 
             //if ROP is not JOP_jmp, then its bugged
             return;
         }
+
 
 
         SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, newRip);
@@ -802,7 +821,7 @@ namespace branches {
     // jnz and jne
     void lift_jnz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // if 0, then jmp, if not then not jump
+
 
         auto zf = getFlag(context, builder, FLAG_ZF);
 
@@ -827,7 +846,7 @@ namespace branches {
 
     void lift_js(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // if 0, then jmp, if not then not jump
+
 
         auto sf = getFlag(context, builder, FLAG_SF);
 
@@ -848,7 +867,6 @@ namespace branches {
     }    
     void lift_jns(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // if 0, then jmp, if not then not jump
 
         auto sf = getFlag(context, builder, FLAG_SF);
 
@@ -922,7 +940,7 @@ namespace branches {
         auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
         auto newRip = createAddFolder(builder,Value, ripval, "jl");
 
-        // Condition for JL: SF != OF
+        
         auto condition = createXorFolder(builder,sf, of, "jl_Condition");
 
         branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jl", branchnumber);
@@ -941,7 +959,7 @@ namespace branches {
         printvalue(sf);
         printvalue(of);
 #endif
-        // Condition for JNL: SF == OF
+        
         auto condition = builder.CreateNot(createXorFolder(builder,sf, of), "jnl_Condition");
 
         branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jnl", branchnumber);
@@ -951,7 +969,7 @@ namespace branches {
 
 
     void lift_jnle(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector<tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>> blockAddresses) {
-        // If SF = OF and ZF = 0, then jump. Otherwise, do not jump.
+        
 
         auto sf = getFlag(context, builder, FLAG_SF);
         auto of = getFlag(context, builder, FLAG_OF);
@@ -962,7 +980,7 @@ namespace branches {
         auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
         auto newRip = createAddFolder(builder,Value, ripval, "jnle");
 
-        // Check if SF = OF and ZF is not set
+        
         auto sf_eq_of = createXorFolder(builder,sf, of);
         auto sf_eq_of_not = builder.CreateNot(sf_eq_of, "jnle_SF_EQ_OF_NOT");
         auto zf_not = builder.CreateNot(zf, "jnle_ZF_NOT");
@@ -977,7 +995,7 @@ namespace branches {
 
     void lift_jbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // If CF=1 or ZF=1, then jump. Otherwise, do not jump.
+        
 
         auto cf = getFlag(context, builder, FLAG_CF);
         auto zf = getFlag(context, builder, FLAG_ZF);
@@ -988,7 +1006,7 @@ namespace branches {
         auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
         auto newRip = createAddFolder(builder,Value, ripval, "jbe");
 
-        // Check if neither CF nor ZF are set
+        
         auto condition = createOrFolder(builder,cf, zf, "jbe_Condition");
 
         branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jbe", branchnumber);
@@ -1001,7 +1019,7 @@ namespace branches {
 
     void lift_jb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // If CF=0, then jump. Otherwise, do not jump.
+        
 
         auto cf = getFlag(context, builder, FLAG_CF);
 
@@ -1012,7 +1030,7 @@ namespace branches {
         auto newRip = createAddFolder(builder,Value, ripval, "jb");
 
 
-        // Check if neither CF nor ZF are set
+        
         auto condition = cf;
         branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jb", branchnumber);
 
@@ -1021,7 +1039,7 @@ namespace branches {
 
     void lift_jnb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // If CF=0, then jump. Otherwise, do not jump.
+        
 
         auto cf = getFlag(context, builder, FLAG_CF);
 
@@ -1032,28 +1050,30 @@ namespace branches {
         auto newRip = createAddFolder(builder,Value, ripval, "jnb");
 
 
-        // Check if neither CF nor ZF are set
+        
         auto condition = builder.CreateNot(cf, "notCF");
         branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jnb", branchnumber);
 
         branchnumber++;
     }
 
-    // jnbe == ja
+    
     void lift_jnbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // If CF=0 and ZF=0, then jump. Otherwise, do not jump.
+        
 
         auto cf = getFlag(context, builder, FLAG_CF);
         auto zf = getFlag(context, builder, FLAG_ZF);
 
+        printvalue(cf);
+        printvalue(zf);
         auto dest = instruction.operands[0];
 
         auto Value = GetOperandValue(context, builder, dest, 64);
         auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
         auto newRip = createAddFolder(builder,Value, ripval, "jnbe");
 
-        // Check if neither CF nor ZF are set
+        
         auto condition = createAndFolder(builder,builder.CreateNot(cf, "notCF"), builder.CreateNot(zf, "notZF"), "jnbe_ja_Condition");
 
         branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jnbe_ja", branchnumber);
@@ -1064,7 +1084,7 @@ namespace branches {
 
     void lift_jo(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // if 0, then jmp, if not then not jump
+        
 
         auto of = getFlag(context, builder, FLAG_OF);
 
@@ -1075,7 +1095,7 @@ namespace branches {
 
         auto newRip = createAddFolder(builder,Value, ripval, "jo");
 
-
+        printvalue(of);
         branchHelper(context, builder, instruction, blockAddresses, of, newRip, "jo", branchnumber);
 
         branchnumber++;
@@ -1084,7 +1104,7 @@ namespace branches {
 
     void lift_jno(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // if 0, then jmp, if not then not jump
+        
 
         auto of = getFlag(context, builder, FLAG_OF);
 
@@ -1104,7 +1124,7 @@ namespace branches {
     
     void lift_jp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // if 0, then jmp, if not then not jump
+        
 
         auto pf = getFlag(context, builder, FLAG_PF);
 
@@ -1124,7 +1144,7 @@ namespace branches {
 
     void lift_jnp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
 
-        // if 0, then jmp, if not then not jump
+        
 
         auto pf = getFlag(context, builder, FLAG_PF);
 
@@ -1155,9 +1175,9 @@ namespace arithmeticsAndLogical {
 
         Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
         Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
-        Value* cf = createZExtOrTruncFolder(builder,getFlag(context, builder, FLAG_CF), Rvalue->getType()); // Initial CF before SBB
+        Value* cf = createZExtOrTruncFolder(builder,getFlag(context, builder, FLAG_CF), Rvalue->getType()); 
         
-        // Perform the subtract with borrow operation
+        
         Value* srcPlusCF = createAddFolder(builder,Rvalue, cf, "srcPlusCF");
         Value* tmpResult = createSubFolder(builder,Lvalue, srcPlusCF, "sbbTempResult");
         SetOperandValue(context, builder, dest, tmpResult);
@@ -1168,19 +1188,12 @@ namespace arithmeticsAndLogical {
         Value* zf = computeZeroFlag(builder, tmpResult);
         Value* pf = computeParityFlag(builder, tmpResult);
         Value* fifteen = ConstantInt::get(Lvalue->getType(), 0xf);
-        Value* sub = createSubFolder(builder,createAndFolder(builder,Lvalue, fifteen,"sbbsub1"), createAndFolder(builder, srcPlusCF, fifteen,"sbbsub2")); // ex: eax = 0xf, CF = 1; sbb eax, 0xf; then AF = 1al
+        Value* sub = createSubFolder(builder,createAndFolder(builder,Lvalue, fifteen,"sbbsub1"), createAndFolder(builder, srcPlusCF, fifteen,"sbbsub2")); 
         Value* add = createAddFolder(builder,sub, cf);
         Value* af = createICMPFolder(builder, CmpInst::ICMP_UGT,add, ConstantInt::get(add->getType(), 0xf));
 
-        Value* signDest = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0), "signDest");
-        Value* signSrc = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
-        Value* signResult = createICMPFolder(builder, CmpInst::ICMP_SLT,tmpResult, ConstantInt::get(tmpResult->getType(), 0));
-        Value* signSrcPlusCF = createICMPFolder(builder, CmpInst::ICMP_SLT,srcPlusCF, ConstantInt::get(srcPlusCF->getType(), 0), "signSrcPlusCF");
-
-        // Overflow occurs if: (signDest != signSrcPlusCF) AND (signDest != signResult)
-        Value* overflowCond1 = createXorFolder(builder,signDest, signSrcPlusCF, "overflowCond1");
-        Value* overflowCond2 = createXorFolder(builder,signDest, signResult, "overflowCond2");
-        Value* of = createAndFolder(builder,overflowCond1, overflowCond2, "OF");
+        
+        auto of = computeOverflowFlagSbb(builder, Lvalue, Rvalue, cf, tmpResult);
 
         setFlag(context, builder, FLAG_CF, newCF);
         setFlag(context, builder, FLAG_SF, sf);
@@ -1288,6 +1301,8 @@ namespace arithmeticsAndLogical {
         auto* countValue = GetOperandValue(context, builder, count, dest.size);
         auto* carryFlag = getFlag(context, builder, FLAG_CF);
 
+        unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
+
         auto* actualCount = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), dest.size), "actualCount");
         auto* wideType = Type::getIntNTy(context, dest.size * 2);
         auto* wideLvalue = createZExtFolder(builder,Lvalue, wideType);
@@ -1307,6 +1322,11 @@ namespace arithmeticsAndLogical {
         auto* msbAfterRotate = builder.CreateTrunc(createLShrFolder(builder,result, dest.size - 1), Type::getInt1Ty(context),"rcrmsb");
         auto* newOF = createSelectFolder(builder,createICMPFolder(builder, CmpInst::ICMP_EQ,actualCount, ConstantInt::get(actualCount->getType(), 1)), createXorFolder(builder,newCF, msbAfterRotate), getFlag(context, builder, FLAG_OF));
 
+        Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ, actualCount, ConstantInt::get(actualCount->getType(), 1));
+        Value* msbOfOriginal = createLShrFolder(builder, Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shrmsb");
+        newCF = createSelectFolder(builder, isCountOne, newOF, getFlag(context, builder, FLAG_OF));
+        result = createSelectFolder(builder, isCountOne, result, Lvalue);
+
         SetOperandValue(context, builder, dest, result);
         setFlag(context, builder, FLAG_CF, newCF);
         setFlag(context, builder, FLAG_OF, newOF);
@@ -1320,6 +1340,8 @@ namespace arithmeticsAndLogical {
         auto Rvalue = GetOperandValue(context, builder, dest, dest.size);
         Rvalue = builder.CreateNot(Rvalue, "realnot-" + to_string(instruction.runtime_address) + "-");
         SetOperandValue(context, builder, dest, Rvalue);
+
+        printvalue(Rvalue);
         //  Flags Affected
         // None
 
@@ -1340,9 +1362,11 @@ namespace arithmeticsAndLogical {
         Value* fifteen = ConstantInt::get(Rvalue->getType(), 0xf);
         auto af = createICMPFolder(builder, CmpInst::ICMP_NE,createAndFolder(builder,Rvalue, fifteen), ConstantInt::get(Rvalue->getType(), 0), "af");
 
+        printvalue(result)
+        printvalue(sf)
         // OF is cleared nvm
         auto of = ConstantInt::getSigned(Rvalue->getType(), 0);
-
+        printvalue(of);
         // The CF flag set to 0 if the source operand is 0; otherwise it is set to 1. The OF, SF, ZF, AF, and PF flags are set 
         // according to the result.
         setFlag(context, builder, FLAG_CF, cf);
@@ -1411,6 +1435,8 @@ namespace arithmeticsAndLogical {
 
     */
     // maybe
+
+    
     void lift_sar(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
         auto count = instruction.operands[1];
@@ -1418,24 +1444,51 @@ namespace arithmeticsAndLogical {
         Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
         Value* countValue = GetOperandValue(context, builder, count, dest.size);
         unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
+        Value* zero = ConstantInt::get(countValue->getType(), 0);
         Value* clampedCount = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), bitWidth), "clampedCount");
-        Value* shiftedValue = builder.CreateAShr(Lvalue, clampedCount, "sar-ashr");
+        Value* shiftedValue = builder.CreateAShr(Lvalue, clampedCount, "shr-lshr-" + to_string(instruction.runtime_address) + "-");
+       
 
-        // Calculate CF (last bit shifted out)
-        auto cfValue = builder.CreateTrunc(createLShrFolder(builder,Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"sarcf"), builder.getInt1Ty());
-        setFlag(context, builder, FLAG_CF, cfValue);
+        
+        auto* cfRvalue = builder.CreateSub(clampedCount, llvm::ConstantInt::get(clampedCount->getType(), 1));
+        auto* cfShl = builder.CreateShl(llvm::ConstantInt::get(cfRvalue->getType(), 1), cfRvalue);
+        auto* cfAnd = builder.CreateAnd(cfShl, Lvalue);
+        auto* cfValue = builder.CreateICmpNE(cfAnd, llvm::ConstantInt::get(cfAnd->getType(), 0));
+
+        
+
+
+        
+        Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,clampedCount, ConstantInt::get(clampedCount->getType(), 1));
+        Value* msbOfOriginal = createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),"shrmsb");
+        msbOfOriginal = createAndFolder(builder,builder.CreateTrunc(msbOfOriginal, Type::getInt1Ty(context)), ConstantInt::get(builder.getInt1Ty(), 1),"shrmsb");
+        Value* of = createSelectFolder(builder,isCountOne, msbOfOriginal, getFlag(context, builder, FLAG_OF));
+
+        Value* isNotZero = createICMPFolder(builder, CmpInst::ICMP_NE, clampedCount, zero);
+        Value* oldcf = getFlag(context, builder, FLAG_CF);
+        cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf);
+
         Value* sf = computeSignFlag(builder, shiftedValue);
         Value* zf = computeZeroFlag(builder, shiftedValue);
         Value* pf = computeParityFlag(builder, shiftedValue);
+        printvalue(Lvalue)
+        printvalue(countValue)
+        printvalue(clampedCount)
+        printvalue(shiftedValue)
+        printvalue(isNotZero)
+        printvalue(cfValue)
+        printvalue(oldcf)
         setFlag(context, builder, FLAG_CF, cfValue);
+        setFlag(context, builder, FLAG_OF, of);
         setFlag(context, builder, FLAG_SF, sf);
         setFlag(context, builder, FLAG_ZF, zf);
         setFlag(context, builder, FLAG_PF, pf);
-        SetOperandValue(context, builder, dest, shiftedValue);
+
+        SetOperandValue(context, builder, dest, shiftedValue, to_string(instruction.runtime_address));
 
 
     }
-    // maybe
+    // TODO fix
     void lift_shr(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
         auto count = instruction.operands[1];
@@ -1445,17 +1498,21 @@ namespace arithmeticsAndLogical {
         unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
         Value* clampedCount = builder.CreateURem(countValue, ConstantInt::get(countValue->getType(), bitWidth), "clampedCount");
         Value* shiftedValue = createLShrFolder(builder,Lvalue, clampedCount, "shr-lshr-" + to_string(instruction.runtime_address) + "-");
+        Value* zero = ConstantInt::get(countValue->getType(), 0);
 
-        // Calculate CF (last bit shifted out)
+        
         Value* cfValue = builder.CreateTrunc(createLShrFolder(builder,Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"shrcf"), builder.getInt1Ty());
 
-        // Calculate OF (only on the first shift, OF is the MSB of original value)
+        
         Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,clampedCount, ConstantInt::get(clampedCount->getType(), 1));
         Value* msbOfOriginal = createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),"shrmsb");
         msbOfOriginal = createAndFolder(builder,builder.CreateTrunc(msbOfOriginal, Type::getInt1Ty(context)), ConstantInt::get(builder.getInt1Ty(), 1),"shrmsb");
         Value* of = createSelectFolder(builder,isCountOne, msbOfOriginal, getFlag(context, builder, FLAG_OF));
 
 
+        Value* isNotZero = createICMPFolder(builder, CmpInst::ICMP_NE, clampedCount, zero);
+        Value* oldcf = getFlag(context, builder, FLAG_CF);
+        cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf);
         Value* sf = computeSignFlag(builder, shiftedValue);
         Value* zf = computeZeroFlag(builder, shiftedValue);
         Value* pf = computeParityFlag(builder, shiftedValue);
@@ -1466,12 +1523,18 @@ namespace arithmeticsAndLogical {
         setFlag(context, builder, FLAG_ZF, zf);
         setFlag(context, builder, FLAG_PF, pf);
 
+        printvalue(Lvalue)
+            printvalue(clampedCount)
+            printvalue(shiftedValue)
+            printvalue(isNotZero)
+            printvalue(oldcf)
+            printvalue(cfValue)
         SetOperandValue(context, builder, dest, shiftedValue, to_string(instruction.runtime_address));
     }
 
 
 
-    // maybe
+    
     void lift_shl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
         auto count = instruction.operands[1];
@@ -1483,43 +1546,59 @@ namespace arithmeticsAndLogical {
 
         Value* clampedCountValue = createAndFolder(builder,countValue, ConstantInt::get(countValue->getType(), bitWidth - 1),"shlclamp");
 
-        // Perform the logical left shift
+        
         Value* shiftedValue = createShlFolder(builder,Lvalue, clampedCountValue, "shl-shift");
 
-        // Calculate CF (last bit shifted out)
+        
         Value* cfValue = createLShrFolder(builder,Lvalue, createSubFolder(builder,bitWidthValue, clampedCountValue),"shlcf");
         Value* one = ConstantInt::get(cfValue->getType(), 1);
         cfValue = createAndFolder(builder,cfValue, one,"shlcf");
         cfValue = builder.CreateTrunc(cfValue, Type::getInt1Ty(context));
 
-        // Calculate OF (only if count is 1)
+        auto countIsNotZero = createICMPFolder(builder, CmpInst::ICMP_NE, clampedCountValue, ConstantInt::get(clampedCountValue->getType(), 0));
+
+        auto cfRvalue = builder.CreateSub(clampedCountValue, llvm::ConstantInt::get(clampedCountValue->getType(), 1));
+        auto cfShl = builder.CreateShl(Lvalue, cfRvalue);
+        auto cfIntT = llvm::cast<llvm::IntegerType>(cfShl->getType());
+        auto cfRightCount = llvm::ConstantInt::get(cfIntT, cfIntT->getBitWidth() - 1);
+        auto cfLow = builder.CreateLShr(cfShl, cfRightCount);
+        cfValue = createSelectFolder(builder, countIsNotZero, builder.CreateTrunc(cfLow, Type::getInt1Ty(context)), getFlag(context, builder, FLAG_CF));
+
+        
         Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,clampedCountValue, ConstantInt::get(clampedCountValue->getType(), 1));
 
         Value* originalMSB = createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlmsb");
         originalMSB = createAndFolder(builder,originalMSB, ConstantInt::get(Lvalue->getType(), 1),"shlmsb");
         originalMSB = builder.CreateTrunc(originalMSB, Type::getInt1Ty(context));
 
-        // For a 1-bit shift, CF is effectively the original MSB.
+        
         Value* cfAsMSB = builder.CreateTrunc(createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlcfasmsb"), Type::getInt1Ty(context));
 
-        // The MSB of the result after the shift.
+        
         Value* resultMSB = builder.CreateTrunc(createLShrFolder(builder,shiftedValue, ConstantInt::get(shiftedValue->getType(), bitWidth - 1), "shlresultmsb"), Type::getInt1Ty(context));
 
-        // Calculate OF = MSB(result) XOR Original MSB (for 1-bit shifts only).
+        
         Value* ofValue = createSelectFolder(builder,isCountOne, createXorFolder(builder,resultMSB, cfAsMSB), getFlag(context, builder, FLAG_OF));
-#ifdef _DEVELOPMENT
-        printvalue(isCountOne)
-        printvalue(clampedCountValue)
-        printvalue(ofValue)
-#endif
-        // Set flags
+
+        
         setFlag(context, builder, FLAG_CF, cfValue);
         setFlag(context, builder, FLAG_OF, ofValue);
 
         Value* sf = computeSignFlag(builder, shiftedValue);
         Value* zf = computeZeroFlag(builder, shiftedValue);
         Value* pf = computeParityFlag(builder, shiftedValue);
-
+#ifdef _DEVELOPMENT
+        printvalue(Lvalue)
+        printvalue(countValue)
+        printvalue(clampedCountValue)
+        printvalue(isCountOne)
+        printvalue(shiftedValue)
+        printvalue(ofValue)
+        printvalue(cfValue)
+        printvalue(sf)
+        printvalue(zf)
+        printvalue(pf)
+#endif
         setFlag(context, builder, FLAG_SF, sf);
         setFlag(context, builder, FLAG_ZF, zf);
         setFlag(context, builder, FLAG_PF, pf);
@@ -1556,45 +1635,6 @@ namespace arithmeticsAndLogical {
 
 
         SetOperandValue(context, builder, dest, newswappedvalue);
-    }
-    void lift_bswap2(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-
-        auto dest = instruction.operands[0];
-
-        auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
-
-        // Define the intrinsic based on the size of the operand
-
-        /*
-        if (ConstantInt* CI = dyn_cast<ConstantInt>(Lvalue)) {
-            // Lvalue is a ConstantInt
-            unsigned size = Lvalue->getType()->getIntegerBitWidth();
-
-            uint64_t constValue = CI->getZExtValue();
-            uint64_t swappedValue = 0;
-
-            for (unsigned i = 0; i < size; i += 8) {
-                uint64_t byte_low = (constValue >> i) & 0xff;
-                uint64_t byte_high = (constValue >> (size - 8 - i)) & 0xff;
-
-                swappedValue |= (byte_high << i) | (byte_low << (size - 8 - i));
-            }
-
-            // Create a new ConstantInt with the byte-swapped value
-            Value* newConstInt = ConstantInt::get(context, APInt(size, swappedValue));
-
-            // Replace the original value with the byte-swapped value
-            SetOperandValue(context, builder, dest, newConstInt);
-            return;
-        }*/
-
-        Function* bswapIntrinsic = Intrinsic::getDeclaration(builder.GetInsertBlock()->getModule(), Intrinsic::bswap, Lvalue->getType());
-        // Use the intrinsic
-        Value* swappedValue = builder.CreateCall(bswapIntrinsic, Lvalue, "bswap");
-        SetOperandValue(context, builder, dest, swappedValue);
-
-
-
     }
 
 
@@ -1637,12 +1677,14 @@ namespace arithmeticsAndLogical {
         auto lastShiftedBitPosition = createSubFolder(builder,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
         auto lastShiftedBit = createAndFolder(builder,createLShrFolder(builder,Lvalue, lastShiftedBitPosition), ConstantInt::get(Lvalue->getType(), 1),"shldresultmsb");
         auto cf = createSelectFolder(builder,countIsNotZero, builder.CreateTrunc(lastShiftedBit, Type::getInt1Ty(context)), getFlag(context, builder, FLAG_CF));
+        resultValue = createSelectFolder(builder,countIsNotZero, resultValue, Lvalue);
 
-        // OF calculation, only valid if shift count is 1
+        
         auto isOne = createICMPFolder(builder, CmpInst::ICMP_EQ,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
         auto newOF = createXorFolder(builder,createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1)), createLShrFolder(builder,resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1)));
         auto of = createSelectFolder(builder,isOne, builder.CreateTrunc(newOF,Type::getInt1Ty(context)), getFlag(context, builder, FLAG_OF));
-
+        
+        //  CF := BIT[DEST, SIZE – COUNT]; if shifted,
         setFlag(context, builder, FLAG_CF, cf);
         setFlag(context, builder, FLAG_OF, of);
 
@@ -1673,6 +1715,7 @@ namespace arithmeticsAndLogical {
          Value* cf = createLShrFolder(builder,Lvalue, cfBitPosition);
          cf = createAndFolder(builder,cf, ConstantInt::get(cf->getType(), 1),"shrdcf");
          cf = builder.CreateTrunc(cf, Type::getInt1Ty(context));
+
 
          // Calculate OF, only when count is 1
          Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
@@ -1721,11 +1764,11 @@ namespace arithmeticsAndLogical {
         Value* cf = nullptr;
         Value* af = nullptr;
         Value* of = nullptr;
-        auto op1sign = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
+        auto Rvaluesign = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
         auto op2sign = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
 
         auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-        auto op1LowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask, "lvalLowerNibble");
+        auto RvalueLowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask, "lvalLowerNibble");
         auto op2LowerNibble = createAndFolder(builder,Rvalue, lowerNibbleMask, "rvalLowerNibble");
 
 
@@ -1733,23 +1776,21 @@ namespace arithmeticsAndLogical {
         case ZYDIS_MNEMONIC_ADD: {
             result = createAddFolder(builder,Lvalue, Rvalue, "realadd-" + to_string(instruction.runtime_address) + "-");
             cf = createOrFolder(builder,createICMPFolder(builder, CmpInst::ICMP_ULT,result, Lvalue, "add_cf1"), createICMPFolder(builder, CmpInst::ICMP_ULT,result, Rvalue, "add_cf2"), "add_cf");
-            auto sumLowerNibble = createAddFolder(builder,op1LowerNibble, op2LowerNibble, "add_sumLowerNibble");
+            auto sumLowerNibble = createAddFolder(builder,RvalueLowerNibble, op2LowerNibble, "add_sumLowerNibble");
             af = createICMPFolder(builder, CmpInst::ICMP_UGT,sumLowerNibble, lowerNibbleMask, "add_af");
-            auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT,result, ConstantInt::get(Lvalue->getType(), 0));
-            auto inputSameSign = createICMPFolder(builder, CmpInst::ICMP_EQ,op1sign, op2sign, "inputsamesign");
-            of = createAndFolder(builder,inputSameSign, createICMPFolder(builder, CmpInst::ICMP_NE,op1sign, resultSign),"addof");
-
+            auto xor0 = builder.CreateXor(Lvalue, result);
+            auto xor1 = builder.CreateXor(Rvalue, result);
+            auto ofAnd = builder.CreateAnd(xor0, xor1);
+            of = createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd, ConstantInt::get(ofAnd->getType(), 0));
             break;
         }
         case ZYDIS_MNEMONIC_SUB: {
             result = createSubFolder(builder,Lvalue, Rvalue, "realsub-" + to_string(instruction.runtime_address) + "-");
 
-            auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT,result, ConstantInt::get(Lvalue->getType(), 0), "resultsign");
-            auto inputDiffSign = createICMPFolder(builder, CmpInst::ICMP_NE,op1sign, op2sign,"inputdiffsign");
-            of = createAndFolder(builder,inputDiffSign, createICMPFolder(builder, CmpInst::ICMP_NE,op1sign, resultSign),"subof");
+            of = computeOverflowFlagSub(builder, Lvalue, Rvalue, result);
 
             cf = createICMPFolder(builder, CmpInst::ICMP_UGT,Rvalue, Lvalue,"add_cf");
-            af = createICMPFolder(builder, CmpInst::ICMP_ULT,op1LowerNibble, op2LowerNibble, "add_af");
+            af = createICMPFolder(builder, CmpInst::ICMP_ULT,RvalueLowerNibble, op2LowerNibble, "add_af");
             break;
         }
         }
@@ -1760,9 +1801,7 @@ namespace arithmeticsAndLogical {
         Flags Affected
         The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
         */
-        Value* sign_result = createICMPFolder(builder, CmpInst::ICMP_SLT,result, ConstantInt::get(result->getType(), 0));
 
-        auto samesignforof = createICMPFolder(builder, CmpInst::ICMP_EQ,op1sign, op2sign);
         auto sf = computeSignFlag(builder,result);
         auto zf = computeZeroFlag(builder,result);
         auto pf = computeParityFlag(builder,result);
@@ -1778,10 +1817,11 @@ namespace arithmeticsAndLogical {
         printvalue(Rvalue);
         printvalue(result);
         printvalue(cf);
+        printvalue(sf);
+        printvalue(of);
 #endif
         SetOperandValue(context, builder, dest, result);
 
-        // 
 
 
     }    
@@ -1812,9 +1852,10 @@ namespace arithmeticsAndLogical {
 
         auto Rvalue = GetOperandValue(context, builder, src, src.size);
 
-        // Assuming AX, DX:AX, or EDX:EAX/RDX:RAX as dividend depending on operand size
         
-        // does zydis already have these operands as hidden?
+        
+        // doesnt zydis already have these operands as hidden?
+        // investigate this and write more visiually pleasing code
         Value* dividendLow, * dividendHigh, * dividend;
         if (src.size == 16) {
             dividendLow = GetRegisterValue(context, builder, ZYDIS_REGISTER_AX);
@@ -1833,15 +1874,15 @@ namespace arithmeticsAndLogical {
             throw std::runtime_error("Unsupported operand size for IDIV.");
         }
 
-        // Combine the high and low parts of the dividend
+        
         auto bitWidth = dividendLow->getType()->getIntegerBitWidth();
         dividend = createOrFolder(builder,createShlFolder(builder,dividendHigh, bitWidth), dividendLow);
 
-        // Perform division
+        
         Value* quotient = builder.CreateSDiv(dividend, Rvalue);
         Value* remainder = builder.CreateSRem(dividend, Rvalue);
 
-        // Set the results
+
         if (src.size == 16) {
             SetRegisterValue(context, builder, ZYDIS_REGISTER_AX, builder.CreateTrunc(quotient, Type::getInt16Ty(context)));
             SetRegisterValue(context, builder, ZYDIS_REGISTER_DX, builder.CreateTrunc(remainder, Type::getInt16Ty(context)));
@@ -1859,9 +1900,6 @@ namespace arithmeticsAndLogical {
 
 
 
-    // extract xor, and, or, ror and rol
-
-
     void lift_xor(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
         auto dest = instruction.operands[0];
@@ -1869,8 +1907,6 @@ namespace arithmeticsAndLogical {
         auto Rvalue = GetOperandValue(context,builder,src, dest.size);
         auto Lvalue = GetOperandValue(context,builder,dest, dest.size);
         auto result = createXorFolder(builder,Lvalue,Rvalue,"realxor-"+to_string(instruction.runtime_address) + "-");
-
-        //Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
 
 #ifdef _DEVELOPMENT
         printvalue(Lvalue)
@@ -1904,9 +1940,12 @@ namespace arithmeticsAndLogical {
         auto src = instruction.operands[1];
         auto Rvalue = GetOperandValue(context, builder, src, dest.size);
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
-        auto result = createOrFolder(builder,Lvalue, Rvalue);
+        auto result = createOrFolder(builder,Lvalue, Rvalue, "realor-" + to_string(instruction.runtime_address) + "-");
 
-        //Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+        printvalue(Lvalue);
+        printvalue(Rvalue);
+        printvalue(result);
+        
 
 
 
@@ -1939,10 +1978,7 @@ namespace arithmeticsAndLogical {
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
 
 
-        auto result = createAndFolder(builder,Lvalue, Rvalue,"realand");
-
-        //Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
-
+        auto result = createAndFolder(builder,Lvalue, Rvalue,"realand-" + to_string(instruction.runtime_address) + "-");
 
 
         auto sf = computeSignFlag(builder, result);
@@ -1988,36 +2024,48 @@ printvalue(result)
         ELSE OF is undefined;
     FI
     */
-void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-    auto dest = instruction.operands[0];
-    auto src = instruction.operands[1];
-    auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
-    auto Rvalue = GetOperandValue(context, builder, src, dest.size);
+    void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+        auto dest = instruction.operands[0];
+        auto src = instruction.operands[1];
+        auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
+        auto Rvalue = GetOperandValue(context, builder, src, dest.size);
 
-    unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
-    Rvalue = createAndFolder(builder,Rvalue, ConstantInt::get(Rvalue->getType(), bitWidth - 1), "maskRvalue");
+        unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
+        Rvalue = createAndFolder(builder, Rvalue, ConstantInt::get(Rvalue->getType(), bitWidth - 1), "maskRvalue");
 
-    Value* shiftedLeft = createShlFolder(builder,Lvalue, Rvalue);
-    Value* shiftedRight = createLShrFolder(builder,Lvalue, createSubFolder(builder,ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue));
-    Value* result = createOrFolder(builder,shiftedLeft, shiftedRight);
+        Value* shiftedLeft = createShlFolder(builder, Lvalue, Rvalue);
+        Value* shiftedRight = createLShrFolder(builder, Lvalue, createSubFolder(builder, ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue));
+        Value* result = createOrFolder(builder, shiftedLeft, shiftedRight);
 
-    // Calculate CF based on the last bit shifted out
-    Value* lastBit = createAndFolder(builder,createLShrFolder(builder,Lvalue, createSubFolder(builder,ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue)), ConstantInt::get(Lvalue->getType(), 1),"rollastbit");
-    Value* cf = builder.CreateTrunc(lastBit, Type::getInt1Ty(context));
+        
+        
+        Value* lastBit = createAndFolder(builder, shiftedRight, ConstantInt::get(Lvalue->getType(), 1), "rollastbit");
+        Value* cf = builder.CreateTrunc(lastBit, Type::getInt1Ty(context));
 
-    // Calculate OF, which is the XOR of CF and the new MSB of the result
-    Value* newMSB = createAndFolder(builder,result, ConstantInt::get(result->getType(), 1ULL << (bitWidth - 1)),"rolmsb");
-    Value* of = createXorFolder(builder,cf, builder.CreateTrunc(newMSB, Type::getInt1Ty(context)));
+        Value* zero = ConstantInt::get(Rvalue->getType(), 0);
+        Value* isNotZero = createICMPFolder(builder, CmpInst::ICMP_NE, Rvalue, zero);
+        Value* oldcf = getFlag(context, builder, FLAG_CF);
+        cf = createSelectFolder(builder, isNotZero, cf, oldcf);
+        result = createSelectFolder(builder, isNotZero, result, Lvalue);
 
-    // Use Select to conditionally update OF based on whether the shift amount is 1
-    Value* isOneBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(Rvalue->getType(), 1));
-    Value* ofCurrent = getFlag(context, builder, FLAG_OF);
-    of = createSelectFolder(builder,isOneBitRotation, of, ofCurrent);
+        // of = cf ^ MSB
+        Value* newMSB = createLShrFolder(builder, result, bitWidth - 1, "rolmsb");
+        Value* of = createXorFolder(builder, cf, builder.CreateTrunc(newMSB, Type::getInt1Ty(context)));
 
-    setFlag(context, builder, FLAG_CF, cf);
-    setFlag(context, builder, FLAG_OF, of);
+        // Use Select to conditionally update OF based on whether the shift amount is 1
+        Value* isOneBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), 1));
+        Value* ofCurrent = getFlag(context, builder, FLAG_OF);
 
-    SetOperandValue(context, builder, dest, result);
+        of = createSelectFolder(builder, isOneBitRotation, of, ofCurrent);
+
+        setFlag(context, builder, FLAG_CF, cf);
+        setFlag(context, builder, FLAG_OF, of);
+
+        printvalue(Lvalue)
+        printvalue(Rvalue)
+        printvalue(result)
+        SetOperandValue(context, builder, dest, result);
+    
 }
 
 
@@ -2039,8 +2087,7 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         ELSE OF is undefined;
     FI
     
-    */
-    void lift_ror(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+    */void lift_ror(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
         auto src = instruction.operands[1];
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
@@ -2049,22 +2096,27 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         auto size = ConstantInt::getSigned(Lvalue->getType(), Lvalue->getType()->getIntegerBitWidth());
         Rvalue = builder.CreateURem(Rvalue, size);
 
-        Value* result = createOrFolder(builder,createLShrFolder(builder,Lvalue, Rvalue), createShlFolder(builder,Lvalue, createSubFolder(builder,size, Rvalue)), "ror-" + std::to_string(instruction.runtime_address) + "-");
+        Value* result = createOrFolder(builder, createLShrFolder(builder, Lvalue, Rvalue), createShlFolder(builder, Lvalue, createSubFolder(builder, size, Rvalue)), "ror-" + std::to_string(instruction.runtime_address) + "-");
 
-        Value* msb = createLShrFolder(builder,result, createSubFolder(builder,size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1))));
+        Value* msb = createLShrFolder(builder, result, createSubFolder(builder, size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1))));
         Value* cf = builder.CreateTrunc(msb, Type::getInt1Ty(context), "ror-cf");
 
-        Value* secondMsb = createLShrFolder(builder,result, createSubFolder(builder,size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 2))));
-        auto ofDefined = builder.CreateTrunc(createXorFolder(builder,msb, secondMsb), cf->getType());
-        auto isOneBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1)));
+        Value* secondMsb = createLShrFolder(builder, result, createSubFolder(builder, size, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 2))));
+        auto ofDefined = builder.CreateTrunc(createXorFolder(builder, msb, secondMsb), cf->getType());
+        auto isOneBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1)));
         Value* ofCurrent = getFlag(context, builder, FLAG_OF);
-        Value* of = createSelectFolder(builder,isOneBitRotation, ofDefined, ofCurrent, "ror-of");
+        Value* of = createSelectFolder(builder, isOneBitRotation, ofDefined, ofCurrent, "ror-of");
+
 
         setFlag(context, builder, FLAG_CF, cf);
         setFlag(context, builder, FLAG_OF, of);
 
-        auto isZeroBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 0)), "iszerobit");
-        result = createSelectFolder(builder,isZeroBitRotation, Lvalue, result, "ror-result");
+        auto isZeroBitRotation = createICMPFolder(builder, CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(context, APInt(Rvalue->getType()->getIntegerBitWidth(), 0)), "iszerobit");
+        result = createSelectFolder(builder, isZeroBitRotation, Lvalue, result, "ror-result");
+
+        printvalue(Lvalue)
+        printvalue(Rvalue)
+        printvalue(result)
 
         SetOperandValue(context, builder, dest, result);
     }
@@ -2073,34 +2125,35 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     void lift_inc_dec(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto operand = instruction.operands[0];
 
-        Value* originalValue = GetOperandValue(context, builder, operand, operand.size);
+        Value* Lvalue = GetOperandValue(context, builder, operand, operand.size);
 
-        Value* one = ConstantInt::get(originalValue->getType(), 1, true);
+        Value* one = ConstantInt::get(Lvalue->getType(), 1, true);
         Value* result; 
-        Value* of; // Overflow flag
+        Value* of; 
         // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set according to the result.
         if (instruction.info.mnemonic == ZYDIS_MNEMONIC_INC) {
             // treat it as add r, 1 for flags
-            result = createAddFolder(builder,originalValue, one, "inc-" + to_string(instruction.runtime_address) + "-");
-            auto* xorResOrig = createXorFolder(builder,originalValue, result);
-            auto* xorOrigOne = createXorFolder(builder,originalValue, one);
-            auto* ofAnd = createAndFolder(builder,xorResOrig, xorOrigOne,"incof");
-            of = createICMPFolder(builder, CmpInst::ICMP_SLT,ofAnd, ConstantInt::get(ofAnd->getType(), 0));
+            result = createAddFolder(builder, Lvalue, one, "inc-" + to_string(instruction.runtime_address) + "-");
+            of = computeOverflowFlagAdd(builder, Lvalue, one, result);
 
         }
         else {
             // treat it as sub r, 1 for flags
-            result = createSubFolder(builder,originalValue, one, "dec-" + to_string(instruction.runtime_address) + "-");        
-            auto* xorResOrig = createXorFolder(builder,originalValue, result);
-            auto* xorOrigMinusOne = createXorFolder(builder,originalValue, ConstantInt::get(originalValue->getType(), 1));
-            auto* ofAnd = createAndFolder(builder,xorResOrig, xorOrigMinusOne,"decof");
-            of = createICMPFolder(builder, CmpInst::ICMP_SLT,ofAnd, ConstantInt::get(ofAnd->getType(), 0));
+            result = createSubFolder(builder, Lvalue, one, "dec-" + to_string(instruction.runtime_address) + "-");
+            of = computeOverflowFlagSub(builder, Lvalue, one, result);
             
 
         }
+
+
+        printvalue(Lvalue)
+        printvalue(result)
+
         Value* sf = computeSignFlag(builder, result);
         Value* zf = computeZeroFlag(builder, result);
         Value* pf = computeParityFlag(builder, result);
+
+        printvalue(sf)
 
         setFlag(context, builder, FLAG_OF, of);
         setFlag(context, builder, FLAG_SF, sf);
@@ -2127,13 +2180,12 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
     }
 
-    // (assuming) causing the branch problem
     void lift_pushfq(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto src = instruction.operands[2]; // value that we are pushing rflags
         auto dest = instruction.operands[1];  // [rsp]
         auto rsp = instruction.operands[0]; // rsp
 
-        // TODO: instead of pushing one big flag variable, push them all seperately. This will make it so bits are not confused as values 
+
          auto Rvalue = GetOperandValue(context, builder, src, dest.size);
         //auto Rvalue = GetRFLAGS(context, builder);
         auto RspValue = GetOperandValue(context, builder, rsp, dest.size);
@@ -2169,7 +2221,7 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 
     }
 
-    // (assuming) causing the branch problem
+    
     void lift_popfq(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[2]; // value that we are pushing
         auto src = instruction.operands[1];  // [rsp]
@@ -2195,13 +2247,11 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
         Value* Rvalue = GetOperandValue(context, builder, src, dest.size);
 
-        // Get the Carry Flag (CF)
-        Value* cf = getFlag(context, builder, FLAG_CF);
 
-        // Extend CF to the size of the destination operand to prepare it for addition
+        Value* cf = getFlag(context, builder, FLAG_CF);
         cf = createZExtFolder(builder,cf, Lvalue->getType());
 
-        // Perform addition
+        
         Value* tempResult = createAddFolder(builder,Lvalue, Rvalue, "adc-temp-" + to_string(instruction.runtime_address) + "-");
         Value* result = createAddFolder(builder,tempResult, cf, "adc-result-" + to_string(instruction.runtime_address) + "-");
         // The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
@@ -2215,19 +2265,15 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         auto cfAfterFirstAdd = createOrFolder(builder,createICMPFolder(builder, CmpInst::ICMP_ULT,tempResult, Lvalue), createICMPFolder(builder, CmpInst::ICMP_ULT,tempResult, Rvalue));
         auto cfFinal = createOrFolder(builder,cfAfterFirstAdd, createICMPFolder(builder, CmpInst::ICMP_ULT,result, cf));
 
-        // Adjust flag
+        
         auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
         auto destLowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask,"adcdst");
         auto srcLowerNibble = createAndFolder(builder,Rvalue, lowerNibbleMask,"adcsrc");
         auto sumLowerNibble = createAddFolder(builder,destLowerNibble, srcLowerNibble);
         auto af = createICMPFolder(builder, CmpInst::ICMP_UGT,sumLowerNibble, lowerNibbleMask);
 
-        // Overflow flag
-        auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT,result, ConstantInt::get(Lvalue->getType(), 0));
-        auto destSign = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
-        auto srcSign = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
-        auto inputSameSign = createICMPFolder(builder, CmpInst::ICMP_EQ,destSign, srcSign);
-        auto of = createAndFolder(builder,inputSameSign, createICMPFolder(builder, CmpInst::ICMP_NE,destSign, resultSign),"adcof");
+        
+        auto of = computeOverflowFlagAdc(builder,Lvalue, Rvalue, cf, result);
 
 
 
@@ -2242,28 +2288,21 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         setFlag(context, builder, FLAG_ZF, zf);
         setFlag(context, builder, FLAG_PF, pf);
 
-
-        // Store the result in the destination operand
         SetOperandValue(context, builder, dest, result);
     }
 
 
     void lift_xadd(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Assuming the first operand is the destination and the second operand is the source
         auto dest = instruction.operands[0];
         auto src = instruction.operands[1];
 
-        // Retrieve the values
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
         auto Rvalue = GetOperandValue(context, builder, src, src.size);
 
-        // Calculate the sum of Lvalue and Rvalue
         Value* sumValue = createAddFolder(builder,Lvalue, Rvalue, "xadd_sum-" + to_string(instruction.runtime_address) + "-");
 
-        // The result to be stored in the destination is sumValue
         SetOperandValue(context, builder, dest, sumValue, to_string(instruction.runtime_address));
 
-        // The result to be stored in the source is the original Lvalue
         SetOperandValue(context, builder, src, Lvalue, to_string(instruction.runtime_address));
         /*
         TEMP := SRC + DEST;
@@ -2277,14 +2316,14 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
 #endif
         auto cf = createOrFolder(builder,createICMPFolder(builder, CmpInst::ICMP_ULT,sumValue, Lvalue), createICMPFolder(builder, CmpInst::ICMP_ULT,sumValue, Rvalue));
 
-        // Adjust flag
+
         auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
         auto destLowerNibble = createAndFolder(builder,Lvalue, lowerNibbleMask,"xadddst");
         auto srcLowerNibble = createAndFolder(builder,Rvalue, lowerNibbleMask,"xaddsrc");
         auto sumLowerNibble = createAddFolder(builder,destLowerNibble, srcLowerNibble);
         auto af = createICMPFolder(builder, CmpInst::ICMP_UGT,sumLowerNibble, lowerNibbleMask);
 
-        // Overflow flag
+
         auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT,sumValue, ConstantInt::get(Lvalue->getType(), 0));
         auto destSign = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
         auto srcSign = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
@@ -2310,19 +2349,19 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         Value* Lvalue = GetOperandValue(context, builder, instruction.operands[0], instruction.operands[0].size);
         Value* Rvalue = GetOperandValue(context, builder, instruction.operands[1], instruction.operands[0].size);
 
-        // Compute the bitwise AND result
+        
         Value* testResult = createAndFolder(builder,Lvalue, Rvalue, "testAnd");
 
-        // OF and CF are cleared
+        
         Value* of = ConstantInt::get(Type::getInt64Ty(context), 0, "of");
         Value* cf = ConstantInt::get(Type::getInt64Ty(context), 0, "cf");
 
-        // Calculate SF, ZF, and PF based on testResult
+        
         Value* sf = createICMPFolder(builder, CmpInst::ICMP_SLT,testResult, ConstantInt::get(testResult->getType(), 0), "sf");
         Value* zf = createICMPFolder(builder, CmpInst::ICMP_EQ,testResult, ConstantInt::get(testResult->getType(), 0), "zf");
         Value* pf = computeParityFlag(builder, testResult);
 
-        //Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+        
 
         Value* new_flags = setFlag(context, builder, FLAG_OF, of);
         new_flags = setFlag(context, builder, FLAG_CF, cf);
@@ -2334,18 +2373,18 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
     }
 
     void lift_cmp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Compute the difference
+        
 
         Value* Lvalue = GetOperandValue(context, builder, instruction.operands[0], instruction.operands[0].size);
         Value* Rvalue = GetOperandValue(context, builder, instruction.operands[1], instruction.operands[0].size);
 
         Value* cmpResult = createSubFolder(builder,Lvalue, Rvalue);
-        // Calculate flags based on cmpResult
+        
         Value* signL = createICMPFolder(builder, CmpInst::ICMP_SLT,Lvalue, ConstantInt::get(Lvalue->getType(), 0));
         Value* signR = createICMPFolder(builder, CmpInst::ICMP_SLT,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
         Value* signResult = createICMPFolder(builder, CmpInst::ICMP_SLT,cmpResult, ConstantInt::get(cmpResult->getType(), 0));
 
-        // Overflow flag: (Lsign and not Rsign and not ResultSign) or (not Lsign and Rsign and ResultSign)
+        
         Value* of = createOrFolder(builder,
             createAndFolder(builder,signL, createAndFolder(builder,builder.CreateNot(signR), builder.CreateNot(signResult), "cmp-and1-")),
             createAndFolder(builder,builder.CreateNot(signL), createAndFolder(builder,signR, signResult), "cmp-and2-"), "cmp-OF-or"
@@ -2356,18 +2395,18 @@ void lift_rol(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstr
         Value* sf = createICMPFolder(builder, CmpInst::ICMP_SLT,cmpResult, ConstantInt::get(cmpResult->getType(), 0));
         Value* pf = computeParityFlag(builder, cmpResult);
 
-        //Value* old_flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+        
 
         Value* new_flags = setFlag(context, builder, FLAG_OF, of);
         new_flags = setFlag(context, builder, FLAG_CF, cf);
         new_flags = setFlag(context, builder, FLAG_SF, sf);
         new_flags = setFlag(context, builder, FLAG_ZF, zf);
         new_flags = setFlag(context, builder, FLAG_PF, pf);
-        //SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, new_flags);
+        
     }
 
 
-    // maybe will edit
+    // TODO: stuff
     void lift_rdtsc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto rdtscCall = builder.CreateIntrinsic(llvm::Intrinsic::readcyclecounter, {}, {});
         auto edxPart = createLShrFolder(builder,rdtscCall, 32, "to_edx");
@@ -2386,10 +2425,10 @@ namespace flagOperation {
 
         Value* zf = getFlag(context, builder, FLAG_ZF);
 
-        // Create a check for ZF being 0 (because SETNZ sets byte to 1 if ZF = 0)
+        
         Value* result = createZExtFolder(builder,builder.CreateNot(zf), Type::getInt8Ty(context));
 
-        // Store the result in the destination operand
+        
         SetOperandValue(context, builder, dest, result);
 
     }
@@ -2399,7 +2438,7 @@ namespace flagOperation {
 
         Value* of = getFlag(context, builder, FLAG_OF);
 
-        // Convert the i1 (boolean) value of OF to an 8-bit integer
+        
         Value* result = createZExtFolder(builder,of, Type::getInt8Ty(context));
 
         SetOperandValue(context, builder, dest, result);
@@ -2412,7 +2451,7 @@ namespace flagOperation {
 
         Value* notOf = builder.CreateNot(of, "notOF");
 
-        // Convert the i1 (boolean) value of notOf to an 8-bit integer
+        
         Value* result = createZExtFolder(builder,notOf, Type::getInt8Ty(context));
 
         SetOperandValue(context, builder, dest, result);
@@ -2424,43 +2463,43 @@ namespace flagOperation {
 
         Value* cf = getFlag(context, builder, FLAG_CF);
 
-        // Check for CF being 0 (because SETNB sets byte to 1 if CF = 0)
+        
         Value* result = createICMPFolder(builder, CmpInst::ICMP_EQ,cf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
-        // Zero extend the result to byte size, since SETNB works on bytes
+        
         Value* byteResult = createZExtFolder(builder,result, Type::getInt8Ty(context));
 
         SetOperandValue(context, builder, dest, byteResult);
     }
 
     void lift_setbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Fetch the CF and ZF flags
+        
         Value* cf = getFlag(context, builder, FLAG_CF);
         Value* zf = getFlag(context, builder, FLAG_ZF);
 
-        // The condition is (CF=1 or ZF=1)
+        
         Value* condition = createOrFolder(builder,cf, zf, "setbe-or");
 
-        // Convert condition from i1 to i8
+        
         Value* result = createZExtFolder(builder,condition, Type::getInt8Ty(context));
 
-        // Set the result to the destination operand
+        
         auto dest = instruction.operands[0];
         SetOperandValue(context, builder, dest, result);
     }
 
     void lift_setnbe(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Fetch the CF and ZF flags
+        
         Value* cf = getFlag(context, builder, FLAG_CF);
         Value* zf = getFlag(context, builder, FLAG_ZF);
 
-        // The condition is (CF=0 and ZF=0)
+        
         Value* condition = createAndFolder(builder,builder.CreateNot(cf), builder.CreateNot(zf), "setnbe-and");
 
-        // Convert condition from i1 to i8
+        
         Value* result = createZExtFolder(builder,condition, Type::getInt8Ty(context));
 
-        // Set the result to the destination operand
+        
         auto dest = instruction.operands[0];
         SetOperandValue(context, builder, dest, result);
     }
@@ -2470,88 +2509,88 @@ namespace flagOperation {
 
         auto dest = instruction.operands[0];
 
-        // Get the current value of the SF flag from RFLAGS register
+        
         Value* sf = getFlag(context, builder, FLAG_SF);
 
-        // Check for SF being 0 (because SETNS sets byte to 1 if SF = 0)
+        
         Value* result = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
-        // Zero extend the result to byte size, since SETNS works on bytes
+        
         Value* byteResult = createZExtFolder(builder,result, Type::getInt8Ty(context));
 
-        // Store the result in the destination operand
+        
         SetOperandValue(context, builder, dest, byteResult);
     }
 
     void lift_setp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Get the PF bit from RFLAGS register
+        
         Value* pf = getFlag(context, builder, FLAG_PF);
 
-        // Convert PF to an 8-bit integer
+        
         Value* result = createZExtFolder(builder,pf, Type::getInt8Ty(context));
 
-        // Assuming the first operand is the destination
+        
         auto dest = instruction.operands[0];
 
-        // Set the value of the destination operand
+        
         SetOperandValue(context, builder, dest, result);
     }
 
     void lift_setnp(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
 
-        // Retrieve the Parity Flag (PF) from the EFLAGS/RFLAGS register
+        
         Value* pf = getFlag(context, builder, FLAG_PF);
 
-        // The result is 1 if PF is clear and 0 otherwise
+        
         Value* resultValue = createZExtFolder(builder,builder.CreateNot(pf), Type::getInt8Ty(context));
 
-        // Update the operand with the result
+        
         SetOperandValue(context, builder, dest, resultValue);
     }
 
 
     void lift_setb(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
-        // The destination is usually a single byte in memory or a byte-sized register.
+        
         auto dest = instruction.operands[0];
 
-        // Get the current value of the CF flag from RFLAGS register
+        
         Value* cf = getFlag(context, builder, FLAG_CF);
 
-        // Convert the i1 (boolean) value of CF to an 8-bit integer
+        
         Value* result = createZExtFolder(builder,cf, Type::getInt8Ty(context));
 
-        // Store the result into the destination operand
+        
         SetOperandValue(context, builder, dest, result);
     }
 
 
     void lift_sets(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Fetch the SF flag
+        
         Value* sf = getFlag(context, builder, FLAG_SF);
 
-        // Convert SF condition from i1 to i8
+        
         Value* result = createZExtFolder(builder,sf, Type::getInt8Ty(context));
 
-        // Set the result to the destination operand
+        
         auto dest = instruction.operands[0];
         SetOperandValue(context, builder, dest, result);
     }
 
 
     void lift_setz(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Assuming the operand is the destination
+        
         auto dest = instruction.operands[0];
 
-        // Get the current value of the ZF flag from RFLAGS register
+        
         Value* zf = getFlag(context, builder, FLAG_ZF);
 
-        // ZF is usually represented in LLVM as a i1 type (boolean).
-        // Extend this to 8 bits to match the size of the SETZ destination.
+        
+        
         Value* extendedZF = createZExtFolder(builder,zf, Type::getInt8Ty(context), "setz_extend");
 
-        // Store the result to the destination operand
+        
         SetOperandValue(context, builder, dest, extendedZF);
     }
 
@@ -2559,78 +2598,78 @@ namespace flagOperation {
 
         auto dest = instruction.operands[0];
 
-        // Get the current values of the ZF, SF, and OF flags from RFLAGS register
+        
         Value* zf = getFlag(context, builder, FLAG_ZF);
         Value* sf = getFlag(context, builder, FLAG_SF);
         Value* of = getFlag(context, builder, FLAG_OF);
 
-        // Check for ZF being 0
+        
         Value* zfNotSet = createICMPFolder(builder, CmpInst::ICMP_EQ,zf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
-        // Check for SF=OF
+        
         Value* sfEqualsOf = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, of);
 
-#ifdef _DEVELOPMENT //ZF=0 and SF=OF
+#ifdef _DEVELOPMENT 
         printvalue(zf)
         printvalue(sf)
         printvalue(of)
 #endif
-        // Combine the two conditions with AND operation
+        
         Value* combinedCondition = createAndFolder(builder,zfNotSet, sfEqualsOf, "setnle-and");
 
-        // Zero extend the result to byte size, since SET instructions work on bytes
+        
         Value* byteResult = createZExtFolder(builder,combinedCondition, Type::getInt8Ty(context));
 
-        // Store the result in the destination operand
+        
         SetOperandValue(context, builder, dest, byteResult);
     }
 
     void lift_setle(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Fetch the ZF, SF, and OF flags
+        
         Value* zf = getFlag(context, builder, FLAG_ZF);
         Value* sf = getFlag(context, builder, FLAG_SF);
         Value* of = getFlag(context, builder, FLAG_OF);
 
-        // Compute the condition (ZF=1) OR (SF != OF)
+        
         Value* sf_ne_of = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
         Value* condition = createOrFolder(builder,zf, sf_ne_of, "setle-or");
 
-        // Convert the condition from i1 to i8
+        
         Value* result = createZExtFolder(builder,condition, Type::getInt8Ty(context));
 
-        // Set the result to the destination operand
+        
         auto dest = instruction.operands[0];
         SetOperandValue(context, builder, dest, result);
     }
 
     void lift_setnl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Fetch the SF and OF flags
+        
         Value* sf = getFlag(context, builder, FLAG_SF);
         Value* of = getFlag(context, builder, FLAG_OF);
 
-        // Compute the condition (SF = OF)
+        
         Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ,sf, of);
 
-        // Convert the condition from i1 to i8
+        
         Value* result = createZExtFolder(builder,condition, Type::getInt8Ty(context));
 
-        // Set the result to the destination operand
+        
         auto dest = instruction.operands[0];
         SetOperandValue(context, builder, dest, result);
     }
 
     void lift_setl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Fetch the SF and OF flags
+        
         Value* sf = getFlag(context, builder, FLAG_SF);
         Value* of = getFlag(context, builder, FLAG_OF);
 
-        // Compute the condition (SF != OF)
+        
         Value* condition = createICMPFolder(builder, CmpInst::ICMP_NE,sf, of);
 
-        // Convert the condition from i1 to i8
+        
         Value* result = createZExtFolder(builder,condition, Type::getInt8Ty(context));
 
-        // Set the result to the destination operand
+        
         auto dest = instruction.operands[0];
         SetOperandValue(context, builder, dest, result);
     }
@@ -2638,126 +2677,106 @@ namespace flagOperation {
 
 
     void lift_bt(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Assuming the first operand is the destination and the second is the bit index
+        
         auto dest = instruction.operands[0];
         auto bitIndex = instruction.operands[1];
 
-        // Retrieve the values
+        // If the bit base operand specifies a register, the instruction takes the modulo 16, 32, or 64 of the bit offset operand (modulo size depends on the mode and register size; 64-bit operands are available only in 64-bit mode).
+        // If the bit base operand specifies a memory location, the operand represents the address of the byte in memory that contains the bit base (bit 0 of the specified byte) of the bit string. The range of the bit position that can be referenced by the offset operand depends on the operand size.
+        // CF := Bit(BitBase, BitOffset);
+
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
         auto bitIndexValue = GetOperandValue(context, builder, bitIndex, dest.size);
 
-        auto adjustedBitIndexValue = builder.CreateURem(bitIndexValue, ConstantInt::get(bitIndexValue->getType(), Lvalue->getType()->getIntegerBitWidth()));
+        unsigned LvalueBitW = llvm::cast<llvm::IntegerType>(Lvalue->getType())->getBitWidth();
+        auto Rvalue = builder.CreateAnd(bitIndexValue, llvm::ConstantInt::get(bitIndexValue->getType(), LvalueBitW - 1));
+        auto shl = builder.CreateShl(llvm::ConstantInt::get(bitIndexValue->getType(), 1), Rvalue);
+        auto andd = builder.CreateAnd(shl, bitIndexValue);
+        auto icmp = builder.CreateICmpNE(andd, llvm::ConstantInt::get(andd->getType(), 0));
+        setFlag(context,builder,FLAG_CF,icmp);
 
-        // Create a mask to test the bit
-        auto mask = createShlFolder(builder,ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue);
-
-
-        // Test the bit by performing bitwise AND
-        auto testValue = createAndFolder(builder,Lvalue, mask, "bt");
-
-        // Check if the bit is set. This will be a non-zero value if the bit was set.
-        auto isBitSet = createICMPFolder(builder, CmpInst::ICMP_NE,testValue, ConstantInt::get(Lvalue->getType(), 0), "btisbitset");
 
     }
 
 
     void lift_btr(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Assuming the first operand is the destination and the second is the bit index
+        
         auto dest = instruction.operands[0];
         auto bitIndex = instruction.operands[1];
 
-        // Retrieve the values
+        
+
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
         auto bitIndexValue = GetOperandValue(context, builder, bitIndex, bitIndex.size);
 
-        // Calculate the modulo of the bit index
+        
         auto adjustedBitIndexValue = builder.CreateURem(bitIndexValue, ConstantInt::get(bitIndexValue->getType(), Lvalue->getType()->getIntegerBitWidth()), "btr-urem");
 
         adjustedBitIndexValue = createZExtOrTruncFolder(builder,adjustedBitIndexValue, Lvalue->getType(), "castedBitIndex");
 
-        // Create a mask to test the bit
+        
 
-        // Create a mask to clear the bit
+        unsigned LvalueBitW = llvm::cast<llvm::IntegerType>(Lvalue->getType())->getBitWidth();
+        auto Rvalue = builder.CreateAnd(bitIndexValue, llvm::ConstantInt::get(bitIndexValue->getType(), LvalueBitW - 1));
+        auto shl = builder.CreateShl(llvm::ConstantInt::get(bitIndexValue->getType(), 1), Rvalue);
+        auto andd = builder.CreateAnd(shl, bitIndexValue);
+        auto icmp = builder.CreateICmpNE(andd, llvm::ConstantInt::get(andd->getType(), 0));
+        setFlag(context, builder, FLAG_CF, icmp);
+
+        
         auto mask = createShlFolder(builder,ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue, "btr-mask");
         mask = builder.CreateNot(mask, "btr-not");
 
-        // Clear the bit
+        
         auto resultValue = createAndFolder(builder,Lvalue, mask, "btr-clear-" + to_string(instruction.runtime_address) + "-");
 
-        // Update the operand with the result
+        
         SetOperandValue(context, builder, dest, resultValue);
 
 
 
     }
 
-    void lift_bsr2(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-
-        auto dest = instruction.operands[0];
-        auto src = instruction.operands[1];
-
-        // Retrieve the value for the source operand
-        Value* Rvalue = GetOperandValue(context, builder, src, src.size);
-
-        // Define the intrinsic for counting leading zeros
-        Function* ctlzIntrinsic = Intrinsic::getDeclaration(
-            builder.GetInsertBlock()->getModule(),
-            Intrinsic::ctlz,
-            Rvalue->getType()
-        );
-
-        // Call the intrinsic to count leading zeros
-        Value* leadingZeros = builder.CreateCall(ctlzIntrinsic, { Rvalue, ConstantInt::getFalse(context) });
-
-        // Calculate the index of the highest set bit
-        Value* bitPosition = createSubFolder(builder,
-            ConstantInt::get(Rvalue->getType(), src.size * 8 - 1),
-            leadingZeros
-        );
-
-        // Set the result into the destination operand
-        SetOperandValue(context, builder, dest, bitPosition);
-    }
-
     void lift_bsr(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
         auto src = instruction.operands[1];
 
-        // Retrieve the value for the source operand
+        
         Value* Rvalue = GetOperandValue(context, builder, src, src.size);
-
-        // Bit width of the source value
+        Value* isZero = createICMPFolder(builder, CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), 0));
+        setFlag(context, builder, FLAG_ZF, isZero);
+        
         unsigned bitWidth = Rvalue->getType()->getIntegerBitWidth();
 
-        // Prepare a loop to find the most significant bit that is set
+        
         Value* index = ConstantInt::get(Rvalue->getType(), bitWidth - 1);
         Value* zeroVal = ConstantInt::get(Rvalue->getType(), 0);
         Value* oneVal = ConstantInt::get(Rvalue->getType(), 1);
 
-        // Placeholder for the result (initialized to -1 to indicate no bits are set)
+        
         Value* bitPosition = ConstantInt::get(Rvalue->getType(), -1);
 
-        // Loop through each bit from MSB to LSB
+        
         for (unsigned i = 0; i < bitWidth; ++i) {
-            // Create mask for current bit
+            
             Value* mask = createShlFolder(builder,oneVal, index);
 
-            // Test if the bit is set
+            
             Value* test = createAndFolder(builder, Rvalue, mask,"bsrtest");
             Value* isBitSet = createICMPFolder(builder, CmpInst::ICMP_NE,test, zeroVal);
 
-            // Use the first bit set as the result and break the loop
+            
             Value* tmpPosition = createSelectFolder(builder, isBitSet, index, bitPosition);
 
-            // Only update bitPosition if it has not been set yet (-1)
+            
             Value* isPositionUnset = createICMPFolder(builder, CmpInst::ICMP_EQ,bitPosition, ConstantInt::get(Rvalue->getType(), -1));
             bitPosition = createSelectFolder(builder, isPositionUnset, tmpPosition, bitPosition);
 
-            // Decrement index for next iteration
+            
             index = createSubFolder(builder, index, oneVal);
         }
 
-        // Set the result into the destination operand
+        
         SetOperandValue(context, builder, dest, bitPosition);
     }
 
@@ -2765,17 +2784,17 @@ namespace flagOperation {
         auto dest = instruction.operands[0];
         auto src = instruction.operands[1];
 
-        // Get value for source operand
+        
         Value* Rvalue = GetOperandValue(context, builder, src, src.size);
 
-        // Check if source is zero and set the zero flag accordingly
+        
         Value* isZero = createICMPFolder(builder, CmpInst::ICMP_EQ,Rvalue, ConstantInt::get(Rvalue->getType(), 0));
         setFlag(context, builder, FLAG_ZF, isZero);
 
         Type* intType = Rvalue->getType();
         uint64_t intWidth = intType->getIntegerBitWidth();
 
-        Value* result = ConstantInt::get(intType, intWidth); // Default to max width indicating no bits found
+        Value* result = ConstantInt::get(intType, intWidth); 
         Value* one = ConstantInt::get(intType, 1);
 
         Value* continuecounting = ConstantInt::get(Type::getInt1Ty(context), 1);
@@ -2792,7 +2811,7 @@ namespace flagOperation {
             result = createSelectFolder(builder, condition, result, possibleResult, "updateResultOnFirstNonZeroBit");
         }
 
-        // Store the result in the destination operand
+        
         SetOperandValue(context, builder, dest, result);
     }
 
@@ -2801,30 +2820,30 @@ namespace flagOperation {
 
 
     void lift_btc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Assuming the first operand is the destination and the second is the bit index
+        
         auto dest = instruction.operands[0];
         auto bitIndex = instruction.operands[1];
 
-        // Retrieve the values
+        
         auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
         auto bitIndexValue = GetOperandValue(context, builder, bitIndex, bitIndex.size);
 
-        // Calculate the modulo of the bit index
+        
         auto adjustedBitIndexValue = builder.CreateURem(bitIndexValue, ConstantInt::get(bitIndexValue->getType(), Lvalue->getType()->getIntegerBitWidth()));
 
         adjustedBitIndexValue = createZExtOrTruncFolder(builder,adjustedBitIndexValue, Lvalue->getType(), "castedBitIndex");
 
-        // Create a mask to test the bit
+        
         auto mask = createShlFolder(builder,ConstantInt::get(Lvalue->getType(), 1), adjustedBitIndexValue, "btc-mask");
 
-        // Test the bit by performing bitwise AND
+        
         auto testValue = createAndFolder(builder,Lvalue, mask, "btc-and");
         auto isBitSet = createICMPFolder(builder, CmpInst::ICMP_NE,testValue, ConstantInt::get(Lvalue->getType(), 0));
 
-        // Toggle the bit by using XOR
+        
         auto resultValue = createXorFolder(builder,Lvalue, mask, "btc-xor");
 
-        // Update the operand with the result
+        
         SetOperandValue(context, builder, dest, resultValue);
         setFlag(context, builder, FLAG_CF, isBitSet);
     }
@@ -2842,18 +2861,30 @@ namespace flagOperation {
         auto pf = getFlag(context, builder, FLAG_PF);
         auto cf = getFlag(context, builder, FLAG_CF);
 
-        Value* Rvalue = createOrFolder(builder,
-            createShlFolder(builder,sf, 7),
-            createOrFolder(builder,
-                createShlFolder(builder,zf, 6),
-                createOrFolder(builder,
-                    createShlFolder(builder,af, 4),
-                    createOrFolder(builder,
-                        createShlFolder(builder,pf, 2), cf, "lahf-or-3"), "lahf-or-2"), "lahf-or1"), "lahf-or");
+        
 
+
+        printvalue(sf)
+        printvalue(zf)
+        printvalue(af)
+        printvalue(pf)
+        printvalue(cf)
+
+        cf = createZExtFolder(builder,cf,Type::getInt8Ty(context));
+        pf = createShlFolder(builder, createZExtFolder(builder, pf, Type::getInt8Ty(context)), FLAG_PF);
+        af = createShlFolder(builder, createZExtFolder(builder, af, Type::getInt8Ty(context)), FLAG_AF);
+        zf = createShlFolder(builder, createZExtFolder(builder, zf, Type::getInt8Ty(context)), FLAG_ZF);
+        sf = createShlFolder(builder, createZExtFolder(builder, sf, Type::getInt8Ty(context)), FLAG_SF);
+        Value* Rvalue = createOrFolder(builder,createOrFolder(builder,createOrFolder(builder,cf, pf), createOrFolder(builder, af, sf)) , sf);
+
+        printvalue(sf)
+        printvalue(zf)
+        printvalue(af)
+        printvalue(pf)
+        printvalue(cf)
 
         SetRegisterValue(context, builder, ZYDIS_REGISTER_AH, Rvalue);
-
+        
 
     }
 
@@ -2862,31 +2893,18 @@ namespace flagOperation {
 
         setFlag(context, builder, FLAG_CF, ConstantInt::get(Type::getInt1Ty(context), 1) );
 
-        //auto flags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+        
 
-        //auto Rvalue = createAndFolder(builder,flags, ConstantInt::get(flags->getType(), 1), "stc-and");
+        
 
 
-        //SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, Rvalue);
+        
 
 
     }
 
     void lift_cmc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        /*
-        Value* eflags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS); // Or ZYDIS_REGISTER_RFLAGS for 64-bit
 
-        // Get the CF bit
-        Value* cf = getFlag(context, builder, FLAG_CF);
-
-        // Toggle the CF bit (complement)
-        Value* toggledCF = createXorFolder(builder,cf, ConstantInt::get(cf->getType(), 1), "cmd-xor");
-
-        // Set the toggled value back into the EFLAGS/RFLAGS register
-        Value* updatedEflags = setFlag(context, builder, FLAG_CF, toggledCF);
-
-        SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, updatedEflags); // Or ZYDIS_REGISTER_RFLAGS for 64-bit
-        */
 
         Value* cf = getFlag(context, builder, FLAG_CF);
         Value* one = ConstantInt::get(cf->getType(), 1);
@@ -2895,46 +2913,46 @@ namespace flagOperation {
     }
     void lift_clc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
-        //Value* eflags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS); // Or ZYDIS_REGISTER_RFLAGS for 64-bit
+        
 
-        // Clear the CF bit
+        
         Value* clearedCF = ConstantInt::get(Type::getInt1Ty(context), 0);
 
-        // Set the cleared CF value into the EFLAGS/RFLAGS register
+        
         setFlag(context, builder, FLAG_CF, clearedCF);
 
-        //SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, updatedEflags); // Or ZYDIS_REGISTER_RFLAGS for 64-bit
+        
 
     }
 
     void lift_cld(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
-        //Value* eflags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS); // Or ZYDIS_REGISTER_EFLAGS for 32-bit
+        
 
-        // Clear the DF bit
+        
         Value* clearedDF = ConstantInt::get(Type::getInt1Ty(context), 0);
 
-        // Set the cleared value back into the EFLAGS/RFLAGS register
+        
         Value* updatedEflags = setFlag(context, builder, FLAG_DF, clearedDF);
 
-        //SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, updatedEflags); // Or ZYDIS_REGISTER_EFLAGS for 32-bit
+        
     }
 
 
     void lift_cli(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
-        //Value* eflags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS); // Or ZYDIS_REGISTER_RFLAGS for 64-bit
+        
 
-        // Get the CF bit
-        //Value* intf = getFlag(context, builder, FLAG_IF);
+        
+        
 
-        // Toggle the CF bit (complement)
+        
         Value* resetIF = ConstantInt::get(Type::getInt1Ty(context), 0);
 
-        // Set the toggled value back into the EFLAGS/RFLAGS register
+        
         Value* updatedEflags = setFlag(context, builder, FLAG_IF, resetIF);
 
-        //SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, updatedEflags); // Or ZYDIS_REGISTER_RFLAGS for 64-bit
+        
 
 
     }
@@ -2942,27 +2960,27 @@ namespace flagOperation {
         auto base = instruction.operands[0];
         auto offset = instruction.operands[1];
 
-        // Convert the offset into a bit offset
-        unsigned baseBitWidth = base.size; // assuming base.size is in bytes
+        
+        unsigned baseBitWidth = base.size; 
 
-        // Convert the offset into a bit offset
+        
         Value* bitOffset = GetOperandValue(context, builder, offset, offset.size);
 
-        // Mask bitOffset to prevent undefined behavior due to shifting with too large values
+        
         Value* bitOffsetMasked = createAndFolder(builder,bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1), "bitOffsetMasked");
 
-        // Extract the bit from the base operand
+        
         Value* baseVal = GetOperandValue(context, builder, base, base.size);
         Value* bit = createLShrFolder(builder,baseVal, bitOffsetMasked, "bts-lshr-" + to_string(instruction.runtime_address) + "-");
         Value* one = ConstantInt::get(bit->getType(), 1);
         bit = createAndFolder(builder,bit, one, "bts-and");
 
-        // Set the CF in EFLAGS/RFLAGS based on the extracted bit
-        //Value* eflags = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
+        
+        
         setFlag(context, builder, FLAG_CF, bit);
-        //SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, eflags);
+        
 
-        // Set the bit in the base operand
+        
         Value* mask = createShlFolder(builder,ConstantInt::get(baseVal->getType(), 1), bitOffsetMasked, "bts-shl");
         baseVal = createOrFolder(builder,baseVal, mask, "bts-or-" + to_string(instruction.runtime_address) + "-");
         SetOperandValue(context, builder, base, baseVal);
@@ -2970,71 +2988,71 @@ namespace flagOperation {
 
 
     void lift_cwd(LLVMContext& context, IRBuilder<>& builder) {
-        // Get the AX register value
+        
         Value* ax = builder.CreateTrunc(GetRegisterValue(context, builder, ZYDIS_REGISTER_AX), Type::getInt16Ty(context));
 
-        // Right shift by 15 to isolate the sign bit of AX
+        
         Value* signBit = builder.CreateAShr(ax, ConstantInt::get(Type::getInt16Ty(context), 15), "getSignBit");
 
-        // If AX was positive or zero, signBit is now 0; if negative, signBit is now 1.
-        // Use signBit to set DX to either 0x0000 (for 0) or 0xFFFF (for 1).
+        
+        
         Value* dx = createSelectFolder(builder,
             createICMPFolder(builder, CmpInst::ICMP_EQ,signBit, ConstantInt::get(Type::getInt16Ty(context), 0)),
             ConstantInt::get(Type::getInt16Ty(context), 0),
             ConstantInt::get(Type::getInt16Ty(context), 0xFFFF),
             "setDX");
 
-        // Store the result back to DX
+        
         SetRegisterValue(context, builder, ZYDIS_REGISTER_DX, dx);
     }
     void lift_cqo(LLVMContext& context, IRBuilder<>& builder) {
-        // Retrieve the RAX register's value
+        
         Value* rax = GetRegisterValue(context, builder, ZYDIS_REGISTER_RAX);
 
-        // Extract the sign bit (MSB) of RAX
-        Value* msb = createLShrFolder(builder, createZExtFolder(builder,rax,Type::getInt64Ty(context) ), 63, "cqo-msb");  // 63 for a 64-bit register
+        
+        Value* msb = createLShrFolder(builder, createZExtFolder(builder,rax,Type::getInt64Ty(context) ), 63, "cqo-msb");  
         Value* one = ConstantInt::get(msb->getType(), 1);
         msb = createAndFolder(builder,msb, one, "cqo-and");
         
-        // If the MSB is 1, RDX will be all 1's, otherwise, all 0's.
-        // This can be achieved by sign extending the MSB to 64 bits.
+        
+        
         Value* rdx = createSExtFolder(builder,msb, Type::getInt64Ty(context));
 
-        // Update the RDX register with the computed value
+        
         SetRegisterValue(context, builder, ZYDIS_REGISTER_RDX, rdx);
     }
 
 
     void lift_cbw(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        // Assuming you have a method to get the AL register value
+        
         Value* al = builder.CreateTrunc(GetRegisterValue(context, builder, ZYDIS_REGISTER_AL), Type::getInt8Ty(context));
 
-        // Sign extend AL to 16 bits (i.e., AX's size)
+        
         Value* ax = createSExtFolder(builder,al, Type::getInt16Ty(context), "cbw");
 
-        // Store the result back to AX
+        
         SetRegisterValue(context, builder, ZYDIS_REGISTER_AX, ax);
     }
 
     void lift_cwde(LLVMContext& context, IRBuilder<>& builder) {
-        // Get the AX register value
+        
         Value* ax = builder.CreateTrunc(GetRegisterValue(context, builder, ZYDIS_REGISTER_AX), Type::getInt16Ty(context));
 
-        // Sign extend AX to 32 bits (i.e., EAX's size)
+        
         Value* eax = createSExtFolder(builder,ax, Type::getInt32Ty(context), "cwde");
 
-        // Store the result back to EAX
+        
         SetRegisterValue(context, builder, ZYDIS_REGISTER_EAX, eax);
     }
 
     void lift_cdqe(LLVMContext& context, IRBuilder<>& builder) {
-        // Get the EAX register value
+        
         Value* eax = createZExtOrTruncFolder(builder,GetRegisterValue(context, builder, ZYDIS_REGISTER_EAX), Type::getInt32Ty(context), "cdqe-trunc");
 
-        // Sign extend EAX to 64 bits (i.e., RAX's size)
+        
         Value* rax = createSExtFolder(builder,eax, Type::getInt64Ty(context), "cdqe");
 
-        // Store the result back to RAX
+        
         SetRegisterValue(context, builder, ZYDIS_REGISTER_RAX, rax);
     }
 

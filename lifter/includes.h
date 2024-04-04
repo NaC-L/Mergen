@@ -6,9 +6,22 @@
 #define ZYDIS_STATIC_BUILD
 #endif // ZYDIS_STATIC_BUILD
 #ifndef NDEBUG
-#define NDEBUG
+#undef NDEBUG
 #endif
-#define _DEVELOPMENT
+//#define _DEVELOPMENT
+
+
+
+#ifdef _DEVELOPMENT
+#define printvalue(x) \
+    outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
+
+#define printvalue2(x) \
+    outs() << " " #x " : " << x << "\n";  outs().flush();
+#else
+#define printvalue(x) ((void)0);
+#define printvalue2(x) ((void)0);
+#endif
 
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)
@@ -277,6 +290,7 @@ enum Flag {
     FLAG_RES29 = 29, //  Reserved, typically not used by programs
     FLAG_AES = 30, // AES key schedule loaded flag
     FLAG_AI = 31, // Alternate Instruction Set enabled
+    // reserved above 32-63
     FLAGS_END = 64
 };
 
@@ -295,6 +309,6 @@ enum ROP_info {
 
 enum JMP_info {
     JOP_jmp = 0,
-    REAL_jmp = 1,
+    JOP_jmp_unsolved = 1,
 };
 
