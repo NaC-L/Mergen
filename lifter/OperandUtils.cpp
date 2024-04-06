@@ -20,6 +20,7 @@ void initBases2(void* file_base, ZyanU8* data) {
 #define TESTFOLDERshr
 #endif
 
+
 KnownBits analyzeValueKnownBits(llvm::Value* value, const llvm::DataLayout& DL) {
 	KnownBits knownBits;
 
@@ -67,12 +68,6 @@ Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 #endif
 	return builder.CreateSub(LHS, RHS, Name);
 }
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Type.h"
-#include "llvm/Support/KnownBits.h"
-
-using namespace llvm;
 
 Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
@@ -81,20 +76,7 @@ Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 	if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
 		return nullptr;
-
-	APInt shiftAmount = RHS.getConstant();
-	unsigned shiftSize = shiftAmount.getZExtValue();
-
-	if (shiftSize >= LHS.getBitWidth())
-		return nullptr;
-
-	KnownBits result(LHS.getBitWidth());
-	result.One = LHS.One.lshr(shiftSize);
-	result.Zero = LHS.Zero.lshr(shiftSize) | APInt::getHighBitsSet(LHS.getBitWidth(), shiftSize);
-
-	if (!(result.Zero | result.One).isAllOnes()) {
-		return nullptr;
-	}
+	auto result = KnownBits::lshr(LHS, RHS);
 
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), result.getConstant());
 }
@@ -103,19 +85,7 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
 		return nullptr;
 
-	APInt shiftAmount = RHS.getConstant();
-	unsigned shiftSize = shiftAmount.getZExtValue();
-
-	if (shiftSize >= LHS.getBitWidth())
-		return nullptr;
-
-	KnownBits result(LHS.getBitWidth());
-	result.One = LHS.One.shl(shiftSize);
-	result.Zero = LHS.Zero.shl(shiftSize) | APInt::getLowBitsSet(LHS.getBitWidth(), shiftSize);
-
-	if (result.hasConflict() || !result.isConstant()) {
-		return nullptr;
-	}
+	auto result = KnownBits::shl(LHS, RHS);
 
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), result.getConstant());
 }
@@ -219,7 +189,6 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine&
 	if (Value* knownBitsAnd = foldOrKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
 		return knownBitsAnd;
 	}
-
 #endif
 
 
@@ -328,14 +297,17 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 
 // - probably not needed anymore
 Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
+	Value* resulttrunc = builder.CreateTrunc(V, DestTy, Name);
 #ifdef TESTFOLDER7
-	if (TruncInst* truncInst = dyn_cast<TruncInst>(V)) {
-		Value* originalValue = truncInst->getOperand(0);
-
-		return builder.CreateTrunc(originalValue, DestTy, Name);
-	}
+	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	KnownBits KnownRHS = analyzeValueKnownBits(resulttrunc, DL);
+	printvalue(resulttrunc)
+	printvalue(V)
+	printvalue2(KnownRHS)
+	if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 && KnownRHS.isConstant())
+		return ConstantInt::get(DestTy, KnownRHS.getConstant());
 #endif
-	return builder.CreateTrunc(V, DestTy, Name);
+	return resulttrunc;
 }
 
 // - probably not needed anymore
@@ -349,34 +321,8 @@ Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twin
 
 
 
-
-
-
-
-
-
-
-
-
-	if (auto* TruncInsts = dyn_cast<TruncInst>(V)) {
-		Value* OriginalValue = TruncInsts->getOperand(0);
-		Type* OriginalType = OriginalValue->getType();
-
-		if (OriginalType->getIntegerBitWidth() == DestTy->getIntegerBitWidth()) {
-			return OriginalValue;
-		}
-
-
-	}
-
-	if (auto* ConstInt = dyn_cast<ConstantInt>(V)) {
-		return ConstantInt::get(DestTy, ConstInt->getValue().zextOrTrunc(DestTy->getIntegerBitWidth()));
-	}
-
-	if (auto* ZExtInsts = dyn_cast<ZExtInst>(V)) {
-		return builder.CreateZExt(ZExtInsts->getOperand(0), DestTy, Name);
-}
 #endif
+
 	return builder.CreateZExt(V, DestTy, Name);
 }
 
@@ -1246,6 +1192,8 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			outs().flush();
 #endif
 
+			// if effectiveAddress is not pointing at stack, its probably self modifying code
+			// if effectiveAddress and value is consant we can say its a self modifying code and modify the binary
 			if (isa<ConstantInt>(effectiveAddress) ) {
 
 				ConstantInt* effectiveAddressInt = cast<ConstantInt>(effectiveAddress);
