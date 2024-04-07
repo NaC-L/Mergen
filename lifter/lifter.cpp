@@ -247,5 +247,5 @@ int main(int argc, char* argv[])
     auto elapsed = std::chrono::high_resolution_clock::now() - start;
     long long microseconds = std::chrono::duration_cast<std::chrono::microseconds>(
         elapsed).count();
-    cout << "\n" << dec << microseconds << " microsecond has past";
+    cout << "\n" << dec << microseconds << " microsecond has past" << endl;
 }
