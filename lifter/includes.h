@@ -5,8 +5,24 @@
 #ifndef ZYDIS_STATIC_BUILD
 #define ZYDIS_STATIC_BUILD
 #endif // ZYDIS_STATIC_BUILD
+#ifndef NDEBUG
 #define NDEBUG
-#define _DEVELOPMENT
+#endif
+//#define _DEVELOPMENT
+
+
+
+#ifdef _DEVELOPMENT
+#define printvalue(x) \
+    outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
+
+#define printvalue2(x) \
+    outs() << " " #x " : " << x << "\n";  outs().flush();
+#else
+#define printvalue(x) ((void)0);
+#define printvalue2(x) ((void)0);
+#endif
+
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)
 #include <iostream>
@@ -38,6 +54,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/Scalar/DeadStoreElimination.h"
@@ -60,6 +77,7 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
@@ -224,10 +242,12 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 
+
+
 using namespace std;
 using namespace llvm;
 #define RIP 0x007FFFFFFF400000
-#define STACKP_VALUE 0x0000000000200000
+#define STACKP_VALUE 0x14FE98
 
 enum FlagOperation {
 	SET_VALUE,
@@ -270,7 +290,8 @@ enum Flag {
     FLAG_RES29 = 29, //  Reserved, typically not used by programs
     FLAG_AES = 30, // AES key schedule loaded flag
     FLAG_AI = 31, // Alternate Instruction Set enabled
-    FLAGS_END = 32
+    // reserved above 32-63
+    FLAGS_END = 64
 };
 
 
@@ -288,6 +309,6 @@ enum ROP_info {
 
 enum JMP_info {
     JOP_jmp = 0,
-    REAL_jmp = 1,
+    JOP_jmp_unsolved = 1,
 };
 
