@@ -16,20 +16,42 @@ void initBases2(void* file_base, ZyanU8* data) {
 #define TESTFOLDER4
 #define TESTFOLDER5
 #define TESTFOLDER6
+#define TESTFOLDER7
+#define TESTFOLDER8
 #define TESTFOLDERshl
 #define TESTFOLDERshr
 #endif
 
 
-KnownBits analyzeValueKnownBits(llvm::Value* value, const llvm::DataLayout& DL) {
-	KnownBits knownBits;
-
+KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL) {
+	KnownBits knownBits(64);
+	knownBits.resetAll();
 	if (value->getType() == Type::getInt128Ty(value->getContext()))
 		return knownBits;
-	computeKnownBits(value, knownBits, DL, 0);
-	return knownBits;
+	
+
+	return computeKnownBits(value, DL, 3);
 }
 
+Value* simplifyValue(Value* v, const DataLayout& DL) {
+	
+	if (!isa<Instruction>(v))
+		return v;
+
+	Instruction* inst = cast<Instruction>(v);
+
+
+	SimplifyQuery SQ(DL,inst);
+
+	if (auto x = simplifyInstruction(inst, SQ)) {
+		/*
+		if (isa<PoisonValue>(x)) // if poison it should be 0 for shifts, can other operations generate poison without a poison value anyways?
+			return ConstantInt::get(v->getType(), 0);
+			*/
+		return x;
+	}
+	return v;
+}
 
 Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* False, const Twine& Name = "") {
 #ifdef TESTFOLDER
@@ -44,8 +66,9 @@ Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* Fa
 			}
 		}
 	}
-#endif
-	return builder.CreateSelect(C, True, False, Name);
+#endif	
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	return simplifyValue(builder.CreateSelect(C, True, False, Name), DL);
 }
 Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER3
@@ -57,7 +80,8 @@ Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 		if (RHSConst->isZero()) return LHS;
 	}
 #endif
-	return builder.CreateAdd(LHS, RHS, Name);
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	return simplifyValue( builder.CreateAdd(LHS, RHS, Name), DL);
 }
 
 Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
@@ -65,8 +89,9 @@ Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isZero()) return LHS;
 	}
-#endif
-	return builder.CreateSub(LHS, RHS, Name);
+#endif	
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	return simplifyValue( builder.CreateSub(LHS, RHS, Name) , DL);
 }
 
 Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -76,7 +101,20 @@ Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 	if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
 		return nullptr;
-	auto result = KnownBits::lshr(LHS, RHS);
+
+	APInt shiftAmount = RHS.getConstant();
+	unsigned shiftSize = shiftAmount.getZExtValue();
+
+	if (shiftSize >= LHS.getBitWidth())
+		return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), 0);;
+
+	KnownBits result(LHS.getBitWidth());
+	result.One = LHS.One.lshr(shiftSize);
+	result.Zero = LHS.Zero.lshr(shiftSize) | APInt::getHighBitsSet(LHS.getBitWidth(), shiftSize);
+
+	if (!(result.Zero | result.One).isAllOnes()) {
+		return nullptr;
+	}
 
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), result.getConstant());
 }
@@ -85,16 +123,30 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
 		return nullptr;
 
-	auto result = KnownBits::shl(LHS, RHS);
+	APInt shiftAmount = RHS.getConstant();
+	unsigned shiftSize = shiftAmount.getZExtValue();
+
+	if (shiftSize >= LHS.getBitWidth())
+		return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), 0);
+
+	KnownBits result(LHS.getBitWidth());
+	result.One = LHS.One.shl(shiftSize);
+	result.Zero = LHS.Zero.shl(shiftSize) | APInt::getLowBitsSet(LHS.getBitWidth(), shiftSize);
+
+	if (result.hasConflict() || !result.isConstant()) {
+		return nullptr;
+	}
 
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), result.getConstant());
 }
 
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDERshl
 
 
-	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+
 
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
@@ -106,15 +158,15 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 #endif
 
 
-
-	return builder.CreateShl(LHS, RHS, Name);
+	return simplifyValue( builder.CreateShl(LHS, RHS, Name), DL);
 }
 
 Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDERshr
 
 
-	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
@@ -126,8 +178,7 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twin
 #endif
 
 
-
-	return builder.CreateLShr(LHS, RHS, Name);
+	return simplifyValue(builder.CreateLShr(LHS, RHS, Name),DL);
 }
 
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name = "") {
@@ -150,7 +201,7 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine
 
 Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
-	if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() || RHS.isUnknown() || LHS.getBitWidth() != RHS.getBitWidth() || !RHS.isConstant() || LHS.getBitWidth() <= 1 || RHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
+	if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() || RHS.isUnknown() || LHS.getBitWidth() != RHS.getBitWidth() || !RHS.isConstant() || LHS.getBitWidth() <= 1 || RHS.getBitWidth() < 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
 		return nullptr;
 	}
 
@@ -160,7 +211,7 @@ Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	combined.One = LHS.One | RHS.One;
 	combined.Zero = LHS.Zero & RHS.Zero;
 
-	if (!(combined.Zero | combined.One).isAllOnes() || combined.getBitWidth() <= 1) {
+	if (!combined.isConstant() || combined.hasConflict()) {
 		return nullptr;
 	}
 
@@ -170,6 +221,7 @@ Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 
 Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER5
 
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
@@ -178,7 +230,6 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine&
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isZero()) return LHS;
 	}
-	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
@@ -192,10 +243,24 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine&
 #endif
 
 
-
-	return builder.CreateOr(LHS, RHS, Name);
+	return simplifyValue( builder.CreateOr(LHS, RHS, Name),DL );
 }
 
+
+Value* foldXorKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
+
+
+	if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() || RHS.isUnknown() || !RHS.isConstant() || LHS.getBitWidth() != RHS.getBitWidth() || RHS.getBitWidth() <= 1 || LHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
+		return nullptr;
+	}
+
+	if (!((LHS.Zero | LHS.One) & RHS.One).eq(RHS.One)) { 
+		return nullptr;
+	}
+	APInt resultValue = LHS.One ^ RHS.One;
+
+	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), resultValue);
+}
 
 Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER6
@@ -206,8 +271,18 @@ Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isZero()) return LHS;
 	}
+
+
 #endif
-	return builder.CreateXor(LHS, RHS, Name);
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
+	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+
+
+	if (auto V = foldXorKnownBits(builder.getContext(), KnownLHS, KnownRHS))
+		return V;
+
+	return simplifyValue(builder.CreateXor(LHS, RHS, Name), DL);
 }
 
 std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS, KnownBits RHS) {
@@ -239,7 +314,7 @@ std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS, KnownBits
 }
 
 Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS, Value* RHS, const Twine& Name = "") {
-	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
@@ -247,7 +322,7 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS, 
 		return ConstantInt::get(Type::getInt1Ty(builder.getContext()), v.value());
 	}
 
-	return builder.CreateICmp(P, LHS, RHS, Name);
+	return simplifyValue( builder.CreateICmp(P, LHS, RHS, Name), DL);
 }
 
 Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -280,7 +355,7 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 		if (RHSConst->isMinusOne()) return LHS;
 	}
 	*/
-	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
@@ -292,38 +367,35 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	}
 
 #endif
-	return builder.CreateAnd(LHS, RHS, Name);
+	return simplifyValue( builder.CreateAnd(LHS, RHS, Name), DL);
 }
 
 // - probably not needed anymore
 Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
 	Value* resulttrunc = builder.CreateTrunc(V, DestTy, Name);
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER7
-	llvm::DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	
 	KnownBits KnownRHS = analyzeValueKnownBits(resulttrunc, DL);
-	printvalue(resulttrunc)
-	printvalue(V)
-	printvalue2(KnownRHS)
 	if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 && KnownRHS.isConstant())
 		return ConstantInt::get(DestTy, KnownRHS.getConstant());
 #endif
-	return resulttrunc;
+	return simplifyValue(resulttrunc, DL);
 }
 
-// - probably not needed anymore
-Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
 
+
+Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
+	auto resultzext = builder.CreateZExt(V, DestTy, Name);
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER8
 
-	if (V->getType() == DestTy) {
-		return V;
-	}
-
-
-
+	KnownBits KnownRHS = analyzeValueKnownBits(resultzext, DL);
+	if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 && KnownRHS.isConstant())
+		return ConstantInt::get(DestTy, KnownRHS.getConstant());
 #endif
 
-	return builder.CreateZExt(V, DestTy, Name);
+	return resultzext;
 }
 
 
@@ -394,30 +466,30 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 	switch (size) {
 
 	case 1: {
-		return llvm::Type::getInt1Ty(context);
+		return Type::getInt1Ty(context);
 	}
 	case 8: {
-		return llvm::Type::getInt8Ty(context);
+		return Type::getInt8Ty(context);
 	}
 
 	case 16: {
-		return llvm::Type::getInt16Ty(context);
+		return Type::getInt16Ty(context);
 	}
 
 	case 32: {
-		return llvm::Type::getInt32Ty(context);
+		return Type::getInt32Ty(context);
 	}
 
 	case 64: {
-		return llvm::Type::getInt64Ty(context);
+		return Type::getInt64Ty(context);
 	}
 
 	case 128: {
-		return llvm::Type::getInt128Ty(context);
+		return Type::getInt128Ty(context);
 	}
 
     default: {
-        return llvm::Type::getIntNTy(context, size);
+        return Type::getIntNTy(context, size);
     }
 
 	}
@@ -426,8 +498,8 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 
 void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
-	auto zero = ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0);
-	auto one = ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 1);
+	auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
+	auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
 
 	FlagList[FLAG_CF] = zero;
 	FlagList[FLAG_PF] = zero;
@@ -445,9 +517,7 @@ void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 
 Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
 	newValue = createTruncFolder(builder,newValue, Type::getInt1Ty(context));
-#ifdef _DEVELOPMENT
-	outs() << "flag set: " << flag << " "; newValue->print(outs()); outs() << "\n"; outs().flush();
-#endif
+
 	if (flag == FLAG_RESERVED1 
 		|| flag == FLAG_RESERVED5
 		|| flag == FLAG_IF
@@ -455,7 +525,7 @@ Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* new
 		)
 		return nullptr;
 
-	auto one = ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 1);
+	auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
 
 	return FlagList[flag] = newValue;
 
@@ -463,7 +533,7 @@ Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* new
 Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 	if (FlagList[flag])
 		return FlagList[flag];
-	return ConstantInt::getSigned(llvm::Type::getInt1Ty(context), 0);
+	return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
 
@@ -476,8 +546,8 @@ Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
 void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
 
 
-	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
-	auto value = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 2); 
+	auto zero = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 0);
+	auto value = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 2); 
 
 	auto flags = RegisterList[ZYDIS_REGISTER_RFLAGS];
 
@@ -505,6 +575,7 @@ void initMemoryAlloc(Value* allocArg) {
 	memoryAlloc = allocArg;
 }
 
+// replace it so that we can select we want rcx, rdx, r8, r9 and rest pushed to stack or everything is unknown
 unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip) {
 
 	int zydisRegister = ZYDIS_REGISTER_RAX; 
@@ -518,7 +589,7 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 			continue;
 		}
 
-		llvm::Argument* arg = &*argIt;
+		Argument* arg = &*argIt;
 		arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
 		
 		if (std::next(argIt) == argEnd) {
@@ -536,8 +607,8 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 
 
 
-	auto zero = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), 0);
-	auto value = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), rip);
+	auto zero = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 0);
+	auto value = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), rip);
 
 	
 	auto new_rip = createAddFolder(builder,zero, value);
@@ -546,7 +617,7 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 
 
 	
-	auto stackvalue = (ConstantInt*)llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context), STACKP_VALUE);
+	auto stackvalue = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE);
 	auto new_stack_pointer = createAddFolder(builder,stackvalue, zero);
 	
 	RegisterList[ZYDIS_REGISTER_RSP] = new_stack_pointer;
@@ -824,8 +895,8 @@ Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDeco
 #include <vector>
 #include <cassert>
 
-using namespace llvm;
 
+// replace it with https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Analysis/MemoryLocation.h#L228 but I think this might be better after build, not while building
 class ValueByteReference {
 public:
 	Value* value;
@@ -862,7 +933,8 @@ public:
 		}
 	}
 
-	Value* retrieveCombinedValue(llvm::IRBuilder<>& builder, unsigned startAddress, unsigned byteCount) {
+	Value* retrieveCombinedValue(IRBuilder<>& builder, unsigned startAddress, unsigned byteCount) {
+		LLVMContext& context = builder.getContext();
 		if (byteCount == 0) return nullptr;
 
 		
@@ -888,6 +960,10 @@ public:
 			return firstSource;
 		}
 
+		// supposed to return 0 if never used, wtf?
+		if (firstSource == nullptr) {
+			return ConstantInt::get( Type::getIntNTy(context,byteCount), 0);
+		}
 
 		Value* result = nullptr;
 
@@ -895,12 +971,12 @@ public:
 			unsigned currentAddress = startAddress + i;
 			if (currentAddress < buffer.size() && buffer[currentAddress] != nullptr) {
 				auto* ref = buffer[currentAddress];
-				llvm::Value* byteValue = extractByte(builder, ref->value, ref->byteOffset);
+				Value* byteValue = extractByte(builder, ref->value, ref->byteOffset);
 				if (!result) {
 					result = createZExtFolder(builder,byteValue, Type::getIntNTy(builder.getContext(), byteCount * 8));
 				}
 				else {
-					llvm::Value* shiftedByteValue = createShlFolder(builder, createZExtFolder(builder,byteValue, Type::getIntNTy(builder.getContext(), byteCount*8) ), llvm::APInt(byteCount * 8, i * 8));
+					Value* shiftedByteValue = createShlFolder(builder, createZExtFolder(builder,byteValue, Type::getIntNTy(builder.getContext(), byteCount*8) ), APInt(byteCount * 8, i * 8));
 					result = createAddFolder(builder,result, shiftedByteValue,"extractbytesthing");
 				}
 			}
@@ -910,13 +986,13 @@ public:
 	}
 
 private:
-	llvm::Value* extractByte(llvm::IRBuilder<>& builder, llvm::Value* value, unsigned byteOffset) {
+	Value* extractByte(IRBuilder<>& builder, Value* value, unsigned byteOffset) {
 		
 		if (!value) {
 			return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
 		}
 		unsigned shiftAmount = byteOffset * 8;
-		llvm::Value* shiftedValue = createLShrFolder(builder,value, llvm::APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
+		Value* shiftedValue = createLShrFolder(builder,value, APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
 		return createTruncFolder(builder,shiftedValue, Type::getInt8Ty(builder.getContext()));
 	}
 };
@@ -941,10 +1017,10 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 		case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
 			ConstantInt* val;
 			if (op.imm.is_signed) {
-				val = (ConstantInt*)llvm::ConstantInt::getSigned(type, op.imm.value.s);
+				val = ConstantInt::getSigned(type, op.imm.value.s);
 			}
 			else {
-				val = llvm::ConstantInt::get(context, llvm::APInt(possiblesize, op.imm.value.u));
+				val = ConstantInt::get(context, APInt(possiblesize, op.imm.value.u));
 			}
 			return val;
 		}
@@ -1097,8 +1173,8 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 	}
 	
 	
-	llvm::APInt maskAPInt = llvm::APInt::getHighBitsSet(existingBitWidth, existingBitWidth - newBitWidth);
-	Value* mask = llvm::ConstantInt::get(context, maskAPInt);
+	APInt maskAPInt = APInt::getHighBitsSet(existingBitWidth, existingBitWidth - newBitWidth);
+	Value* mask = ConstantInt::get(context, maskAPInt);
 
 	
 	Value* maskedExistingValue = createAndFolder(builder,existingValue, mask, "maskedExistingValue");

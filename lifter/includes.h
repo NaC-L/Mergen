@@ -6,7 +6,7 @@
 #define ZYDIS_STATIC_BUILD
 #endif // ZYDIS_STATIC_BUILD
 #ifndef NDEBUG
-#undef NDEBUG
+#define NDEBUG
 #endif
 //#define _DEVELOPMENT
 
