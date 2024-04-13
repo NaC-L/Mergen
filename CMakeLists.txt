@@ -58,13 +58,12 @@ target_include_directories(Zydis PRIVATE
 
 # Target: lifter
 set(lifter_SOURCES
-	"lifter/CustomPasses.cpp"
+	"lifter/CustomPasses.hpp"
 	"lifter/LLVM-init.cpp"
 	"lifter/OperandUtils.cpp"
 	"lifter/ROPdetection.cpp"
 	"lifter/Semantics.cpp"
 	"lifter/lifter.cpp"
-	"lifter/nacibaba_opts.cpp"
 	"lifter/utils.cpp"
 	"lifter/CustomPasses.h"
 	"lifter/LLVM-init.h"
@@ -72,7 +71,6 @@ set(lifter_SOURCES
 	"lifter/ROPdetection.h"
 	"lifter/Semantics.h"
 	"lifter/includes.h"
-	"lifter/nacibaba_opts.h"
 	"lifter/utils.h"
 	cmake.toml
 )
