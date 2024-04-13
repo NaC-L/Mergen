@@ -44,6 +44,7 @@
 #include "llvm/IR/Module.h"
 #include "utils.h"
 
+#include "llvm/Support/KnownBits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/IR/Verifier.h"
