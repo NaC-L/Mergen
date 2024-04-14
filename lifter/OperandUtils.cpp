@@ -42,10 +42,8 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 
 
 	SimplifyQuery SQ(DL,inst);
-	printvalue(inst)
 	if (auto vconstant = ConstantFoldInstruction(inst, DL)) {
 		
-		printvalue(vconstant)
 		return vconstant;
 	}
 
@@ -54,7 +52,6 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 		if (isa<PoisonValue>(x)) // if poison it should be 0 for shifts, can other operations generate poison without a poison value anyways?
 			return ConstantInt::get(v->getType(), 0);
 			*/
-		printvalue(vsimplified)
 		return vsimplified;
 	}	
 
@@ -68,9 +65,12 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 	
 
 	auto loadInst = cast<LoadInst>(v);
-
-	auto effectiveAddress = loadInst->getOperand(loadInst->getNumOperands() - 1);
-
+	printvalue(loadInst)
+	auto GEP = loadInst->getOperand(loadInst->getNumOperands() - 1);
+	printvalue(GEP)
+	auto gepInst = cast<GetElementPtrInst>(GEP);
+	auto effectiveAddress = gepInst->getOperand(gepInst->getNumOperands() - 1);
+	printvalue(effectiveAddress)
 	if (!isa<ConstantInt>(effectiveAddress)) {
 		return v;
 	}
