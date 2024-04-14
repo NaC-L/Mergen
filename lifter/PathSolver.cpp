@@ -645,7 +645,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
     clonedFunc->print(OS);
 #endif
     while (dest == 0) {
-        bool changed = false;
+    /*
+    bool changed = false;
         do {
             changed = false;
 
@@ -672,7 +673,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             }
 
         } while (changed);
-
+        */
 
 
     #ifdef _DEVELOPMENT
@@ -684,7 +685,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
 
-        if (returnInst = dyn_cast<llvm::ReturnInst>(clonedFunc->back().getTerminator())) {
+        if (returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
 
             if (returnInst->getReturnValue() != nullptr) {
 
@@ -697,32 +698,53 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             }
         }
         //clonedFunc->print(outs());
+        std::set<llvm::Instruction*> worklist;
+        std::set<llvm::Instruction*> visited_used;
+
+        // Start with the return instruction
+        worklist.insert(returnInst);
+
+        while (!worklist.empty()) {
+            llvm::Instruction* inst = *worklist.begin();
+            worklist.erase(worklist.begin());
+            visited_used.insert(inst);
+
+
+            for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i) {
+                llvm::Value* operand = inst->getOperand(i);
+                if (llvm::Instruction* opInst = llvm::dyn_cast<llvm::Instruction>(operand)) {
+                    if (visited_used.find(opInst) == visited_used.end()) {
+                        worklist.insert(opInst);
+                    }
+                }
+            }
+        }
+
         Value* value_with_least_possible_values = nullptr;
         unsigned int least_possible_value_value = INT_MAX;
         KnownBits bitsof_least_possible_value(64);
 
-        DataLayout DL(clonedFunc->getParent());
+        DataLayout DL(function->getParent());
 
-        for (auto& BB : *clonedFunc) {
-            for (auto& I : BB) {
-                KnownBits KnownVal = analyzeValueKnownBits(&I, DL);
-                unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) + 1;
-                if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value) {
-                    least_possible_value_value = possible_values;
-                    value_with_least_possible_values = &I;
-                    bitsof_least_possible_value = KnownVal;
-                }
+        for (auto I : visited_used) {
+            KnownBits KnownVal = analyzeValueKnownBits(I, DL);
+            unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) + 1;
 
+            if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value) {
+                least_possible_value_value = possible_values;
+                value_with_least_possible_values = cast<Value>(I);
+                bitsof_least_possible_value = KnownVal;
             }
-        }
 
+        }
+        
         printvalueforce(value_with_least_possible_values)
         printvalueforce2(bitsof_least_possible_value)
             outs() << " possible values: " << least_possible_value_value << " : \n";
         auto possible_values = getPossibleValues(bitsof_least_possible_value, least_possible_value_value - 1);
-        auto original_value = (*rVMap)[value_with_least_possible_values];
+        auto original_value = value_with_least_possible_values;//(*rVMap)[value_with_least_possible_values];
 
-        if (original_value)
+        if (isa<Value>(original_value))
             printvalueforce(original_value);
 
         unsigned max_possible_values = possible_values.size();
@@ -740,50 +762,29 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         // TODO: implement something to remember the choice
         unsigned long long option = 0;
         cin >> option;
-        value_with_least_possible_values->replaceAllUsesWith( ConstantInt::get(value_with_least_possible_values->getType(), possible_values[option]));
-        original_value->replaceAllUsesWith( ConstantInt::get(value_with_least_possible_values->getType(), possible_values[option]));
+        auto newValue = ConstantInt::get(value_with_least_possible_values->getType(), possible_values[option]);
 
-        auto original_inst = (cast<Instruction>(original_value));
-        SimplifyQuery SQ(DL);
 
-        std::queue<Instruction*> toSimplify;
-        std::set<Instruction*> visited; 
+        
 
-        toSimplify.push(original_inst);
-        visited.insert(original_inst);
-        IRBuilder<> builder(original_inst);
-        while (!toSimplify.empty()) {
-            Instruction* inst = toSimplify.front();
-            toSimplify.pop();
-            
-            // replace simplifyInstruction with a custom one, then force GEPLoadPass-ish
-
-            /*if (Instruction* simplifiedInst = dyn_cast_or_null<Instruction>(simplifyValueLater(inst, DL))) {
-                if (simplifiedInst != inst && inst) {
-
-                    if (flippedRegisterMap[inst]) { // if we are using the value actively in our map? 
-                        builder.SetInsertPoint(inst);
-                        SetRegisterValue(inst->getContext(), builder, flippedRegisterMap[inst], simplifiedInst);
-                    }
-                        
-                    printvalue(inst)
-                    printvalue(simplifiedInst)
-                    simplifiedInst->insertBefore(inst);
-                    inst->replaceAllUsesWith(simplifiedInst);
-                    inst->eraseFromParent();
-                    inst = simplifiedInst;
-                }
-            }*/
-
-            for (User* user : inst->users()) {
-                if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                    if (visited.insert(userInst).second) {  
-                        toSimplify.push(userInst);
-                    }
-                }
-            }
+        original_value->replaceAllUsesWith(newValue);
+        
+        // now make this loooooooooooooppppp
+        for (auto user : newValue->users()) {
+            printvalue(user)
+            auto nsv = simplifyValueLater(user, DL);
+            printvalue(nsv)
+            // yes return the same value very good idea definitely doesnt break anything
+            if (user != nsv)
+                user->replaceAllUsesWith(nsv);
 
         }
+
+        SimplifyQuery SQ(DL);
+
+
+     
+            
         std::string Filename3 = "output_trysolve2.ll";
         std::error_code EC3;
         raw_fd_ostream OS3(Filename3, EC3);

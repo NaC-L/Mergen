@@ -42,22 +42,30 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 
 
 	SimplifyQuery SQ(DL,inst);
+	printvalue(inst)
+	if (auto vconstant = ConstantFoldInstruction(inst, DL)) {
+		
+		printvalue(vconstant)
+		return vconstant;
+	}
 
-	if (auto x = simplifyInstruction(inst, SQ)) {
+	if (auto vsimplified = simplifyInstruction(inst, SQ)) {
 		/*
 		if (isa<PoisonValue>(x)) // if poison it should be 0 for shifts, can other operations generate poison without a poison value anyways?
 			return ConstantInt::get(v->getType(), 0);
 			*/
-		return x;
-	}
+		printvalue(vsimplified)
+		return vsimplified;
+	}	
+
 	return v;
 }
 
 Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 
-	if (!isa<LoadInst>(v)) {
+	if (!isa<LoadInst>(v)) 
 		return simplifyValue(v, DL);
-	}
+	
 
 	auto loadInst = cast<LoadInst>(v);
 
@@ -625,9 +633,9 @@ unordered_map<Value*, int> flipRegisterMap() {
 	for (const auto& pair : RegisterList) {
 		RevMap[pair.second] = pair.first;
 	}
-	for (const auto& pair : FlagList) {
+	/*for (const auto& pair : FlagList) {
 		RevMap[pair.second] = pair.first;
-	}
+	}*/
 	return RevMap;
 }
 
@@ -638,11 +646,11 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 	auto argEnd = function->arg_end();
 	for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
 
-		if ((zydisRegister == ZYDIS_REGISTER_RSP) || (zydisRegister == ZYDIS_REGISTER_ESP)) {
+		/*if ((zydisRegister == ZYDIS_REGISTER_RSP) || (zydisRegister == ZYDIS_REGISTER_ESP)) {
 			
 			zydisRegister++;
 			continue;
-		}
+		}*/
 
 		Argument* arg = &*argIt;
 		arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
@@ -1244,6 +1252,9 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 
 
 Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address = "") {
+
+	value = simplifyValue(value, builder.GetInsertBlock()->getParent()->getParent()->getDataLayout() );
+
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
 			SetRegisterValue(context, builder, op.reg.value, value);

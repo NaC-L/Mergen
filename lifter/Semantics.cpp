@@ -76,76 +76,6 @@ Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x < 0 = sf
 
 
 // this function is used for jumps that are related to user, ex: vms using different handlers, jmptables, etc.
-void jumpHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses) {
-
-    // TODO: 
-    // save the current state of memory, registers etc., 
-    // after execution is finished, return to latest state ask if want to continue execution, then execute from new address
-
-    // find the value with least possible values (least unknown bits) 
-    // for each unknown bit 2x possible values,
-    // 00?0 = 2
-    // 00?? = 4
-    // print possible values of that value
-    // set that value to something
-
-
-    // set the value and run the optimizations again and again until we have a result
-    // probably move the cond stuff to here aswell
-
-
-
-    auto function = builder.GetInsertBlock()->getParent();
-    /*
-    Value* least_possible_value = nullptr;
-    unsigned int least_possible_value_value = INT_MAX;
-    KnownBits bitsof_least_possible_value(64);
-    */
-    /*
-    // move ret stuff here u donkey
-    DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-    auto retInst = builder.GetInsertBlock()->getTerminator(); // should be last ret
-    printvalueforce(retInst)
-    Value* retvalue = retInst->getOperand( retInst->getNumOperands() - 1 );
-    printvalueforce(retvalue)
-    KnownBits KnownVal = analyzeValueKnownBits(retvalue, DL);
-    outs() << " possible values: " << KnownVal.countMaxSignificantBits();
-    ForeachNumInKnownBits(KnownVal, [&](APInt Value1) {
-        outs() << Value1 << " - ";
-    });
-    */
-    /*
-    for (auto& BB : *function) {
-        for (auto& I : BB) {
-            KnownBits KnownVal = analyzeValueKnownBits(&I, DL);
-
-            if (!KnownVal.isConstant() && !KnownVal.hasConflict() && KnownVal.countMaxSignificantBits() < least_possible_value_value) {
-                least_possible_value_value = KnownVal.countMaxSignificantBits();
-                least_possible_value = &I;
-                bitsof_least_possible_value = KnownVal;
-            }
-
-        }
-    }
-    */
-
-
-    cout << "Which address do you want do jump?, check output_condition.ll file: ";
-    
-    long long address = 0;
-    cin >> address;
-
-    string block_name = "jumpsomewhere-" + to_string(instruction.runtime_address) + "-";;
-    auto bb = BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
-
-
-    SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, ConstantInt::get(Type::getInt64Ty(context), address) );
-    builder.CreateBr(bb);
-
-    blockAddresses->push_back(make_tuple(address, bb, getRegisterList()));
-    return;
-
-}
 
 
 void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, Value* condition, Value* newRip, string instname, int numbered) {
@@ -821,40 +751,6 @@ namespace branches {
 
                 blockAddresses->push_back(make_tuple(destination, bb, getRegisterList()));
                 (*run) = 0;
-            }
-            if (pathInfo == PATH_unsolved) {
-                ValueToValueMapTy VMap;
-                Function* conditionFunction = CloneFunction(function, VMap);
-                std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", function->getContext());
-                conditionFunction->removeFromParent();
-
-                destinationModule->getFunctionList().push_back(conditionFunction);
-#ifdef _DEVELOPMENT
-                std::string Filename_cond = "output_condition_noopt.ll";
-                std::error_code EC_cond;
-                raw_fd_ostream OS_cond(Filename_cond, EC_cond);
-                destinationModule->print(OS_cond, nullptr);
-#endif
-                final_optpass(conditionFunction);
-                std::string Filename = "output_condition.ll";
-                std::error_code EC;
-                raw_fd_ostream OS(Filename, EC);
-                destinationModule->print(OS, nullptr);
-
-                lastinst->eraseFromParent();
-
-                block->setName("previousjmp-" + to_string(instruction.runtime_address) + "-");
-                // if false, continue from runtime_address
-                // if true, continue from runtime_address + dest.imm.value.s
-
-                //builder.CreateCondBr(condition, bb, bb2);
-                //auto placeholder = ConstantInt::get(Type::getInt64Ty(context), 0);
-                //builder.CreateRet(placeholder);
-                //result = createSelectFolder(builder,condition, newRip, ripval);
-
-                // TODO help exploring branches for other stuff
-                // this will be used to explore branches
-                jumpHelper(context, builder, instruction, blockAddresses);
             }
             (*run) = 0;
 
