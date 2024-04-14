@@ -734,7 +734,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         std::string Filename = "output_trysolve.ll";
         std::error_code EC;
         raw_fd_ostream OS(Filename, EC);
-        destinationModule->print(OS, nullptr);
+        function->print(OS, nullptr);
 
         cout << "\nWhich option do you select? ";
         // TODO: implement something to remember the choice
@@ -751,27 +751,29 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
         toSimplify.push(original_inst);
         visited.insert(original_inst);
-
+        IRBuilder<> builder(original_inst);
         while (!toSimplify.empty()) {
             Instruction* inst = toSimplify.front();
             toSimplify.pop();
-
+            
             // replace simplifyInstruction with a custom one, then force GEPLoadPass-ish
 
-            if (Instruction* simplifiedInst = dyn_cast_or_null<Instruction>(simplifyValueLater(inst, DL))) {
+            /*if (Instruction* simplifiedInst = dyn_cast_or_null<Instruction>(simplifyValueLater(inst, DL))) {
                 if (simplifiedInst != inst && inst) {
 
-                    /*if (flippedRegisterMap[inst]) // if we are using the value actively in our map?
-                        SetRegisterValue(,flippedRegisterMap[inst], simplifiedInst)
-                        */
+                    if (flippedRegisterMap[inst]) { // if we are using the value actively in our map? 
+                        builder.SetInsertPoint(inst);
+                        SetRegisterValue(inst->getContext(), builder, flippedRegisterMap[inst], simplifiedInst);
+                    }
+                        
                     printvalue(inst)
                     printvalue(simplifiedInst)
                     simplifiedInst->insertBefore(inst);
                     inst->replaceAllUsesWith(simplifiedInst);
-                    //inst->eraseFromParent();
-                    //inst = simplifiedInst;
+                    inst->eraseFromParent();
+                    inst = simplifiedInst;
                 }
-            }
+            }*/
 
             for (User* user : inst->users()) {
                 if (Instruction* userInst = dyn_cast<Instruction>(user)) {
@@ -782,7 +784,10 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             }
 
         }
-
+        std::string Filename3 = "output_trysolve2.ll";
+        std::error_code EC3;
+        raw_fd_ostream OS3(Filename3, EC3);
+        function->print(outs());
         // receive input, replace the value with received input
         // re-run program
     }

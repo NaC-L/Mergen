@@ -64,7 +64,6 @@ set(lifter_SOURCES
 	"lifter/PathSolver.cpp"
 	"lifter/Semantics.cpp"
 	"lifter/lifter.cpp"
-	"lifter/nacibaba_opts.cpp"
 	"lifter/utils.cpp"
 	"lifter/CustomPasses.h"
 	"lifter/LLVM-init.h"
@@ -72,7 +71,6 @@ set(lifter_SOURCES
 	"lifter/PathSolver.h"
 	"lifter/Semantics.h"
 	"lifter/includes.h"
-	"lifter/nacibaba_opts.h"
 	"lifter/utils.h"
 	cmake.toml
 )
