@@ -730,13 +730,17 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             KnownBits KnownVal = analyzeValueKnownBits(I, DL);
             unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) + 1;
 
-            if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value) {
+            if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value && possible_values > 0) {
                 least_possible_value_value = possible_values;
                 value_with_least_possible_values = cast<Value>(I);
                 bitsof_least_possible_value = KnownVal;
             }
 
         }
+
+        if (least_possible_value_value == 0)
+            throw("something went terribly");
+
         
         printvalueforce(value_with_least_possible_values)
         printvalueforce2(bitsof_least_possible_value)
@@ -770,14 +774,56 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         original_value->replaceAllUsesWith(newValue);
         
         // now make this loooooooooooooppppp
-        for (auto user : newValue->users()) {
-            printvalue(user)
-            auto nsv = simplifyValueLater(user, DL);
-            printvalue(nsv)
-            // yes return the same value very good idea definitely doesnt break anything
-            if (user != nsv)
-                user->replaceAllUsesWith(nsv);
+        queue<Value*> toSimplify;
+        set<Value*> visited;
 
+        for (User* user : newValue->users()) {
+            if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+                toSimplify.push(userInst);
+            }
+        }
+
+        while (!toSimplify.empty()) {
+            auto user = toSimplify.front();
+            toSimplify.pop();
+            
+            auto nsv = simplifyValueLater(user, DL);
+            
+
+            if (isa<GetElementPtrInst>(nsv)) {
+                for (User* user : nsv->users()) {
+                    if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+                        // push if not visited
+                        printvalue(userInst)
+                            if (visited.find(userInst) == visited.end()) {
+                                printvalue(userInst) // if we are inserting, print for 2nd time
+                                    toSimplify.push(userInst);
+                                visited.insert(userInst);
+                            }
+                    }
+                }
+            }
+
+            // yes return the same value very good idea definitely doesnt break anything
+            if (user == nsv) {
+                continue;
+            }
+
+            user->replaceAllUsesWith(nsv);
+            // find a way to make this look not ugly, or dont. idc
+            for (User* user : nsv->users()) {
+                if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+                    // push if not visited
+                    printvalue(userInst)
+                        
+                        if (visited.find(userInst) == visited.end() ) {
+                            printvalue(userInst) // if we are inserting, print for 2nd time
+                            toSimplify.push(userInst);
+                            visited.insert(userInst);
+                        }
+                }
+            }
+            
         }
 
         SimplifyQuery SQ(DL);
