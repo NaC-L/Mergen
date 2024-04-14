@@ -312,3 +312,8 @@ enum JMP_info {
     JOP_jmp_unsolved = 1,
 };
 
+
+enum PATH_info {
+    PATH_unsolved = 0,
+    PATH_solved = 1,
+};
