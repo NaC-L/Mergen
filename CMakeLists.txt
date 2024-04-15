@@ -58,14 +58,13 @@ target_include_directories(Zydis PRIVATE
 
 # Target: lifter
 set(lifter_SOURCES
-	"lifter/CustomPasses.cpp"
+	"lifter/CustomPasses.hpp"
 	"lifter/LLVM-init.cpp"
 	"lifter/OperandUtils.cpp"
 	"lifter/PathSolver.cpp"
 	"lifter/Semantics.cpp"
 	"lifter/lifter.cpp"
 	"lifter/utils.cpp"
-	"lifter/CustomPasses.h"
 	"lifter/LLVM-init.h"
 	"lifter/OperandUtils.h"
 	"lifter/PathSolver.h"

@@ -4,7 +4,7 @@
 #include "LLVM-init.h"
 #include "Semantics.h"
 #include "OperandUtils.h"
-#include "ROPdetection.h"
+#include "PathSolver.h"
 #include "OperandUtils.h"
 #include "nt/nt_headers.hpp"
 #include <cstdlib>
@@ -108,12 +108,6 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
         run = 0;
 
         
-        llvm::ValueToValueMapTy VMap;
-        std::string Filename = "output_noopts.ll";
-        std::error_code EC;
-        llvm::raw_fd_ostream OS(Filename, EC);
-
-        function->print(OS, nullptr);
 
     }
 }
