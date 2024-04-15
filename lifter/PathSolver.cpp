@@ -728,7 +728,12 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
         for (auto I : visited_used) {
             KnownBits KnownVal = analyzeValueKnownBits(I, DL);
-            unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) + 1;
+            unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) * 2;
+
+
+            printvalueforce(I)
+            printvalueforce2(KnownVal)
+            printvalueforce2(possible_values)
 
             if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value && possible_values > 0) {
                 least_possible_value_value = possible_values;
@@ -741,15 +746,13 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         if (least_possible_value_value == 0)
             throw("something went terribly");
 
-        
+
         printvalueforce(value_with_least_possible_values)
         printvalueforce2(bitsof_least_possible_value)
             outs() << " possible values: " << least_possible_value_value << " : \n";
         auto possible_values = getPossibleValues(bitsof_least_possible_value, least_possible_value_value - 1);
         auto original_value = value_with_least_possible_values;//(*rVMap)[value_with_least_possible_values];
 
-        if (isa<Value>(original_value))
-            printvalueforce(original_value);
 
         unsigned max_possible_values = possible_values.size();
         for (unsigned i = 0; i < max_possible_values; i++) {
@@ -770,9 +773,10 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
         
-
+        printvalue2(original_value->getNumUses())
         original_value->replaceAllUsesWith(newValue);
-        
+
+        printvalue2(newValue->getNumUses())
         // now make this loooooooooooooppppp
         queue<Value*> toSimplify;
         set<Value*> visited;
@@ -784,19 +788,20 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         }
 
         while (!toSimplify.empty()) {
-            auto user = toSimplify.front();
+            auto simplifyUser = toSimplify.front();
             toSimplify.pop();
             
-            auto nsv = simplifyValueLater(user, DL);
+            auto nsv = simplifyValueLater(simplifyUser, DL);
             
 
             if (isa<GetElementPtrInst>(nsv)) {
                 for (User* user : nsv->users()) {
+                    //printvalue(user)
                     if (Instruction* userInst = dyn_cast<Instruction>(user)) {
                         // push if not visited
-                        printvalue(userInst)
+                        //printvalue(userInst)
                             if (visited.find(userInst) == visited.end()) {
-                                printvalue(userInst) // if we are inserting, print for 2nd time
+                                //printvalue(userInst) // if we are inserting, print for 2nd time
                                     toSimplify.push(userInst);
                                 visited.insert(userInst);
                             }
@@ -805,13 +810,15 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             }
 
             // yes return the same value very good idea definitely doesnt break anything
-            if (user == nsv) {
+            if (simplifyUser == nsv) {
                 continue;
             }
+            // if can simplify, continue?
 
-            user->replaceAllUsesWith(nsv);
             // find a way to make this look not ugly, or dont. idc
-            for (User* user : nsv->users()) {
+            for (User* user : simplifyUser->users()) {
+                printvalue(nsv)
+                printvalue(user)
                 if (Instruction* userInst = dyn_cast<Instruction>(user)) {
                     // push if not visited
                     printvalue(userInst)
@@ -823,6 +830,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
                         }
                 }
             }
+
+            simplifyUser->replaceAllUsesWith(nsv);
             
         }
 
@@ -834,7 +843,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         std::string Filename3 = "output_trysolve2.ll";
         std::error_code EC3;
         raw_fd_ostream OS3(Filename3, EC3);
-        function->print(outs());
+        //function->print(OS3, EC);
         // receive input, replace the value with received input
         // re-run program
     }
