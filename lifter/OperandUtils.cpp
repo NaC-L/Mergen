@@ -42,16 +42,59 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 
 
 	SimplifyQuery SQ(DL,inst);
+	if (auto vconstant = ConstantFoldInstruction(inst, DL)) {
+		
+		return vconstant;
+	}
 
-	if (auto x = simplifyInstruction(inst, SQ)) {
+	if (auto vsimplified = simplifyInstruction(inst, SQ)) {
 		/*
 		if (isa<PoisonValue>(x)) // if poison it should be 0 for shifts, can other operations generate poison without a poison value anyways?
 			return ConstantInt::get(v->getType(), 0);
 			*/
-		return x;
+		return vsimplified;
+	}	
+
+	return v;
+}
+
+Value* simplifyValueLater(Value* v, const DataLayout& DL) {
+
+	if (!isa<LoadInst>(v)) 
+		return simplifyValue(v, DL);
+	
+
+	auto loadInst = cast<LoadInst>(v);
+	printvalue(loadInst)
+	auto GEP = loadInst->getOperand(loadInst->getNumOperands() - 1);
+	printvalue(GEP)
+	auto gepInst = cast<GetElementPtrInst>(GEP);
+	auto effectiveAddress = gepInst->getOperand(gepInst->getNumOperands() - 1);
+	printvalue(effectiveAddress)
+	if (!isa<ConstantInt>(effectiveAddress)) {
+		return v;
+	}
+
+	ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
+	if (!effectiveAddressInt) return nullptr;
+
+	uintptr_t addr = effectiveAddressInt->getZExtValue();
+	uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
+
+	unsigned byteSize = v->getType()->getIntegerBitWidth() / 8;
+	uintptr_t tempValue;
+
+	if (mappedAddr > 0) {
+		std::memcpy(&tempValue, reinterpret_cast<const void*>(data_g_operand + mappedAddr), byteSize);
+
+		APInt readValue(byteSize * 8, tempValue);
+		Constant* newVal = ConstantInt::get(v->getType(), readValue);
+		if (newVal)
+			return newVal;
 	}
 	return v;
 }
+
 
 Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* False, const Twine& Name = "") {
 #ifdef TESTFOLDER
@@ -151,8 +194,8 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
-	if (Value* knownBitsAnd = foldShlKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-		return knownBitsAnd;
+	if (Value* knownBitsShl = foldShlKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+		return knownBitsShl;
 	}
 
 #endif
@@ -171,8 +214,9 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twin
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
-	if (Value* knownBitsAnd = foldLShrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-		return knownBitsAnd;
+	if (Value* knownBitsLshr = foldLShrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+		printvalue(knownBitsLshr)
+		return knownBitsLshr;
 	}
 
 #endif
@@ -265,6 +309,10 @@ Value* foldXorKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER6
 
+	if (LHS == RHS) {
+		return ConstantInt::get(LHS->getType(), 0);
+	}
+
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
 		if (LHSConst->isZero()) return RHS;
 	}
@@ -341,7 +389,7 @@ Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
 #ifdef TESTFOLDER
-	/*
+	
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
 		if (LHSConst->isZero()) return ConstantInt::get(RHS->getType(), 0);
 	}
@@ -354,7 +402,7 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isMinusOne()) return LHS;
 	}
-	*/
+	
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
@@ -574,8 +622,23 @@ Value* memoryAlloc;
 void initMemoryAlloc(Value* allocArg) {
 	memoryAlloc = allocArg;
 }
+Value* getMemory() {
+	return memoryAlloc;
+}
 
 // replace it so that we can select we want rcx, rdx, r8, r9 and rest pushed to stack or everything is unknown
+
+unordered_map<Value*, int> flipRegisterMap() {
+	unordered_map<Value*, int> RevMap;
+	for (const auto& pair : RegisterList) {
+		RevMap[pair.second] = pair.first;
+	}
+	/*for (const auto& pair : FlagList) {
+		RevMap[pair.second] = pair.first;
+	}*/
+	return RevMap;
+}
+
 unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip) {
 
 	int zydisRegister = ZYDIS_REGISTER_RAX; 
@@ -583,11 +646,11 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 	auto argEnd = function->arg_end();
 	for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
 
-		if ((zydisRegister == ZYDIS_REGISTER_RSP) || (zydisRegister == ZYDIS_REGISTER_ESP)) {
+		/*if ((zydisRegister == ZYDIS_REGISTER_RSP) || (zydisRegister == ZYDIS_REGISTER_ESP)) {
 			
 			zydisRegister++;
 			continue;
-		}
+		}*/
 
 		Argument* arg = &*argIt;
 		arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
@@ -651,9 +714,7 @@ void SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
 		int shiftAmount = flag;
 		Value* shiftedFlagValue = createLShrFolder(builder,value, ConstantInt::get(value->getType(), shiftAmount), "setflag"); 
 		auto flagValue = createTruncFolder(builder,shiftedFlagValue, Type::getInt1Ty(context),"flagtrunc"); 
-#ifdef _DEVELOPMENT
-		outs() << " Flag : " << flag << " : "; flagValue->print(outs()); outs() << "\n"; outs().flush();
-#endif
+
 		setFlag(context, builder, (Flag)flag, flagValue);
 		
 	}
@@ -692,6 +753,7 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
 	}
 	*/
 
+	printvalue(RegisterList[newKey]);
 
 	return RegisterList[newKey];
 
@@ -1190,6 +1252,9 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 
 
 Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address = "") {
+
+	value = simplifyValue(value, builder.GetInsertBlock()->getParent()->getParent()->getDataLayout() );
+
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
 			SetRegisterValue(context, builder, op.reg.value, value);
