@@ -52,3 +52,9 @@ Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* val
 
 void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, vector<Value*> value, string address = "");
 vector<Value*> GetRFLAGS(LLVMContext& context, IRBuilder<>& builder);
+
+Value* getMemory();
+
+KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL);
+Value* simplifyValueLater(Value* v, const DataLayout& DL);
+unordered_map<Value*, int> flipRegisterMap();

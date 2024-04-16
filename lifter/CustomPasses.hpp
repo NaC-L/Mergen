@@ -7,6 +7,7 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Constants.h"
+#include "OperandUtils.h"
 
 
 class RemovePseudoStackPass : public llvm::PassInfoMixin<RemovePseudoStackPass> {
@@ -15,8 +16,7 @@ public:
 
     llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
-
-
+        Value* memory = getMemory();
 
         bool hasChanged = false;
         Value* stackMemory = NULL;
@@ -34,8 +34,20 @@ public:
             for (auto& BB : F) {
                 for (auto& I : BB) {
                     if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
+                        
+                        auto* MemoryOperand = GEP->getOperand(GEP->getNumOperands() - 2);
+                        //printvalue(MemoryOperand)
+                        //printvalue(memory)
+
+                        if (memory != MemoryOperand)
+                            continue; // this is a good(!) solution
 
                         auto* OffsetOperand = GEP->getOperand(GEP->getNumOperands() - 1);
+                        //printvalue(OffsetOperand)
+
+                        if (!isa<ConstantInt>(OffsetOperand))
+                            continue; // ??? also we can use knwonbits here but MEH
+
                         if (auto* ConstInt = llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
                             uintptr_t constintvalue = (uintptr_t)ConstInt->getZExtValue();
                             if (constintvalue < STACKP_VALUE + 100) {

@@ -11,7 +11,6 @@
 //#define _DEVELOPMENT
 
 
-
 #ifdef _DEVELOPMENT
 #define printvalue(x) \
     outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
@@ -23,12 +22,19 @@
 #define printvalue2(x) ((void)0);
 #endif
 
+#define printvalueforce(x) \
+    outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
+
+#define printvalueforce2(x) \
+    outs() << " " #x " : " << x << "\n";  outs().flush();
+
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)
 #include <iostream>
 #include <vector>
 #include <map>
 #include <tuple>
+#include <queue>
 #ifdef _WIN32
 #define NOMINMAX
 #include <Windows.h>
@@ -47,6 +53,7 @@
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
@@ -313,3 +320,8 @@ enum JMP_info {
     JOP_jmp_unsolved = 1,
 };
 
+
+enum PATH_info {
+    PATH_unsolved = 0,
+    PATH_solved = 1,
+};

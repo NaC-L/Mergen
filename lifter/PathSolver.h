@@ -14,3 +14,4 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t& dest);
 
 JMP_info isJOP(Function* function, uintptr_t& dest);
 
+PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename);
