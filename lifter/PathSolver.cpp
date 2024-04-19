@@ -18,6 +18,109 @@ void initDetections(void* file_base, ZyanU8* data) {
     data_g = data;
 }
 
+void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv, unordered_map<Value*, int> rVMap) {
+
+    // if two values are same, we go in a infinite loop
+    if (v == nv)
+        return;
+
+    auto registerV = rVMap[v];
+
+    if (registerV) {
+        if (isa<Instruction>(v)) {
+            auto registerI = cast<Instruction>(v);
+            SetRegisterValue(v->getContext(), registerV, v);
+        }
+    }
+
+
+    v->replaceAllUsesWith(nv);
+
+    v = nv;
+
+}
+
+
+void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> flippedRegisterMap) {
+    set<Value*> visited;
+    std::priority_queue<Instruction*, std::vector<Instruction*>, InstructionDependencyOrder> toSimplify;
+    for (User* user : newValue->users()) {
+        if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+            toSimplify.push(userInst);
+        }
+    }
+
+    while (!toSimplify.empty()) {
+        auto simplifyUser = toSimplify.top();
+        toSimplify.pop();
+        auto nsv = simplifyValueLater(simplifyUser, DL);
+        visited.insert(simplifyUser);
+        printvalueforce(simplifyUser)
+        printvalueforce(nsv)
+
+        if (isa<GetElementPtrInst>(simplifyUser)) {
+            for (User* user : simplifyUser->users()) {
+                //printvalue(user)
+                if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+                    // push if not visited
+                        //printvalueforce(userInst)
+                    if (visited.find(userInst) == visited.end()) {
+                        //printvalue(userInst) // if we are inserting, print for 2nd time
+                        toSimplify.push(userInst);
+                        visited.insert(userInst);
+                    }
+                }
+            }
+        }
+
+        // yes return the same value very good idea definitely wont make replaceAllUsesWith loop
+        if (simplifyUser == nsv) {
+            outs() << " same value? \n";
+            continue;
+        }
+        // if can simplify, continue?
+
+        // find a way to make this look not ugly, or dont. idc
+        for (User* user : simplifyUser->users()) {
+            //printvalue(nsv)
+            //printvalue(user)
+            if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+                //  push if not visited
+                //  printvalue(userInst)
+
+                if (visited.find(userInst) == visited.end()) {
+                    //printvalue(userInst) // if we are inserting, print for 2nd time
+                    toSimplify.push(userInst);
+                    visited.erase(userInst);
+                }
+            }
+        }
+
+        //printvalueforce(simplifyUser, simplify)
+        //printvalueforce(nsv, with)
+
+        replaceAllUsesWithandReplaceRMap(simplifyUser, nsv, flippedRegisterMap);
+        //simplifyUser->replaceAllUsesWith(nsv);
+
+    }
+}
+PATH_info getReturnVal(llvm::Function* function, uint64_t &dest) {
+    PATH_info result = PATH_unsolved;
+    if (auto returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
+        printvalueforce(returnInst)
+            if (returnInst->getReturnValue() != nullptr) {
+
+                if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
+                    printvalueforce(constInt)
+                        dest = constInt->getZExtValue();
+                    result = PATH_solved;
+                    return result;
+                }
+            }
+    }
+    return result;
+}
+
 // https://github.com/llvm/llvm-project/blob/30f6eafaa978b4e0211368976fe60f15fa9f0067/llvm/unittests/Support/KnownBitsTest.h#L38
 /* ex:
 KnownBits Known1;
@@ -575,12 +678,15 @@ ValueMap<const Value*, Value*> mapHoldValues;
 
 
 llvm::ValueToValueMapTy* flipVMap(const ValueToValueMapTy& VMap) {
+    
     ValueToValueMapTy* RevMap = new llvm::ValueToValueMapTy;
     for (const auto& pair : VMap) {
         (*RevMap)[pair.second] = const_cast<Value*>(pair.first);
     }
     return RevMap;
 }
+
+
 
 
 PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) {
@@ -693,21 +799,22 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
 
+        // check if returnInst is solveable?
 
-        if (returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
-            printvalueforce(returnInst)
-            if (returnInst->getReturnValue() != nullptr) {
-
-                if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
-                    printvalueforce(constInt)
-                    dest = constInt->getZExtValue();
-                    result = PATH_solved;
-                    clonedFunc->eraseFromParent();
-                    return result;
-                }
+        
+        // make this into a function?
+        if (PATH_info solved = getReturnVal(function, dest)) {
+            if (solved == PATH_solved) {
+                clonedFunc->eraseFromParent();
+                return solved; 
             }
         }
+
+        
+
         //clonedFunc->print(outs());
+        
+        // here, collect values that build up to the returnValue
         deque<llvm::Instruction*> worklist;
         std::vector<llvm::Instruction*> visited_used;
 
@@ -738,21 +845,38 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         DataLayout DL(function->getParent());
 
         int total_user = 0;
+        // find the VWLPV(value with least possible values) that builds up to the returnValue 
         for (auto I : visited_used) {
 
             total_user++;
             KnownBits KnownVal = analyzeValueKnownBits(I, DL);
             unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) * 2;
 
-            //printvalueforce(I)
+            printvalueforce(I)
             
-
             if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value && possible_values > 0) {
                 least_possible_value_value = possible_values;
                 value_with_least_possible_values = cast<Value>(I);
                 bitsof_least_possible_value = KnownVal;
             }
 
+            // if constant, simplify later users?
+            // simplify it aswell
+            if (KnownVal.isConstant() && !KnownVal.hasConflict()) {
+                printvalueforce(I, simplifying)
+                auto nsv = simplifyValueLater(I, DL);
+                printvalueforce(nsv, simplified)
+                replaceAllUsesWithandReplaceRMap(I, nsv, flippedRegisterMap);
+                simplifyUsers(nsv, DL, flippedRegisterMap);
+            }
+
+        }
+
+        if (PATH_info solved = getReturnVal(function, dest)) {
+            if (solved == PATH_solved) {
+                clonedFunc->eraseFromParent();
+                return solved;
+            }
         }
 
         cout << "Total user: " << total_user << "\n";
@@ -787,78 +911,19 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
         
         printvalueforce2(original_value->getNumUses())
-        original_value->replaceAllUsesWith(newValue);
+
+        // replace original value with the value we selected
+        replaceAllUsesWithandReplaceRMap(original_value, newValue, flippedRegisterMap);
+        //original_value->replaceAllUsesWith(newValue);
 
         printvalueforce2(newValue->getNumUses())
-        // now make this loooooooooooooppppp
-        deque<Value*> toSimplify2;
-        set<Value*> visited;
 
-        std::priority_queue<Instruction*, std::vector<Instruction*>, InstructionDependencyOrder> toSimplify;
-        for (User* user : newValue->users()) {
-            if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                toSimplify.push(userInst);
-            }
-        }
+        // simplify later usages
+        simplifyUsers(newValue, DL, flippedRegisterMap);
 
-        // %GEPLoadxd-5370985151-11930 = getelementptr i8, ptr %memory, i64 %realsub-5370985149-
-        // why not simplified?
-
-
-
-        while (!toSimplify.empty()) {
-            auto simplifyUser = toSimplify.top();
-            toSimplify.pop();
-            auto nsv = simplifyValueLater(simplifyUser, DL);
-            visited.insert(simplifyUser);
-            printvalueforce(simplifyUser)
-            printvalueforce(nsv)
-
-            if (isa<GetElementPtrInst>(simplifyUser)) {
-                for (User* user : simplifyUser->users()) {
-                    //printvalue(user)
-                    if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                        // push if not visited
-                            printvalueforce(userInst)
-                            if (visited.find(userInst) == visited.end()) {
-                                //printvalue(userInst) // if we are inserting, print for 2nd time
-                                    toSimplify.push(userInst);
-                                    visited.insert(userInst);
-                            }
-                    }
-                }
-            }
-
-            // yes return the same value very good idea definitely wont make replaceAllUsesWith loop
-            if (simplifyUser == nsv) {
-                outs() << " same value? \n";
-                continue;
-            }
-            // if can simplify, continue?
-
-            // find a way to make this look not ugly, or dont. idc
-            for (User* user : simplifyUser->users()) {
-                //printvalue(nsv)
-                printvalue(user)
-                if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                        //  push if not visited
-                        //  printvalue(userInst)
-                        
-                        if (visited.find(userInst) == visited.end() ) {
-                            printvalue(userInst) // if we are inserting, print for 2nd time
-                            toSimplify.push(userInst);
-                            visited.erase(userInst);
-                        }
-                }
-            }
-
-            //printvalueforce(simplifyUser, simplify)
-            //printvalueforce(nsv, with)
-
-            simplifyUser->replaceAllUsesWith(nsv);
-            
-        }
         SimplifyQuery SQ(DL);
+
+
 
 
      
