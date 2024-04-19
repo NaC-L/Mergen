@@ -1191,7 +1191,6 @@ namespace arithmeticsAndLogical {
     FI;
     */
 
-    // poison values created here
     void lift_rcl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
         auto count = instruction.operands[1];
@@ -2695,7 +2694,6 @@ namespace flagOperation {
 
     }
 
-    // actually this creates the poison
     void lift_btr(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         
         auto dest = instruction.operands[0];

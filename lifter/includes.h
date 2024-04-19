@@ -22,11 +22,11 @@
 #define printvalue2(x) ((void)0);
 #endif
 
-#define printvalueforce(x) \
-    outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
+#define printvalueforce(x, y) \
+    outs() << " " #y " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
 
-#define printvalueforce2(x) \
-    outs() << " " #x " : " << x << "\n";  outs().flush();
+#define printvalueforce2(x , y) \
+    outs() << " " #y " " #x " : " << x << "\n";  outs().flush();
 
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)
@@ -35,6 +35,8 @@
 #include <map>
 #include <tuple>
 #include <queue>
+#include <set>
+#include <unordered_set>
 #ifdef _WIN32
 #define NOMINMAX
 #include <Windows.h>
@@ -51,6 +53,11 @@
 #include "utils.h"
 
 
+<<<<<<< Updated upstream
+=======
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Constants.h"
+>>>>>>> Stashed changes
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/ADT/APInt.h"
