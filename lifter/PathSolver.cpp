@@ -6,6 +6,11 @@
 void* file_base_g;
 ZyanU8* data_g;
 
+struct InstructionDependencyOrder {
+    bool operator()(Instruction* const& a, Instruction* const& b) const {
+        return !( a->comesBefore(b) ); 
+    }
+};
  
 // remove this **special** global variable stuff its UGLY and dumb
 void initDetections(void* file_base, ZyanU8* data) { 
@@ -49,7 +54,11 @@ std::vector<llvm::APInt> getPossibleValues(const llvm::KnownBits& known, unsigne
                 currentBit++;
             }
         }
-        values.push_back(temp);
+
+        if (std::find(values.begin(), values.end(), temp) == values.end()) {
+            values.push_back(temp); 
+        }
+
     }
 
     return values;
@@ -686,10 +695,11 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
         if (returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
-
+            printvalueforce(returnInst)
             if (returnInst->getReturnValue() != nullptr) {
 
                 if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
+                    printvalueforce(constInt)
                     dest = constInt->getZExtValue();
                     result = PATH_solved;
                     clonedFunc->eraseFromParent();
@@ -698,26 +708,27 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             }
         }
         //clonedFunc->print(outs());
-        std::set<llvm::Instruction*> worklist;
-        std::set<llvm::Instruction*> visited_used;
+        deque<llvm::Instruction*> worklist;
+        std::vector<llvm::Instruction*> visited_used;
 
         // Start with the return instruction
-        worklist.insert(returnInst);
+        worklist.push_front(returnInst);
 
         while (!worklist.empty()) {
-            llvm::Instruction* inst = *worklist.begin();
-            worklist.erase(worklist.begin());
-            visited_used.insert(inst);
+            llvm::Instruction* inst = worklist.front();
+            worklist.pop_front();
+            visited_used.emplace_back(inst);
 
-
-            for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i) {
-                llvm::Value* operand = inst->getOperand(i);
-                if (llvm::Instruction* opInst = llvm::dyn_cast<llvm::Instruction>(operand)) {
-                    if (visited_used.find(opInst) == visited_used.end()) {
-                        worklist.insert(opInst);
+            //printvalueforce(inst)
+                for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i) {
+                    llvm::Value* operand = inst->getOperand(i);
+                    if (llvm::Instruction* opInst = llvm::dyn_cast<llvm::Instruction>(operand)) {
+                        if (std::find(visited_used.begin(), visited_used.end(), opInst) == visited_used.end()) {
+                                //printvalueforce(opInst)
+                                worklist.push_back(opInst);
+                        }
                     }
                 }
-            }
         }
 
         Value* value_with_least_possible_values = nullptr;
@@ -726,14 +737,15 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
         DataLayout DL(function->getParent());
 
+        int total_user = 0;
         for (auto I : visited_used) {
+
+            total_user++;
             KnownBits KnownVal = analyzeValueKnownBits(I, DL);
             unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) * 2;
 
-
-            printvalueforce(I)
-            printvalueforce2(KnownVal)
-            printvalueforce2(possible_values)
+            //printvalueforce(I)
+            
 
             if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value && possible_values > 0) {
                 least_possible_value_value = possible_values;
@@ -743,6 +755,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
         }
 
+        cout << "Total user: " << total_user << "\n";
         if (least_possible_value_value == 0)
             throw("something went terribly");
 
@@ -773,68 +786,78 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
         
-        printvalue2(original_value->getNumUses())
+        printvalueforce2(original_value->getNumUses())
         original_value->replaceAllUsesWith(newValue);
 
-        printvalue2(newValue->getNumUses())
+        printvalueforce2(newValue->getNumUses())
         // now make this loooooooooooooppppp
-        queue<Value*> toSimplify;
+        deque<Value*> toSimplify2;
         set<Value*> visited;
 
+        std::priority_queue<Instruction*, std::vector<Instruction*>, InstructionDependencyOrder> toSimplify;
         for (User* user : newValue->users()) {
             if (Instruction* userInst = dyn_cast<Instruction>(user)) {
                 toSimplify.push(userInst);
             }
         }
 
-        while (!toSimplify.empty()) {
-            auto simplifyUser = toSimplify.front();
-            toSimplify.pop();
-            
-            auto nsv = simplifyValueLater(simplifyUser, DL);
-            
+        // %GEPLoadxd-5370985151-11930 = getelementptr i8, ptr %memory, i64 %realsub-5370985149-
+        // why not simplified?
 
-            if (isa<GetElementPtrInst>(nsv)) {
-                for (User* user : nsv->users()) {
+
+
+        while (!toSimplify.empty()) {
+            auto simplifyUser = toSimplify.top();
+            toSimplify.pop();
+            auto nsv = simplifyValueLater(simplifyUser, DL);
+            visited.insert(simplifyUser);
+            printvalueforce(simplifyUser)
+            printvalueforce(nsv)
+
+            if (isa<GetElementPtrInst>(simplifyUser)) {
+                for (User* user : simplifyUser->users()) {
                     //printvalue(user)
                     if (Instruction* userInst = dyn_cast<Instruction>(user)) {
                         // push if not visited
-                        //printvalue(userInst)
+                            printvalueforce(userInst)
                             if (visited.find(userInst) == visited.end()) {
                                 //printvalue(userInst) // if we are inserting, print for 2nd time
                                     toSimplify.push(userInst);
-                                visited.insert(userInst);
+                                    visited.insert(userInst);
                             }
                     }
                 }
             }
 
-            // yes return the same value very good idea definitely doesnt break anything
+            // yes return the same value very good idea definitely wont make replaceAllUsesWith loop
             if (simplifyUser == nsv) {
+                outs() << " same value? \n";
                 continue;
             }
             // if can simplify, continue?
 
             // find a way to make this look not ugly, or dont. idc
             for (User* user : simplifyUser->users()) {
-                printvalue(nsv)
+                //printvalue(nsv)
                 printvalue(user)
                 if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                    // push if not visited
-                    printvalue(userInst)
+                        //  push if not visited
+                        //  printvalue(userInst)
                         
                         if (visited.find(userInst) == visited.end() ) {
                             printvalue(userInst) // if we are inserting, print for 2nd time
                             toSimplify.push(userInst);
-                            visited.insert(userInst);
+                            visited.erase(userInst);
                         }
                 }
             }
 
+            //printvalueforce(simplifyUser, simplify)
+            //printvalueforce(nsv, with)
+
             simplifyUser->replaceAllUsesWith(nsv);
             
         }
-
         SimplifyQuery SQ(DL);
 
 
@@ -843,7 +866,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         std::string Filename3 = "output_trysolve2.ll";
         std::error_code EC3;
         raw_fd_ostream OS3(Filename3, EC3);
-        //function->print(OS3, EC);
+        function->print(OS3, nullptr);
         // receive input, replace the value with received input
         // re-run program
     }

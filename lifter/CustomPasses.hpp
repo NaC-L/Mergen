@@ -5,8 +5,6 @@
 #include "includes.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/Constants.h"
 #include "OperandUtils.h"
 
 
@@ -15,7 +13,7 @@ public:
 
 
     llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
-
+        
         Value* memory = getMemory();
 
         bool hasChanged = false;
@@ -168,3 +166,4 @@ public:
 
 
 #endif 
+
