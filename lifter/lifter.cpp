@@ -88,6 +88,8 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
                     offset += instruction.info.length;
                     runtime_address += instruction.info.length;
 
+                    // whats the purpose of this ????
+                    // maybe change it to a queue
                     for (auto& b_address : added_blocks_addresses) {
                         if (get<0>(b_address) - file_base == offset) {
                             builder.CreateBr(get<1>(b_address));

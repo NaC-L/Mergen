@@ -155,7 +155,6 @@ namespace GEPStoreTracker {
             }
             */
             if (t_ptr == pv && !isa<ConstantInt>(t_idx) && !isStore) { // if we hit the load, return? 
-                outs() << " breaking  \n";
                 break;
             }
             //printvalueforce2(isStore)

@@ -908,6 +908,12 @@ Value* SetValueToSubRegister2(LLVMContext& context, IRBuilder<>& builder, int re
 
 }
 
+void SetRegisterValue(LLVMContext& context, int key, Value* value) {
+
+	int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP) ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key) : key;
+
+	RegisterList[newKey] = value;
+}
 
 void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value) {
     if (
@@ -1221,15 +1227,20 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 					APInt readValue(byteSize * 8, tempValue);
 					Constant* newVal = ConstantInt::get(loadType, readValue);
-					if (newVal)
+					if (newVal) {
+						printvalue(newVal);
 						return newVal;
+					}
 				}
 
 				if (addr > 0 && addr < STACKP_VALUE) {
 					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
-					if (newval)
-						return simplifyValue(newval,
+					if (newval) {
+						auto retval = simplifyValue(newval,
 							builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+						printvalue(retval);
+						return retval;
+					}
 					return ConstantInt::get(getIntSize(byteSize, context), 0);
 
 				}
@@ -1268,8 +1279,11 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			*/
 			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, nullptr, false);
 
-			return simplifyValue(builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-"),
+			auto retval = simplifyValue(builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-"),
 				builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+			printvalue(retval);
+
+			return retval;
 		}
 		default: {
 			throw std::runtime_error("operand type not implemented"); exit(-1);
@@ -1397,8 +1411,10 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			if (isa<ConstantInt>(effectiveAddress) ) {
 
 				ConstantInt* effectiveAddressInt = cast<ConstantInt>(effectiveAddress);
-
-				globalBuffer.addValueReference(value, effectiveAddressInt->getZExtValue());
+				auto addr = effectiveAddressInt->getZExtValue();
+				if (addr > 0 && addr < STACKP_VALUE) {
+					globalBuffer.addValueReference(value, addr);
+				}
 			}
 			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, value, true);
 

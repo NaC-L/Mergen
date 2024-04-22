@@ -75,7 +75,6 @@ void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> f
 
         // yes return the same value very good idea definitely wont make replaceAllUsesWith loop
         if (simplifyUser == nsv) {
-            outs() << " same value? \n";
             continue;
         }
         // if can simplify, continue?
@@ -872,6 +871,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
         }
 
+
         if (PATH_info solved = getReturnVal(function, dest)) {
             if (solved == PATH_solved) {
                 clonedFunc->eraseFromParent();
@@ -879,14 +879,15 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             }
         }
 
-        cout << "Total user: " << total_user << "\n";
+       //  cout << "Total user: " << total_user << "\n";
         if (least_possible_value_value == 0)
             throw("something went terribly");
 
 
-        printvalueforce(value_with_least_possible_values)
-        printvalueforce2(bitsof_least_possible_value)
-            outs() << " possible values: " << least_possible_value_value << " : \n";
+        outs() << " value_with_least_possible_values: "; value_with_least_possible_values->print(outs()); outs() << "\n";  outs().flush();
+        outs() << " bitsof_least_possible_value : " << bitsof_least_possible_value << "\n";  outs().flush();
+        outs() << " possible values: " << least_possible_value_value << " : \n";
+
         auto possible_values = getPossibleValues(bitsof_least_possible_value, least_possible_value_value - 1);
         auto original_value = value_with_least_possible_values;//(*rVMap)[value_with_least_possible_values];
 
@@ -903,7 +904,11 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         function->print(OS, nullptr);
 
         cout << "\nWhich option do you select? ";
-        // TODO: implement something to remember the choice
+        // TODO:
+        // store current state
+        // select some option 
+        // after that option is explored to the end, create a branch to that option, we can use jump table?
+
         unsigned long long option = 0;
         cin >> option;
         auto newValue = ConstantInt::get(value_with_least_possible_values->getType(), possible_values[option]);

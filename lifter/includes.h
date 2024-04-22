@@ -8,7 +8,7 @@
 #ifndef NDEBUG
 #define NDEBUG
 #endif
-//#define _DEVELOPMENT
+#define _DEVELOPMENT
 
 
 #ifdef _DEVELOPMENT
@@ -22,11 +22,16 @@
 #define printvalue2(x) ((void)0);
 #endif
 
+#ifdef _FORCEPRINT
 #define printvalueforce(x, y) \
     outs() << " " #y " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
 
 #define printvalueforce2(x , y) \
     outs() << " " #y " " #x " : " << x << "\n";  outs().flush();
+#else
+#define printvalueforce(x,y) ((void)0);
+#define printvalueforce2(x,y) ((void)0);
+#endif
 
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)
@@ -53,11 +58,8 @@
 #include "utils.h"
 
 
-<<<<<<< Updated upstream
-=======
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Constants.h"
->>>>>>> Stashed changes
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/ADT/APInt.h"

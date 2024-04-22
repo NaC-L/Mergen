@@ -23,6 +23,7 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine&
 
 Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key);
 void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value);
+void SetRegisterValue(LLVMContext& context, int key, Value* value);
 unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip);
 
 Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize);
