@@ -862,9 +862,9 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             // if constant, simplify later users?
             // simplify it aswell
             if (KnownVal.isConstant() && !KnownVal.hasConflict()) {
-                printvalueforce(I, simplifying)
+                printvalueforce(I)
                 auto nsv = simplifyValueLater(I, DL);
-                printvalueforce(nsv, simplified)
+                printvalueforce(nsv)
                 replaceAllUsesWithandReplaceRMap(I, nsv, flippedRegisterMap);
                 simplifyUsers(nsv, DL, flippedRegisterMap);
             }

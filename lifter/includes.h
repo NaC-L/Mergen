@@ -24,14 +24,14 @@
 #endif
 
 #ifdef _FORCEPRINT
-#define printvalueforce(x, y) \
-    outs() << " " #y " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
+#define printvalueforce(x) \
+    outs() << " "  #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
 
-#define printvalueforce2(x , y) \
-    outs() << " " #y " " #x " : " << x << "\n";  outs().flush();
+#define printvalueforce2(x) \
+    outs() << " " #x " : " << x << "\n";  outs().flush();
 #else
-#define printvalueforce(x,y) ((void)0);
-#define printvalueforce2(x,y) ((void)0);
+#define printvalueforce(x) ((void)0);
+#define printvalueforce2(x) ((void)0);
 #endif
 
 #pragma warning(disable: 4996)
