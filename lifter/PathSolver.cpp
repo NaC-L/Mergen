@@ -8,6 +8,7 @@ ZyanU8* data_g;
 
 struct InstructionDependencyOrder {
     bool operator()(Instruction* const& a, Instruction* const& b) const {
+        
         return !( a->comesBefore(b) ); 
     }
 };
@@ -912,13 +913,10 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
         
-        printvalueforce2(original_value->getNumUses())
-
         // replace original value with the value we selected
         replaceAllUsesWithandReplaceRMap(original_value, newValue, flippedRegisterMap);
         //original_value->replaceAllUsesWith(newValue);
 
-        printvalueforce2(newValue->getNumUses())
 
         // simplify later usages
         simplifyUsers(newValue, DL, flippedRegisterMap);

@@ -1044,11 +1044,6 @@ public:
 		}
 	}
 
-	
-	
-	
-	
-
 	void addValueReference(Value* value, unsigned address) {
 		unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
 		for (unsigned i = 0; i < valueSizeInBytes; i++) {
@@ -1219,6 +1214,11 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadxd-" + address + "-");
 
 
+			auto retval = builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
+
+			if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
+				return solvedLoad;
+
 			if (isa<ConstantInt>(effectiveAddress)) {
 				ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
 				if (!effectiveAddressInt) return nullptr;
@@ -1246,12 +1246,9 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 						return retval;
 					}
 					return ConstantInt::get(getIntSize(byteSize, context), 0);
-
 				}
-
-
 			}
-
+			
 			pointer = simplifyValue(pointer,
 				builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 
@@ -1283,8 +1280,6 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			*/
 			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, nullptr, false);
 
-			auto retval = simplifyValue(builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-"),
-				builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 			printvalue(retval);
 
 			return retval;
@@ -1420,6 +1415,8 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 					globalBuffer.addValueReference(value, addr);
 				}
 			}
+
+			GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
 			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, value, true);
 
 			return store;

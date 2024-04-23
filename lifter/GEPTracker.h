@@ -23,6 +23,10 @@ namespace BinaryOperations {
 
 namespace GEPStoreTracker {
 
+    Value* solveLoad(LoadInst* inst);
+
+    void insertMemoryOp(Instruction* inst);
+
     void insertInfo(ptrValue pv, idxValue av, memoryValue mv, bool isStore);
 
     // we use this as a loadValue
