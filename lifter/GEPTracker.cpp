@@ -162,11 +162,12 @@ namespace GEPStoreTracker {
         return std::max(addr1, addr2) < std::min(addr1 + size1, addr2 + size2);
     }
 
-    uint64_t createmask(long diff) {
+
+    uint64_t createmask(long diff, unsigned sizebits) {
 
         long shift = abs(diff);
 
-        auto mask = 0xFFFFFFFFFFFFFFFFULL << shift * 8;
+        auto mask = (0xFFFFFFFFFFFFFFFFULL >> 64 - sizebits * 8) << shift * 8;
 
         return mask ^ -(diff > 0); // 0 or -1 if 0, noop, if -1 xor
 
@@ -277,14 +278,14 @@ namespace GEPStoreTracker {
             printvalueforce2(diff)
             printvalueforce2(memOffsetValue)
             printvalueforce2(loadOffsetValue)
-
+            auto storeBitSize = MemLoc.Size.getValue();
             //if (std::max(loadOffsetValue, memOffsetValue) < std::min(loadOffsetValue + cloadsize, memOffsetValue + MemLoc.Size.getValue() )) {
-            if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, MemLoc.Size.getValue() )) {
+            if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, storeBitSize)) {
                 
                 if (!retval)
                     retval = ConstantInt::get(load->getType(), 0);
 
-                unsigned long long mask = createmask(diff);
+                unsigned long long mask = createmask(diff, storeBitSize);
                 // diff -4 = 0xFF_FF_FF_FF_00_00_00_00
                 // diff  4 = 0x00_00_00_00_FF_FF_FF_FF
                 printvalueforce2(mask)
