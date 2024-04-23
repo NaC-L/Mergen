@@ -1,14 +1,11 @@
 #include "includes.h"
+#include "GEPTracker.h"
 
 
 void* file_base_g_operand;
 ZyanU8* data_g_operand;
 
 
-void initBases2(void* file_base, ZyanU8* data) {
-	file_base_g_operand = file_base;
-	data_g_operand = data;
-}
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -49,7 +46,7 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 
 	if (auto vsimplified = simplifyInstruction(inst, SQ)) {
 		/*
-		if (isa<PoisonValue>(x)) // if poison it should be 0 for shifts, can other operations generate poison without a poison value anyways?
+		if (isa<PoisonValue>(vsimplified)) // if poison it should be 0 for shifts, can other operations generate poison without a poison value anyways?
 			return ConstantInt::get(v->getType(), 0);
 			*/
 		return vsimplified;
@@ -58,30 +55,83 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 	return v;
 }
 
+Value* simplifyLoadValue(Value* v) {
+
+
+	Instruction* inst = cast<Instruction>(v);
+	Module* M = (inst->getModule());
+	Function& F = *inst->getFunction();
+
+	llvm::IRBuilder<> builder(&*F.getEntryBlock().getFirstInsertionPt());
+	auto LInst = cast<LoadInst>(v);
+	auto GEPVal = LInst->getPointerOperand();
+
+	if (!isa<GetElementPtrInst>(GEPVal))
+		return nullptr;
+
+	auto GEPInst = cast<GetElementPtrInst>(GEPVal);
+
+	Value* pv = GEPInst->getPointerOperand();
+	Value* idxv = GEPInst->getOperand(1);
+	unsigned byteCount = v->getType()->getIntegerBitWidth() / 8;
+
+	//printvalueforce(v)
+	//printvalueforce(pv)
+	//printvalueforce(idxv)
+	//printvalueforce2(byteCount)
+
+	auto retVal = GEPStoreTracker::getValueAt(builder, pv, idxv, byteCount);
+
+	//printvalueforce(retVal)
+	return retVal;
+
+}
+
 Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 
+	//printvalueforce(v)
+	if (!isa<Instruction>(v))
+		return v;
 	if (!isa<LoadInst>(v)) 
 		return simplifyValue(v, DL);
+
 	
 
+
+	
+		
+	
 	auto loadInst = cast<LoadInst>(v);
-	printvalue(loadInst)
+	//printvalueforce(loadInst)
 	auto GEP = loadInst->getOperand(loadInst->getNumOperands() - 1);
-	printvalue(GEP)
+	//printvalueforce(GEP)
 	auto gepInst = cast<GetElementPtrInst>(GEP);
 	auto effectiveAddress = gepInst->getOperand(gepInst->getNumOperands() - 1);
-	printvalue(effectiveAddress)
+	//printvalueforce(effectiveAddress)
 	if (!isa<ConstantInt>(effectiveAddress)) {
 		return v;
 	}
 
+
 	ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
 	if (!effectiveAddressInt) return nullptr;
 
+
+
 	uintptr_t addr = effectiveAddressInt->getZExtValue();
-	uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
+
+	// also the second case
+	if (addr > 0 && addr < STACKP_VALUE) {
+		if (auto SLV = simplifyLoadValue(v))
+			return SLV;
+	}
+
+	
+
 
 	unsigned byteSize = v->getType()->getIntegerBitWidth() / 8;
+/*
+	uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
 	uintptr_t tempValue;
 
 	if (mappedAddr > 0) {
@@ -92,11 +142,20 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 		if (newVal)
 			return newVal;
 	}
+*/
+	if (APInt* ConstantValue = BinaryOperations::readMemory(addr, byteSize)) {
+		APInt value = *ConstantValue;
+		Constant* newVal = ConstantInt::get(v->getType(), value);
+
+		if (newVal)
+			return newVal;
+	}
+
 	return v;
 }
 
 
-Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* False, const Twine& Name = "") {
+Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* False, const Twine& Name ) {
 #ifdef TESTFOLDER
 	if (auto* CConst = dyn_cast<Constant>(C)) {
 
@@ -113,7 +172,7 @@ Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True, Value* Fa
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	return simplifyValue(builder.CreateSelect(C, True, False, Name), DL);
 }
-Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 #ifdef TESTFOLDER3
 
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
@@ -127,7 +186,7 @@ Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	return simplifyValue( builder.CreateAdd(LHS, RHS, Name), DL);
 }
 
-Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 #ifdef TESTFOLDER4
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isZero()) return LHS;
@@ -183,7 +242,7 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), result.getConstant());
 }
 
-Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDERshl
@@ -204,7 +263,7 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	return simplifyValue( builder.CreateShl(LHS, RHS, Name), DL);
 }
 
-Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDERshr
@@ -225,20 +284,20 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twin
 	return simplifyValue(builder.CreateLShr(LHS, RHS, Name),DL);
 }
 
-Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name = "") {
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name ) {
 	return createShlFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
 
-Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name = "") {
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name ) {
 	return createShlFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
 
 
 
-Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name = "") {
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name ) {
 	return createLShrFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
-Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name = "") {
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name ) {
 	return createLShrFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
 
@@ -264,7 +323,7 @@ Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 }
 
 
-Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER5
 
@@ -306,7 +365,7 @@ Value* foldXorKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), resultValue);
 }
 
-Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 #ifdef TESTFOLDER6
 
 	if (LHS == RHS) {
@@ -361,7 +420,7 @@ std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS, KnownBits
 	return nullopt;
 }
 
-Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS, Value* RHS, const Twine& Name = "") {
+Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS, Value* RHS, const Twine& Name ) {
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
@@ -387,7 +446,7 @@ Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), resultValue);
 }
 
-Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name = "") {
+Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 #ifdef TESTFOLDER
 	
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
@@ -419,7 +478,7 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 }
 
 // - probably not needed anymore
-Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
+Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name ) {
 	Value* resulttrunc = builder.CreateTrunc(V, DestTy, Name);
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER7
@@ -433,7 +492,7 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twi
 
 
 
-Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
+Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name ) {
 	auto resultzext = builder.CreateZExt(V, DestTy, Name);
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER8
@@ -447,7 +506,7 @@ Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twin
 }
 
 
-Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
+Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name ) {
 	Type* VTy = V->getType();
 	if (VTy->getScalarSizeInBits() < DestTy->getScalarSizeInBits())
 		return createZExtFolder(builder, V, DestTy, Name);
@@ -456,7 +515,7 @@ Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, con
 	return V;
 }
 
-Value* createSExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
+Value* createSExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name ) {
 #ifdef TESTFOLDER9
 
 	if (V->getType() == DestTy) {
@@ -488,7 +547,7 @@ Value* createSExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twin
 	return builder.CreateSExt(V, DestTy, Name);
 }
 
-Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name = "") {
+Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, const Twine& Name ) {
 	Type* VTy = V->getType();
 	if (VTy->getScalarSizeInBits() < DestTy->getScalarSizeInBits())
 		return createSExtFolder(builder, V, DestTy, Name);
@@ -670,9 +729,8 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 
 
 
-	auto zero = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 0);
-	auto value = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), rip);
-
+	auto zero = cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), 0));
+	auto value = cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
 	
 	auto new_rip = createAddFolder(builder,zero, value);
 	
@@ -680,7 +738,7 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 
 
 	
-	auto stackvalue = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE);
+	auto stackvalue = cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));
 	auto new_stack_pointer = createAddFolder(builder,stackvalue, zero);
 	
 	RegisterList[ZYDIS_REGISTER_RSP] = new_stack_pointer;
@@ -857,6 +915,12 @@ Value* SetValueToSubRegister2(LLVMContext& context, IRBuilder<>& builder, int re
 
 }
 
+void SetRegisterValue(LLVMContext& context, int key, Value* value) {
+
+	int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP) ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key) : key;
+
+	RegisterList[newKey] = value;
+}
 
 void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value) {
     if (
@@ -980,11 +1044,6 @@ public:
 		}
 	}
 
-	
-	
-	
-	
-
 	void addValueReference(Value* value, unsigned address) {
 		unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
 		for (unsigned i = 0; i < valueSizeInBytes; i++) {
@@ -1063,7 +1122,7 @@ private:
 lifterMemoryBuffer globalBuffer;
 
 
-Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address = "") {
+Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address) {
 
 	auto type = getIntSize(possiblesize, context);
 
@@ -1155,37 +1214,46 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadxd-" + address + "-");
 
 
+			auto retval = builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
+
+			/*
+			GEPStoreTracker::insertMemoryOp(cast<StoreInst>(retval));
+			if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
+				return solvedLoad;
+			*/
 
 			if (isa<ConstantInt>(effectiveAddress)) {
 				ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
 				if (!effectiveAddressInt) return nullptr;
 
 				uintptr_t addr = effectiveAddressInt->getZExtValue();
-				uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
 
 				unsigned byteSize = loadType->getIntegerBitWidth() / 8;
-				uintptr_t tempValue;
+				
+				
 
-				if (mappedAddr > 0) {
-					std::memcpy(&tempValue, reinterpret_cast<const void*>(data_g_operand + mappedAddr), byteSize);
+				if (APInt* readValue = BinaryOperations::readMemory(addr, byteSize)) {
+					APInt value = *readValue;
+					Constant* newVal = ConstantInt::get(loadType, value);
 
-					APInt readValue(byteSize * 8, tempValue);
-					Constant* newVal = ConstantInt::get(loadType, readValue);
 					if (newVal)
 						return newVal;
 				}
 
 				if (addr > 0 && addr < STACKP_VALUE) {
 					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
-					if (newval)
-						return newval;
+					if (newval) {
+						auto retval = simplifyValue(newval,
+							builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+						printvalue(retval);
+						return retval;
+					}
 					return ConstantInt::get(getIntSize(byteSize, context), 0);
-
 				}
-
-
 			}
-
+			
+			pointer = simplifyValue(pointer,
+				builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 
 			/*
 			if (isa<ConstantExpr>(pointer)) {
@@ -1214,7 +1282,11 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			}
 			*/
 
-			return builder.CreateLoad(loadType, pointer);
+			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, nullptr, false);
+
+			printvalue(retval);
+
+			return retval;
 		}
 		default: {
 			throw std::runtime_error("operand type not implemented"); exit(-1);
@@ -1251,7 +1323,7 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 
 
 
-Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address = "") {
+Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address) {
 
 	value = simplifyValue(value, builder.GetInsertBlock()->getParent()->getParent()->getDataLayout() );
 
@@ -1325,6 +1397,10 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			indices.push_back(effectiveAddress); 
 
 			Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,indices,"GEPSTORE-"+ address + "-");
+
+			pointer = simplifyValue(pointer,
+				builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+
 			Value* store = builder.CreateStore(value, pointer);  
 #ifdef _DEVELOPMENT
 			outs() << "	effectiveAddress : ";
@@ -1338,10 +1414,14 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			if (isa<ConstantInt>(effectiveAddress) ) {
 
 				ConstantInt* effectiveAddressInt = cast<ConstantInt>(effectiveAddress);
-
-				globalBuffer.addValueReference(value, effectiveAddressInt->getZExtValue());
+				auto addr = effectiveAddressInt->getZExtValue();
+				if (addr > 0 && addr < STACKP_VALUE) {
+					globalBuffer.addValueReference(value, addr);
+				}
 			}
 
+			GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
+			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, value, true);
 
 			return store;
 		}
@@ -1415,7 +1495,7 @@ vector<Value*> GetRFLAGS(LLVMContext& context, IRBuilder<>& builder) {
 
 
 
-void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, vector<Value*> value, string address = "") {
+void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, vector<Value*> value, string address) {
 	auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
 
 

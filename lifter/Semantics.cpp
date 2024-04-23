@@ -714,7 +714,7 @@ namespace branches {
         auto newRip = createAddFolder(builder,Value, ripval, "jump-xd-" + to_string(instruction.runtime_address) + "-");
 
         jmpcount++;
-        if (dest.type == ZYDIS_OPERAND_TYPE_REGISTER) {
+        if (dest.type == ZYDIS_OPERAND_TYPE_REGISTER || dest.type == ZYDIS_OPERAND_TYPE_MEMORY) {
             auto rspvalue = GetOperandValue(context, builder, dest, 64);
             auto trunc = createZExtOrTruncFolder(builder,rspvalue, Type::getInt64Ty(context), "jmp-register");
 
@@ -1191,7 +1191,6 @@ namespace arithmeticsAndLogical {
     FI;
     */
 
-    // poison values created here
     void lift_rcl(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto dest = instruction.operands[0];
         auto count = instruction.operands[1];
@@ -1636,6 +1635,54 @@ namespace arithmeticsAndLogical {
         SetOperandValue(context, builder, dest, newswappedvalue);
     }
 
+    void lift_cmpxchg(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+
+        auto dest = instruction.operands[0];
+        auto src = instruction.operands[1];
+        auto accop = instruction.operands[2];
+
+
+        auto Rvalue = GetOperandValue(context, builder, src, src.size);
+        auto Lvalue = GetOperandValue(context, builder, dest, dest.size);
+        auto accum = GetOperandValue(context, builder, dest, dest.size);
+
+        auto sub = builder.CreateSub(accum, Lvalue);
+
+        auto of = computeOverflowFlagSub(builder, Lvalue, Rvalue, sub);
+
+        auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
+        auto RvalueLowerNibble = createAndFolder(builder, Lvalue, lowerNibbleMask, "lvalLowerNibble");
+        auto op2LowerNibble = createAndFolder(builder, Rvalue, lowerNibbleMask, "rvalLowerNibble");
+
+        auto cf = createICMPFolder(builder, CmpInst::ICMP_UGT, Rvalue, Lvalue, "add_cf");
+        auto af = createICMPFolder(builder, CmpInst::ICMP_ULT, RvalueLowerNibble, op2LowerNibble, "add_af");
+        
+        auto sf = computeSignFlag(builder, sub);
+
+        /* 
+        TEMP := DEST
+        IF accumulator = TEMP
+            THEN
+                ZF := 1;
+                DEST := SRC;
+            ELSE
+                ZF := 0;
+                accumulator := TEMP;
+                DEST := TEMP;
+        FI;
+        */
+        auto zf = createICMPFolder(builder, CmpInst::ICMP_EQ, accum, Lvalue );
+        // if zf dest = src
+        auto result = createSelectFolder(builder, zf, Rvalue, Lvalue);
+
+        SetOperandValue(context, builder, dest, result);
+        setFlag(context, builder, FLAG_OF, of);
+        setFlag(context, builder, FLAG_CF, cf);
+        setFlag(context, builder, FLAG_AF, af);
+        setFlag(context, builder, FLAG_SF, sf);
+        setFlag(context, builder, FLAG_ZF, zf);
+
+    }
 
     void lift_xchg(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
@@ -2170,6 +2217,8 @@ printvalue(result)
         auto val = ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
         auto result = createSubFolder(builder,RspValue, val, "pushing_newrsp-" + to_string(instruction.runtime_address) + "-");
 
+        printvalue(RspValue)
+            printvalue(result)
         SetOperandValue(context, builder, rsp, result, to_string(instruction.runtime_address));; // sub rsp 8 first,
 
 
@@ -2208,12 +2257,15 @@ printvalue(result)
 
         auto val = ConstantInt::getSigned(Type::getInt64Ty(context), 8); // assuming its x64
         auto result = createAddFolder(builder,RspValue, val, "popping_new_rsp-" + to_string(instruction.runtime_address) + "-");
-#ifdef _DEVELOPMENT
+
         printvalue(Rvalue)
-#endif
-        SetOperandValue(context, builder, dest, Rvalue, to_string(instruction.runtime_address));; // mov val, rsp first
+        printvalue(RspValue)
+        printvalue(result)
 
         SetOperandValue(context, builder, rsp, result); // then add rsp 8
+
+        SetOperandValue(context, builder, dest, Rvalue, to_string(instruction.runtime_address));; // mov val, rsp first
+
 
 
     }
@@ -2695,7 +2747,6 @@ namespace flagOperation {
 
     }
 
-    // actually this creates the poison
     void lift_btr(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         
         auto dest = instruction.operands[0];
@@ -3044,7 +3095,7 @@ namespace flagOperation {
     }
 
     void lift_cbw(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-        
+
         Value* al = createTruncFolder(builder,GetRegisterValue(context, builder, ZYDIS_REGISTER_AL), Type::getInt8Ty(context));
 
         
@@ -3089,8 +3140,8 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     // RIP gets updated before execution of the instruction.
     auto val = ConstantInt::getSigned(Type::getInt64Ty(context), instruction.runtime_address);
     SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, val);
-
-
+    auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
+    printvalue(rsp);
     switch (instruction.info.mnemonic) {
         // movs
     case ZYDIS_MNEMONIC_MOVUPS:
@@ -3262,6 +3313,10 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
 
     case ZYDIS_MNEMONIC_XCHG: {
         arithmeticsAndLogical::lift_xchg(context, builder, instruction);
+        break;
+    }    
+    case ZYDIS_MNEMONIC_CMPXCHG: {
+        arithmeticsAndLogical::lift_cmpxchg(context, builder, instruction);
         break;
     }
     case ZYDIS_MNEMONIC_NOT: {
