@@ -4,6 +4,7 @@
 #include "LLVM-init.h"
 #include "Semantics.h"
 #include "OperandUtils.h"
+#include "GEPTracker.h"
 #include "PathSolver.h"
 #include "OperandUtils.h"
 #include "nt/nt_headers.hpp"
@@ -41,12 +42,9 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             
             blockAddresses->pop_back();
 
-            
-            initDetections((void*)file_base, data);
-            initBases2((void*)file_base, data);
+            BinaryOperations::initBases((void*)file_base, data);
             size_t last_value;
 
-            
             bool run = 1;
 
             

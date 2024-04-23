@@ -11,6 +11,16 @@ using ptrValue = Value*;
 using memoryInfo = tuple<ptrValue, idxValue, memoryValue, bool>;
 
 
+namespace BinaryOperations {
+
+    void initBases(void* file_base, ZyanU8* data);
+    
+    void getBases(void* file_base, ZyanU8* data);
+
+    APInt* readMemory(uintptr_t addr, unsigned byteSize);
+
+};
+
 namespace GEPStoreTracker {
 
     void insertInfo(ptrValue pv, idxValue av, memoryValue mv, bool isStore);

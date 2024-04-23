@@ -6,6 +6,7 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "OperandUtils.h"
+#include "GEPTracker.h"
 
 
 class RemovePseudoStackPass : public llvm::PassInfoMixin<RemovePseudoStackPass> {
@@ -63,11 +64,11 @@ public:
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
 
-    void* file_base_g;
-    ZyanU8* data_g;
-    GEPLoadPass(void* file_base, ZyanU8* data) {
-        file_base_g = file_base;
-        data_g = data;
+    void* file_base;
+    ZyanU8* data;
+
+    GEPLoadPass() {
+        BinaryOperations::getBases(file_base, data);
     }
 
     llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
@@ -80,7 +81,7 @@ public:
                         auto* OffsetOperand = GEP->getOperand(GEP->getNumOperands() - 1);
                         if (auto* ConstInt = llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
                             uintptr_t constintvalue = (uintptr_t)ConstInt->getZExtValue();
-                            if (uintptr_t offset = address_to_mapped_address(file_base_g, constintvalue)) {
+                            if (uintptr_t offset = address_to_mapped_address(file_base, constintvalue)) {
                                 for (auto* User : GEP->users()) {
                                     if (auto* LoadInst = llvm::dyn_cast<llvm::LoadInst>(User)) {
                                         llvm::Type* loadType = LoadInst->getType();
@@ -89,7 +90,7 @@ public:
                                         unsigned byteSize = loadType->getIntegerBitWidth() / 8;
                                         uintptr_t tempvalue;
 
-                                        std::memcpy(&tempvalue, reinterpret_cast<const void*>(data_g + offset), byteSize);
+                                        std::memcpy(&tempvalue, reinterpret_cast<const void*>(data + offset), byteSize);
 
                                         llvm::APInt readValue(byteSize * 8, tempvalue);
                                         llvm::Constant* newVal = llvm::ConstantInt::get(loadType, readValue);

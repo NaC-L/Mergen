@@ -112,12 +112,54 @@ private:
     }
 };
 
+
+namespace BinaryOperations {
+    void* file_base_g;
+    ZyanU8* data_g;
+
+    void initBases(void* file_base, ZyanU8* data) {
+        file_base_g = file_base;
+        data_g = data;
+    }
+
+    void getBases(void* file_base, ZyanU8* data) {
+        file_base = file_base_g;
+        data = data_g;
+    }
+
+
+    // sections
+    APInt* readMemory(uintptr_t addr, unsigned byteSize) {
+
+
+        uintptr_t mappedAddr = address_to_mapped_address(file_base_g, addr);
+        uintptr_t tempValue;
+
+        if (mappedAddr > 0) {
+            std::memcpy(&tempValue, reinterpret_cast<const void*>(data_g + mappedAddr), byteSize);
+
+            APInt readValue(byteSize * 8, tempValue);
+            return &readValue;
+        }
+
+        return nullptr;
+    }
+
+    // TODO
+    // 1- if writes into execute section, flag that address, if we execute that address then do fancy stuff to figure out what we wrote so we know what we will be executing
+    void writeMemory();
+
+};
+
+
 namespace GEPStoreTracker {
     // only push stores to here
     queue<memoryInfo> memInfos;
 
     void insertInfo(ptrValue pv, idxValue av, memoryValue mv, bool isStore) {
         memInfos.push(make_tuple(pv, av, mv, isStore));
+        TypeBasedAAResult AA;
+        
     }
 
     // we use this as a loadValue
