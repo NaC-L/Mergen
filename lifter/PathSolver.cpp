@@ -9,7 +9,7 @@ ZyanU8* data_g;
 struct InstructionDependencyOrder {
     bool operator()(Instruction* const& a, Instruction* const& b) const {
         
-        return !( a->comesBefore(b) ); 
+        return ( b->comesBefore(a) ); 
     }
 };
  
@@ -38,7 +38,8 @@ void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv, unordered_map<Value*,
 
 
 void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> flippedRegisterMap) {
-    set<Value*> visited;
+    unordered_map<Value*, short > visitCount;
+    unordered_set<Value*> visited;
     std::priority_queue<Instruction*, std::vector<Instruction*>, InstructionDependencyOrder> toSimplify;
     for (User* user : newValue->users()) {
         if (Instruction* userInst = dyn_cast<Instruction>(user)) {
@@ -49,6 +50,7 @@ void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> f
     while (!toSimplify.empty()) {
         auto simplifyUser = toSimplify.top();
         toSimplify.pop();
+        visitCount[simplifyUser]++;
         auto nsv = simplifyValueLater(simplifyUser, DL);
         visited.insert(simplifyUser);
         printvalueforce(simplifyUser)
@@ -58,13 +60,13 @@ void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> f
             for (User* user : simplifyUser->users()) {
                 //printvalue(user)
                 if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                    // push if not visited
-                        //printvalueforce(userInst)
-                    if (visited.find(userInst) == visited.end()) {
-                        //printvalue(userInst) // if we are inserting, print for 2nd time
+                    
+                    if (visited.find(userInst) == visited.end()) { // it can try to insert max 3 times here
                         toSimplify.push(userInst);
                         visited.insert(userInst);
+                        visitCount[userInst] = 0;
                     }
+
                 }
             }
         }

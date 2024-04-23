@@ -8,8 +8,8 @@
 #ifndef NDEBUG
 #define NDEBUG
 #endif
-#define _DEVELOPMENT
-#define _FORCEPRINT
+//#define _DEVELOPMENT
+//#define _FORCEPRINT
 
 
 #ifdef _DEVELOPMENT
