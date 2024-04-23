@@ -197,13 +197,14 @@ namespace GEPStoreTracker {
     }
 
     Value* solveLoad(LoadInst* load) {
+
         auto LoadMemLoc = MemoryLocation::get(load);
 
         const Value* loadPtr = LoadMemLoc.Ptr;
         LocationSize loadsize = LoadMemLoc.Size;
 
         auto cloadsize = loadsize.getValue();
-        printvalueforce2(cloadsize);
+        //printvalueforce2(cloadsize);
         
         // shouldnt happen anyways
         if (!isa<GetElementPtrInst>(loadPtr))
@@ -213,13 +214,21 @@ namespace GEPStoreTracker {
         auto loadPointer = loadPtrGEP->getPointerOperand();
         auto loadOffset = loadPtrGEP->getOperand(1);
 
+
+
+
         Value* retval = nullptr;
 
         for (auto inst : memInfos2) {
 
             // we are only interested in previous instructions
-            if (!inst->comesBefore(load) )
+
+            printvalueforce2(load->comesBefore(inst))
+            if (load->comesBefore(inst)) {
+                printvalueforce(inst)
+                printvalueforce(load)
                 break;
+            }
 
             // we are only interested in stores
             if (!inst->mayWriteToMemory())

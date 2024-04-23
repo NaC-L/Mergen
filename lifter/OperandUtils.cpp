@@ -1216,9 +1216,12 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			auto retval = builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
 
+			/*
+			GEPStoreTracker::insertMemoryOp(cast<StoreInst>(retval));
 			if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
 				return solvedLoad;
-			
+			*/
+
 			if (isa<ConstantInt>(effectiveAddress)) {
 				ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
 				if (!effectiveAddressInt) return nullptr;
@@ -1278,6 +1281,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 				}
 			}
 			*/
+
 			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, nullptr, false);
 
 			printvalue(retval);
