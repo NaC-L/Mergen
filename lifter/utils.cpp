@@ -18,7 +18,10 @@ uintptr_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva) {
     auto sectionHeader = ntHeaders->get_sections();
     for (int i = 0; i < ntHeaders->file_header.num_sections; i++, sectionHeader++) {
         if (rva >= sectionHeader->virtual_address && rva < (sectionHeader->virtual_address + sectionHeader->virtual_size)) {
-            return rva - sectionHeader->virtual_address + sectionHeader->ptr_raw_data;
+            if (sectionHeader->characteristics.mem_read && !sectionHeader->characteristics.mem_write)
+                return rva - sectionHeader->virtual_address + sectionHeader->ptr_raw_data;
+            else
+                return 0;
         }
     }
     return 0;

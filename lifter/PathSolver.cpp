@@ -6,11 +6,116 @@
 void* file_base_g;
 ZyanU8* data_g;
 
+struct InstructionDependencyOrder {
+    bool operator()(Instruction* const& a, Instruction* const& b) const {
+        
+        return ( b->comesBefore(a) ); 
+    }
+};
  
-// remove this **special** global variable stuff its UGLY and dumb
-void initDetections(void* file_base, ZyanU8* data) { 
-    file_base_g = file_base;
-    data_g = data;
+
+void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv, unordered_map<Value*, int> rVMap) {
+
+    // if two values are same, we go in a infinite loop
+    if (v == nv)
+        return;
+
+    auto registerV = rVMap[v];
+
+    if (registerV) {
+        if (isa<Instruction>(v)) {
+            auto registerI = cast<Instruction>(v);
+            SetRegisterValue(v->getContext(), registerV, v);
+        }
+    }
+
+
+    v->replaceAllUsesWith(nv);
+
+    v = nv;
+
+}
+
+
+void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> flippedRegisterMap) {
+    unordered_map<Value*, short > visitCount;
+    unordered_set<Value*> visited;
+    std::priority_queue<Instruction*, std::vector<Instruction*>, InstructionDependencyOrder> toSimplify;
+    for (User* user : newValue->users()) {
+        if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+            toSimplify.push(userInst);
+        }
+    }
+
+    while (!toSimplify.empty()) {
+        auto simplifyUser = toSimplify.top();
+        toSimplify.pop();
+        visitCount[simplifyUser]++;
+        auto nsv = simplifyValueLater(simplifyUser, DL);
+        visited.insert(simplifyUser);
+        printvalueforce(simplifyUser)
+        printvalueforce(nsv)
+
+        if (isa<GetElementPtrInst>(simplifyUser)) {
+            for (User* user : simplifyUser->users()) {
+                //printvalue(user)
+                if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+                    
+                    if (visited.find(userInst) == visited.end()) { // it can try to insert max 3 times here
+                        toSimplify.push(userInst);
+                        visited.insert(userInst);
+                        visitCount[userInst] = 0;
+                    }
+
+                }
+            }
+        }
+
+        // yes return the same value very good idea definitely wont make replaceAllUsesWith loop
+        if (simplifyUser == nsv) {
+            continue;
+        }
+        // if can simplify, continue?
+
+        // find a way to make this look not ugly, or dont. idc
+        for (User* user : simplifyUser->users()) {
+            //printvalue(nsv)
+            //printvalue(user)
+            if (Instruction* userInst = dyn_cast<Instruction>(user)) {
+                //  push if not visited
+                //  printvalue(userInst)
+
+                if (visited.find(userInst) == visited.end()) {
+                    //printvalue(userInst) // if we are inserting, print for 2nd time
+                    toSimplify.push(userInst);
+                    visited.erase(userInst);
+                }
+            }
+        }
+
+        //printvalueforce(simplifyUser, simplify)
+        //printvalueforce(nsv, with)
+
+        replaceAllUsesWithandReplaceRMap(simplifyUser, nsv, flippedRegisterMap);
+        //simplifyUser->replaceAllUsesWith(nsv);
+
+    }
+}
+PATH_info getReturnVal(llvm::Function* function, uint64_t &dest) {
+    PATH_info result = PATH_unsolved;
+    if (auto returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
+        printvalueforce(returnInst)
+            if (returnInst->getReturnValue() != nullptr) {
+
+                if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
+                    printvalueforce(constInt)
+                        dest = constInt->getZExtValue();
+                    result = PATH_solved;
+                    return result;
+                }
+            }
+    }
+    return result;
 }
 
 // https://github.com/llvm/llvm-project/blob/30f6eafaa978b4e0211368976fe60f15fa9f0067/llvm/unittests/Support/KnownBitsTest.h#L38
@@ -49,7 +154,11 @@ std::vector<llvm::APInt> getPossibleValues(const llvm::KnownBits& known, unsigne
                 currentBit++;
             }
         }
-        values.push_back(temp);
+
+        if (std::find(values.begin(), values.end(), temp) == values.end()) {
+            values.push_back(temp); 
+        }
+
     }
 
     return values;
@@ -76,7 +185,7 @@ void test_optxd(Function* clonedFuncx) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -92,7 +201,7 @@ void test_optxd(Function* clonedFuncx) {
 
         
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
 
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.addPass(RemovePseudoStackPass());
@@ -109,6 +218,8 @@ void test_optxd(Function* clonedFuncx) {
     } while (changed);
 }
 
+
+// this doesnt belong in this file anymore but it also doesnt have a home...
 void final_optpass(Function* clonedFuncx) {
     llvm::PassBuilder passBuilder;
 
@@ -130,7 +241,7 @@ void final_optpass(Function* clonedFuncx) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -147,7 +258,7 @@ void final_optpass(Function* clonedFuncx) {
 
         
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.addPass(RemovePseudoStackPass());
 
@@ -226,7 +337,7 @@ opaque_info isOpaque(Function* function) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -247,7 +358,7 @@ opaque_info isOpaque(Function* function) {
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
 
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
         
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
@@ -353,7 +464,7 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -381,7 +492,7 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
         
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
         
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
@@ -495,7 +606,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -513,7 +624,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
         
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
         
 
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
@@ -566,12 +677,15 @@ ValueMap<const Value*, Value*> mapHoldValues;
 
 
 llvm::ValueToValueMapTy* flipVMap(const ValueToValueMapTy& VMap) {
+    
     ValueToValueMapTy* RevMap = new llvm::ValueToValueMapTy;
     for (const auto& pair : VMap) {
         (*RevMap)[pair.second] = const_cast<Value*>(pair.first);
     }
     return RevMap;
 }
+
+
 
 
 PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) {
@@ -629,7 +743,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g, data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -684,40 +798,43 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
 
+        // check if returnInst is solveable?
 
-        if (returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
-
-            if (returnInst->getReturnValue() != nullptr) {
-
-                if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
-                    dest = constInt->getZExtValue();
-                    result = PATH_solved;
-                    clonedFunc->eraseFromParent();
-                    return result;
-                }
+        
+        // make this into a function?
+        if (PATH_info solved = getReturnVal(function, dest)) {
+            if (solved == PATH_solved) {
+                clonedFunc->eraseFromParent();
+                return solved; 
             }
         }
+
+        
+
         //clonedFunc->print(outs());
-        std::set<llvm::Instruction*> worklist;
-        std::set<llvm::Instruction*> visited_used;
+        
+        // here, collect values that build up to the returnValue
+        deque<llvm::Instruction*> worklist;
+        std::vector<llvm::Instruction*> visited_used;
 
         // Start with the return instruction
-        worklist.insert(returnInst);
+        worklist.push_front(returnInst);
 
         while (!worklist.empty()) {
-            llvm::Instruction* inst = *worklist.begin();
-            worklist.erase(worklist.begin());
-            visited_used.insert(inst);
+            llvm::Instruction* inst = worklist.front();
+            worklist.pop_front();
+            visited_used.emplace_back(inst);
 
-
-            for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i) {
-                llvm::Value* operand = inst->getOperand(i);
-                if (llvm::Instruction* opInst = llvm::dyn_cast<llvm::Instruction>(operand)) {
-                    if (visited_used.find(opInst) == visited_used.end()) {
-                        worklist.insert(opInst);
+            //printvalueforce(inst)
+                for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i) {
+                    llvm::Value* operand = inst->getOperand(i);
+                    if (llvm::Instruction* opInst = llvm::dyn_cast<llvm::Instruction>(operand)) {
+                        if (std::find(visited_used.begin(), visited_used.end(), opInst) == visited_used.end()) {
+                                //printvalueforce(opInst)
+                                worklist.push_back(opInst);
+                        }
                     }
                 }
-            }
         }
 
         Value* value_with_least_possible_values = nullptr;
@@ -726,30 +843,51 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
         DataLayout DL(function->getParent());
 
+        int total_user = 0;
+        // find the VWLPV(value with least possible values) that builds up to the returnValue 
         for (auto I : visited_used) {
+
+            total_user++;
             KnownBits KnownVal = analyzeValueKnownBits(I, DL);
             unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) * 2;
 
-
             printvalueforce(I)
-            printvalueforce2(KnownVal)
-            printvalueforce2(possible_values)
-
+            
             if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value && possible_values > 0) {
                 least_possible_value_value = possible_values;
                 value_with_least_possible_values = cast<Value>(I);
                 bitsof_least_possible_value = KnownVal;
             }
 
+            // if constant, simplify later users?
+            // simplify it aswell
+            if (KnownVal.isConstant() && !KnownVal.hasConflict()) {
+                printvalueforce(I)
+                auto nsv = simplifyValueLater(I, DL);
+                printvalueforce(nsv)
+                replaceAllUsesWithandReplaceRMap(I, nsv, flippedRegisterMap);
+                simplifyUsers(nsv, DL, flippedRegisterMap);
+            }
+
         }
 
+
+        if (PATH_info solved = getReturnVal(function, dest)) {
+            if (solved == PATH_solved) {
+                clonedFunc->eraseFromParent();
+                return solved;
+            }
+        }
+
+       //  cout << "Total user: " << total_user << "\n";
         if (least_possible_value_value == 0)
             throw("something went terribly");
 
 
-        printvalueforce(value_with_least_possible_values)
-        printvalueforce2(bitsof_least_possible_value)
-            outs() << " possible values: " << least_possible_value_value << " : \n";
+        outs() << " value_with_least_possible_values: "; value_with_least_possible_values->print(outs()); outs() << "\n";  outs().flush();
+        outs() << " bitsof_least_possible_value : " << bitsof_least_possible_value << "\n";  outs().flush();
+        outs() << " possible values: " << least_possible_value_value << " : \n";
+
         auto possible_values = getPossibleValues(bitsof_least_possible_value, least_possible_value_value - 1);
         auto original_value = value_with_least_possible_values;//(*rVMap)[value_with_least_possible_values];
 
@@ -766,76 +904,28 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         function->print(OS, nullptr);
 
         cout << "\nWhich option do you select? ";
-        // TODO: implement something to remember the choice
+        // TODO:
+        // store current state
+        // select some option 
+        // after that option is explored to the end, create a branch to that option, we can use jump table?
+
         unsigned long long option = 0;
         cin >> option;
         auto newValue = ConstantInt::get(value_with_least_possible_values->getType(), possible_values[option]);
 
 
         
-        printvalue2(original_value->getNumUses())
-        original_value->replaceAllUsesWith(newValue);
+        // replace original value with the value we selected
+        replaceAllUsesWithandReplaceRMap(original_value, newValue, flippedRegisterMap);
+        //original_value->replaceAllUsesWith(newValue);
 
-        printvalue2(newValue->getNumUses())
-        // now make this loooooooooooooppppp
-        queue<Value*> toSimplify;
-        set<Value*> visited;
 
-        for (User* user : newValue->users()) {
-            if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                toSimplify.push(userInst);
-            }
-        }
-
-        while (!toSimplify.empty()) {
-            auto simplifyUser = toSimplify.front();
-            toSimplify.pop();
-            
-            auto nsv = simplifyValueLater(simplifyUser, DL);
-            
-
-            if (isa<GetElementPtrInst>(nsv)) {
-                for (User* user : nsv->users()) {
-                    //printvalue(user)
-                    if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                        // push if not visited
-                        //printvalue(userInst)
-                            if (visited.find(userInst) == visited.end()) {
-                                //printvalue(userInst) // if we are inserting, print for 2nd time
-                                    toSimplify.push(userInst);
-                                visited.insert(userInst);
-                            }
-                    }
-                }
-            }
-
-            // yes return the same value very good idea definitely doesnt break anything
-            if (simplifyUser == nsv) {
-                continue;
-            }
-            // if can simplify, continue?
-
-            // find a way to make this look not ugly, or dont. idc
-            for (User* user : simplifyUser->users()) {
-                printvalue(nsv)
-                printvalue(user)
-                if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                    // push if not visited
-                    printvalue(userInst)
-                        
-                        if (visited.find(userInst) == visited.end() ) {
-                            printvalue(userInst) // if we are inserting, print for 2nd time
-                            toSimplify.push(userInst);
-                            visited.insert(userInst);
-                        }
-                }
-            }
-
-            simplifyUser->replaceAllUsesWith(nsv);
-            
-        }
+        // simplify later usages
+        simplifyUsers(newValue, DL, flippedRegisterMap);
 
         SimplifyQuery SQ(DL);
+
+
 
 
      
@@ -843,7 +933,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         std::string Filename3 = "output_trysolve2.ll";
         std::error_code EC3;
         raw_fd_ostream OS3(Filename3, EC3);
-        //function->print(OS3, EC);
+        function->print(OS3, nullptr);
         // receive input, replace the value with received input
         // re-run program
     }

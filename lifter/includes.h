@@ -9,6 +9,7 @@
 #define NDEBUG
 #endif
 //#define _DEVELOPMENT
+//#define _FORCEPRINT
 
 
 #ifdef _DEVELOPMENT
@@ -22,11 +23,16 @@
 #define printvalue2(x) ((void)0);
 #endif
 
+#ifdef _FORCEPRINT
 #define printvalueforce(x) \
-    outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
+    outs() << " "  #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
 
 #define printvalueforce2(x) \
     outs() << " " #x " : " << x << "\n";  outs().flush();
+#else
+#define printvalueforce(x) ((void)0);
+#define printvalueforce2(x) ((void)0);
+#endif
 
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)
@@ -35,6 +41,8 @@
 #include <map>
 #include <tuple>
 #include <queue>
+#include <set>
+#include <unordered_set>
 #ifdef _WIN32
 #define NOMINMAX
 #include <Windows.h>
@@ -49,7 +57,8 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "utils.h"
-
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/ADT/APInt.h"
