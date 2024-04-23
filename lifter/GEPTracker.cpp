@@ -172,6 +172,29 @@ namespace GEPStoreTracker {
 
     }
 
+    Value* bswapValue(Value* v, IRBuilder<>& builder) {
+        Value* newswappedvalue = ConstantInt::get(v->getType(), 0);
+        Value* mask = ConstantInt::get(v->getType(), 0xff);
+        for (int i = 0; i < v->getType()->getIntegerBitWidth() / 8; i++) {
+            // 0xff
+            // b = a & 0xff >> 0
+            // b = 0x78
+            // nb |=  b << 24
+            // nb |= 0x78000000
+            // 0xff00
+            // b = a & 0xff00 >> 8
+            // b = 0x56
+            // nb |= b << 16
+            // nb = 0x78560000
+            auto byte = createLShrFolder(builder, createAndFolder(builder, v, mask), i * 8, "shlresultmsb");
+            auto shiftby = v->getType()->getIntegerBitWidth() - (i + 1) * 8;
+            auto newposbyte = createShlFolder(builder, byte, shiftby);
+            newswappedvalue = createOrFolder(builder, newswappedvalue, newposbyte);
+            mask = createShlFolder(builder, mask, 8);
+        }
+        return newswappedvalue;
+    }
+
     Value* solveLoad(LoadInst* load) {
         auto LoadMemLoc = MemoryLocation::get(load);
 
@@ -274,10 +297,20 @@ namespace GEPStoreTracker {
 
                 
                 IRBuilder<> builder(bb);
-                
-                auto maskedinst = builder.CreateAnd(inst->getOperand(0), mask, inst->getName() + ".masked");
-                retval = builder.CreateOr(retval, maskedinst, retval->getName() + ".merged");
 
+                // get negated mask and or then?
+                auto maskedinst = builder.CreateAnd(builder.CreateZExt(inst->getOperand(0), retval->getType()) , mask, inst->getName() + ".maskedinst");
+
+                printvalueforce(maskedinst);
+                if (diff > 0)
+                    maskedinst = builder.CreateShl(maskedinst, diff*8);
+                else
+                    maskedinst = builder.CreateLShr(maskedinst, -diff*8);
+
+                printvalueforce(maskedinst);
+
+                retval = builder.CreateAnd(retval, mask, inst->getName() + ".masked");
+                retval = builder.CreateOr(retval, maskedinst, retval->getName() + ".merged");
                 printvalueforce(inst);
                 printvalueforce(retval);
             }

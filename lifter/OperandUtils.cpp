@@ -1218,7 +1218,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
 				return solvedLoad;
-
+			
 			if (isa<ConstantInt>(effectiveAddress)) {
 				ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
 				if (!effectiveAddressInt) return nullptr;
