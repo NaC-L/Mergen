@@ -32,11 +32,6 @@ public:
         }
     }
 
-
-
-
-
-
     void addValueReference(Value* value, unsigned address) {
         unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
         for (unsigned i = 0; i < valueSizeInBytes; i++) {
@@ -152,39 +147,169 @@ namespace BinaryOperations {
 };
 
 
+
 namespace GEPStoreTracker {
     // only push stores to here
-    queue<memoryInfo> memInfos;
+    vector<memoryInfo> memInfos;
+
+    vector<Instruction*> memInfos2;
+
+    void insertMemoryOp(Instruction* inst) {
+        memInfos2.push_back(inst);
+    }    
+    
+    bool overlaps(uint64_t addr1, uint64_t size1, uint64_t addr2, uint64_t size2) {
+        return std::max(addr1, addr2) < std::min(addr1 + size1, addr2 + size2);
+    }
+
+    uint64_t createmask(long diff) {
+
+        long shift = abs(diff);
+
+        auto mask = 0xFFFFFFFFFFFFFFFFULL << shift * 8;
+
+        return mask ^ -(diff > 0); // 0 or -1 if 0, noop, if -1 xor
+
+    }
+
+    Value* solveLoad(LoadInst* load) {
+        auto LoadMemLoc = MemoryLocation::get(load);
+
+        const Value* loadPtr = LoadMemLoc.Ptr;
+        LocationSize loadsize = LoadMemLoc.Size;
+
+        auto cloadsize = loadsize.getValue();
+        printvalueforce2(cloadsize);
+        
+        // shouldnt happen anyways
+        if (!isa<GetElementPtrInst>(loadPtr))
+            return nullptr;
+        auto loadPtrGEP = cast<GetElementPtrInst>(loadPtr);
+
+        auto loadPointer = loadPtrGEP->getPointerOperand();
+        auto loadOffset = loadPtrGEP->getOperand(1);
+
+        Value* retval = nullptr;
+
+        for (auto inst : memInfos2) {
+
+            // we are only interested in previous instructions
+            if (!inst->comesBefore(load) )
+                break;
+
+            // we are only interested in stores
+            if (!inst->mayWriteToMemory())
+                continue;
+
+
+            auto MemLoc = MemoryLocation::get(inst);
+
+            auto memLocationValue = MemLoc.Ptr;
+
+            // shouldnt happen anyways
+            if (!isa<GetElementPtrInst>(memLocationValue))
+                continue;
+            auto memLocationGEP = cast<GetElementPtrInst>(memLocationValue);
+
+            auto pointer = memLocationGEP->getPointerOperand();
+            auto offset = memLocationGEP->getOperand(1);
+
+            
+            if (pointer != loadPointer)
+                break;
+
+
+            // find a way to compare with unk values, we are also interested when offset in unk ( should be a rare case ) 
+            if (!isa<ConstantInt>(offset) || !isa<ConstantInt>(loadOffset))
+                continue;
+
+            auto memOffsetValue = cast<ConstantInt>(offset)->getZExtValue();
+            auto loadOffsetValue = cast<ConstantInt>(loadOffset)->getZExtValue();
+
+            long diff = memOffsetValue - loadOffsetValue;
+
+            // say we want to access 4
+            // and 0 stores A, 8 stores B
+            // 0 <= 4 <= 0+SIZE  // 4 (load starting) is in 0 (first store, 0 to 8 range) 
+            // 8 <= 4+SIZE <= 8+SIZE // 4+SIZE (load end) is in 8 (last store 8 to 16 range)
+            //
+            // what if we want to access 0
+            // 0 <= 0 <= 0+SIZE // correct
+            // 0 <= 0+SIZE <= 0+SIZE // correct
+            //
+            // now do this with variables
+            // a <= c <= a+SIZE
+            // b <= c+SIZE <= b+SIZE
+            // simplify it to
+            // 0 <= c-a <= SIZE
+            // -SIZE <= c-b <= 0 
+            // 
+            //  ???
+            //
+            // what if we have more than 2 stores 
+            // store 0x1234 at 0 ( 0 = 0x12, 1 = 0x34)
+            // store 0x56 at 2 ( 2 = 0x56)
+            // store 0x78 at 3 ( 3 = 0x78)
+
+            printvalueforce2(diff)
+            printvalueforce2(memOffsetValue)
+            printvalueforce2(loadOffsetValue)
+
+            //if (std::max(loadOffsetValue, memOffsetValue) < std::min(loadOffsetValue + cloadsize, memOffsetValue + MemLoc.Size.getValue() )) {
+            if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, MemLoc.Size.getValue() )) {
+                
+                if (!retval)
+                    retval = ConstantInt::get(load->getType(), 0);
+
+                unsigned long long mask = createmask(diff);
+                // diff -4 = 0xFF_FF_FF_FF_00_00_00_00
+                // diff  4 = 0x00_00_00_00_FF_FF_FF_FF
+                printvalueforce2(mask)
+
+
+                // mask inst here
+                // then or with retval
+
+                auto bb = inst->getParent();
+
+                
+                IRBuilder<> builder(bb);
+                
+                auto maskedinst = builder.CreateAnd(inst->getOperand(0), mask, inst->getName() + ".masked");
+                retval = builder.CreateOr(retval, maskedinst, retval->getName() + ".merged");
+
+                printvalueforce(inst);
+                printvalueforce(retval);
+            }
+
+        }
+        return retval;
+    }
 
     void insertInfo(ptrValue pv, idxValue av, memoryValue mv, bool isStore) {
-        memInfos.push(make_tuple(pv, av, mv, isStore));
-        TypeBasedAAResult AA;
-        
+        memInfos.push_back(make_tuple(pv, av, mv, isStore));
     }
 
     // we use this as a loadValue
     memoryValue getValueAt(IRBuilder<>& builder, ptrValue pv, idxValue iv, unsigned int byteCount) {
 
+
         if (!isa<ConstantInt>(iv))
             return nullptr;
 
+        // i really want to replace this buffer
         lifterMemoryBuffer2 tempBuffer;
         // only care about %memory values for now 
 
 
         // replace queue with vector maybe?
-        queue<memoryInfo> memInfos_temp = memInfos;
 
-        while (!memInfos_temp.empty()) {
+        for (memoryInfo info : memInfos) {
 
-            auto info = memInfos_temp.front();
-            
-            memInfos_temp.pop();
-            
             ptrValue t_ptr = get<0>(info);
-            
+
             idxValue t_idx = get<1>(info);
-            
+
             memoryValue t_mem = get<2>(info);
             
             bool isStore = get<3>(info);
@@ -196,9 +321,11 @@ namespace GEPStoreTracker {
                 printvalueforce(t_mem)
             }
             */
+            
             if (t_ptr == pv && !isa<ConstantInt>(t_idx) && !isStore) { // if we hit the load, return? 
                 break;
             }
+
             //printvalueforce2(isStore)
             if (!isStore) // if not store, no reason to insert it to our buffer
                 continue;
