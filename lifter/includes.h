@@ -8,7 +8,7 @@
 #ifndef NDEBUG
 #define NDEBUG
 #endif
-#define _DEVELOPMENT
+//#define _DEVELOPMENT
 
 
 #ifdef _DEVELOPMENT

@@ -12,11 +12,6 @@ struct InstructionDependencyOrder {
     }
 };
  
-// remove this **special** global variable stuff its UGLY and dumb
-void initDetections(void* file_base, ZyanU8* data) { 
-    file_base_g = file_base;
-    data_g = data;
-}
 
 void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv, unordered_map<Value*, int> rVMap) {
 
@@ -187,7 +182,7 @@ void test_optxd(Function* clonedFuncx) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -203,7 +198,7 @@ void test_optxd(Function* clonedFuncx) {
 
         
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
 
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.addPass(RemovePseudoStackPass());
@@ -220,6 +215,8 @@ void test_optxd(Function* clonedFuncx) {
     } while (changed);
 }
 
+
+// this doesnt belong in this file anymore but it also doesnt have a home...
 void final_optpass(Function* clonedFuncx) {
     llvm::PassBuilder passBuilder;
 
@@ -241,7 +238,7 @@ void final_optpass(Function* clonedFuncx) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -258,7 +255,7 @@ void final_optpass(Function* clonedFuncx) {
 
         
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.addPass(RemovePseudoStackPass());
 
@@ -337,7 +334,7 @@ opaque_info isOpaque(Function* function) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -358,7 +355,7 @@ opaque_info isOpaque(Function* function) {
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
 
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
         
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
@@ -464,7 +461,7 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -492,7 +489,7 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
         
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
         
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
 
@@ -606,7 +603,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;
@@ -624,7 +621,7 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
         
 
         modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(GEPLoadPass(file_base_g,data_g));
+        modulePassManager.addPass(GEPLoadPass());
         
 
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
@@ -743,7 +740,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass(file_base_g, data_g));
+            modulePassManager.addPass(GEPLoadPass());
             return true;
         }
         return false;

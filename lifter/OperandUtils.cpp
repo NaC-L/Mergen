@@ -6,10 +6,6 @@ void* file_base_g_operand;
 ZyanU8* data_g_operand;
 
 
-void initBases2(void* file_base, ZyanU8* data) {
-	file_base_g_operand = file_base;
-	data_g_operand = data;
-}
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -130,10 +126,12 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 			return SLV;
 	}
 
-	uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
+	
 
 
 	unsigned byteSize = v->getType()->getIntegerBitWidth() / 8;
+/*
+	uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
 	uintptr_t tempValue;
 
 	if (mappedAddr > 0) {
@@ -144,6 +142,15 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 		if (newVal)
 			return newVal;
 	}
+*/
+	if (APInt* ConstantValue = BinaryOperations::readMemory(addr, byteSize)) {
+		APInt value = *ConstantValue;
+		Constant* newVal = ConstantInt::get(v->getType(), value);
+
+		if (newVal)
+			return newVal;
+	}
+
 	return v;
 }
 
@@ -1217,20 +1224,17 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 				if (!effectiveAddressInt) return nullptr;
 
 				uintptr_t addr = effectiveAddressInt->getZExtValue();
-				uintptr_t mappedAddr = address_to_mapped_address(file_base_g_operand, addr);
 
 				unsigned byteSize = loadType->getIntegerBitWidth() / 8;
-				uintptr_t tempValue;
+				
+				
 
-				if (mappedAddr > 0) {
-					std::memcpy(&tempValue, reinterpret_cast<const void*>(data_g_operand + mappedAddr), byteSize);
+				if (APInt* readValue = BinaryOperations::readMemory(addr, byteSize)) {
+					APInt value = *readValue;
+					Constant* newVal = ConstantInt::get(loadType, value);
 
-					APInt readValue(byteSize * 8, tempValue);
-					Constant* newVal = ConstantInt::get(loadType, readValue);
-					if (newVal) {
-						printvalue(newVal);
+					if (newVal)
 						return newVal;
-					}
 				}
 
 				if (addr > 0 && addr < STACKP_VALUE) {
