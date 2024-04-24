@@ -237,7 +237,7 @@ void final_optpass(Function* clonedFuncx) {
     passBuilder.crossRegisterProxies(loopAnalysisManager, functionAnalysisManager, cGSCCAnalysisManager, moduleAnalysisManager);
 
     
-    llvm::ModulePassManager modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+    llvm::ModulePassManager modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O0);
 
     passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         if (Name == "gep-load-pass") {
@@ -257,10 +257,11 @@ void final_optpass(Function* clonedFuncx) {
         size_t beforeSize = module->getInstructionCount();
 
         
-        modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+        modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O1);
         modulePassManager.addPass(GEPLoadPass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.addPass(RemovePseudoStackPass());
+        
 
         modulePassManager.run(*module, moduleAnalysisManager);
 
@@ -695,6 +696,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
     PATH_info result = PATH_unsolved;
+
+    // this gets the last basicblock, either change this or make sure we respect it all the times
     llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
     if (returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {

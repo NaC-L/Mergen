@@ -1,6 +1,7 @@
 ﻿#include "includes.h"
 #include "OperandUtils.h"
 #include "PathSolver.h"
+#include "GEPTracker.h"
 
 // probably move this stuff somewhere else
 
@@ -574,13 +575,52 @@ namespace branches {
         auto bb = BasicBlock::Create(context, block_name.c_str(), builder.GetInsertBlock()->getParent());
 
 
-        builder.CreateBr(bb);
 
-        uintptr_t test = src.imm.value.s + instruction.runtime_address;
+        uintptr_t jump_address = instruction.runtime_address;
+        switch (src.type) {
+        case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
+            jump_address += src.imm.value.s;
+            break;
+        }
+        case ZYDIS_OPERAND_TYPE_MEMORY:
+        case ZYDIS_OPERAND_TYPE_REGISTER: {
+            auto registerValue = GetOperandValue(context, builder, src, 64);
+            if (!isa<ConstantInt>(registerValue))
+                throw("trying to call an unknown value");
+            auto registerCValue = cast<ConstantInt>(registerValue);
+            jump_address = registerCValue->getZExtValue();
+            break;
+        }
+        }
+
+
+
+        // if its trying to jump somewhere else than our binary
+        if (!BinaryOperations::readMemory(jump_address, 1)) {
+            // actually call the function first
+
+            FunctionType* externFuncType = FunctionType::get(Type::getInt64Ty(context), {  }, false);
+            auto M = builder.GetInsertBlock()->getParent()->getParent();
+
+            Function* externFunc = cast<Function>(M->getOrInsertFunction("externfunc_", externFuncType).getCallee());
+            
+            auto callresult = builder.CreateCall(externFunc);
+
+            SetRegisterValue(context, builder, ZYDIS_REGISTER_RAX, callresult); // add rsp 8,
+
+            SetOperandValue(context, builder, rsp, RspValue, to_string(instruction.runtime_address)); // add rsp 8,
+
+            // get [rsp], jump there
+            auto RIP_value = cast<ConstantInt>(push_into_rsp);
+            jump_address = RIP_value->getZExtValue();
+        }
+
+        builder.CreateBr(bb);
 #ifdef _DEVELOPMENT
-        cout << "jmp address: " << test << "\n";
+        cout << "jmp address: " << jump_address << "\n";
 #endif
-        blockAddresses->push_back(make_tuple(test, bb, getRegisterList()));
+
+        blockAddresses->push_back(make_tuple(jump_address, bb, getRegisterList()));
 
     }
 
@@ -617,7 +657,7 @@ namespace branches {
         std::string Filename = "output_rets.ll";
         std::error_code EC;
         raw_fd_ostream OS(Filename, EC);
-        function->print(OS);
+        function->getParent()->print(OS,nullptr);
 #endif
 
 
@@ -3142,6 +3182,10 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     SetRegisterValue(context, builder, ZYDIS_REGISTER_RIP, val);
     auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
     printvalue(rsp);
+
+
+
+
     switch (instruction.info.mnemonic) {
         // movs
     case ZYDIS_MNEMONIC_MOVUPS:
