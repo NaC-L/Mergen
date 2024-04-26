@@ -68,7 +68,7 @@ public:
     ZyanU8* data;
 
     GEPLoadPass() {
-        BinaryOperations::getBases(file_base, data);
+        BinaryOperations::getBases(&file_base, &data);
     }
 
     llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {

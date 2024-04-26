@@ -117,14 +117,14 @@ namespace BinaryOperations {
         data_g = data;
     }
 
-    void getBases(void* file_base, ZyanU8* data) {
-        file_base = file_base_g;
-        data = data_g;
+    void getBases(void** file_base, ZyanU8** data) {
+        *file_base = file_base_g;
+        *data = data_g;
     }
 
 
     // sections
-    APInt* readMemory(uintptr_t addr, unsigned byteSize) {
+    bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value) {
 
 
         uintptr_t mappedAddr = address_to_mapped_address(file_base_g, addr);
@@ -134,10 +134,11 @@ namespace BinaryOperations {
             std::memcpy(&tempValue, reinterpret_cast<const void*>(data_g + mappedAddr), byteSize);
 
             APInt readValue(byteSize * 8, tempValue);
-            return &readValue;
+            value = readValue;
+            return 1;
         }
 
-        return nullptr;
+        return 0;
     }
 
     // TODO

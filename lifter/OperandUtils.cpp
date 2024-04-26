@@ -143,8 +143,8 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 			return newVal;
 	}
 */
-	if (APInt* ConstantValue = BinaryOperations::readMemory(addr, byteSize)) {
-		APInt value = *ConstantValue;
+	APInt value ;
+	if (BinaryOperations::readMemory(addr, byteSize, value)) {
 		Constant* newVal = ConstantInt::get(v->getType(), value);
 
 		if (newVal)
@@ -1231,14 +1231,11 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 				unsigned byteSize = loadType->getIntegerBitWidth() / 8;
 				
-				
-
-				if (APInt* readValue = BinaryOperations::readMemory(addr, byteSize)) {
-					APInt value = *readValue;
+				APInt value(1,0);
+				if (BinaryOperations::readMemory(addr, byteSize, value)) {
+					
 					Constant* newVal = ConstantInt::get(loadType, value);
-
-					if (newVal)
-						return newVal;
+					return newVal;
 				}
 
 				if (addr > 0 && addr < STACKP_VALUE) {
@@ -1528,4 +1525,51 @@ void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& 
 
 		rsp = createAddFolder(builder, rsp, ConstantInt::get(rsp->getType(), 1));
 	}
+}
+
+// return [rsp], rsp+=8
+Value* popStack(LLVMContext& context, IRBuilder<>& builder) {
+	auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
+	// should we get a address calculator function, do we need that?
+
+	std::vector<Value*> indices;
+	indices.push_back(rsp);
+
+	Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadPOPStack--");
+
+	auto loadType = Type::getInt64Ty(context);
+	Value* returnValue = builder.CreateLoad(loadType, pointer, "PopStack-");
+
+
+	auto CI = ConstantInt::get(rsp->getType(), 8);
+	SetRegisterValue(context, ZYDIS_REGISTER_RSP, createAddFolder(builder, rsp, CI));
+
+	if (isa<ConstantInt>(rsp)) {
+		ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(rsp);
+		if (!effectiveAddressInt) return nullptr;
+
+		uintptr_t addr = effectiveAddressInt->getZExtValue();
+
+		unsigned byteSize = loadType->getBitWidth() / 8;
+		// should never hit
+		APInt value(1, 0);
+		if (BinaryOperations::readMemory(addr, byteSize, value)) {
+
+			Constant* newVal = ConstantInt::get(loadType, value);
+			return newVal;
+		}
+
+		if (addr > 0 && addr < STACKP_VALUE) {
+			auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
+			if (newval) {
+				auto retval = simplifyValue(newval,
+					builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+				printvalue(retval);
+				return  retval;
+			}
+			return ConstantInt::get(loadType, 0);
+		}
+	}
+
+	return returnValue;
 }

@@ -17,6 +17,7 @@ vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > added_block
 uintptr_t original_address = 0;
 
 
+// consider having this function in a class, later we can use multi-threading to explore different paths
 void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* data, ZyanU64 runtime_address, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, Function* function, ZyanU64 file_base) {
 
     
@@ -114,62 +115,66 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
 
 
 
-void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, uintptr_t file_base, shared_ptr<Module> lifting_module) {
+void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, uintptr_t file_base) {
     ZydisDecoder decoder;
     ZydisFormatter formatter;
-    LLVMContext& context = lifting_module->getContext();
 
+    
     ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
     ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
 
+    
+    LLVMContext context;
+    string mod_name = "my_lifting_module";
+    llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
 
 
-
+    
     std::vector<llvm::Type*> argTypes;
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::PointerType::get(context, 0));
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::Type::getInt64Ty(context)); 
+    argTypes.push_back(llvm::PointerType::get(context, 0)); 
 
     auto functionType = llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 
 
-
+    
     string function_name = "main";
-    auto function = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, function_name.c_str(), lifting_module.get());
+    auto function = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, function_name.c_str(), lifting_module);
 
-
+    
     string block_name = "entry";
     auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
     llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
-
+    
     auto RegisterList = InitRegisters(context, builder, function, runtime_address);
 
     ZydisDisassembledInstruction instruction;
 
-
+    
     std::shared_ptr<std::vector<std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>> blockAddresses = std::make_shared<std::vector<std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>>();
 
     blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
-
+    
     asm_to_zydis_to_lift(context, builder, (uint8_t*)file_base, runtime_address, blockAddresses, function, file_base);
 
 
-
+    
     std::string Filename = "output.ll";
     std::error_code EC;
     llvm::raw_fd_ostream OS(Filename, EC);
@@ -179,9 +184,9 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
         return;
     }
 
-    lifting_module->print(OS, nullptr);
+    lifting_module.print(OS, nullptr);
 
-    
+
     return;
 }
 
@@ -228,12 +233,8 @@ int main(int argc, char* argv[])
     cout << "address: " << ADDRESS << " filebase: " << (uintptr_t)fileBase << " fOffset: " << fileOffset << " RVA: " << RVA << endl;
 
 
-
-    LLVMContext context;
-    string mod_name = "my_lifting_module";
-    shared_ptr<Module> lifting_module = std::make_shared<Module>(mod_name.c_str(), context);
     
-    InitFunction_and_LiftInstructions(dataAtAddress, startAddr, (uintptr_t)fileBase, lifting_module);
+    InitFunction_and_LiftInstructions(dataAtAddress, startAddr, (uintptr_t)fileBase);
 
 
 
