@@ -239,15 +239,6 @@ void final_optpass(Function* clonedFuncx) {
     
     llvm::ModulePassManager modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O0);
 
-    passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
-        if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass());
-            return true;
-        }
-        return false;
-    });
-
-
     llvm::Module* module = clonedFuncx->getParent();
 
     bool changed;
@@ -257,7 +248,7 @@ void final_optpass(Function* clonedFuncx) {
         size_t beforeSize = module->getInstructionCount();
 
         
-        modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O1);
+        modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
         modulePassManager.addPass(GEPLoadPass());
         modulePassManager.addPass(ReplaceTruncWithLoadPass());
         modulePassManager.addPass(RemovePseudoStackPass());
