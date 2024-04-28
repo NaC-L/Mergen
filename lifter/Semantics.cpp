@@ -1459,8 +1459,8 @@ namespace arithmeticsAndLogical {
 
         auto bitWidthValue = ConstantInt::get(countValue->getType(), bitWidth);
 
-        Value* clampedCount = createAndFolder(builder, countValue, ConstantInt::get(countValue->getType(), maskC), "shlclamp");
-        Value* shiftedValue = builder.CreateAShr(Lvalue, clampedCount, "shr-lshr-" + to_string(instruction.runtime_address) + "-");
+        Value* clampedCount = createAndFolder(builder, countValue, ConstantInt::get(countValue->getType(), maskC), "sarclamp");
+        Value* shiftedValue = builder.CreateAShr(Lvalue, clampedCount, "sar-lshr-" + to_string(instruction.runtime_address) + "-");
 
         Value* isZeroed = createICMPFolder(builder, CmpInst::ICMP_UGT, clampedCount, ConstantInt::get(clampedCount->getType(), bitWidth-1));
         shiftedValue = createSelectFolder(builder, isZeroed, zero, shiftedValue);
@@ -1481,7 +1481,7 @@ namespace arithmeticsAndLogical {
         Value* isNotZero = createICMPFolder(builder, CmpInst::ICMP_NE, clampedCount, zero);
         Value* oldcf = getFlag(context, builder, FLAG_CF);
         cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf);
-        cfValue = createSelectFolder(builder, isZeroed, zero, cfValue);
+        cfValue = createSelectFolder(builder, isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)), cfValue);
 
         Value* sf = computeSignFlag(builder, shiftedValue);
         Value* zf = computeZeroFlag(builder, shiftedValue);
@@ -1516,25 +1516,25 @@ namespace arithmeticsAndLogical {
 
         auto bitWidthValue = ConstantInt::get(countValue->getType(), bitWidth);
 
-        Value* clampedCount = createAndFolder(builder, countValue, ConstantInt::get(countValue->getType(), maskC), "shlclamp");
+        Value* clampedCount = createAndFolder(builder, countValue, ConstantInt::get(countValue->getType(), maskC), "shrclamp");
 
         Value* shiftedValue = createLShrFolder(builder,Lvalue, clampedCount, "shr-lshr-" + to_string(instruction.runtime_address) + "-");
         Value* zero = ConstantInt::get(countValue->getType(), 0);
         Value* isZeroed = createICMPFolder(builder, CmpInst::ICMP_UGT, clampedCount, ConstantInt::get(clampedCount->getType(), bitWidth-1));
-        shiftedValue = createSelectFolder(builder, isZeroed, zero, shiftedValue);
+        shiftedValue = createSelectFolder(builder, isZeroed, zero, shiftedValue,"shiftValue");
         
-        Value* cfValue = createTruncFolder(builder,createLShrFolder(builder,Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"shrcf"), builder.getInt1Ty());
+        Value* cfValue = builder.CreateTrunc(createLShrFolder(builder,Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"shrcf"), builder.getInt1Ty());
 
         
         Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ,clampedCount, ConstantInt::get(clampedCount->getType(), 1));
         Value* of = createICMPFolder(builder, CmpInst::ICMP_SLT, Lvalue, ConstantInt::get(Lvalue->getType(), 0));
-        of = createSelectFolder(builder,isCountOne, of, getFlag(context, builder, FLAG_OF));
+        of = createSelectFolder(builder,isCountOne, of, getFlag(context, builder, FLAG_OF),"of");
 
 
         Value* isNotZero = createICMPFolder(builder, CmpInst::ICMP_NE, clampedCount, zero);
         Value* oldcf = getFlag(context, builder, FLAG_CF);
-        cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf);
-        cfValue = createSelectFolder(builder, isZeroed, createTruncFolder(builder, zero, Type::getInt1Ty(context)), cfValue);
+        cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf,"cfValue1");
+        cfValue = createSelectFolder(builder, isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)), cfValue,"cfValue2");
         Value* sf = computeSignFlag(builder, shiftedValue);
         Value* zf = computeZeroFlag(builder, shiftedValue);
         Value* pf = computeParityFlag(builder, shiftedValue);
@@ -1551,7 +1551,7 @@ namespace arithmeticsAndLogical {
             printvalue(isNotZero)
             printvalue(oldcf)
             printvalue(cfValue)
-        SetOperandValue(context, builder, dest, shiftedValue, to_string(instruction.runtime_address));;
+        SetOperandValue(context, builder, dest, shiftedValue, to_string(instruction.runtime_address));
     }
 
 
@@ -3075,7 +3075,7 @@ namespace flagOperation {
         
         
         Value* dx = createSelectFolder(builder,
-            createICMPFolder(builder, CmpInst::ICMP_EQ,signBit, ConstantInt::get(Type::getInt16Ty(context), 0)),
+            createICMPFolder(builder, CmpInst::ICMP_EQ,signBit, ConstantInt::get(signBit->getType(), 0)),
             ConstantInt::get(Type::getInt16Ty(context), 0),
             ConstantInt::get(Type::getInt16Ty(context), 0xFFFF),
             "setDX");
@@ -3093,7 +3093,7 @@ namespace flagOperation {
 
 
         Value* edx = createSelectFolder(builder,
-            createICMPFolder(builder, CmpInst::ICMP_EQ, signBit, ConstantInt::get(Type::getInt32Ty(context), 0)),
+            createICMPFolder(builder, CmpInst::ICMP_EQ, signBit, ConstantInt::get(signBit->getType(), 0)),
             ConstantInt::get(Type::getInt32Ty(context), 0),
             ConstantInt::get(Type::getInt32Ty(context), 0xFFFFFFFF),
             "setEDX");
@@ -3108,7 +3108,7 @@ namespace flagOperation {
         Value* signBit = computeSignFlag(builder, rax);
 
         Value* rdx = createSelectFolder(builder,
-            createICMPFolder(builder, CmpInst::ICMP_EQ, signBit, ConstantInt::get(Type::getInt64Ty(context), 0)),
+            createICMPFolder(builder, CmpInst::ICMP_EQ, signBit, ConstantInt::get(signBit->getType(), 0)),
             ConstantInt::get(Type::getInt64Ty(context), 0),
             ConstantInt::get(Type::getInt64Ty(context), 0xFFFFFFFFFFFFFFFF),
             "setRDX");

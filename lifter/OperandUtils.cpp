@@ -20,12 +20,27 @@ ZyanU8* data_g_operand;
 #endif
 
 
+
+// returns if a comes before b
+bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT) {
+	
+	bool sameBlock = a->getParent() == b->getParent(); // if same block, use ->comesBefore,
+
+	if (sameBlock) {
+		return a->comesBefore(b); // if a comes before b, return true
+	}
+	// if "a"'s block dominates "b"'s block, "a" comes first.
+	bool dominate = DT.properlyDominates(a->getParent(), b->getParent());
+	return dominate;
+}
+
+
 KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL) {
 	KnownBits knownBits(64);
 	knownBits.resetAll();
-	if (value->getType() == Type::getInt128Ty(value->getContext()))
+	/*if (value->getType() == Type::getInt128Ty(value->getContext()))
 		return knownBits;
-	
+	*/
 
 	return computeKnownBits(value, DL, 3);
 }
@@ -80,6 +95,7 @@ Value* simplifyLoadValue(Value* v) {
 	//printvalueforce(idxv)
 	//printvalueforce2(byteCount)
 
+	// rework
 	auto retVal = GEPStoreTracker::getValueAt(builder, pv, idxv, byteCount);
 
 	//printvalueforce(retVal)
@@ -248,7 +264,9 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 #ifdef TESTFOLDERshl
 
 
-
+	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+		if (RHSConst->isZero()) return LHS;
+	}
 
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
@@ -268,7 +286,9 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twin
 	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDERshr
 
-
+	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+		if (RHSConst->isZero()) return LHS;
+	}
 
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
@@ -1217,11 +1237,10 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			auto retval = builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
 
-			/*
-			GEPStoreTracker::insertMemoryOp(cast<StoreInst>(retval));
-			if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
-				return solvedLoad;
-			*/
+			
+			GEPStoreTracker::insertMemoryOp(retval);
+
+			
 
 			if (isa<ConstantInt>(effectiveAddress)) {
 				ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
@@ -1235,19 +1254,24 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 				if (BinaryOperations::readMemory(addr, byteSize, value)) {
 					
 					Constant* newVal = ConstantInt::get(loadType, value);
+					printvalueforce(newVal);
 					return newVal;
 				}
-
+				
+				if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
+					return solvedLoad;
+				/*
 				if (addr > 0 && addr < STACKP_VALUE) {
 					auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
 					if (newval) {
-						auto retval = simplifyValue(newval,
+						auto retvalStack = simplifyValue(newval,
 							builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
-						printvalue(retval);
-						return retval;
+						printvalue(retvalStack);
+						return retvalStack;
 					}
 					return ConstantInt::get(getIntSize(byteSize, context), 0);
 				}
+				*/
 			}
 			
 			pointer = simplifyValue(pointer,
@@ -1280,6 +1304,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			}
 			*/
 
+			// ??
 			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, nullptr, false);
 
 			printvalue(retval);
@@ -1406,7 +1431,7 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			outs() << "\n";
 			outs().flush();
 #endif
-
+			printvalue(pointer)
 			// if effectiveAddress is not pointing at stack, its probably self modifying code
 			// if effectiveAddress and value is consant we can say its a self modifying code and modify the binary
 			if (isa<ConstantInt>(effectiveAddress) ) {
@@ -1523,6 +1548,8 @@ void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& 
 		ConstantInt* rspInt = cast<ConstantInt>(rsp);
 		globalBuffer.addValueReference(byteVal, rspInt->getZExtValue());
 
+		GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
+		GEPStoreTracker::insertInfo(memoryAlloc, rsp, byteVal, true);
 		rsp = createAddFolder(builder, rsp, ConstantInt::get(rsp->getType(), 1));
 	}
 }
@@ -1538,11 +1565,13 @@ Value* popStack(LLVMContext& context, IRBuilder<>& builder) {
 	Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices, "GEPLoadPOPStack--");
 
 	auto loadType = Type::getInt64Ty(context);
-	Value* returnValue = builder.CreateLoad(loadType, pointer, "PopStack-");
+	auto returnValue = builder.CreateLoad(loadType, pointer, "PopStack-");
 
 
 	auto CI = ConstantInt::get(rsp->getType(), 8);
 	SetRegisterValue(context, ZYDIS_REGISTER_RSP, createAddFolder(builder, rsp, CI));
+
+	GEPStoreTracker::insertMemoryOp(returnValue);
 
 	if (isa<ConstantInt>(rsp)) {
 		ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(rsp);
@@ -1558,6 +1587,9 @@ Value* popStack(LLVMContext& context, IRBuilder<>& builder) {
 			Constant* newVal = ConstantInt::get(loadType, value);
 			return newVal;
 		}
+
+		if (Value* solvedLoad = GEPStoreTracker::solveLoad(returnValue))
+			return solvedLoad;
 
 		if (addr > 0 && addr < STACKP_VALUE) {
 			auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);

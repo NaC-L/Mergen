@@ -8,8 +8,10 @@
 #ifndef NDEBUG
 #define NDEBUG
 #endif
-#define _DEVELOPMENT
-//#define _FORCEPRINT
+//#define _DEVELOPMENT
+
+// alternative printing for (sometimes) debug and some other purposes
+#define _DISABLEFORCEPRINT
 
 
 #ifdef _DEVELOPMENT
@@ -23,7 +25,7 @@
 #define printvalue2(x) ((void)0);
 #endif
 
-#ifdef _FORCEPRINT
+#ifndef _DISABLEFORCEPRINT
 #define printvalueforce(x) \
     outs() << " "  #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
 

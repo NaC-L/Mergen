@@ -150,12 +150,24 @@ namespace BinaryOperations {
 
 
 namespace GEPStoreTracker {
+    DominatorTree *DT;
+
     // only push stores to here
     vector<memoryInfo> memInfos;
+
+
+    void initDomTree(Function& F) {
+        DT = new DominatorTree(F);
+    }
+
+    void updateDomTree(Function& F) {
+        DT->recalculate(F);
+    }
 
     vector<Instruction*> memInfos2;
 
     void insertMemoryOp(Instruction* inst) {
+        // no reason to push loads anymore
         memInfos2.push_back(inst);
     }    
     
@@ -176,6 +188,8 @@ namespace GEPStoreTracker {
 
 
     Value* solveLoad(LoadInst* load) {
+        Function* F = load->getFunction();
+        
 
         auto LoadMemLoc = MemoryLocation::get(load);
 
@@ -194,18 +208,18 @@ namespace GEPStoreTracker {
         auto loadOffset = loadPtrGEP->getOperand(1);
 
 
-
+        
 
         Value* retval = nullptr;
 
         for (auto inst : memInfos2) {
 
             // we are only interested in previous instructions
-
-            printvalueforce2(load->comesBefore(inst))
-            if (load->comesBefore(inst)) {
-                printvalueforce(inst)
-                printvalueforce(load)
+            
+            //printvalueforce2(comesBefore(load,inst))
+            if (comesBefore(load, inst, *DT)) {
+                printvalue(load)
+                printvalue(inst)
                 break;
             }
 
@@ -262,46 +276,58 @@ namespace GEPStoreTracker {
             // store 0x1234 at 0 ( 0 = 0x12, 1 = 0x34)
             // store 0x56 at 2 ( 2 = 0x56)
             // store 0x78 at 3 ( 3 = 0x78)
+            /*
 
-            printvalueforce2(diff)
-            printvalueforce2(memOffsetValue)
-            printvalueforce2(loadOffsetValue)
+            */
             auto storeBitSize = MemLoc.Size.getValue();
             //if (std::max(loadOffsetValue, memOffsetValue) < std::min(loadOffsetValue + cloadsize, memOffsetValue + MemLoc.Size.getValue() )) {
             if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, storeBitSize)) {
                 
+                printvalueforce2(diff)
+                printvalueforce2(memOffsetValue)
+                printvalueforce2(loadOffsetValue)
+
                 if (!retval)
                     retval = ConstantInt::get(load->getType(), 0);
 
-                unsigned long long mask = createmask(diff, storeBitSize);
+                Value* mask = ConstantInt::get(load->getType(), createmask(diff, storeBitSize));
                 // diff -4 = 0xFF_FF_FF_FF_00_00_00_00
                 // diff  4 = 0x00_00_00_00_FF_FF_FF_FF
-                printvalueforce2(mask)
+                printvalueforce(mask)
 
 
                 // mask inst here
                 // then or with retval
 
                 auto bb = inst->getParent();
+                IRBuilder<> builder(load);
 
-                
-                IRBuilder<> builder(bb);
 
                 // get negated mask and or then?
-                auto maskedinst = builder.CreateAnd(builder.CreateZExt(inst->getOperand(0), retval->getType()) , mask, inst->getName() + ".maskedinst");
+                auto maskedinst = createAndFolder(builder, builder.CreateZExtOrTrunc(inst->getOperand(0), retval->getType()) , mask, inst->getName() + ".maskedinst");
 
                 printvalueforce(maskedinst);
-                if (diff > 0)
-                    maskedinst = builder.CreateShl(maskedinst, diff*8);
-                else
-                    maskedinst = builder.CreateLShr(maskedinst, -diff*8);
+                // move the mask?
+                if (diff > 0) {
+                    maskedinst = createShlFolder(builder, maskedinst, diff * 8);
+                    mask = createShlFolder(builder, mask, diff * 8);
 
+                }
+                else {
+                    maskedinst = createLShrFolder(builder, maskedinst, -diff * 8);
+                    mask = createLShrFolder(builder, mask, -diff * 8);
+                }
                 printvalueforce(maskedinst);
+                
+                // clear mask
+                auto cleared_retval = createAndFolder(builder,retval, builder.CreateNot(mask), retval->getName() + ".cleared");
 
-                retval = builder.CreateAnd(retval, mask, inst->getName() + ".masked");
-                retval = builder.CreateOr(retval, maskedinst, retval->getName() + ".merged");
+                retval = createOrFolder(builder, cleared_retval, maskedinst, cleared_retval->getName() + ".merged");
+
                 printvalueforce(inst);
-                printvalueforce(retval);
+                auto retvalload = retval;
+                printvalueforce(cleared_retval);
+                printvalueforce(retvalload);
             }
 
         }

@@ -6,10 +6,15 @@
 void* file_base_g;
 ZyanU8* data_g;
 
+
 struct InstructionDependencyOrder {
     bool operator()(Instruction* const& a, Instruction* const& b) const {
-        
-        return ( b->comesBefore(a) ); 
+
+        Function* F = a->getFunction();
+        DominatorTree DT(*F);
+        DT.recalculate(*F);
+
+        return ( comesBefore(b,a, DT)  );
     }
 };
  

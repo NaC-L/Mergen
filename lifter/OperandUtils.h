@@ -52,3 +52,4 @@ KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL);
 Value* simplifyValueLater(Value* v, const DataLayout& DL);
 unordered_map<Value*, int> flipRegisterMap();
 Value* popStack(LLVMContext& context, IRBuilder<>& builder);
+bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT);
