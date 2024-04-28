@@ -22,7 +22,8 @@ namespace BinaryOperations {
 };
 
 namespace GEPStoreTracker {
-
+    void initDomTree(Function& F);
+    void updateDomTree(Function& F);
     Value* solveLoad(LoadInst* inst);
 
     void insertMemoryOp(Instruction* inst);

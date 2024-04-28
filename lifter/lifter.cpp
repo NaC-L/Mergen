@@ -11,7 +11,6 @@
 #include <cstdlib>
 #include <fstream>
 
-#define _CRTDBG_MAP_ALLOC
 
 vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > added_blocks_addresses;
 uintptr_t original_address = 0;
@@ -20,7 +19,6 @@ uintptr_t original_address = 0;
 // consider having this function in a class, later we can use multi-threading to explore different paths
 void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* data, ZyanU64 runtime_address, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, Function* function, ZyanU64 file_base) {
 
-    
     bool run = 1;
     while (run) {
 
@@ -35,12 +33,19 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
             cout << "offset: " << offset << " file_base?: " << original_address << " runtime: " << runtime_address << endl;
 #endif
             
+            auto nextBasicBlock = get<1>(blockAddresses->back());
             added_blocks_addresses.push_back(blockAddresses->back());
             
-            builder.SetInsertPoint(get<1>(blockAddresses->back()));
+            builder.SetInsertPoint(nextBasicBlock);
             
+            // will use this for exploring multiple branches
             setRegisterList(get<2>(blockAddresses->back()));
-            
+            //
+
+            // update only when its needed
+            auto F = nextBasicBlock->getParent();
+            GEPStoreTracker::updateDomTree(*F);
+
             blockAddresses->pop_back();
 
             BinaryOperations::initBases((void*)file_base, data);
@@ -91,8 +96,9 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
                     // maybe change it to a queue
                     for (auto& b_address : added_blocks_addresses) {
                         if (get<0>(b_address) - file_base == offset) {
-                            builder.CreateBr(get<1>(b_address));
-                            builder.SetInsertPoint(get<1>(b_address));
+                            auto nextBB = get<1>(b_address);
+                            builder.CreateBr(nextBB);
+                            builder.SetInsertPoint(nextBB);
                             run = 0;
                             break;
                         }
@@ -166,6 +172,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
 
     ZydisDisassembledInstruction instruction;
 
+    GEPStoreTracker::initDomTree(*function);
     
     std::shared_ptr<std::vector<std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>> blockAddresses = std::make_shared<std::vector<std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>>();
 
