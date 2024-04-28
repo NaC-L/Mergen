@@ -291,13 +291,45 @@ namespace GEPStoreTracker {
                     retval = ConstantInt::get(load->getType(), 0);
 
                 Value* mask = ConstantInt::get(load->getType(), createmask(diff, storeBitSize));
+                // we apply this mask to ?
                 // diff -4 = 0xFF_FF_FF_FF_00_00_00_00
-                // diff  4 = 0x00_00_00_00_FF_FF_FF_FF
+                // diff  4 = 0x00_00_00_00_FF_FF_FF_FF ??
                 printvalueforce(mask)
 
 
                 // mask inst here
                 // then or with retval
+
+                // v = 0x1122334455667788
+                // insert v to (0)
+                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 44 (5) 33 (6) 22 (7) 11 (8)
+                // ci = 0
+                // insert ci to (4)
+                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 0 (5) 0 (6) 0 (7) 0 (8)
+                // value at (0) = 0x55667788
+                // nv = v & 0xFF_FF_FF_FF ; nv = 0x55667788
+                // nc = ci & 0xFF_FF_FF_FF << (diff)4 * 8 ; nc = 0
+                // nv2 = nv | nc ; nv2 = 0x55667788
+                // 
+                // new case
+                // insert v to (0)
+                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 44 (5) 33 (6) 22 (7) 11 (8)
+                // ci = 0x44332211
+                // insert ci to (4)
+                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 11 (5) 22 (6) 33 (7) 44 (8)
+                // value should be = 0x44332211_55667788
+                // nv = v & 0xFF_FF_FF_FF ; nv = 0x55667788
+                // nc = ci & 0xFF_FF_FF_FF << (diff)4 * 8 ; nc = ( 0x44332211 ) << 32 = 0x44332211_00000000
+                // nv2 = nv | nc ; nv2 = 0x55667788 | 0x44332211_00000000 = 0x44332211_55667788
+
+
+                // v = i64 0x1122334455667788
+                // insert v to (0)
+                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 44 (5) 33 (6) 22 (7) 11 (8)
+                // ci = i32 0
+                // insert ci to (0)
+                // (0) 0 (1) 0 (2) 0 (3) 0 (4) 44 (5) 33 (6) 22 (7) 11 (8)
+                
 
                 auto bb = inst->getParent();
                 IRBuilder<> builder(load);
@@ -305,6 +337,9 @@ namespace GEPStoreTracker {
 
                 // get negated mask and or then?
                 auto maskedinst = createAndFolder(builder, builder.CreateZExtOrTrunc(inst->getOperand(0), retval->getType()) , mask, inst->getName() + ".maskedinst");
+                // maskedinst = 0x1122334455667788 & -1
+                // now diff is 4, mask is 0xff_ff_ff_ff
+                // maskedinst = 0x44332211 & 0xff_ff_ff_ff
 
                 printvalueforce(maskedinst);
                 // move the mask?
@@ -317,12 +352,22 @@ namespace GEPStoreTracker {
                     maskedinst = createLShrFolder(builder, maskedinst, -diff * 8);
                     mask = createLShrFolder(builder, mask, -diff * 8);
                 }
+                // maskedinst = maskedinst
+                // maskedinst = 0x4433221100000000
                 printvalueforce(maskedinst);
                 
-                // clear mask
-                auto cleared_retval = createAndFolder(builder,retval, builder.CreateNot(mask), retval->getName() + ".cleared");
+                // clear mask from retval so we can merge
+                // this will be a NOT operation for sure
+                auto reverseMask = builder.CreateNot(mask);
+
+                printvalueforce(reverseMask);
+                auto cleared_retval = createAndFolder(builder,retval, reverseMask, retval->getName() + ".cleared");
+                // cleared_retval = 0 & 0; clear retval
+                // cleared_retval = retval & 0xff_ff_ff_ff_00_00_00_00
 
                 retval = createOrFolder(builder, cleared_retval, maskedinst, cleared_retval->getName() + ".merged");
+                // retval = cleared_retval | maskedinst =|= 0 | 0x1122334455667788
+                // retval = cleared_retval | maskedinst =|= 0x55667788 | 0x4433221100000000
 
                 printvalueforce(inst);
                 auto retvalload = retval;

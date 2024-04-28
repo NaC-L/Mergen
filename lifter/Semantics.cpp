@@ -3167,9 +3167,9 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
     printvalue(rsp);
 
-
+    
     uintptr_t jump_address = instruction.runtime_address;
-    // if its trying to jump somewhere else than our binary, call it and continue from [rsp]
+    // if its trying to jump somewhere else than our binary, call it and continue from [rsp] (apperantly also forget to check rsp value in the meantime)
     APInt temp;
     if (!BinaryOperations::readMemory(jump_address, 1, temp)) {
 
@@ -3198,7 +3198,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
         (*run) = 0;
         return;
     }
-
+    
 
 
 
