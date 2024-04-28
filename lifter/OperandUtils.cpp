@@ -1587,10 +1587,10 @@ Value* popStack(LLVMContext& context, IRBuilder<>& builder) {
 			Constant* newVal = ConstantInt::get(loadType, value);
 			return newVal;
 		}
-
+		
 		if (Value* solvedLoad = GEPStoreTracker::solveLoad(returnValue))
 			return solvedLoad;
-
+		/*
 		if (addr > 0 && addr < STACKP_VALUE) {
 			auto newval = globalBuffer.retrieveCombinedValue(builder, addr, byteSize);
 			if (newval) {
@@ -1601,6 +1601,7 @@ Value* popStack(LLVMContext& context, IRBuilder<>& builder) {
 			}
 			return ConstantInt::get(loadType, 0);
 		}
+		*/
 	}
 
 	return returnValue;
