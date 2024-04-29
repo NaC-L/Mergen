@@ -8,10 +8,10 @@
 #ifndef NDEBUG
 #define NDEBUG
 #endif
-#define _DEVELOPMENT
+//#define _DEVELOPMENT
 
 // alternative printing for (sometimes) debug and some other purposes
-//#define _DISABLEFORCEPRINT
+#define _DISABLEFORCEPRINT
 
 
 #ifdef _DEVELOPMENT

@@ -148,26 +148,30 @@ namespace BinaryOperations {
 };
 
 
-
+// do some cleanup
 namespace GEPStoreTracker {
     DominatorTree *DT;
 
     // only push stores to here
     vector<memoryInfo> memInfos;
 
+    BasicBlock* lastBB = nullptr;
 
     void initDomTree(Function& F) {
         DT = new DominatorTree(F);
     }
 
     void updateDomTree(Function& F) {
-        DT->recalculate(F);
+        // doesnt make a much difference, but good to have
+        auto getLastBB = &(F.back());
+        if (getLastBB != lastBB)
+            DT->recalculate(F);
+        lastBB = getLastBB;
     }
 
+    // rename
     vector<Instruction*> memInfos2;
-
     void insertMemoryOp(Instruction* inst) {
-        // no reason to push loads anymore
         memInfos2.push_back(inst);
     }    
     
@@ -189,7 +193,8 @@ namespace GEPStoreTracker {
 
     Value* solveLoad(LoadInst* load) {
         Function* F = load->getFunction();
-        
+
+        GEPStoreTracker::updateDomTree(*F);
 
         auto LoadMemLoc = MemoryLocation::get(load);
 
@@ -379,11 +384,12 @@ namespace GEPStoreTracker {
         return retval;
     }
 
+    // remove
     void insertInfo(ptrValue pv, idxValue av, memoryValue mv, bool isStore) {
         memInfos.push_back(make_tuple(pv, av, mv, isStore));
     }
 
-    // we use this as a loadValue
+    // remove
     memoryValue getValueAt(IRBuilder<>& builder, ptrValue pv, idxValue iv, unsigned int byteCount) {
 
 

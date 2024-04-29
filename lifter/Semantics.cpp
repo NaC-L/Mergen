@@ -3168,6 +3168,37 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
     printvalue(rsp);
 
+    uintptr_t jump_address = instruction.runtime_address;
+    // if its trying to jump somewhere else than our binary, call it and continue from [rsp] (apperantly also forget to check rsp value in the meantime)
+    APInt temp;
+    if (!BinaryOperations::readMemory(jump_address, 1, temp) && cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
+
+        auto bb = BasicBlock::Create(context, "returnToOrgCF", builder.GetInsertBlock()->getParent());
+        // actually call the function first
+
+        FunctionType* externFuncType = FunctionType::get(Type::getInt64Ty(context), { llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context) }, false);
+        auto M = builder.GetInsertBlock()->getParent()->getParent();
+
+        Function* externFunc = cast<Function>(M->getOrInsertFunction("externfunc_" + to_string(jump_address) + "-", externFuncType).getCallee());
+
+        auto RspRegister = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
+        auto callresult = builder.CreateCall(externFunc, { createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RAX),Type::getInt64Ty(context)) , createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RCX),Type::getInt64Ty(context)) , createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RDX),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RBX),Type::getInt64Ty(context)) , RspRegister ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RBP),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RSI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RDI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RDI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R8),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R9),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R10),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R11),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R12),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R13),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R14),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R15),Type::getInt64Ty(context)) , getMemory() });
+
+        SetRegisterValue(context, builder, ZYDIS_REGISTER_RAX, callresult); // rax = externalfunc()
+
+        auto next_jump = popStack(context, builder);
+        printvalue(next_jump);
+        // get [rsp], jump there
+        auto RIP_value = cast<ConstantInt>(next_jump);
+        jump_address = RIP_value->getZExtValue();
+
+        builder.CreateBr(bb);
+
+        blockAddresses->push_back(make_tuple(jump_address, bb, getRegisterList()));
+        (*run) = 0;
+        return;
+    }
+
     switch (instruction.info.mnemonic) {
         // movs
     case ZYDIS_MNEMONIC_MOVUPS:
@@ -3637,35 +3668,6 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
         exit(-2);
     }
     }
-    uintptr_t jump_address = instruction.runtime_address;
-    // if its trying to jump somewhere else than our binary, call it and continue from [rsp] (apperantly also forget to check rsp value in the meantime)
-    APInt temp;
-    if (!BinaryOperations::readMemory(jump_address, 1, temp) && cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
 
-        auto bb = BasicBlock::Create(context, "returnToOrgCF", builder.GetInsertBlock()->getParent());
-        // actually call the function first
-
-        FunctionType* externFuncType = FunctionType::get(Type::getInt64Ty(context), { llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context) }, false);
-        auto M = builder.GetInsertBlock()->getParent()->getParent();
-
-        Function* externFunc = cast<Function>(M->getOrInsertFunction("externfunc_" + to_string(jump_address) + "-", externFuncType).getCallee());
-
-        auto RspRegister = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
-        auto callresult = builder.CreateCall(externFunc, { createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RAX),Type::getInt64Ty(context)) , createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RCX),Type::getInt64Ty(context)) , createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RDX),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RBX),Type::getInt64Ty(context)) , RspRegister ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RBP),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RSI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RDI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_RDI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R8),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R9),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R10),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R11),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R12),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R13),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R14),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(context,builder, ZYDIS_REGISTER_R15),Type::getInt64Ty(context)) , getMemory() });
-
-        SetRegisterValue(context, builder, ZYDIS_REGISTER_RAX, callresult); // rax = externalfunc()
-
-        auto next_jump = popStack(context, builder);
-        printvalue(next_jump);
-        // get [rsp], jump there
-        auto RIP_value = cast<ConstantInt>(next_jump);
-        jump_address = RIP_value->getZExtValue();
-
-        builder.CreateBr(bb);
-
-        blockAddresses->push_back(make_tuple(jump_address, bb, getRegisterList()));
-        (*run) = 0;
-        return;
-    }
 
 }

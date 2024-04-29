@@ -72,7 +72,6 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 
 Value* simplifyLoadValue(Value* v) {
 
-
 	Instruction* inst = cast<Instruction>(v);
 	Module* M = (inst->getModule());
 	Function& F = *inst->getFunction();
@@ -96,7 +95,7 @@ Value* simplifyLoadValue(Value* v) {
 	//printvalueforce2(byteCount)
 
 	// rework
-	auto retVal = GEPStoreTracker::getValueAt(builder, pv, idxv, byteCount);
+	auto retVal = GEPStoreTracker::solveLoad(cast<LoadInst>(v));
 
 	//printvalueforce(retVal)
 	return retVal;
