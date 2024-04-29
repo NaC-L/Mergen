@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <fstream>
 
-
+// do some cleanup
 vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > added_blocks_addresses;
 uintptr_t original_address = 0;
 
@@ -44,7 +44,6 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
 
             // update only when its needed
             auto F = nextBasicBlock->getParent();
-            GEPStoreTracker::updateDomTree(*F);
 
             blockAddresses->pop_back();
 
@@ -94,6 +93,8 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
 
                     // whats the purpose of this ????
                     // maybe change it to a queue
+                    // maybe remove XD?
+                    /*
                     for (auto& b_address : added_blocks_addresses) {
                         if (get<0>(b_address) - file_base == offset) {
                             auto nextBB = get<1>(b_address);
@@ -103,6 +104,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
                             break;
                         }
                     }
+                    */
 
                 }
                 else
