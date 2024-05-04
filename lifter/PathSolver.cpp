@@ -42,6 +42,13 @@ void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv, unordered_map<Value*,
 }
 
 
+// simplify Users with BFS
+// because =>  
+// x = add a, b 
+// if we go simplify a then simplify x, then simplify b, we might miss simplifying x
+// if we go simplify a, then simplify b, then simplify x we will not miss
+//
+// also refactor this
 void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> flippedRegisterMap) {
     unordered_map<Value*, short > visitCount;
     unordered_set<Value*> visited;
@@ -907,6 +914,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         // store current state
         // select some option 
         // after that option is explored to the end, create a branch to that option, we can use jump table?
+        // similar to DFS
 
         unsigned long long option = 0;
         cin >> option;

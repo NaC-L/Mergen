@@ -180,16 +180,38 @@ namespace GEPStoreTracker {
     }
 
 
-    uint64_t createmask(long diff, unsigned sizebits) {
+    uint64_t createmask(unsigned long a1, unsigned long a2, unsigned long b1, unsigned long b2) {
 
-        long shift = abs(diff);
+        auto start_overlap = max(a1, b1);
+        auto end_overlap = min(a2, b2);
+        long diffStart = a1 - b1;
 
-        auto mask = (0xFFFFFFFFFFFFFFFFULL >> 64 - sizebits * 8) << shift * 8;
+        printvalue2(start_overlap)
+        printvalue2(end_overlap)
+        // If there is no overlap
+        if (start_overlap > end_overlap) 
+            return 0; 
 
-        return mask ^ -(diff > 0); // 0 or -1 if 0, noop, if -1 xor
+        auto num_bytes = end_overlap - start_overlap;
+        // mask =>  
+        unsigned long long mask = 0xffffffffffffffff >> 64-(num_bytes*8); // adjust mask for bytesize
+        printvalue2(diffStart)
+        if (diffStart <= 0)
+            return mask;
+
+            
+        auto diffShift = abs(diffStart);
+
+        printvalue2(mask)
+        mask <<= (diffShift)*8; // get the shifted mask
+        printvalue2(mask)
+
+        mask ^=  -(diffStart < 0); // if diff was -, get the negative of mask
+        printvalue2(mask)
+
+        return mask;
 
     }
-
 
     Value* solveLoad(LoadInst* load) {
         Function* F = load->getFunction();
@@ -223,8 +245,6 @@ namespace GEPStoreTracker {
             
             //printvalueforce2(comesBefore(load,inst))
             if (comesBefore(load, inst, *DT)) {
-                printvalue(load)
-                printvalue(inst)
                 break;
             }
 
@@ -259,31 +279,8 @@ namespace GEPStoreTracker {
 
             long diff = memOffsetValue - loadOffsetValue;
 
-            // say we want to access 4
-            // and 0 stores A, 8 stores B
-            // 0 <= 4 <= 0+SIZE  // 4 (load starting) is in 0 (first store, 0 to 8 range) 
-            // 8 <= 4+SIZE <= 8+SIZE // 4+SIZE (load end) is in 8 (last store 8 to 16 range)
-            //
-            // what if we want to access 0
-            // 0 <= 0 <= 0+SIZE // correct
-            // 0 <= 0+SIZE <= 0+SIZE // correct
-            //
-            // now do this with variables
-            // a <= c <= a+SIZE
-            // b <= c+SIZE <= b+SIZE
-            // simplify it to
-            // 0 <= c-a <= SIZE
-            // -SIZE <= c-b <= 0 
-            // 
-            //  ???
-            //
-            // what if we have more than 2 stores 
-            // store 0x1234 at 0 ( 0 = 0x12, 1 = 0x34)
-            // store 0x56 at 2 ( 2 = 0x56)
-            // store 0x78 at 3 ( 3 = 0x78)
-            /*
 
-            */
+            
             auto storeBitSize = MemLoc.Size.getValue();
             //if (std::max(loadOffsetValue, memOffsetValue) < std::min(loadOffsetValue + cloadsize, memOffsetValue + MemLoc.Size.getValue() )) {
             if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, storeBitSize)) {
@@ -291,93 +288,242 @@ namespace GEPStoreTracker {
                 printvalueforce2(diff)
                 printvalueforce2(memOffsetValue)
                 printvalueforce2(loadOffsetValue)
+                printvalueforce2(storeBitSize)
 
+                    auto storedInst = inst->getOperand(0);
                 if (!retval)
                     retval = ConstantInt::get(load->getType(), 0);
-
-                Value* mask = ConstantInt::get(load->getType(), createmask(diff, storeBitSize));
-                // we apply this mask to ?
-                // diff -4 = 0xFF_FF_FF_FF_00_00_00_00
-                // diff  4 = 0x00_00_00_00_FF_FF_FF_FF ??
-                printvalueforce(mask)
-
-
-                // mask inst here
-                // then or with retval
-
-                // v = 0x1122334455667788
-                // insert v to (0)
-                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 44 (5) 33 (6) 22 (7) 11 (8)
-                // ci = 0
-                // insert ci to (4)
-                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 0 (5) 0 (6) 0 (7) 0 (8)
-                // value at (0) = 0x55667788
-                // nv = v & 0xFF_FF_FF_FF ; nv = 0x55667788
-                // nc = ci & 0xFF_FF_FF_FF << (diff)4 * 8 ; nc = 0
-                // nv2 = nv | nc ; nv2 = 0x55667788
-                // 
-                // new case
-                // insert v to (0)
-                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 44 (5) 33 (6) 22 (7) 11 (8)
-                // ci = 0x44332211
-                // insert ci to (4)
-                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 11 (5) 22 (6) 33 (7) 44 (8)
-                // value should be = 0x44332211_55667788
-                // nv = v & 0xFF_FF_FF_FF ; nv = 0x55667788
-                // nc = ci & 0xFF_FF_FF_FF << (diff)4 * 8 ; nc = ( 0x44332211 ) << 32 = 0x44332211_00000000
-                // nv2 = nv | nc ; nv2 = 0x55667788 | 0x44332211_00000000 = 0x44332211_55667788
-
-
-                // v = i64 0x1122334455667788
-                // insert v to (0)
-                // (0) 88 (1) 77 (2) 66 (3) 55 (4) 44 (5) 33 (6) 22 (7) 11 (8)
-                // ci = i32 0
-                // insert ci to (0)
-                // (0) 0 (1) 0 (2) 0 (3) 0 (4) 44 (5) 33 (6) 22 (7) 11 (8)
+               
                 
+                
+                // partial load example
+                // 
+                // %m1 = getelementptr i8, %memory, i64 0
+                // %m2 = getelementptr i8, %memory, i64 4
+                // %m3 = getelementptr i8, %memory, i64 8
+                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 55 [4] 44 33 22 11 [8]
+                // store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m3 => [0] 88 77 66 55 [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16]
+                // %x = load i64, ptr %m2                       => [0] 88 77 66 55 [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16]
+                // now:                                         %x = 44 33 22 11 AC AB FF EE => 0xEE_FF_AB_AC_11_22_33_44
+                // %p1 = 0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_FF_00_00_00_00
+                // %p2 = 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_00_00_FF_FF_FF_FF
+                // %p3 = 0
+                // %p1.shift = %p1 >> 4(diff)*8
+                // %p2.shift = %p2 << 4(diff)*8
+                // %p4 = %p1.shift | %p2.shift
+                // 
+                // overwriting example
+                //
+                //
+                //
+                // %m1 = getelementptr i8, %memory, i64 0
+                // %m2 = getelementptr i8, %memory, i64 2
+                // %m3 = getelementptr i8, %memory, i64 8
+                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 [2] 66 55 [4] 44 33 22 11 [8]
+                // store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m2 => [0] 88 77 [2] AC AB [4] FF EE DD CC [8] BB AA [10]
+                // %x = load i64, ptr %m1                       => [0] 88 77 [2] AC AB [4] FF EE DD CC [8] BB AA [10]
+                // now:                                         %x = 88 77 AC AB FF EE DD CC => 0xCC_DD_EE_FF_AB_AC_11_22
+                // %p1 = 0x11_22_33_44_55_66_77_88 & -1
+                // %p2 = 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_FF_FF_FF_FF_FF_FF
+                // %p2.shifted = %p2 << 2*8
+                // %mask.shifted = 0x00_00_FF_FF_FF_FF_FF_FF << 2*8 => 0xFF_FF_FF_FF_FF_FF_00_00
+                // %reverse.mask.shifted = 0xFF_FF 
+                // %p1.masked = %p1 & %reverse.mask.shifted
+                // %retval = %p2.shifted | %p1.masked
+                //
+                // overwriting example WITH DIFFERENT TYPES
+                //
+                //
+                //
+                // %m1 = getelementptr i8, %memory, i64 0
+                // %m2 = getelementptr i8, %memory, i64 3
+                // %m3 = getelementptr i8, %memory, i64 8
+                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33 22 [7] 11 [8]
+                // store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66 [3] DD CC BB AA [7] 11 [8]
+                // %x = load i64, ptr %m1                       => [0] 88 77 66 [3] DD CC BB AA [7] 11 [8]
+                // now:                                         %x=[0] 88 77 66 [3] DD CC BB AA [7] 11 [8] => 0x11_AA_BB_CC_DD_66_77_88
+                // %p1 = 0x11_22_33_44_55_66_77_88 & -1
+                // %p2 = 0xAA_BB_CC_DD & 0xFF_FF_FF_FF 
+                // %p2.shifted = %p2 << 1*8                 =>  0xAA_BB_CC_DD << 8 => 0x_AA_BB_CC_DD_00
+                // %mask.shifted = 0xFF_FF_FF_FF << 1*8     => 0x00_00_00_FF_FF_FF_FF_00
+                // %reverse.mask.shifted = 0xFF_FF_FF_00_00_00_00_FF 
+                // %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_00_00_00_00_FF => 0x11_22_33_00_00_00_00_88
+                // %retval = %p2.shifted | %p1.masked       =>  0x11_22_33_00_00_00_00_88 | 0x00_00_00_AA_BB_CC_DD_00 => 0x11_22_33_AA_BB_CC_DD_88
+                // 
+                // PARTIAL overwriting example WITH DIFFERENT TYPES v1
+                //
+                //
+                //
+                // %m1 = getelementptr i8, %memory, i64 0
+                // %m2 = getelementptr i8, %memory, i64 6
+                // %m3 = getelementptr i8, %memory, i64 8
+                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33 [6] 22 11 [8] 
+                // store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66 [3] 55 44 33 [6] DD CC [8] BB AA [10]
+                // %x = load i64, ptr %m1                       => [0] 88 77 66 [3] 55 44 33 [6] DD CC [8] BB AA [10]
+                // now:                                         %x=[0] 88 77 66 [3] 55 44 33 [6] DD CC [8] => 0xCC_DD_33_44_55_66_77_88
+                // %p1 = 0x11_22_33_44_55_66_77_88 & -1
+                // %p2 = 0xAA_BB_CC_DD & 0x00_00_FF_FF 
+                // %p2.shifted = %p2 << 6*8                 =>  0xCC_DD << 48 => 0xCC_DD_00_00_00_00_00_00
+                // %mask.shifted = 0xFF_FF_FF_FF << 6*8     => 0xFF_FF_00_00_00_00_00_00
+                // %reverse.mask.shifted = 0x00_00_FF_FF_FF_FF_FF_FF
+                // %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0x00_00_FF_FF_FF_FF_FF_FF => 0x00_00_33_44_55_66_77_88
+                // %retval = %p2.shifted | %p1.masked       =>  0x00_00_33_44_55_66_77_88 | 0xCC_DD_00_00_00_00_00_00 => 0xCC_DD_33_44_55_66_77_88
+                //
+                // 
+                // PARTIAL overwriting example WITH DIFFERENT TYPES v2
+                //
+                //
+                //
+                // %m1 = getelementptr i8, %memory, i64 8
+                // %m2 = getelementptr i8, %memory, i64 7
+                // %m3 = getelementptr i8, %memory, i64 16
+                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [7] ?? [8] 88 77 66 [11] 55 44 33 22 11 [16] 
+                // store i32 0xAA_BB_CC_DD, ptr %m2             => [7] DD [8] CC BB AA [11] 55 44 33 22 11 [16]
+                // %x = load i64, ptr %m1                       => [7] DD [8] CC BB AA [11] 55 44 33 22 11 [16] 
+                // now:                                         %x=[7] DD [8] CC BB AA [11] 55 44 33 22 11 [16] => 0xCC_DD_33_44_55_66_77_88
+                // %p1 = 0x11_22_33_44_55_66_77_88 & -1
+                // %p2 = 0xAA_BB_CC_DD & 0xFF_FF_FF_00 (0xFF ^ -1)
+                // %p2.shifted = %p2 << 1*8                 =>  0xAA_BB_CC_00 >> 8 => 0xAA_BB_CC => 0x00_00_00_00_00_AA_BB_CC
+                // %mask.shifted = 0xFF_FF_FF_00 >> 1*8     => 0xFF_FF_FF
+                // %reverse.mask.shifted = 0xFF_FF_FF_FF_FF_00_00_00
+                // %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_FF_FF_00_00_00 => 0x11_22_33_44_55_00_00_00
+                // %retval = %p2.shifted | %p1.masked       =>  0x11_22_33_44_55_00_00_00 | 0xAA_BB_CC                => 0x11_22_33_44_55_AA_BB_CC
+                //
+                // 
+                // creating masks:
+                // orgload = 0<->8
+                // currentstore = 4<->8 
+                // size = 32bits
+                // mask will be:
+                // 0xFF_FF_FF_FF_00_00_00_00
+                // 
+                // orgload = 0<->8
+                // currentstore = 3<->7 
+                // size = 32bits
+                // mask will be:
+                // 0x00_FF_FF_FF_FF_00_00_00
+                // 
+                // orgload = 0<->8
+                // currentstore = 6<->10 
+                // size = 32bits
+                // mask will be:
+                // 0xFF_FF_00_00_00_00_00_00
+                // 
+                // orgload = 10<->18
+                // currentstore = 8<->16 
+                // size = 32bits
+                // mask will be:
+                // 0x00_00_00_00_00_00_FF_FF
+                // 
+                // mask generation:
+                // a1 = loadStart
+                // a2 = loadEnd
+                // b1 = storeStart
+                // b2 = storeEnd
+                //  a1, a2, b1, b2
+                // (assuming they overlap)
+                // [6 = b1] [7] [8 = a1] [9] [10 = b2] [11] [12 = a2]
+                //    -      -      +     +     -       /       /
+                // normal mask for b =  0xFF_FF_00_00
+                // clear  mask for a = ~0x00_00_FF_FF 
+                // 
+                // shift size = 2 (a1-b1, since its +, shift to right)
+                // 
+                // 
+                // [8 = a1] [9] [10] [11 = b1] [12 = a2] [13] [14 = b2]
+                //    -      -    -      +        /        /      /
+                // 
+                // normal mask for b =  0x00_00_00_FF (lowest byte gets saved)
+                // clear  mask for a = ~0xFF_00_00_00 (only highest byte gets cleared)
+                // 
+                // shift size = -3 (a1-b1, since its -, shift to left)
+                // 
+                // first iteration in loop
+                // store = getstore(currentStore)
+                // createMask( diff )
+                // shiftStore  = Store1 << diff
+                // shiftedmask = mask << diff
+                // reverseMask = ~shiftedmask
+                // retvalCleared = retval & reverseMask
+                // retval = retvalCleared | shiftStore
+                // second iteration in loop
+                // 
+                // store = getstore(currentStore)
+                // createMask( diff )
+                // shiftStore  = Store1 << diff
+                // shiftedmask = mask << diff
+                // reverseMask = ~shiftedmask
+                // retvalCleared = retval & reverseMask
+                // retval = retvalCleared | shiftStore
+                //
+                //
+                //
+                
+                long sizeExceeded = max( (int)( (memOffsetValue+ storeBitSize) -(loadOffsetValue + cloadsize)) , 0);
+                Value* mask = ConstantInt::get(storedInst->getType(), createmask(loadOffsetValue, loadOffsetValue + cloadsize, memOffsetValue, memOffsetValue + storeBitSize));
 
+                printvalueforce(mask)
+                
                 auto bb = inst->getParent();
                 IRBuilder<> builder(load);
 
+                auto maskedinst = createAndFolder(builder, storedInst, mask, inst->getName() + ".maskedinst");
 
-                // get negated mask and or then?
-                auto maskedinst = createAndFolder(builder, builder.CreateZExtOrTrunc(inst->getOperand(0), retval->getType()) , mask, inst->getName() + ".maskedinst");
-                // maskedinst = 0x1122334455667788 & -1
-                // now diff is 4, mask is 0xff_ff_ff_ff
-                // maskedinst = 0x44332211 & 0xff_ff_ff_ff
-
+                printvalueforce(storedInst);
+                printvalueforce(mask);
                 printvalueforce(maskedinst);
+                if (maskedinst->getType()->getScalarSizeInBits() < retval->getType()->getScalarSizeInBits()) 
+                    maskedinst = builder.CreateZExt(maskedinst, retval->getType());
+
+                if (mask->getType()->getScalarSizeInBits() < retval->getType()->getScalarSizeInBits()) 
+                    mask = builder.CreateZExt(mask, retval->getType());
+                
+                printvalueforce(maskedinst);
+                printvalue2(diff);
                 // move the mask?
                 if (diff > 0) {
-                    maskedinst = createShlFolder(builder, maskedinst, diff * 8);
-                    mask = createShlFolder(builder, mask, diff * 8);
-
+                    maskedinst = createShlFolder(builder, maskedinst, (diff) * 8);
+                    mask = createShlFolder(builder, mask, (diff) * 8);
                 }
-                else {
-                    maskedinst = createLShrFolder(builder, maskedinst, -diff * 8);
-                    mask = createLShrFolder(builder, mask, -diff * 8);
+                else if (diff < 0) {
+                    maskedinst = createLShrFolder(builder, maskedinst, -(diff) * 8);
+                    mask = createLShrFolder(builder, mask, -(diff) * 8);
                 }
                 // maskedinst = maskedinst
                 // maskedinst = 0x4433221100000000
                 printvalueforce(maskedinst);
+                maskedinst = builder.CreateZExtOrTrunc(maskedinst, retval->getType());
+                printvalueforce(maskedinst);
                 
+
+                printvalueforce(mask);
+
                 // clear mask from retval so we can merge
                 // this will be a NOT operation for sure
                 auto reverseMask = builder.CreateNot(mask);
-
+                
                 printvalueforce(reverseMask);
                 auto cleared_retval = createAndFolder(builder,retval, reverseMask, retval->getName() + ".cleared");
                 // cleared_retval = 0 & 0; clear retval
                 // cleared_retval = retval & 0xff_ff_ff_ff_00_00_00_00
 
                 retval = createOrFolder(builder, cleared_retval, maskedinst, cleared_retval->getName() + ".merged");
+                //retval = builder.CreateTrunc(retval, load->getType());
+                printvalueforce(cleared_retval);
+                printvalueforce(maskedinst);
                 // retval = cleared_retval | maskedinst =|= 0 | 0x1122334455667788
                 // retval = cleared_retval | maskedinst =|= 0x55667788 | 0x4433221100000000
+
+                if (retval)
+                    if (retval->getType()->getScalarSizeInBits() > load->getType()->getScalarSizeInBits())
+                        retval = builder.CreateTrunc(retval, load->getType());
 
                 printvalueforce(inst);
                 auto retvalload = retval;
                 printvalueforce(cleared_retval);
                 printvalueforce(retvalload);
+                string next_line = "------------------------------";
+                printvalue2(next_line)
             }
 
         }
