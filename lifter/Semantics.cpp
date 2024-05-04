@@ -224,10 +224,6 @@ namespace mov {
         auto Rvalue = GetOperandValue(context, builder, src, src.size, to_string(instruction.runtime_address));;
 
 
-        if ((dest.type == ZYDIS_OPERAND_TYPE_MEMORY) && (src.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) && (src.size < dest.size)) {
-            Rvalue = GetOperandValue(context, builder, src, dest.size);
-
-        }
 
         switch (instruction.info.mnemonic) {
         case ZYDIS_MNEMONIC_MOVSX: {
@@ -244,6 +240,9 @@ namespace mov {
         }
         }
 
+        if ((src.type == ZYDIS_OPERAND_TYPE_IMMEDIATE)) {
+            Rvalue = GetOperandValue(context, builder, src, dest.size);
+        }
 #ifdef _DEVELOPMENT
         printvalue(Rvalue);
 #endif
@@ -962,11 +961,14 @@ namespace branches {
         auto Value = GetOperandValue(context, builder, dest, 64);
         auto ripval = GetRegisterValue(context, builder, ZYDIS_REGISTER_RIP);
         auto newRip = createAddFolder(builder,Value, ripval, "jnle");
-
+        // Jump short if greater (ZF=0 and SF=OF).
+        printvalue(sf)
+        printvalue(zf)
+        printvalue(of)
         
-        auto sf_eq_of = createXorFolder(builder,sf, of);
-        auto sf_eq_of_not = builder.CreateNot(sf_eq_of, "jnle_SF_EQ_OF_NOT");
-        auto zf_not = builder.CreateNot(zf, "jnle_ZF_NOT");
+        auto sf_eq_of = createXorFolder(builder,sf, of); // 0-0 or 1-1 => 0
+        auto sf_eq_of_not = builder.CreateNot(sf_eq_of, "jnle_SF_EQ_OF_NOT"); // 0 => 1
+        auto zf_not = builder.CreateNot(zf, "jnle_ZF_NOT"); // zf == 0
         auto condition = createAndFolder(builder,sf_eq_of_not, zf_not, "jnle_Condition");
 
         branchHelper(context, builder, instruction, blockAddresses, condition, newRip, "jnle", branchnumber);
@@ -1451,7 +1453,7 @@ namespace arithmeticsAndLogical {
         auto dest = instruction.operands[0];
         auto count = instruction.operands[1];
 
-        Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
+        Value* Lvalue = GetOperandValue(context, builder, dest, dest.size, to_string(instruction.runtime_address));
         Value* countValue = GetOperandValue(context, builder, count, dest.size);
 
         Value* zero = ConstantInt::get(countValue->getType(), 0);
@@ -1461,10 +1463,10 @@ namespace arithmeticsAndLogical {
         auto bitWidthValue = ConstantInt::get(countValue->getType(), bitWidth);
 
         Value* clampedCount = createAndFolder(builder, countValue, ConstantInt::get(countValue->getType(), maskC), "sarclamp");
-        Value* shiftedValue = builder.CreateAShr(Lvalue, clampedCount, "sar-lshr-" + to_string(instruction.runtime_address) + "-");
+        Value* result = builder.CreateAShr(Lvalue, clampedCount, "sar-lshr-" + to_string(instruction.runtime_address) + "-");
 
         Value* isZeroed = createICMPFolder(builder, CmpInst::ICMP_UGT, clampedCount, ConstantInt::get(clampedCount->getType(), bitWidth-1));
-        shiftedValue = createSelectFolder(builder, isZeroed, zero, shiftedValue);
+        result = createSelectFolder(builder, isZeroed, zero, result);
 
         
         auto cfRvalue = createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1));
@@ -1484,13 +1486,14 @@ namespace arithmeticsAndLogical {
         cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf);
         cfValue = createSelectFolder(builder, isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)), cfValue);
 
-        Value* sf = computeSignFlag(builder, shiftedValue);
-        Value* zf = computeZeroFlag(builder, shiftedValue);
-        Value* pf = computeParityFlag(builder, shiftedValue);
+        Value* sf = computeSignFlag(builder, result);
+        Value* zf = computeZeroFlag(builder, result);
+        Value* pf = computeParityFlag(builder, result);
         printvalue(Lvalue)
+        printvalue2(bitWidth)
         printvalue(countValue)
         printvalue(clampedCount)
-        printvalue(shiftedValue)
+        printvalue(result)
         printvalue(isNotZero)
         printvalue(cfValue)
         printvalue(oldcf)
@@ -1500,7 +1503,7 @@ namespace arithmeticsAndLogical {
         setFlag(context, builder, FLAG_ZF, zf);
         setFlag(context, builder, FLAG_PF, pf);
 
-        SetOperandValue(context, builder, dest, shiftedValue, to_string(instruction.runtime_address));;
+        SetOperandValue(context, builder, dest, result, to_string(instruction.runtime_address));;
 
 
     }
@@ -1519,10 +1522,10 @@ namespace arithmeticsAndLogical {
 
         Value* clampedCount = createAndFolder(builder, countValue, ConstantInt::get(countValue->getType(), maskC), "shrclamp");
 
-        Value* shiftedValue = createLShrFolder(builder,Lvalue, clampedCount, "shr-lshr-" + to_string(instruction.runtime_address) + "-");
+        Value* result = createLShrFolder(builder,Lvalue, clampedCount, "shr-lshr-" + to_string(instruction.runtime_address) + "-");
         Value* zero = ConstantInt::get(countValue->getType(), 0);
         Value* isZeroed = createICMPFolder(builder, CmpInst::ICMP_UGT, clampedCount, ConstantInt::get(clampedCount->getType(), bitWidth-1));
-        shiftedValue = createSelectFolder(builder, isZeroed, zero, shiftedValue,"shiftValue");
+        result = createSelectFolder(builder, isZeroed, zero, result,"shiftValue");
         
         Value* cfValue = builder.CreateTrunc(createLShrFolder(builder,Lvalue, createSubFolder(builder,clampedCount, ConstantInt::get(clampedCount->getType(), 1)),"shrcf"), builder.getInt1Ty());
 
@@ -1536,9 +1539,9 @@ namespace arithmeticsAndLogical {
         Value* oldcf = getFlag(context, builder, FLAG_CF);
         cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf,"cfValue1");
         cfValue = createSelectFolder(builder, isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)), cfValue,"cfValue2");
-        Value* sf = computeSignFlag(builder, shiftedValue);
-        Value* zf = computeZeroFlag(builder, shiftedValue);
-        Value* pf = computeParityFlag(builder, shiftedValue);
+        Value* sf = computeSignFlag(builder, result);
+        Value* zf = computeZeroFlag(builder, result);
+        Value* pf = computeParityFlag(builder, result);
 
         setFlag(context, builder, FLAG_CF, cfValue);
         setFlag(context, builder, FLAG_OF, of);
@@ -1548,11 +1551,11 @@ namespace arithmeticsAndLogical {
 
         printvalue(Lvalue)
             printvalue(clampedCount)
-            printvalue(shiftedValue)
+            printvalue(result)
             printvalue(isNotZero)
             printvalue(oldcf)
             printvalue(cfValue)
-        SetOperandValue(context, builder, dest, shiftedValue, to_string(instruction.runtime_address));
+        SetOperandValue(context, builder, dest, result, to_string(instruction.runtime_address));
     }
 
 
@@ -1562,7 +1565,7 @@ namespace arithmeticsAndLogical {
         auto dest = instruction.operands[0];
         auto count = instruction.operands[1];
 
-        Value* Lvalue = GetOperandValue(context, builder, dest, dest.size);
+        Value* Lvalue = GetOperandValue(context, builder, dest, dest.size, to_string(instruction.runtime_address));
         Value* countValue = GetOperandValue(context, builder, count, dest.size);
         unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
         unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
@@ -1572,10 +1575,10 @@ namespace arithmeticsAndLogical {
         Value* clampedCountValue = createAndFolder(builder,countValue, ConstantInt::get(countValue->getType(), maskC),"shlclamp");
 
         
-        Value* shiftedValue = createShlFolder(builder,Lvalue, clampedCountValue, "shl-shift");
+        Value* result = createShlFolder(builder,Lvalue, clampedCountValue, "shl-shift");
         Value* zero = ConstantInt::get(countValue->getType(), 0);
         Value* isZeroed = createICMPFolder(builder, CmpInst::ICMP_UGT, clampedCountValue, ConstantInt::get(clampedCountValue->getType(), bitWidth-1));
-        shiftedValue = createSelectFolder(builder, isZeroed, zero, shiftedValue);
+        result = createSelectFolder(builder, isZeroed, zero, result);
         
         Value* cfValue = createLShrFolder(builder,Lvalue, createSubFolder(builder,bitWidthValue, clampedCountValue),"shlcf");
         Value* one = ConstantInt::get(cfValue->getType(), 1);
@@ -1603,7 +1606,7 @@ namespace arithmeticsAndLogical {
         Value* cfAsMSB = createTruncFolder(builder,createLShrFolder(builder,Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlcfasmsb"), Type::getInt1Ty(context));
 
         
-        Value* resultMSB = createTruncFolder(builder,createLShrFolder(builder,shiftedValue, ConstantInt::get(shiftedValue->getType(), bitWidth - 1), "shlresultmsb"), Type::getInt1Ty(context));
+        Value* resultMSB = createTruncFolder(builder,createLShrFolder(builder,result, ConstantInt::get(result->getType(), bitWidth - 1), "shlresultmsb"), Type::getInt1Ty(context));
 
         
         Value* ofValue = createSelectFolder(builder,isCountOne, createXorFolder(builder,resultMSB, cfAsMSB), getFlag(context, builder, FLAG_OF));
@@ -1612,21 +1615,21 @@ namespace arithmeticsAndLogical {
         setFlag(context, builder, FLAG_CF, cfValue);
         setFlag(context, builder, FLAG_OF, ofValue);
 
-        Value* sf = computeSignFlag(builder, shiftedValue);
-        Value* zf = computeZeroFlag(builder, shiftedValue);
-        Value* pf = computeParityFlag(builder, shiftedValue);
+        Value* sf = computeSignFlag(builder, result);
+        Value* zf = computeZeroFlag(builder, result);
+        Value* pf = computeParityFlag(builder, result);
 #ifdef _DEVELOPMENT
         printvalue(Lvalue)
         printvalue(countValue)
         printvalue(clampedCountValue)
         printvalue(isCountOne)
-        printvalue(shiftedValue)
+        printvalue(result)
 #endif
         setFlag(context, builder, FLAG_SF, sf);
         setFlag(context, builder, FLAG_ZF, zf);
         setFlag(context, builder, FLAG_PF, pf);
 
-        SetOperandValue(context, builder, dest, shiftedValue);
+        SetOperandValue(context, builder, dest, result, to_string(instruction.runtime_address));
     }
 
 
@@ -3170,8 +3173,9 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
 
     uintptr_t jump_address = instruction.runtime_address;
     // if its trying to jump somewhere else than our binary, call it and continue from [rsp] (apperantly also forget to check rsp value in the meantime)
+    const bool debugging = 1;
     APInt temp;
-    if (!BinaryOperations::readMemory(jump_address, 1, temp) && cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
+    if (!BinaryOperations::readMemory(jump_address, 1, temp) && cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE && !debugging) {
 
         auto bb = BasicBlock::Create(context, "returnToOrgCF", builder.GetInsertBlock()->getParent());
         // actually call the function first

@@ -293,7 +293,7 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twin
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
 	if (Value* knownBitsLshr = foldLShrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-		printvalue(knownBitsLshr)
+		//printvalue(knownBitsLshr)
 		return knownBitsLshr;
 	}
 
@@ -1239,8 +1239,8 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			
 			GEPStoreTracker::insertMemoryOp(retval);
 
-			
-
+			auto KBload = analyzeValueKnownBits(retval, retval->getFunction()->getParent()->getDataLayout());
+			printvalue2(KBload)
 			if (isa<ConstantInt>(effectiveAddress)) {
 				ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
 				if (!effectiveAddressInt) return nullptr;
