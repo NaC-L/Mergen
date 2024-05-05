@@ -12,7 +12,7 @@ using memoryInfo = tuple<ptrValue, idxValue, memoryValue, bool>;
 
 
 namespace BinaryOperations {
-
+    const char* getName(unsigned long long offset);
     void initBases(void* file_base, ZyanU8* data);
     
     void getBases(void** file_base, ZyanU8** data);

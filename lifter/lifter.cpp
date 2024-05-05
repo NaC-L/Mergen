@@ -228,7 +228,7 @@ int main(int argc, char* argv[])
 
     auto fileBase = fileData.data();
 
-    
+    //printsymbols(fileBase);
     auto dosHeader = (win::dos_header_t*)fileBase;
     auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
     auto sectionHeader = ntHeaders->get_sections();

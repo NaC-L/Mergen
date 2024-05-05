@@ -102,7 +102,7 @@ private:
         }
         unsigned shiftAmount = byteOffset * 8;
         Value* shiftedValue = createLShrFolder(builder, value, APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
-        //printvalueforce(shiftedValue)
+        //printvalue(shiftedValue)
         return createTruncFolder(builder, shiftedValue, Type::getInt8Ty(builder.getContext()));
     }
 };
@@ -122,6 +122,12 @@ namespace BinaryOperations {
         *data = data_g;
     }
 
+    const char* getName(unsigned long long offset) {
+        auto dosHeader = (win::dos_header_t*)file_base_g;
+        auto ntHeaders = (win::nt_headers_x64_t*)((uint8_t*)file_base_g + dosHeader->e_lfanew);
+        auto rvaOffset = RvaToFileOffset(ntHeaders, offset);
+        return (const char*)file_base_g + rvaOffset;
+    }
 
     // sections
     bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value) {
@@ -224,6 +230,10 @@ namespace GEPStoreTracker {
     };
 
     void removeDuplicateOffsets(vector<Instruction*>& vec) {
+        
+        if (vec.size() <= 0)
+            return;
+
         unordered_set<pair<Value*, int> , PairHash> latestOffsets;
 
         vector<Instruction*> uniqueInstructions;
@@ -254,9 +264,7 @@ namespace GEPStoreTracker {
     }
 
     void removeFutureInsts(vector<Instruction*>& vec, LoadInst* load) {
-        // profile binary search first: with binary search, approx time: 1: ~4 0: ~8
-        // w/o 1: 5213221 0 : 10792287
-
+        // binary search
         auto it = std::lower_bound(vec.begin(), vec.end(), load,
             [](Instruction* a, Instruction* b) {
             return comesBefore(a, b, *DT);
@@ -283,7 +291,6 @@ namespace GEPStoreTracker {
         LocationSize loadsize = LoadMemLoc.Size;
 
         auto cloadsize = loadsize.getValue();
-        //printvalueforce2(cloadsize);
         
         auto loadPtrGEP = cast<GetElementPtrInst>(loadPtr);
 
@@ -296,6 +303,8 @@ namespace GEPStoreTracker {
 
         clearedMemInfos = memInfos2;
 
+        // remove anything not around load? , nah we would still have to loop every inst; instead we can create a new vector; but im not sure it would make a too big of a difference, so maybe later 
+        
         if (!buildTime)
             removeFutureInsts(clearedMemInfos, load);
         
@@ -324,11 +333,6 @@ namespace GEPStoreTracker {
             StoreInst* storeInst = cast<StoreInst>(inst);
             auto memLocationValue = storeInst->getPointerOperand();
 
-            // shouldnt happen anyways
-            /*
-            if (!isa<GetElementPtrInst>(memLocationValue))
-                continue;
-            */
             auto memLocationGEP = cast<GetElementPtrInst>(memLocationValue);
 
             auto pointer = memLocationGEP->getOperand(0);
@@ -355,10 +359,10 @@ namespace GEPStoreTracker {
             //if (std::max(loadOffsetValue, memOffsetValue) < std::min(loadOffsetValue + cloadsize, memOffsetValue + MemLoc.Size.getValue() )) {
             if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, storeBitSize)) {
                 
-                printvalueforce2(diff)
-                printvalueforce2(memOffsetValue)
-                printvalueforce2(loadOffsetValue)
-                printvalueforce2(storeBitSize)
+                printvalue2(diff)
+                printvalue2(memOffsetValue)
+                printvalue2(loadOffsetValue)
+                printvalue2(storeBitSize)
 
                     auto storedInst = inst->getOperand(0);
                 if (!retval)
@@ -368,23 +372,23 @@ namespace GEPStoreTracker {
                 long sizeExceeded = max( (int)( (memOffsetValue+ storeBitSize) -(loadOffsetValue + cloadsize)) , 0);
                 Value* mask = ConstantInt::get(storedInst->getType(), createmask(loadOffsetValue, loadOffsetValue + cloadsize, memOffsetValue, memOffsetValue + storeBitSize));
 
-                printvalueforce(mask)
+                printvalue(mask)
                 
                 auto bb = inst->getParent();
                 IRBuilder<> builder(load);
                 // we dont have to calculate knownbits if its a constant
                 auto maskedinst = createAndFolder(builder, storedInst, mask, inst->getName() + ".maskedinst");
 
-                printvalueforce(storedInst);
-                printvalueforce(mask);
-                printvalueforce(maskedinst);
+                printvalue(storedInst);
+                printvalue(mask);
+                printvalue(maskedinst);
                 if (maskedinst->getType()->getScalarSizeInBits() < retval->getType()->getScalarSizeInBits()) 
                     maskedinst = builder.CreateZExt(maskedinst, retval->getType());
 
                 if (mask->getType()->getScalarSizeInBits() < retval->getType()->getScalarSizeInBits()) 
                     mask = builder.CreateZExt(mask, retval->getType());
                 
-                printvalueforce(maskedinst);
+                printvalue(maskedinst);
                 printvalue2(diff);
                 // move the mask?
                 if (diff > 0) {
@@ -397,12 +401,12 @@ namespace GEPStoreTracker {
                 }
                 // maskedinst = maskedinst
                 // maskedinst = 0x4433221100000000
-                printvalueforce(maskedinst);
+                printvalue(maskedinst);
                 maskedinst = builder.CreateZExtOrTrunc(maskedinst, retval->getType());
-                printvalueforce(maskedinst);
+                printvalue(maskedinst);
                 
 
-                printvalueforce(mask);
+                printvalue(mask);
 
                 // clear mask from retval so we can merge
                 // this will be a NOT operation for sure
@@ -410,7 +414,7 @@ namespace GEPStoreTracker {
                  // overhead
                 auto reverseMask = builder.CreateNot(mask);
                 
-                printvalueforce(reverseMask);
+                printvalue(reverseMask);
 
                 // overhead
                 auto cleared_retval = createAndFolder(builder,retval, reverseMask, retval->getName() + ".cleared");
@@ -419,8 +423,8 @@ namespace GEPStoreTracker {
 
                 retval = createOrFolder(builder, cleared_retval, maskedinst, cleared_retval->getName() + ".merged");
                 //retval = builder.CreateTrunc(retval, load->getType());
-                printvalueforce(cleared_retval);
-                printvalueforce(maskedinst);
+                printvalue(cleared_retval);
+                printvalue(maskedinst);
                 // retval = cleared_retval | maskedinst =|= 0 | 0x1122334455667788
                 // retval = cleared_retval | maskedinst =|= 0x55667788 | 0x4433221100000000
 
@@ -428,10 +432,10 @@ namespace GEPStoreTracker {
                     if (retval->getType()->getScalarSizeInBits() > load->getType()->getScalarSizeInBits())
                         retval = builder.CreateTrunc(retval, load->getType());
 
-                printvalueforce(inst);
+                printvalue(inst);
                 auto retvalload = retval;
-                printvalueforce(cleared_retval);
-                printvalueforce(retvalload);
+                printvalue(cleared_retval);
+                printvalue(retvalload);
                 //string next_line = "------------------------------";
                 printvalue2(next_line)
             }
@@ -456,7 +460,7 @@ namespace GEPStoreTracker {
         lifterMemoryBuffer2 tempBuffer;
         // only care about %memory values for now 
 
-
+        
         // replace queue with vector maybe?
 
         for (memoryInfo info : memInfos) {
@@ -469,11 +473,11 @@ namespace GEPStoreTracker {
             
             bool isStore = get<3>(info);
             
-            // printvalueforce(t_ptr)
-                // printvalueforce(t_idx)
+            // printvalue(t_ptr)
+                // printvalue(t_idx)
             
             /*if (t_mem) {
-                printvalueforce(t_mem)
+                printvalue(t_mem)
             }
             */
             
@@ -481,7 +485,7 @@ namespace GEPStoreTracker {
                 break;
             }
 
-            //printvalueforce2(isStore)
+            //printvalue2(isStore)
             if (!isStore) // if not store, no reason to insert it to our buffer
                 continue;
 
@@ -494,8 +498,8 @@ namespace GEPStoreTracker {
 
         }
 
-        //printvalueforce(pv)
-        //printvalueforce(iv)
+        //printvalue(pv)
+        //printvalue(iv)
 
         // this will create a temporary buffer, write all the values until we hit addressValue then retrieve the value from there
         // multiple values should not be a problem since the order doesnt matter 
@@ -505,7 +509,7 @@ namespace GEPStoreTracker {
 
         Value* retvalue = tempBuffer.retrieveCombinedValue(builder,CI->getZExtValue(), byteCount );
 
-        //printvalueforce(retvalue)
+        //printvalue(retvalue)
 
         return retvalue;
 
