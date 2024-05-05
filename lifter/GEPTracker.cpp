@@ -160,6 +160,9 @@ namespace GEPStoreTracker {
     void initDomTree(Function& F) {
         DT = new DominatorTree(F);
     }
+    DominatorTree* getDomTree() {
+        return DT;
+    }
 
     void updateDomTree(Function& F) {
         // doesnt make a much difference, but good to have
@@ -213,11 +216,67 @@ namespace GEPStoreTracker {
 
     }
 
-    Value* solveLoad(LoadInst* load) {
+    struct PairHash {
+        std::size_t operator()(const std::pair<llvm::Value*, int>& pair) const {
+            // Combine the hashes of the two elements
+            return hash<llvm::Value*>{}(pair.first) ^ hash<int>{}(pair.second);
+        }
+    };
+
+    void removeDuplicateOffsets(vector<Instruction*>& vec) {
+        unordered_set<pair<Value*, int> , PairHash> latestOffsets;
+
+        vector<Instruction*> uniqueInstructions;
+
+        auto it = vec.rbegin(); // Start from the beginning of the reversed vector
+        while (it != vec.rend()) {
+            auto inst = cast<StoreInst>(*it);
+            auto GEPval = inst->getPointerOperand();
+            auto valOp = inst->getValueOperand();
+            int size = valOp->getType()->getIntegerBitWidth();
+            auto GEPInst = cast<GetElementPtrInst>(GEPval);
+            auto offset = GEPInst->getOperand(1);
+            auto pair = make_pair(offset, size);
+
+            if (latestOffsets.find(pair) == latestOffsets.end()) {
+                // If the pair (offset, size) is not encountered before, add it to the unique vector
+                uniqueInstructions.push_back(*it);
+
+                // Update the latest occurrence of the pair
+                latestOffsets.insert(pair);
+            }
+
+            ++it;
+        }
+
+        // Replace the original vector with the unique vector
+        vec = vector<Instruction*>(uniqueInstructions.rbegin(), uniqueInstructions.rend());
+    }
+
+    void removeFutureInsts(vector<Instruction*>& vec, LoadInst* load) {
+        // profile binary search first: with binary search, approx time: 1: ~4 0: ~8
+        // w/o 1: 5213221 0 : 10792287
+
+        auto it = std::lower_bound(vec.begin(), vec.end(), load,
+            [](Instruction* a, Instruction* b) {
+            return comesBefore(a, b, *DT);
+        });
+
+        if (it != vec.end()) {
+            vec.erase(it, vec.end());
+        }
+
+    }
+
+
+    Value* solveLoad(LoadInst* load, bool buildTime) {
         Function* F = load->getFunction();
 
-        GEPStoreTracker::updateDomTree(*F);
+        if (!buildTime)
+            GEPStoreTracker::updateDomTree(*F);
 
+
+        // replace this
         auto LoadMemLoc = MemoryLocation::get(load);
 
         const Value* loadPtr = LoadMemLoc.Ptr;
@@ -226,43 +285,53 @@ namespace GEPStoreTracker {
         auto cloadsize = loadsize.getValue();
         //printvalueforce2(cloadsize);
         
-        // shouldnt happen anyways
-        if (!isa<GetElementPtrInst>(loadPtr))
-            return nullptr;
         auto loadPtrGEP = cast<GetElementPtrInst>(loadPtr);
 
         auto loadPointer = loadPtrGEP->getPointerOperand();
         auto loadOffset = loadPtrGEP->getOperand(1);
 
 
+        // create a new vector with only leave what we care about
+        vector<Instruction*> clearedMemInfos;
+
+        clearedMemInfos = memInfos2;
+
+        if (!buildTime)
+            removeFutureInsts(clearedMemInfos, load);
         
+        removeDuplicateOffsets(clearedMemInfos);
+
 
         Value* retval = nullptr;
 
-        for (auto inst : memInfos2) {
+
+        for (auto inst : clearedMemInfos) {
 
             // we are only interested in previous instructions
             
-            //printvalueforce2(comesBefore(load,inst))
-            if (comesBefore(load, inst, *DT)) {
-                break;
-            }
-
-            // we are only interested in stores
-            if (!inst->mayWriteToMemory())
-                continue;
+            if (!buildTime)
+                if (comesBefore(load, inst, *DT)) 
+                    break;
+            
+            
 
 
-            auto MemLoc = MemoryLocation::get(inst);
+            
+            
+            // replace it with something more efficent
+            //auto MemLoc = MemoryLocation::get(inst);
 
-            auto memLocationValue = MemLoc.Ptr;
+            StoreInst* storeInst = cast<StoreInst>(inst);
+            auto memLocationValue = storeInst->getPointerOperand();
 
             // shouldnt happen anyways
+            /*
             if (!isa<GetElementPtrInst>(memLocationValue))
                 continue;
+            */
             auto memLocationGEP = cast<GetElementPtrInst>(memLocationValue);
 
-            auto pointer = memLocationGEP->getPointerOperand();
+            auto pointer = memLocationGEP->getOperand(0);
             auto offset = memLocationGEP->getOperand(1);
 
             
@@ -280,8 +349,9 @@ namespace GEPStoreTracker {
             long diff = memOffsetValue - loadOffsetValue;
 
 
-            
-            auto storeBitSize = MemLoc.Size.getValue();
+            // this is bytesize, not bitsize
+            auto storeBitSize = storeInst->getValueOperand()->getType()->getIntegerBitWidth() / 8;
+            //outs() << " \nstoreBitSize: " << storeBYTESize << " \n normal size: " << storeInst->getValueOperand()->getType()->getIntegerBitWidth() << "\n"; outs().flush();
             //if (std::max(loadOffsetValue, memOffsetValue) < std::min(loadOffsetValue + cloadsize, memOffsetValue + MemLoc.Size.getValue() )) {
             if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, storeBitSize)) {
                 
@@ -294,171 +364,7 @@ namespace GEPStoreTracker {
                 if (!retval)
                     retval = ConstantInt::get(load->getType(), 0);
                
-                
-                
-                // partial load example
-                // 
-                // %m1 = getelementptr i8, %memory, i64 0
-                // %m2 = getelementptr i8, %memory, i64 4
-                // %m3 = getelementptr i8, %memory, i64 8
-                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 55 [4] 44 33 22 11 [8]
-                // store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m3 => [0] 88 77 66 55 [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16]
-                // %x = load i64, ptr %m2                       => [0] 88 77 66 55 [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16]
-                // now:                                         %x = 44 33 22 11 AC AB FF EE => 0xEE_FF_AB_AC_11_22_33_44
-                // %p1 = 0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_FF_00_00_00_00
-                // %p2 = 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_00_00_FF_FF_FF_FF
-                // %p3 = 0
-                // %p1.shift = %p1 >> 4(diff)*8
-                // %p2.shift = %p2 << 4(diff)*8
-                // %p4 = %p1.shift | %p2.shift
-                // 
-                // overwriting example
-                //
-                //
-                //
-                // %m1 = getelementptr i8, %memory, i64 0
-                // %m2 = getelementptr i8, %memory, i64 2
-                // %m3 = getelementptr i8, %memory, i64 8
-                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 [2] 66 55 [4] 44 33 22 11 [8]
-                // store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m2 => [0] 88 77 [2] AC AB [4] FF EE DD CC [8] BB AA [10]
-                // %x = load i64, ptr %m1                       => [0] 88 77 [2] AC AB [4] FF EE DD CC [8] BB AA [10]
-                // now:                                         %x = 88 77 AC AB FF EE DD CC => 0xCC_DD_EE_FF_AB_AC_11_22
-                // %p1 = 0x11_22_33_44_55_66_77_88 & -1
-                // %p2 = 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_FF_FF_FF_FF_FF_FF
-                // %p2.shifted = %p2 << 2*8
-                // %mask.shifted = 0x00_00_FF_FF_FF_FF_FF_FF << 2*8 => 0xFF_FF_FF_FF_FF_FF_00_00
-                // %reverse.mask.shifted = 0xFF_FF 
-                // %p1.masked = %p1 & %reverse.mask.shifted
-                // %retval = %p2.shifted | %p1.masked
-                //
-                // overwriting example WITH DIFFERENT TYPES
-                //
-                //
-                //
-                // %m1 = getelementptr i8, %memory, i64 0
-                // %m2 = getelementptr i8, %memory, i64 3
-                // %m3 = getelementptr i8, %memory, i64 8
-                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33 22 [7] 11 [8]
-                // store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66 [3] DD CC BB AA [7] 11 [8]
-                // %x = load i64, ptr %m1                       => [0] 88 77 66 [3] DD CC BB AA [7] 11 [8]
-                // now:                                         %x=[0] 88 77 66 [3] DD CC BB AA [7] 11 [8] => 0x11_AA_BB_CC_DD_66_77_88
-                // %p1 = 0x11_22_33_44_55_66_77_88 & -1
-                // %p2 = 0xAA_BB_CC_DD & 0xFF_FF_FF_FF 
-                // %p2.shifted = %p2 << 1*8                 =>  0xAA_BB_CC_DD << 8 => 0x_AA_BB_CC_DD_00
-                // %mask.shifted = 0xFF_FF_FF_FF << 1*8     => 0x00_00_00_FF_FF_FF_FF_00
-                // %reverse.mask.shifted = 0xFF_FF_FF_00_00_00_00_FF 
-                // %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_00_00_00_00_FF => 0x11_22_33_00_00_00_00_88
-                // %retval = %p2.shifted | %p1.masked       =>  0x11_22_33_00_00_00_00_88 | 0x00_00_00_AA_BB_CC_DD_00 => 0x11_22_33_AA_BB_CC_DD_88
-                // 
-                // PARTIAL overwriting example WITH DIFFERENT TYPES v1
-                //
-                //
-                //
-                // %m1 = getelementptr i8, %memory, i64 0
-                // %m2 = getelementptr i8, %memory, i64 6
-                // %m3 = getelementptr i8, %memory, i64 8
-                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33 [6] 22 11 [8] 
-                // store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66 [3] 55 44 33 [6] DD CC [8] BB AA [10]
-                // %x = load i64, ptr %m1                       => [0] 88 77 66 [3] 55 44 33 [6] DD CC [8] BB AA [10]
-                // now:                                         %x=[0] 88 77 66 [3] 55 44 33 [6] DD CC [8] => 0xCC_DD_33_44_55_66_77_88
-                // %p1 = 0x11_22_33_44_55_66_77_88 & -1
-                // %p2 = 0xAA_BB_CC_DD & 0x00_00_FF_FF 
-                // %p2.shifted = %p2 << 6*8                 =>  0xCC_DD << 48 => 0xCC_DD_00_00_00_00_00_00
-                // %mask.shifted = 0xFF_FF_FF_FF << 6*8     => 0xFF_FF_00_00_00_00_00_00
-                // %reverse.mask.shifted = 0x00_00_FF_FF_FF_FF_FF_FF
-                // %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0x00_00_FF_FF_FF_FF_FF_FF => 0x00_00_33_44_55_66_77_88
-                // %retval = %p2.shifted | %p1.masked       =>  0x00_00_33_44_55_66_77_88 | 0xCC_DD_00_00_00_00_00_00 => 0xCC_DD_33_44_55_66_77_88
-                //
-                // 
-                // PARTIAL overwriting example WITH DIFFERENT TYPES v2
-                //
-                //
-                //
-                // %m1 = getelementptr i8, %memory, i64 8
-                // %m2 = getelementptr i8, %memory, i64 7
-                // %m3 = getelementptr i8, %memory, i64 16
-                // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [7] ?? [8] 88 77 66 [11] 55 44 33 22 11 [16] 
-                // store i32 0xAA_BB_CC_DD, ptr %m2             => [7] DD [8] CC BB AA [11] 55 44 33 22 11 [16]
-                // %x = load i64, ptr %m1                       => [7] DD [8] CC BB AA [11] 55 44 33 22 11 [16] 
-                // now:                                         %x=[7] DD [8] CC BB AA [11] 55 44 33 22 11 [16] => 0xCC_DD_33_44_55_66_77_88
-                // %p1 = 0x11_22_33_44_55_66_77_88 & -1
-                // %p2 = 0xAA_BB_CC_DD & 0xFF_FF_FF_00 (0xFF ^ -1)
-                // %p2.shifted = %p2 << 1*8                 =>  0xAA_BB_CC_00 >> 8 => 0xAA_BB_CC => 0x00_00_00_00_00_AA_BB_CC
-                // %mask.shifted = 0xFF_FF_FF_00 >> 1*8     => 0xFF_FF_FF
-                // %reverse.mask.shifted = 0xFF_FF_FF_FF_FF_00_00_00
-                // %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_FF_FF_00_00_00 => 0x11_22_33_44_55_00_00_00
-                // %retval = %p2.shifted | %p1.masked       =>  0x11_22_33_44_55_00_00_00 | 0xAA_BB_CC                => 0x11_22_33_44_55_AA_BB_CC
-                //
-                // 
-                // creating masks:
-                // orgload = 0<->8
-                // currentstore = 4<->8 
-                // size = 32bits
-                // mask will be:
-                // 0xFF_FF_FF_FF_00_00_00_00
-                // 
-                // orgload = 0<->8
-                // currentstore = 3<->7 
-                // size = 32bits
-                // mask will be:
-                // 0x00_FF_FF_FF_FF_00_00_00
-                // 
-                // orgload = 0<->8
-                // currentstore = 6<->10 
-                // size = 32bits
-                // mask will be:
-                // 0xFF_FF_00_00_00_00_00_00
-                // 
-                // orgload = 10<->18
-                // currentstore = 8<->16 
-                // size = 32bits
-                // mask will be:
-                // 0x00_00_00_00_00_00_FF_FF
-                // 
-                // mask generation:
-                // a1 = loadStart
-                // a2 = loadEnd
-                // b1 = storeStart
-                // b2 = storeEnd
-                //  a1, a2, b1, b2
-                // (assuming they overlap)
-                // [6 = b1] [7] [8 = a1] [9] [10 = b2] [11] [12 = a2]
-                //    -      -      +     +     -       /       /
-                // normal mask for b =  0xFF_FF_00_00
-                // clear  mask for a = ~0x00_00_FF_FF 
-                // 
-                // shift size = 2 (a1-b1, since its +, shift to right)
-                // 
-                // 
-                // [8 = a1] [9] [10] [11 = b1] [12 = a2] [13] [14 = b2]
-                //    -      -    -      +        /        /      /
-                // 
-                // normal mask for b =  0x00_00_00_FF (lowest byte gets saved)
-                // clear  mask for a = ~0xFF_00_00_00 (only highest byte gets cleared)
-                // 
-                // shift size = -3 (a1-b1, since its -, shift to left)
-                // 
-                // first iteration in loop
-                // store = getstore(currentStore)
-                // createMask( diff )
-                // shiftStore  = Store1 << diff
-                // shiftedmask = mask << diff
-                // reverseMask = ~shiftedmask
-                // retvalCleared = retval & reverseMask
-                // retval = retvalCleared | shiftStore
-                // second iteration in loop
-                // 
-                // store = getstore(currentStore)
-                // createMask( diff )
-                // shiftStore  = Store1 << diff
-                // shiftedmask = mask << diff
-                // reverseMask = ~shiftedmask
-                // retvalCleared = retval & reverseMask
-                // retval = retvalCleared | shiftStore
-                //
-                //
-                //
-                
+               
                 long sizeExceeded = max( (int)( (memOffsetValue+ storeBitSize) -(loadOffsetValue + cloadsize)) , 0);
                 Value* mask = ConstantInt::get(storedInst->getType(), createmask(loadOffsetValue, loadOffsetValue + cloadsize, memOffsetValue, memOffsetValue + storeBitSize));
 
@@ -466,7 +372,7 @@ namespace GEPStoreTracker {
                 
                 auto bb = inst->getParent();
                 IRBuilder<> builder(load);
-
+                // we dont have to calculate knownbits if its a constant
                 auto maskedinst = createAndFolder(builder, storedInst, mask, inst->getName() + ".maskedinst");
 
                 printvalueforce(storedInst);
@@ -500,9 +406,13 @@ namespace GEPStoreTracker {
 
                 // clear mask from retval so we can merge
                 // this will be a NOT operation for sure
+                // 
+                 // overhead
                 auto reverseMask = builder.CreateNot(mask);
                 
                 printvalueforce(reverseMask);
+
+                // overhead
                 auto cleared_retval = createAndFolder(builder,retval, reverseMask, retval->getName() + ".cleared");
                 // cleared_retval = 0 & 0; clear retval
                 // cleared_retval = retval & 0xff_ff_ff_ff_00_00_00_00
@@ -522,7 +432,7 @@ namespace GEPStoreTracker {
                 auto retvalload = retval;
                 printvalueforce(cleared_retval);
                 printvalueforce(retvalload);
-                string next_line = "------------------------------";
+                //string next_line = "------------------------------";
                 printvalue2(next_line)
             }
 
@@ -602,3 +512,169 @@ namespace GEPStoreTracker {
     }
 
 };
+
+
+
+// some stuff about memory
+// partial load example
+// 
+// %m1 = getelementptr i8, %memory, i64 0
+// %m2 = getelementptr i8, %memory, i64 4
+// %m3 = getelementptr i8, %memory, i64 8
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 55 [4] 44 33 22 11 [8]
+// store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m3 => [0] 88 77 66 55 [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16]
+// %x = load i64, ptr %m2                       => [0] 88 77 66 55 [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16]
+// now:                                         %x = 44 33 22 11 AC AB FF EE => 0xEE_FF_AB_AC_11_22_33_44
+// %p1 = 0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_FF_00_00_00_00
+// %p2 = 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_00_00_FF_FF_FF_FF
+// %p3 = 0
+// %p1.shift = %p1 >> 4(diff)*8
+// %p2.shift = %p2 << 4(diff)*8
+// %p4 = %p1.shift | %p2.shift
+// 
+// overwriting example
+//
+//
+//
+// %m1 = getelementptr i8, %memory, i64 0
+// %m2 = getelementptr i8, %memory, i64 2
+// %m3 = getelementptr i8, %memory, i64 8
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 [2] 66 55 [4] 44 33 22 11 [8]
+// store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m2 => [0] 88 77 [2] AC AB [4] FF EE DD CC [8] BB AA [10]
+// %x = load i64, ptr %m1                       => [0] 88 77 [2] AC AB [4] FF EE DD CC [8] BB AA [10]
+// now:                                         %x = 88 77 AC AB FF EE DD CC => 0xCC_DD_EE_FF_AB_AC_11_22
+// %p1 = 0x11_22_33_44_55_66_77_88 & -1
+// %p2 = 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_FF_FF_FF_FF_FF_FF
+// %p2.shifted = %p2 << 2*8
+// %mask.shifted = 0x00_00_FF_FF_FF_FF_FF_FF << 2*8 => 0xFF_FF_FF_FF_FF_FF_00_00
+// %reverse.mask.shifted = 0xFF_FF 
+// %p1.masked = %p1 & %reverse.mask.shifted
+// %retval = %p2.shifted | %p1.masked
+//
+// overwriting example WITH DIFFERENT TYPES
+//
+//
+//
+// %m1 = getelementptr i8, %memory, i64 0
+// %m2 = getelementptr i8, %memory, i64 3
+// %m3 = getelementptr i8, %memory, i64 8
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33 22 [7] 11 [8]
+// store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66 [3] DD CC BB AA [7] 11 [8]
+// %x = load i64, ptr %m1                       => [0] 88 77 66 [3] DD CC BB AA [7] 11 [8]
+// now:                                         %x=[0] 88 77 66 [3] DD CC BB AA [7] 11 [8] => 0x11_AA_BB_CC_DD_66_77_88
+// %p1 = 0x11_22_33_44_55_66_77_88 & -1
+// %p2 = 0xAA_BB_CC_DD & 0xFF_FF_FF_FF 
+// %p2.shifted = %p2 << 1*8                 =>  0xAA_BB_CC_DD << 8 => 0x_AA_BB_CC_DD_00
+// %mask.shifted = 0xFF_FF_FF_FF << 1*8     => 0x00_00_00_FF_FF_FF_FF_00
+// %reverse.mask.shifted = 0xFF_FF_FF_00_00_00_00_FF 
+// %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_00_00_00_00_FF => 0x11_22_33_00_00_00_00_88
+// %retval = %p2.shifted | %p1.masked       =>  0x11_22_33_00_00_00_00_88 | 0x00_00_00_AA_BB_CC_DD_00 => 0x11_22_33_AA_BB_CC_DD_88
+// 
+// PARTIAL overwriting example WITH DIFFERENT TYPES v1
+//
+//
+//
+// %m1 = getelementptr i8, %memory, i64 0
+// %m2 = getelementptr i8, %memory, i64 6
+// %m3 = getelementptr i8, %memory, i64 8
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33 [6] 22 11 [8] 
+// store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66 [3] 55 44 33 [6] DD CC [8] BB AA [10]
+// %x = load i64, ptr %m1                       => [0] 88 77 66 [3] 55 44 33 [6] DD CC [8] BB AA [10]
+// now:                                         %x=[0] 88 77 66 [3] 55 44 33 [6] DD CC [8] => 0xCC_DD_33_44_55_66_77_88
+// %p1 = 0x11_22_33_44_55_66_77_88 & -1
+// %p2 = 0xAA_BB_CC_DD & 0x00_00_FF_FF 
+// %p2.shifted = %p2 << 6*8                 =>  0xCC_DD << 48 => 0xCC_DD_00_00_00_00_00_00
+// %mask.shifted = 0xFF_FF_FF_FF << 6*8     => 0xFF_FF_00_00_00_00_00_00
+// %reverse.mask.shifted = 0x00_00_FF_FF_FF_FF_FF_FF
+// %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0x00_00_FF_FF_FF_FF_FF_FF => 0x00_00_33_44_55_66_77_88
+// %retval = %p2.shifted | %p1.masked       =>  0x00_00_33_44_55_66_77_88 | 0xCC_DD_00_00_00_00_00_00 => 0xCC_DD_33_44_55_66_77_88
+//
+// 
+// PARTIAL overwriting example WITH DIFFERENT TYPES v2
+//
+//
+//
+// %m1 = getelementptr i8, %memory, i64 8
+// %m2 = getelementptr i8, %memory, i64 7
+// %m3 = getelementptr i8, %memory, i64 16
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [7] ?? [8] 88 77 66 [11] 55 44 33 22 11 [16] 
+// store i32 0xAA_BB_CC_DD, ptr %m2             => [7] DD [8] CC BB AA [11] 55 44 33 22 11 [16]
+// %x = load i64, ptr %m1                       => [7] DD [8] CC BB AA [11] 55 44 33 22 11 [16] 
+// now:                                         %x=[7] DD [8] CC BB AA [11] 55 44 33 22 11 [16] => 0xCC_DD_33_44_55_66_77_88
+// %p1 = 0x11_22_33_44_55_66_77_88 & -1
+// %p2 = 0xAA_BB_CC_DD & 0xFF_FF_FF_00 (0xFF ^ -1)
+// %p2.shifted = %p2 << 1*8                 =>  0xAA_BB_CC_00 >> 8 => 0xAA_BB_CC => 0x00_00_00_00_00_AA_BB_CC
+// %mask.shifted = 0xFF_FF_FF_00 >> 1*8     => 0xFF_FF_FF
+// %reverse.mask.shifted = 0xFF_FF_FF_FF_FF_00_00_00
+// %p1.masked = %p1 & %reverse.mask.shifted =>  0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_FF_FF_00_00_00 => 0x11_22_33_44_55_00_00_00
+// %retval = %p2.shifted | %p1.masked       =>  0x11_22_33_44_55_00_00_00 | 0xAA_BB_CC                => 0x11_22_33_44_55_AA_BB_CC
+//
+// 
+// creating masks:
+// orgload = 0<->8
+// currentstore = 4<->8 
+// size = 32bits
+// mask will be:
+// 0xFF_FF_FF_FF_00_00_00_00
+// 
+// orgload = 0<->8
+// currentstore = 3<->7 
+// size = 32bits
+// mask will be:
+// 0x00_FF_FF_FF_FF_00_00_00
+// 
+// orgload = 0<->8
+// currentstore = 6<->10 
+// size = 32bits
+// mask will be:
+// 0xFF_FF_00_00_00_00_00_00
+// 
+// orgload = 10<->18
+// currentstore = 8<->16 
+// size = 32bits
+// mask will be:
+// 0x00_00_00_00_00_00_FF_FF
+// 
+// mask generation:
+// a1 = loadStart
+// a2 = loadEnd
+// b1 = storeStart
+// b2 = storeEnd
+//  a1, a2, b1, b2
+// (assuming they overlap)
+// [6 = b1] [7] [8 = a1] [9] [10 = b2] [11] [12 = a2]
+//    -      -      +     +     -       /       /
+// normal mask for b =  0xFF_FF_00_00
+// clear  mask for a = ~0x00_00_FF_FF 
+// 
+// shift size = 2 (a1-b1, since its +, shift to right)
+// 
+// 
+// [8 = a1] [9] [10] [11 = b1] [12 = a2] [13] [14 = b2]
+//    -      -    -      +        /        /      /
+// 
+// normal mask for b =  0x00_00_00_FF (lowest byte gets saved)
+// clear  mask for a = ~0xFF_00_00_00 (only highest byte gets cleared)
+// 
+// shift size = -3 (a1-b1, since its -, shift to left)
+// 
+// first iteration in loop
+// store = getstore(currentStore)
+// createMask( diff )
+// shiftStore  = Store1 << diff
+// shiftedmask = mask << diff
+// reverseMask = ~shiftedmask
+// retvalCleared = retval & reverseMask
+// retval = retvalCleared | shiftStore
+// second iteration in loop
+// 
+// store = getstore(currentStore)
+// createMask( diff )
+// shiftStore  = Store1 << diff
+// shiftedmask = mask << diff
+// reverseMask = ~shiftedmask
+// retvalCleared = retval & reverseMask
+// retval = retvalCleared | shiftStore
+//
+//
+//

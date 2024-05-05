@@ -3172,6 +3172,8 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     printvalue(rsp);
 
     uintptr_t jump_address = instruction.runtime_address;
+
+    // maybe replace this with a forcing a ret? definitely!! inline this function, we will use it alot + there is a possiblitity that next_jump wont be a constant
     // if its trying to jump somewhere else than our binary, call it and continue from [rsp] (apperantly also forget to check rsp value in the meantime)
     const bool debugging = 1;
     APInt temp;

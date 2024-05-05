@@ -11,10 +11,10 @@ struct InstructionDependencyOrder {
     bool operator()(Instruction* const& a, Instruction* const& b) const {
 
         Function* F = a->getFunction();
-        DominatorTree DT(*F);
-        DT.recalculate(*F);
+        GEPStoreTracker::updateDomTree(*F);
+        DominatorTree *DT = GEPStoreTracker::getDomTree();
 
-        return ( comesBefore(b,a, DT)  );
+        return ( comesBefore(b,a, *DT)  );
     }
 };
  

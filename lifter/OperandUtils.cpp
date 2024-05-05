@@ -95,7 +95,7 @@ Value* simplifyLoadValue(Value* v) {
 	//printvalueforce2(byteCount)
 
 	// rework
-	auto retVal = GEPStoreTracker::solveLoad(cast<LoadInst>(v));
+	auto retVal = GEPStoreTracker::solveLoad(cast<LoadInst>(v), 0);
 
 	//printvalueforce(retVal)
 	return retVal;
@@ -259,14 +259,15 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 
-	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+	
 #ifdef TESTFOLDERshl
 
 
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+		if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) return ConstantInt::get(RHS->getType(), LHSConst->getZExtValue() << RHSConst->getZExtValue());
 		if (RHSConst->isZero()) return LHS;
 	}
-
+DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
@@ -282,13 +283,14 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 
 Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
 
-	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDERshr
 
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+		if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) return ConstantInt::get(RHS->getType(), LHSConst->getZExtValue() >> RHSConst->getZExtValue());
 		if (RHSConst->isZero()) return LHS;
 	}
 
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
@@ -343,16 +345,17 @@ Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 
 Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine& Name ) {
-	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER5
 
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+		if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) return ConstantInt::get(RHS->getType(), RHSConst->getZExtValue() | LHSConst->getZExtValue());
 		if (LHSConst->isZero()) return RHS;
 	}
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isZero()) return LHS;
 	}
 
+	DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 	KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
 	KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
@@ -392,6 +395,7 @@ Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 	}
 
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+		if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) return ConstantInt::get(RHS->getType(), RHSConst->getZExtValue() ^ LHSConst->getZExtValue());
 		if (LHSConst->isZero()) return RHS;
 	}
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
@@ -469,7 +473,9 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 #ifdef TESTFOLDER
 	
 	if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+		if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) return ConstantInt::get(RHS->getType(), RHSConst->getZExtValue() & LHSConst->getZExtValue());
 		if (LHSConst->isZero()) return ConstantInt::get(RHS->getType(), 0);
+		
 	}
 	if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
 		if (RHSConst->isZero()) return  ConstantInt::get(LHS->getType(), 0);
@@ -1236,8 +1242,8 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			auto retval = builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
 
-			
-			GEPStoreTracker::insertMemoryOp(retval);
+			// no
+			//GEPStoreTracker::insertMemoryOp(retval);
 
 			auto KBload = analyzeValueKnownBits(retval, retval->getFunction()->getParent()->getDataLayout());
 			printvalue2(KBload)
@@ -1441,7 +1447,8 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 					globalBuffer.addValueReference(value, addr);
 				}
 			}
-
+			
+			// storeInst good, loadinst bad
 			GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
 			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, value, true);
 
