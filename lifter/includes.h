@@ -10,8 +10,7 @@
 #endif
 //#define _DEVELOPMENT
 
-// alternative printing for (sometimes) debug and some other purposes
-#define _DISABLEFORCEPRINT
+
 
 
 #ifdef _DEVELOPMENT
@@ -25,16 +24,12 @@
 #define printvalue2(x) ((void)0);
 #endif
 
-#ifndef _DISABLEFORCEPRINT
 #define printvalueforce(x) \
     outs() << " "  #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
 
 #define printvalueforce2(x) \
     outs() << " " #x " : " << x << "\n";  outs().flush();
-#else
-#define printvalueforce(x) ((void)0);
-#define printvalueforce2(x) ((void)0);
-#endif
+
 
 #pragma warning(disable: 4996)
 #pragma warning(disable:4146)

@@ -2,8 +2,6 @@
 #include "GEPTracker.h"
 
 
-void* file_base_g_operand;
-ZyanU8* data_g_operand;
 
 
 
@@ -89,22 +87,22 @@ Value* simplifyLoadValue(Value* v) {
 	Value* idxv = GEPInst->getOperand(1);
 	unsigned byteCount = v->getType()->getIntegerBitWidth() / 8;
 
-	//printvalueforce(v)
-	//printvalueforce(pv)
-	//printvalueforce(idxv)
-	//printvalueforce2(byteCount)
+	//printvalue(v)
+	//printvalue(pv)
+	//printvalue(idxv)
+	//printvalue2(byteCount)
 
 	// rework
 	auto retVal = GEPStoreTracker::solveLoad(cast<LoadInst>(v), 0);
 
-	//printvalueforce(retVal)
+	//printvalue(retVal)
 	return retVal;
 
 }
 
 Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 
-	//printvalueforce(v)
+	//printvalue(v)
 	if (!isa<Instruction>(v))
 		return v;
 	if (!isa<LoadInst>(v)) 
@@ -117,12 +115,12 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 		
 	
 	auto loadInst = cast<LoadInst>(v);
-	//printvalueforce(loadInst)
+	//printvalue(loadInst)
 	auto GEP = loadInst->getOperand(loadInst->getNumOperands() - 1);
-	//printvalueforce(GEP)
+	//printvalue(GEP)
 	auto gepInst = cast<GetElementPtrInst>(GEP);
 	auto effectiveAddress = gepInst->getOperand(gepInst->getNumOperands() - 1);
-	//printvalueforce(effectiveAddress)
+	//printvalue(effectiveAddress)
 	if (!isa<ConstantInt>(effectiveAddress)) {
 		return v;
 	}
@@ -1259,7 +1257,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 				if (BinaryOperations::readMemory(addr, byteSize, value)) {
 					
 					Constant* newVal = ConstantInt::get(loadType, value);
-					printvalueforce(newVal);
+					printvalue(newVal);
 					return newVal;
 				}
 				
@@ -1577,7 +1575,6 @@ Value* popStack(LLVMContext& context, IRBuilder<>& builder) {
 	auto CI = ConstantInt::get(rsp->getType(), 8);
 	SetRegisterValue(context, ZYDIS_REGISTER_RSP, createAddFolder(builder, rsp, CI));
 
-	GEPStoreTracker::insertMemoryOp(returnValue);
 
 	if (isa<ConstantInt>(rsp)) {
 		ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(rsp);

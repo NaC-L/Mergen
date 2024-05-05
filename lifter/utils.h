@@ -5,6 +5,8 @@
 #include <linuxpe>
 #include <cstdint>
 
+
+void printsymbols(void* fileBase);
 win::section_header_t* GetEnclosingSectionHeader(uint32_t rva, win::nt_headers_x64_t* pNTHeader);
 
 

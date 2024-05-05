@@ -65,8 +65,8 @@ void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> f
         visitCount[simplifyUser]++;
         auto nsv = simplifyValueLater(simplifyUser, DL);
         visited.insert(simplifyUser);
-        printvalueforce(simplifyUser)
-        printvalueforce(nsv)
+        printvalue(simplifyUser)
+        printvalue(nsv)
 
         if (isa<GetElementPtrInst>(simplifyUser)) {
             for (User* user : simplifyUser->users()) {
@@ -105,8 +105,8 @@ void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> f
             }
         }
 
-        //printvalueforce(simplifyUser, simplify)
-        //printvalueforce(nsv, with)
+        //printvalue(simplifyUser, simplify)
+        //printvalue(nsv, with)
 
         replaceAllUsesWithandReplaceRMap(simplifyUser, nsv, flippedRegisterMap);
         //simplifyUser->replaceAllUsesWith(nsv);
@@ -116,11 +116,11 @@ void simplifyUsers(Value* newValue, DataLayout& DL, unordered_map<Value*, int> f
 PATH_info getReturnVal(llvm::Function* function, uint64_t &dest) {
     PATH_info result = PATH_unsolved;
     if (auto returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
-        printvalueforce(returnInst)
+        printvalue(returnInst)
             if (returnInst->getReturnValue() != nullptr) {
 
                 if (llvm::ConstantInt* constInt = dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
-                    printvalueforce(constInt)
+                    printvalue(constInt)
                         dest = constInt->getZExtValue();
                     result = PATH_solved;
                     return result;
@@ -718,45 +718,9 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
     llvm::ValueToValueMapTy VMap;
     llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap);
 
-    ValueToValueMapTy* rVMap = flipVMap(VMap);
     auto flippedRegisterMap = flipRegisterMap();
-    std::unique_ptr<Module> destinationModule = std::make_unique<Module>("destination_module", function->getContext());
-    clonedFunctmp->removeFromParent();
 
 
-    destinationModule->getFunctionList().push_back(clonedFunctmp);
-
-    Function* clonedFunc = destinationModule->getFunction(clonedFunctmp->getName());
-
-
-    llvm::PassBuilder passBuilder;
-
-
-    llvm::LoopAnalysisManager loopAnalysisManager;
-    llvm::FunctionAnalysisManager functionAnalysisManager;
-    llvm::CGSCCAnalysisManager cGSCCAnalysisManager;
-    llvm::ModuleAnalysisManager moduleAnalysisManager;
-
-
-    passBuilder.registerModuleAnalyses(moduleAnalysisManager);
-    passBuilder.registerCGSCCAnalyses(cGSCCAnalysisManager);
-    passBuilder.registerFunctionAnalyses(functionAnalysisManager);
-    passBuilder.registerLoopAnalyses(loopAnalysisManager);
-    passBuilder.crossRegisterProxies(loopAnalysisManager, functionAnalysisManager, cGSCCAnalysisManager, moduleAnalysisManager);
-
-
-    llvm::ModulePassManager modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-
-    passBuilder.registerPipelineParsingCallback([&](llvm::StringRef Name, llvm::ModulePassManager& MPM, llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
-        if (Name == "gep-load-pass") {
-            modulePassManager.addPass(GEPLoadPass());
-            return true;
-        }
-        return false;
-    });
-
-
-    llvm::Module* module = clonedFunc->getParent();
 
 
 #ifdef _DEVELOPMENT
@@ -765,36 +729,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
     clonedFunc->print(OS);
 #endif
     while (dest == 0) {
-    /*
-    bool changed = false;
-        do {
-            changed = false;
-
-            size_t beforeSize = module->getInstructionCount();
-
-
-
-            modulePassManager = passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-            modulePassManager.addPass(GEPLoadPass(file_base_g, data_g));
-
-
-            modulePassManager.addPass(ReplaceTruncWithLoadPass());
-
-
-            modulePassManager.addPass(RemovePseudoStackPass());
-
-            auto result = modulePassManager.run(*module, moduleAnalysisManager);
-
-            size_t afterSize = module->getInstructionCount();
-
-
-            if (beforeSize != afterSize) {
-                changed = true;
-            }
-
-        } while (changed);
-        */
-
+   
 
     #ifdef _DEVELOPMENT
         std::error_code EC2;
@@ -810,16 +745,12 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         // make this into a function?
         if (PATH_info solved = getReturnVal(function, dest)) {
             if (solved == PATH_solved) {
-                clonedFunc->eraseFromParent();
                 return solved; 
             }
         }
 
         
-
-        //clonedFunc->print(outs());
         
-        // here, collect values that build up to the returnValue
         deque<llvm::Instruction*> worklist;
         std::vector<llvm::Instruction*> visited_used;
 
@@ -831,12 +762,12 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             worklist.pop_front();
             visited_used.emplace_back(inst);
 
-            //printvalueforce(inst)
+            //printvalue(inst)
                 for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i) {
                     llvm::Value* operand = inst->getOperand(i);
                     if (llvm::Instruction* opInst = llvm::dyn_cast<llvm::Instruction>(operand)) {
                         if (std::find(visited_used.begin(), visited_used.end(), opInst) == visited_used.end()) {
-                                //printvalueforce(opInst)
+                                //printvalue(opInst)
                                 worklist.push_back(opInst);
                         }
                     }
@@ -857,7 +788,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             KnownBits KnownVal = analyzeValueKnownBits(I, DL);
             unsigned int possible_values = llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) * 2;
 
-            printvalueforce(I)
+            printvalue(I)
             
             if (!KnownVal.isConstant() && !KnownVal.hasConflict() && possible_values < least_possible_value_value && possible_values > 0) {
                 least_possible_value_value = possible_values;
@@ -868,9 +799,9 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
             // if constant, simplify later users?
             // simplify it aswell
             if (KnownVal.isConstant() && !KnownVal.hasConflict()) {
-                printvalueforce(I)
+                printvalue(I)
                 auto nsv = simplifyValueLater(I, DL);
-                printvalueforce(nsv)
+                printvalue(nsv)
                 replaceAllUsesWithandReplaceRMap(I, nsv, flippedRegisterMap);
                 simplifyUsers(nsv, DL, flippedRegisterMap);
             }
@@ -880,7 +811,6 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
         if (PATH_info solved = getReturnVal(function, dest)) {
             if (solved == PATH_solved) {
-                clonedFunc->eraseFromParent();
                 return solved;
             }
         }
@@ -944,7 +874,5 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
         // receive input, replace the value with received input
         // re-run program
     }
-    delete rVMap;
-    clonedFunc->eraseFromParent();
     return result;
 }
