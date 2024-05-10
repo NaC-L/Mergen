@@ -723,19 +723,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest, string debug_filename) 
 
 
 
-#ifdef _DEVELOPMENT
-    std::error_code EC;
-    llvm::raw_fd_ostream OS(debug_filename + "_before.ll", EC);
-    clonedFunc->print(OS);
-#endif
     while (dest == 0) {
    
-
-    #ifdef _DEVELOPMENT
-        std::error_code EC2;
-        llvm::raw_fd_ostream OS2(debug_filename + "_after.ll", EC2);
-        clonedFunc->print(OS2);
-    #endif
 
 
 

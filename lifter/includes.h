@@ -8,7 +8,7 @@
 #ifndef NDEBUG
 #define NDEBUG
 #endif
-//#define _DEVELOPMENT
+#define _DEVELOPMENT
 
 
 
@@ -57,6 +57,7 @@
 
 
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Transforms/Utils/Cloning.h"
