@@ -149,7 +149,7 @@ public:
                                 TruncInst->replaceAllUsesWith(newLoad);
 
                                 toRemove.push_back(TruncInst);
-
+                                
                                 hasChanged = true;
                             }
                         }

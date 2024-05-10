@@ -53,10 +53,7 @@ uintptr_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva) {
 
 
 uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva) {
-
     auto dosHeader = (win::dos_header_t*)fileBase;
-
-    
     auto ntHeaders = (win::nt_headers_x64_t*)((uint8_t*)fileBase + dosHeader->e_lfanew);
 
     auto ADDRESS = rva - ntHeaders->optional_header.image_base;

@@ -160,7 +160,7 @@ void branchHelper(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledI
 
         // TODO help exploring branches for other stuff
         // this will be used to explore branches
-        cout << "Enter choice (1 for True path, 0 for False path), check output_condition.ll file: ";
+        cout << "Enter choice (1 for True path, 0 for False path), check output_condition.ll file (" <<  instruction.runtime_address  << ") : ";
         int choice;
         cin >> choice;
         if (choice) {
@@ -2483,7 +2483,7 @@ printvalue(result)
     }
 
 
-    // TODO: stuff
+    // TODO: 
     void lift_rdtsc(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         auto rdtscCall = builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
         auto edxPart = createLShrFolder(builder,rdtscCall, 32, "to_edx");
@@ -2491,6 +2491,34 @@ printvalue(result)
         SetRegisterValue(context, builder, ZYDIS_REGISTER_EDX, edxPart);
         SetRegisterValue(context, builder, ZYDIS_REGISTER_EAX, eaxPart);
 
+    }    
+
+    void lift_cpuid(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+        // instruction.operands[0] = eax
+        // instruction.operands[1] = ebx
+        // instruction.operands[2] = ecx
+        // instruction.operands[3] = edx
+
+        Value* eax = GetOperandValue(context, builder, instruction.operands[0], instruction.operands[0].size);
+
+        FunctionType* AsmFTy = FunctionType::get(llvm::StructType::create({ builder.getInt32Ty(), builder.getInt32Ty(), builder.getInt32Ty(), builder.getInt32Ty() }), { builder.getInt32Ty(), builder.getInt32Ty(), builder.getInt32Ty(), builder.getInt32Ty() }, true);
+        InlineAsm* IA = InlineAsm::get(AsmFTy, "cpuid", "={ax},={bx},={cx},={dx},{ax}", true);
+
+        // Inputs for cpuid
+        std::vector<Value*> Args{ eax };
+
+        // Call the cpuid inline assembly
+        Value* cpuidCall = builder.CreateCall(IA, Args);
+
+        Value* eaxv = builder.CreateExtractValue(cpuidCall, 0, "eax");
+        Value* ebx = builder.CreateExtractValue(cpuidCall, 1, "ebx");
+        Value* ecx = builder.CreateExtractValue(cpuidCall, 2, "ecx");
+        Value* edx = builder.CreateExtractValue(cpuidCall, 3, "edx");
+
+        SetOperandValue(context, builder, instruction.operands[0], eaxv);
+        SetOperandValue(context, builder, instruction.operands[1], ebx);
+        SetOperandValue(context, builder, instruction.operands[2], ecx);
+        SetOperandValue(context, builder, instruction.operands[3], edx);
     }
 
 }
@@ -3176,7 +3204,7 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     // maybe replace this with a forcing a ret? definitely!! inline this function, we will use it alot + there is a possiblitity that next_jump wont be a constant
     // if its trying to jump somewhere else than our binary, call it and continue from [rsp] (apperantly also forget to check rsp value in the meantime)
     APInt temp;
-    if (!BinaryOperations::readMemory(jump_address, 1, temp) && cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE ) {
+    if (!BinaryOperations::readMemory(jump_address, 1, temp) && cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
         auto bb = BasicBlock::Create(context, "returnToOrgCF", builder.GetInsertBlock()->getParent());
         // actually call the function first
 
@@ -3514,6 +3542,10 @@ void liftInstruction(LLVMContext& context, IRBuilder<>& builder, ZydisDisassembl
     }
     case ZYDIS_MNEMONIC_RDTSC: {
         arithmeticsAndLogical::lift_rdtsc(context, builder, instruction);
+        break;
+    }
+    case ZYDIS_MNEMONIC_CPUID: {
+        arithmeticsAndLogical::lift_cpuid(context, builder, instruction);
         break;
     }
 

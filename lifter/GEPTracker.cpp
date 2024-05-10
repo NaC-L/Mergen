@@ -230,16 +230,14 @@ namespace GEPStoreTracker {
     };
 
     void removeDuplicateOffsets(vector<Instruction*>& vec) {
-        
-        if (vec.size() <= 0)
+        if (vec.empty())
             return;
 
-        unordered_set<pair<Value*, int> , PairHash> latestOffsets;
-
+        unordered_map<pair<Value*, int>, Instruction*, PairHash> latestOffsets;
         vector<Instruction*> uniqueInstructions;
+        uniqueInstructions.reserve(vec.size()); // reserve space assuming all could be unique
 
-        auto it = vec.rbegin(); // Start from the beginning of the reversed vector
-        while (it != vec.rend()) {
+        for (auto it = vec.rbegin(); it != vec.rend(); ++it) {
             auto inst = cast<StoreInst>(*it);
             auto GEPval = inst->getPointerOperand();
             auto valOp = inst->getValueOperand();
@@ -248,19 +246,12 @@ namespace GEPStoreTracker {
             auto offset = GEPInst->getOperand(1);
             auto pair = make_pair(offset, size);
 
-            if (latestOffsets.find(pair) == latestOffsets.end()) {
-                // If the pair (offset, size) is not encountered before, add it to the unique vector
+            if (latestOffsets.emplace(pair,*it).second) {
                 uniqueInstructions.push_back(*it);
-
-                // Update the latest occurrence of the pair
-                latestOffsets.insert(pair);
             }
-
-            ++it;
         }
 
-        // Replace the original vector with the unique vector
-        vec = vector<Instruction*>(uniqueInstructions.rbegin(), uniqueInstructions.rend());
+        vec.assign(uniqueInstructions.rbegin(), uniqueInstructions.rend());
     }
 
     void removeFutureInsts(vector<Instruction*>& vec, LoadInst* load) {
@@ -436,8 +427,10 @@ namespace GEPStoreTracker {
                 auto retvalload = retval;
                 printvalue(cleared_retval);
                 printvalue(retvalload);
-                //string next_line = "------------------------------";
+#ifdef          _DEVELOPMENT
+                string next_line = "------------------------------";
                 printvalue2(next_line)
+#endif
             }
 
         }
