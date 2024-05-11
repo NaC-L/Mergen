@@ -13,500 +13,500 @@ using memoryInfo = tuple<ptrValue, idxValue, memoryValue, bool>;
 // replace it with https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Analysis/MemoryLocation.h#L228 but I think this might be better after build, not while building
 class ValueByteReference2 {
 public:
-    Value* value;
-    short byteOffset;
+	Value* value;
+	short byteOffset;
 
-    ValueByteReference2(Value* val, short offset) : value(val), byteOffset(offset) {}
+	ValueByteReference2(Value* val, short offset) : value(val), byteOffset(offset) {}
 };
 
 class lifterMemoryBuffer2 {
 public:
-    std::vector<ValueByteReference2*> buffer;
+	std::vector<ValueByteReference2*> buffer;
 
-    lifterMemoryBuffer2() : buffer(STACKP_VALUE, nullptr) {}
+	lifterMemoryBuffer2() : buffer(STACKP_VALUE, nullptr) {}
 
-    ~lifterMemoryBuffer2() {
+	~lifterMemoryBuffer2() {
 
-        for (auto* ref : buffer) {
-            delete ref;
-        }
-    }
+		for (auto* ref : buffer) {
+			delete ref;
+		}
+	}
 
-    void addValueReference(Value* value, unsigned address) {
-        unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
-        for (unsigned i = 0; i < valueSizeInBytes; i++) {
+	void addValueReference(Value* value, unsigned address) {
+		unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
+		for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
-            delete buffer[address + i];
+			delete buffer[address + i];
 
-            buffer[address + i] = new ValueByteReference2(value, i);
-        }
-    }
+			buffer[address + i] = new ValueByteReference2(value, i);
+		}
+	}
 
-    Value* retrieveCombinedValue(IRBuilder<>& builder, unsigned startAddress, unsigned byteCount) {
-        LLVMContext& context = builder.getContext();
-        if (byteCount == 0) return nullptr;
-
-
-        Value* firstSource = nullptr;
-        bool contiguous = true;
-
-        for (unsigned i = 0; i < byteCount && contiguous; ++i) {
-            unsigned currentAddress = startAddress + i;
-            if (currentAddress >= buffer.size() || buffer[currentAddress] == nullptr) {
-                contiguous = false;
-                break;
-            }
-            if (i == 0) {
-                firstSource = buffer[currentAddress]->value;
-            }
-            else if (buffer[currentAddress]->value != firstSource || buffer[currentAddress]->byteOffset != i) {
-                contiguous = false;
-            }
-        }
+	Value* retrieveCombinedValue(IRBuilder<>& builder, unsigned startAddress, unsigned byteCount) {
+		LLVMContext& context = builder.getContext();
+		if (byteCount == 0) return nullptr;
 
 
-        if (contiguous && firstSource != nullptr && byteCount == firstSource->getType()->getIntegerBitWidth() / 8) {
-            return firstSource;
-        }
+		Value* firstSource = nullptr;
+		bool contiguous = true;
 
-        // supposed to return 0 if never used, wtf?
-        if (firstSource == nullptr) {
-            return ConstantInt::get(Type::getIntNTy(context, byteCount), 0);
-        }
+		for (unsigned i = 0; i < byteCount && contiguous; ++i) {
+			unsigned currentAddress = startAddress + i;
+			if (currentAddress >= buffer.size() || buffer[currentAddress] == nullptr) {
+				contiguous = false;
+				break;
+			}
+			if (i == 0) {
+				firstSource = buffer[currentAddress]->value;
+			}
+			else if (buffer[currentAddress]->value != firstSource || buffer[currentAddress]->byteOffset != i) {
+				contiguous = false;
+			}
+		}
 
-        Value* result = nullptr;
 
-        for (unsigned i = 0; i < byteCount; i++) {
-            unsigned currentAddress = startAddress + i;
-            if (currentAddress < buffer.size() && buffer[currentAddress] != nullptr) {
-                auto* ref = buffer[currentAddress];
-                Value* byteValue = extractByte(builder, ref->value, ref->byteOffset);
-                if (!result) {
-                    result = createZExtFolder(builder, byteValue, Type::getIntNTy(builder.getContext(), byteCount * 8));
-                }
-                else {
-                    Value* shiftedByteValue = createShlFolder(builder, createZExtFolder(builder, byteValue, Type::getIntNTy(builder.getContext(), byteCount * 8)), APInt(byteCount * 8, i * 8));
-                    result = createAddFolder(builder, result, shiftedByteValue, "extractbytesthing");
-                }
-            }
+		if (contiguous && firstSource != nullptr && byteCount == firstSource->getType()->getIntegerBitWidth() / 8) {
+			return firstSource;
+		}
 
-        }
-        return result;
-    }
+		// supposed to return 0 if never used, wtf?
+		if (firstSource == nullptr) {
+			return ConstantInt::get(Type::getIntNTy(context, byteCount), 0);
+		}
+
+		Value* result = nullptr;
+
+		for (unsigned i = 0; i < byteCount; i++) {
+			unsigned currentAddress = startAddress + i;
+			if (currentAddress < buffer.size() && buffer[currentAddress] != nullptr) {
+				auto* ref = buffer[currentAddress];
+				Value* byteValue = extractByte(builder, ref->value, ref->byteOffset);
+				if (!result) {
+					result = createZExtFolder(builder, byteValue, Type::getIntNTy(builder.getContext(), byteCount * 8));
+				}
+				else {
+					Value* shiftedByteValue = createShlFolder(builder, createZExtFolder(builder, byteValue, Type::getIntNTy(builder.getContext(), byteCount * 8)), APInt(byteCount * 8, i * 8));
+					result = createAddFolder(builder, result, shiftedByteValue, "extractbytesthing");
+				}
+			}
+
+		}
+		return result;
+	}
 
 private:
-    Value* extractByte(IRBuilder<>& builder, Value* value, unsigned byteOffset) {
+	Value* extractByte(IRBuilder<>& builder, Value* value, unsigned byteOffset) {
 
-        if (!value) {
-            return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
-        }
-        unsigned shiftAmount = byteOffset * 8;
-        Value* shiftedValue = createLShrFolder(builder, value, APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
-        //printvalue(shiftedValue)
-        return createTruncFolder(builder, shiftedValue, Type::getInt8Ty(builder.getContext()));
-    }
+		if (!value) {
+			return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
+		}
+		unsigned shiftAmount = byteOffset * 8;
+		Value* shiftedValue = createLShrFolder(builder, value, APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "extractbyte");
+		//printvalue(shiftedValue)
+		return createTruncFolder(builder, shiftedValue, Type::getInt8Ty(builder.getContext()));
+	}
 };
 
 
 namespace BinaryOperations {
-    void* file_base_g;
-    ZyanU8* data_g;
+	void* file_base_g;
+	ZyanU8* data_g;
 
-    void initBases(void* file_base, ZyanU8* data) {
-        file_base_g = file_base;
-        data_g = data;
-    }
+	void initBases(void* file_base, ZyanU8* data) {
+		file_base_g = file_base;
+		data_g = data;
+	}
 
-    void getBases(void** file_base, ZyanU8** data) {
-        *file_base = file_base_g;
-        *data = data_g;
-    }
+	void getBases(void** file_base, ZyanU8** data) {
+		*file_base = file_base_g;
+		*data = data_g;
+	}
 
-    const char* getName(unsigned long long offset) {
-        auto dosHeader = (win::dos_header_t*)file_base_g;
-        auto ntHeaders = (win::nt_headers_x64_t*)((uint8_t*)file_base_g + dosHeader->e_lfanew);
-        auto rvaOffset = RvaToFileOffset(ntHeaders, offset);
-        return (const char*)file_base_g + rvaOffset;
-    }
+	const char* getName(unsigned long long offset) {
+		auto dosHeader = (win::dos_header_t*)file_base_g;
+		auto ntHeaders = (win::nt_headers_x64_t*)((uint8_t*)file_base_g + dosHeader->e_lfanew);
+		auto rvaOffset = RvaToFileOffset(ntHeaders, offset);
+		return (const char*)file_base_g + rvaOffset;
+	}
 
-    // sections
-    bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value) {
+	// sections
+	bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value) {
 
 
-        uintptr_t mappedAddr = address_to_mapped_address(file_base_g, addr);
-        uintptr_t tempValue;
+		uintptr_t mappedAddr = address_to_mapped_address(file_base_g, addr);
+		uintptr_t tempValue;
 
-        if (mappedAddr > 0) {
-            std::memcpy(&tempValue, reinterpret_cast<const void*>(data_g + mappedAddr), byteSize);
+		if (mappedAddr > 0) {
+			std::memcpy(&tempValue, reinterpret_cast<const void*>(data_g + mappedAddr), byteSize);
 
-            APInt readValue(byteSize * 8, tempValue);
-            value = readValue;
-            return 1;
-        }
+			APInt readValue(byteSize * 8, tempValue);
+			value = readValue;
+			return 1;
+		}
 
-        return 0;
-    }
+		return 0;
+	}
 
-    // TODO
-    // 1- if writes into execute section, flag that address, if we execute that address then do fancy stuff to figure out what we wrote so we know what we will be executing
-    void writeMemory();
+	// TODO
+	// 1- if writes into execute section, flag that address, if we execute that address then do fancy stuff to figure out what we wrote so we know what we will be executing
+	void writeMemory();
 
 };
 
 
 // do some cleanup
 namespace GEPStoreTracker {
-    DominatorTree *DT;
+	DominatorTree* DT;
 
-    // only push stores to here
-    vector<memoryInfo> memInfos;
+	// only push stores to here
+	vector<memoryInfo> memInfos;
 
-    BasicBlock* lastBB = nullptr;
+	BasicBlock* lastBB = nullptr;
 
-    void initDomTree(Function& F) {
-        DT = new DominatorTree(F);
-    }
-    DominatorTree* getDomTree() {
-        return DT;
-    }
+	void initDomTree(Function& F) {
+		DT = new DominatorTree(F);
+	}
+	DominatorTree* getDomTree() {
+		return DT;
+	}
 
-    void updateDomTree(Function& F) {
-        // doesnt make a much difference, but good to have
-        auto getLastBB = &(F.back());
-        if (getLastBB != lastBB)
-            DT->recalculate(F);
-        lastBB = getLastBB;
-    }
+	void updateDomTree(Function& F) {
+		// doesnt make a much difference, but good to have
+		auto getLastBB = &(F.back());
+		if (getLastBB != lastBB)
+			DT->recalculate(F);
+		lastBB = getLastBB;
+	}
 
-    // rename
-    vector<Instruction*> memInfos2;
-    void insertMemoryOp(Instruction* inst) {
-        memInfos2.push_back(inst);
-    }    
-    
-    bool overlaps(uint64_t addr1, uint64_t size1, uint64_t addr2, uint64_t size2) {
-        return std::max(addr1, addr2) < std::min(addr1 + size1, addr2 + size2);
-    }
+	// rename
+	vector<Instruction*> memInfos2;
+	void insertMemoryOp(Instruction* inst) {
+		memInfos2.push_back(inst);
+	}
 
-
-    uint64_t createmask(unsigned long a1, unsigned long a2, unsigned long b1, unsigned long b2) {
-
-        auto start_overlap = max(a1, b1);
-        auto end_overlap = min(a2, b2);
-        long diffStart = a1 - b1;
-
-        printvalue2(start_overlap)
-        printvalue2(end_overlap)
-        // If there is no overlap
-        if (start_overlap > end_overlap) 
-            return 0; 
-
-        auto num_bytes = end_overlap - start_overlap;
-        // mask =>  
-        unsigned long long mask = 0xffffffffffffffff >> 64-(num_bytes*8); // adjust mask for bytesize
-        printvalue2(diffStart)
-        if (diffStart <= 0)
-            return mask;
-
-            
-        auto diffShift = abs(diffStart);
-
-        printvalue2(mask)
-        mask <<= (diffShift)*8; // get the shifted mask
-        printvalue2(mask)
-
-        mask ^=  -(diffStart < 0); // if diff was -, get the negative of mask
-        printvalue2(mask)
-
-        return mask;
-
-    }
-
-    struct PairHash {
-        std::size_t operator()(const std::pair<llvm::Value*, int>& pair) const {
-            // Combine the hashes of the two elements
-            return hash<llvm::Value*>{}(pair.first) ^ hash<int>{}(pair.second);
-        }
-    };
-
-    void removeDuplicateOffsets(vector<Instruction*>& vec) {
-        if (vec.empty())
-            return;
-
-        unordered_map<pair<Value*, int>, Instruction*, PairHash> latestOffsets;
-        vector<Instruction*> uniqueInstructions;
-        uniqueInstructions.reserve(vec.size()); // reserve space assuming all could be unique
-
-        for (auto it = vec.rbegin(); it != vec.rend(); ++it) {
-            auto inst = cast<StoreInst>(*it);
-            auto GEPval = inst->getPointerOperand();
-            auto valOp = inst->getValueOperand();
-            int size = valOp->getType()->getIntegerBitWidth();
-            auto GEPInst = cast<GetElementPtrInst>(GEPval);
-            auto offset = GEPInst->getOperand(1);
-            auto pair = make_pair(offset, size);
-
-            if (latestOffsets.emplace(pair,*it).second) {
-                uniqueInstructions.push_back(*it);
-            }
-        }
-
-        vec.assign(uniqueInstructions.rbegin(), uniqueInstructions.rend());
-    }
-
-    void removeFutureInsts(vector<Instruction*>& vec, LoadInst* load) {
-        // binary search
-        auto it = std::lower_bound(vec.begin(), vec.end(), load,
-            [](Instruction* a, Instruction* b) {
-            return comesBefore(a, b, *DT);
-        });
-
-        if (it != vec.end()) {
-            vec.erase(it, vec.end());
-        }
-
-    }
+	bool overlaps(uint64_t addr1, uint64_t size1, uint64_t addr2, uint64_t size2) {
+		return std::max(addr1, addr2) < std::min(addr1 + size1, addr2 + size2);
+	}
 
 
-    Value* solveLoad(LoadInst* load, bool buildTime) {
-        Function* F = load->getFunction();
+	uint64_t createmask(unsigned long a1, unsigned long a2, unsigned long b1, unsigned long b2) {
 
-        if (!buildTime)
-            GEPStoreTracker::updateDomTree(*F);
+		auto start_overlap = max(a1, b1);
+		auto end_overlap = min(a2, b2);
+		long diffStart = a1 - b1;
 
+		printvalue2(start_overlap)
+			printvalue2(end_overlap)
+			// If there is no overlap
+			if (start_overlap > end_overlap)
+				return 0;
 
-        // replace this
-        auto LoadMemLoc = MemoryLocation::get(load);
-
-        const Value* loadPtr = LoadMemLoc.Ptr;
-        LocationSize loadsize = LoadMemLoc.Size;
-
-        auto cloadsize = loadsize.getValue();
-        
-        auto loadPtrGEP = cast<GetElementPtrInst>(loadPtr);
-
-        auto loadPointer = loadPtrGEP->getPointerOperand();
-        auto loadOffset = loadPtrGEP->getOperand(1);
-
-
-        // create a new vector with only leave what we care about
-        vector<Instruction*> clearedMemInfos;
-
-        clearedMemInfos = memInfos2;
-
-        // remove anything not around load? , nah we would still have to loop every inst; instead we can create a new vector; but im not sure it would make a too big of a difference, so maybe later 
-        
-        if (!buildTime)
-            removeFutureInsts(clearedMemInfos, load);
-        
-        removeDuplicateOffsets(clearedMemInfos);
+		auto num_bytes = end_overlap - start_overlap;
+		// mask =>  
+		unsigned long long mask = 0xffffffffffffffff >> 64 - (num_bytes * 8); // adjust mask for bytesize
+		printvalue2(diffStart)
+			if (diffStart <= 0)
+				return mask;
 
 
-        Value* retval = nullptr;
+		auto diffShift = abs(diffStart);
+
+		printvalue2(mask)
+			mask <<= (diffShift) * 8; // get the shifted mask
+		printvalue2(mask)
+
+			mask ^= -(diffStart < 0); // if diff was -, get the negative of mask
+		printvalue2(mask)
+
+			return mask;
+
+	}
+
+	struct PairHash {
+		std::size_t operator()(const std::pair<llvm::Value*, int>& pair) const {
+			// Combine the hashes of the two elements
+			return hash<llvm::Value*>{}(pair.first) ^ hash<int>{}(pair.second);
+		}
+	};
+
+	void removeDuplicateOffsets(vector<Instruction*>& vec) {
+		if (vec.empty())
+			return;
+
+		unordered_map<pair<Value*, int>, Instruction*, PairHash> latestOffsets;
+		vector<Instruction*> uniqueInstructions;
+		uniqueInstructions.reserve(vec.size()); // reserve space assuming all could be unique
+
+		for (auto it = vec.rbegin(); it != vec.rend(); ++it) {
+			auto inst = cast<StoreInst>(*it);
+			auto GEPval = inst->getPointerOperand();
+			auto valOp = inst->getValueOperand();
+			int size = valOp->getType()->getIntegerBitWidth();
+			auto GEPInst = cast<GetElementPtrInst>(GEPval);
+			auto offset = GEPInst->getOperand(1);
+			auto pair = make_pair(offset, size);
+
+			if (latestOffsets.emplace(pair, *it).second) {
+				uniqueInstructions.push_back(*it);
+			}
+		}
+
+		vec.assign(uniqueInstructions.rbegin(), uniqueInstructions.rend());
+	}
+
+	void removeFutureInsts(vector<Instruction*>& vec, LoadInst* load) {
+		// binary search
+		auto it = std::lower_bound(vec.begin(), vec.end(), load,
+								   [](Instruction* a, Instruction* b) {
+			return comesBefore(a, b, *DT);
+		});
+
+		if (it != vec.end()) {
+			vec.erase(it, vec.end());
+		}
+
+	}
 
 
-        for (auto inst : clearedMemInfos) {
+	Value* solveLoad(LoadInst* load, bool buildTime) {
+		Function* F = load->getFunction();
 
-            // we are only interested in previous instructions
-            
-            if (!buildTime)
-                if (comesBefore(load, inst, *DT)) 
-                    break;
-            
-            
+		if (!buildTime)
+			GEPStoreTracker::updateDomTree(*F);
 
 
-            
-            
-            // replace it with something more efficent
-            //auto MemLoc = MemoryLocation::get(inst);
+		// replace this
+		auto LoadMemLoc = MemoryLocation::get(load);
 
-            StoreInst* storeInst = cast<StoreInst>(inst);
-            auto memLocationValue = storeInst->getPointerOperand();
+		const Value* loadPtr = LoadMemLoc.Ptr;
+		LocationSize loadsize = LoadMemLoc.Size;
 
-            auto memLocationGEP = cast<GetElementPtrInst>(memLocationValue);
+		auto cloadsize = loadsize.getValue();
 
-            auto pointer = memLocationGEP->getOperand(0);
-            auto offset = memLocationGEP->getOperand(1);
+		auto loadPtrGEP = cast<GetElementPtrInst>(loadPtr);
 
-            
-            if (pointer != loadPointer)
-                break;
+		auto loadPointer = loadPtrGEP->getPointerOperand();
+		auto loadOffset = loadPtrGEP->getOperand(1);
 
 
-            // find a way to compare with unk values, we are also interested when offset in unk ( should be a rare case ) 
-            if (!isa<ConstantInt>(offset) || !isa<ConstantInt>(loadOffset))
-                continue;
+		// create a new vector with only leave what we care about
+		vector<Instruction*> clearedMemInfos;
 
-            auto memOffsetValue = cast<ConstantInt>(offset)->getZExtValue();
-            auto loadOffsetValue = cast<ConstantInt>(loadOffset)->getZExtValue();
+		clearedMemInfos = memInfos2;
 
-            long diff = memOffsetValue - loadOffsetValue;
+		// remove anything not around load? , nah we would still have to loop every inst; instead we can create a new vector; but im not sure it would make a too big of a difference, so maybe later 
+
+		if (!buildTime)
+			removeFutureInsts(clearedMemInfos, load);
+
+		removeDuplicateOffsets(clearedMemInfos);
 
 
-            // this is bytesize, not bitsize
-            auto storeBitSize = storeInst->getValueOperand()->getType()->getIntegerBitWidth() / 8;
-            //outs() << " \nstoreBitSize: " << storeBYTESize << " \n normal size: " << storeInst->getValueOperand()->getType()->getIntegerBitWidth() << "\n"; outs().flush();
-            //if (std::max(loadOffsetValue, memOffsetValue) < std::min(loadOffsetValue + cloadsize, memOffsetValue + MemLoc.Size.getValue() )) {
-            if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, storeBitSize)) {
-                
-                printvalue2(diff)
-                printvalue2(memOffsetValue)
-                printvalue2(loadOffsetValue)
-                printvalue2(storeBitSize)
+		Value* retval = nullptr;
 
-                    auto storedInst = inst->getOperand(0);
-                if (!retval)
-                    retval = ConstantInt::get(load->getType(), 0);
-               
-               
-                long sizeExceeded = max( (int)( (memOffsetValue+ storeBitSize) -(loadOffsetValue + cloadsize)) , 0);
-                Value* mask = ConstantInt::get(storedInst->getType(), createmask(loadOffsetValue, loadOffsetValue + cloadsize, memOffsetValue, memOffsetValue + storeBitSize));
 
-                printvalue(mask)
-                
-                auto bb = inst->getParent();
-                IRBuilder<> builder(load);
-                // we dont have to calculate knownbits if its a constant
-                auto maskedinst = createAndFolder(builder, storedInst, mask, inst->getName() + ".maskedinst");
+		for (auto inst : clearedMemInfos) {
 
-                printvalue(storedInst);
-                printvalue(mask);
-                printvalue(maskedinst);
-                if (maskedinst->getType()->getScalarSizeInBits() < retval->getType()->getScalarSizeInBits()) 
-                    maskedinst = builder.CreateZExt(maskedinst, retval->getType());
+			// we are only interested in previous instructions
 
-                if (mask->getType()->getScalarSizeInBits() < retval->getType()->getScalarSizeInBits()) 
-                    mask = builder.CreateZExt(mask, retval->getType());
-                
-                printvalue(maskedinst);
-                printvalue2(diff);
-                // move the mask?
-                if (diff > 0) {
-                    maskedinst = createShlFolder(builder, maskedinst, (diff) * 8);
-                    mask = createShlFolder(builder, mask, (diff) * 8);
-                }
-                else if (diff < 0) {
-                    maskedinst = createLShrFolder(builder, maskedinst, -(diff) * 8);
-                    mask = createLShrFolder(builder, mask, -(diff) * 8);
-                }
-                // maskedinst = maskedinst
-                // maskedinst = 0x4433221100000000
-                printvalue(maskedinst);
-                maskedinst = builder.CreateZExtOrTrunc(maskedinst, retval->getType());
-                printvalue(maskedinst);
-                
+			if (!buildTime)
+				if (comesBefore(load, inst, *DT))
+					break;
 
-                printvalue(mask);
 
-                // clear mask from retval so we can merge
-                // this will be a NOT operation for sure
-                // 
-                 // overhead
-                auto reverseMask = builder.CreateNot(mask);
-                
-                printvalue(reverseMask);
 
-                // overhead
-                auto cleared_retval = createAndFolder(builder,retval, reverseMask, retval->getName() + ".cleared");
-                // cleared_retval = 0 & 0; clear retval
-                // cleared_retval = retval & 0xff_ff_ff_ff_00_00_00_00
 
-                retval = createOrFolder(builder, cleared_retval, maskedinst, cleared_retval->getName() + ".merged");
-                //retval = builder.CreateTrunc(retval, load->getType());
-                printvalue(cleared_retval);
-                printvalue(maskedinst);
-                // retval = cleared_retval | maskedinst =|= 0 | 0x1122334455667788
-                // retval = cleared_retval | maskedinst =|= 0x55667788 | 0x4433221100000000
 
-                if (retval)
-                    if (retval->getType()->getScalarSizeInBits() > load->getType()->getScalarSizeInBits())
-                        retval = builder.CreateTrunc(retval, load->getType());
 
-                printvalue(inst);
-                auto retvalload = retval;
-                printvalue(cleared_retval);
-                printvalue(retvalload);
+			// replace it with something more efficent
+			//auto MemLoc = MemoryLocation::get(inst);
+
+			StoreInst* storeInst = cast<StoreInst>(inst);
+			auto memLocationValue = storeInst->getPointerOperand();
+
+			auto memLocationGEP = cast<GetElementPtrInst>(memLocationValue);
+
+			auto pointer = memLocationGEP->getOperand(0);
+			auto offset = memLocationGEP->getOperand(1);
+
+
+			if (pointer != loadPointer)
+				break;
+
+
+			// find a way to compare with unk values, we are also interested when offset in unk ( should be a rare case ) 
+			if (!isa<ConstantInt>(offset) || !isa<ConstantInt>(loadOffset))
+				continue;
+
+			auto memOffsetValue = cast<ConstantInt>(offset)->getZExtValue();
+			auto loadOffsetValue = cast<ConstantInt>(loadOffset)->getZExtValue();
+
+			long diff = memOffsetValue - loadOffsetValue;
+
+
+			// this is bytesize, not bitsize
+			auto storeBitSize = storeInst->getValueOperand()->getType()->getIntegerBitWidth() / 8;
+			//outs() << " \nstoreBitSize: " << storeBYTESize << " \n normal size: " << storeInst->getValueOperand()->getType()->getIntegerBitWidth() << "\n"; outs().flush();
+			//if (std::max(loadOffsetValue, memOffsetValue) < std::min(loadOffsetValue + cloadsize, memOffsetValue + MemLoc.Size.getValue() )) {
+			if (overlaps(loadOffsetValue, cloadsize, memOffsetValue, storeBitSize)) {
+
+				printvalue2(diff)
+					printvalue2(memOffsetValue)
+					printvalue2(loadOffsetValue)
+					printvalue2(storeBitSize)
+
+					auto storedInst = inst->getOperand(0);
+				if (!retval)
+					retval = ConstantInt::get(load->getType(), 0);
+
+
+				long sizeExceeded = max((int)((memOffsetValue + storeBitSize) - (loadOffsetValue + cloadsize)), 0);
+				Value* mask = ConstantInt::get(storedInst->getType(), createmask(loadOffsetValue, loadOffsetValue + cloadsize, memOffsetValue, memOffsetValue + storeBitSize));
+
+				printvalue(mask)
+
+					auto bb = inst->getParent();
+				IRBuilder<> builder(load);
+				// we dont have to calculate knownbits if its a constant
+				auto maskedinst = createAndFolder(builder, storedInst, mask, inst->getName() + ".maskedinst");
+
+				printvalue(storedInst);
+				printvalue(mask);
+				printvalue(maskedinst);
+				if (maskedinst->getType()->getScalarSizeInBits() < retval->getType()->getScalarSizeInBits())
+					maskedinst = builder.CreateZExt(maskedinst, retval->getType());
+
+				if (mask->getType()->getScalarSizeInBits() < retval->getType()->getScalarSizeInBits())
+					mask = builder.CreateZExt(mask, retval->getType());
+
+				printvalue(maskedinst);
+				printvalue2(diff);
+				// move the mask?
+				if (diff > 0) {
+					maskedinst = createShlFolder(builder, maskedinst, (diff) * 8);
+					mask = createShlFolder(builder, mask, (diff) * 8);
+				}
+				else if (diff < 0) {
+					maskedinst = createLShrFolder(builder, maskedinst, -(diff) * 8);
+					mask = createLShrFolder(builder, mask, -(diff) * 8);
+				}
+				// maskedinst = maskedinst
+				// maskedinst = 0x4433221100000000
+				printvalue(maskedinst);
+				maskedinst = builder.CreateZExtOrTrunc(maskedinst, retval->getType());
+				printvalue(maskedinst);
+
+
+				printvalue(mask);
+
+				// clear mask from retval so we can merge
+				// this will be a NOT operation for sure
+				// 
+				 // overhead
+				auto reverseMask = builder.CreateNot(mask);
+
+				printvalue(reverseMask);
+
+				// overhead
+				auto cleared_retval = createAndFolder(builder, retval, reverseMask, retval->getName() + ".cleared");
+				// cleared_retval = 0 & 0; clear retval
+				// cleared_retval = retval & 0xff_ff_ff_ff_00_00_00_00
+
+				retval = createOrFolder(builder, cleared_retval, maskedinst, cleared_retval->getName() + ".merged");
+				//retval = builder.CreateTrunc(retval, load->getType());
+				printvalue(cleared_retval);
+				printvalue(maskedinst);
+				// retval = cleared_retval | maskedinst =|= 0 | 0x1122334455667788
+				// retval = cleared_retval | maskedinst =|= 0x55667788 | 0x4433221100000000
+
+				if (retval)
+					if (retval->getType()->getScalarSizeInBits() > load->getType()->getScalarSizeInBits())
+						retval = builder.CreateTrunc(retval, load->getType());
+
+				printvalue(inst);
+				auto retvalload = retval;
+				printvalue(cleared_retval);
+				printvalue(retvalload);
 #ifdef          _DEVELOPMENT
-                string next_line = "------------------------------";
-                printvalue2(next_line)
+				string next_line = "------------------------------";
+				printvalue2(next_line)
 #endif
-            }
+			}
 
-        }
-        return retval;
-    }
+		}
+		return retval;
+	}
 
-    // remove
-    void insertInfo(ptrValue pv, idxValue av, memoryValue mv, bool isStore) {
-        memInfos.push_back(make_tuple(pv, av, mv, isStore));
-    }
+	// remove
+	void insertInfo(ptrValue pv, idxValue av, memoryValue mv, bool isStore) {
+		memInfos.push_back(make_tuple(pv, av, mv, isStore));
+	}
 
-    // remove
-    memoryValue getValueAt(IRBuilder<>& builder, ptrValue pv, idxValue iv, unsigned int byteCount) {
-
-
-        if (!isa<ConstantInt>(iv))
-            return nullptr;
-
-        // i really want to replace this buffer
-        lifterMemoryBuffer2 tempBuffer;
-        // only care about %memory values for now 
-
-        
-        // replace queue with vector maybe?
-
-        for (memoryInfo info : memInfos) {
-
-            ptrValue t_ptr = get<0>(info);
-
-            idxValue t_idx = get<1>(info);
-
-            memoryValue t_mem = get<2>(info);
-            
-            bool isStore = get<3>(info);
-            
-            // printvalue(t_ptr)
-                // printvalue(t_idx)
-            
-            /*if (t_mem) {
-                printvalue(t_mem)
-            }
-            */
-            
-            if (t_ptr == pv && !isa<ConstantInt>(t_idx) && !isStore) { // if we hit the load, return? 
-                break;
-            }
-
-            //printvalue2(isStore)
-            if (!isStore) // if not store, no reason to insert it to our buffer
-                continue;
-
-            if (!isa<ConstantInt>(t_idx))
-                continue;
-
-            ConstantInt* t_CI = cast<ConstantInt>(t_idx);
-            tempBuffer.addValueReference(t_mem, t_CI->getZExtValue() );
+	// remove
+	memoryValue getValueAt(IRBuilder<>& builder, ptrValue pv, idxValue iv, unsigned int byteCount) {
 
 
-        }
+		if (!isa<ConstantInt>(iv))
+			return nullptr;
 
-        //printvalue(pv)
-        //printvalue(iv)
-
-        // this will create a temporary buffer, write all the values until we hit addressValue then retrieve the value from there
-        // multiple values should not be a problem since the order doesnt matter 
+		// i really want to replace this buffer
+		lifterMemoryBuffer2 tempBuffer;
+		// only care about %memory values for now 
 
 
-        ConstantInt* CI = cast<ConstantInt>(iv);
+		// replace queue with vector maybe?
 
-        Value* retvalue = tempBuffer.retrieveCombinedValue(builder,CI->getZExtValue(), byteCount );
+		for (memoryInfo info : memInfos) {
 
-        //printvalue(retvalue)
+			ptrValue t_ptr = get<0>(info);
 
-        return retvalue;
+			idxValue t_idx = get<1>(info);
 
-    }
+			memoryValue t_mem = get<2>(info);
+
+			bool isStore = get<3>(info);
+
+			// printvalue(t_ptr)
+				// printvalue(t_idx)
+
+			/*if (t_mem) {
+				printvalue(t_mem)
+			}
+			*/
+
+			if (t_ptr == pv && !isa<ConstantInt>(t_idx) && !isStore) { // if we hit the load, return? 
+				break;
+			}
+
+			//printvalue2(isStore)
+			if (!isStore) // if not store, no reason to insert it to our buffer
+				continue;
+
+			if (!isa<ConstantInt>(t_idx))
+				continue;
+
+			ConstantInt* t_CI = cast<ConstantInt>(t_idx);
+			tempBuffer.addValueReference(t_mem, t_CI->getZExtValue());
+
+
+		}
+
+		//printvalue(pv)
+		//printvalue(iv)
+
+		// this will create a temporary buffer, write all the values until we hit addressValue then retrieve the value from there
+		// multiple values should not be a problem since the order doesnt matter 
+
+
+		ConstantInt* CI = cast<ConstantInt>(iv);
+
+		Value* retvalue = tempBuffer.retrieveCombinedValue(builder, CI->getZExtValue(), byteCount);
+
+		//printvalue(retvalue)
+
+		return retvalue;
+
+	}
 
 };
 

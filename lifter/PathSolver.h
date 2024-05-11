@@ -1,7 +1,6 @@
 #pragma once
 #include "includes.h"
 
-bool doesReturnRsp(Function* clonedFunc, BasicBlock& clonedBB, void* file_base, ZyanU8* data);
 void test_optxd(Function* clonedFuncx);
 
 void final_optpass(Function* clonedFuncx);
