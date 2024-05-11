@@ -8,7 +8,7 @@
 #ifndef NDEBUG
 #define NDEBUG
 #endif
-#define _DEVELOPMENT
+//#define _DEVELOPMENT
 
 
 
@@ -241,7 +241,6 @@
 #include "llvm/Transforms/Vectorize/LoopVectorize.h"
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
-
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/Argument.h"

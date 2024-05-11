@@ -213,7 +213,6 @@ Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 
 
-
 	if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() || RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
 		return nullptr;
 
@@ -221,7 +220,7 @@ Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 	unsigned shiftSize = shiftAmount.getZExtValue();
 
 	if (shiftSize >= LHS.getBitWidth())
-		return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), 0);;
+		return ConstantInt::get(Type::getIntNTy(context,LHS.getBitWidth()), 0);;
 
 	KnownBits result(LHS.getBitWidth());
 	result.One = LHS.One.lshr(shiftSize);
@@ -321,7 +320,7 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine
 }
 
 
-Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
+Value* foldOrKnownBits(LLVMContext& context , KnownBits LHS, KnownBits RHS) {
 
 	if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() || RHS.isUnknown() || LHS.getBitWidth() != RHS.getBitWidth() || !RHS.isConstant() || LHS.getBitWidth() <= 1 || RHS.getBitWidth() < 1 || RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
 		return nullptr;
@@ -591,7 +590,7 @@ Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy, con
 
 unordered_map<int,Value*> RegisterList;
 unordered_map<Flag, Value*> FlagList;
-
+// delet dis?
 IntegerType* getIntSize(int size, LLVMContext& context) {
 	switch (size) {
 
@@ -626,8 +625,8 @@ IntegerType* getIntSize(int size, LLVMContext& context) {
 }
 
 
-void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
-
+void Init_Flags(IRBuilder<>& builder) {
+	LLVMContext& context = builder.getContext();
 	auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 	auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
 
@@ -645,7 +644,8 @@ void Init_Flags(LLVMContext& context, IRBuilder<>& builder) {
 }
 
 
-Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
+Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
+	LLVMContext& context = builder.getContext();
 	newValue = createTruncFolder(builder,newValue, Type::getInt1Ty(context));
 
 	if (flag == FLAG_RESERVED1 
@@ -660,21 +660,17 @@ Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* new
 	return FlagList[flag] = newValue;
 
 }
-Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
+Value* getFlag(IRBuilder<>& builder, Flag flag) {
 	if (FlagList[flag])
 		return FlagList[flag];
+
+	LLVMContext& context = builder.getContext();
 	return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-
-
-
-
-
-
-
-void Init_Flags2(LLVMContext& context, IRBuilder<>& builder) {
-
+// remove dis?
+void Init_Flags2(IRBuilder<>& builder) {
+	LLVMContext& context = builder.getContext();
 
 	auto zero = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 0);
 	auto value = (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 2); 
@@ -721,7 +717,7 @@ unordered_map<Value*, int> flipRegisterMap() {
 	return RevMap;
 }
 
-unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip) {
+unordered_map<int, Value*> InitRegisters(IRBuilder<>& builder,Function* function, ZyanU64 rip) {
 
 	int zydisRegister = ZYDIS_REGISTER_RAX; 
 
@@ -748,9 +744,9 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 	}
 
 	
-	Init_Flags(context,builder);
+	Init_Flags(builder);
 
-
+	LLVMContext& context = builder.getContext();
 
 	auto zero = cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), 0));
 	auto value = cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
@@ -771,7 +767,7 @@ unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& buil
 
 
 
-Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, int reg) {
+Value* GetValueFromHighByteRegister(IRBuilder<>& builder, int reg) {
 
 
 	Value* fullRegisterValue = RegisterList[ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,(ZydisRegister)reg) ];  
@@ -787,7 +783,8 @@ Value* GetValueFromHighByteRegister(LLVMContext& context, IRBuilder<>& builder, 
 }
 
 
-void SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
+void SetRFLAGSValue(IRBuilder<>& builder, Value* value) {
+	LLVMContext& context = builder.getContext();
 #ifdef _DEVELOPMENT
 	outs() << " value : "; value->print(outs()); outs() << "\n"; outs().flush();
 #endif
@@ -796,16 +793,17 @@ void SetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
 		Value* shiftedFlagValue = createLShrFolder(builder,value, ConstantInt::get(value->getType(), shiftAmount), "setflag"); 
 		auto flagValue = createTruncFolder(builder,shiftedFlagValue, Type::getInt1Ty(context),"flagtrunc"); 
 
-		setFlag(context, builder, (Flag)flag, flagValue);
+		setFlag(builder, (Flag)flag, flagValue);
 		
 	}
 	return;
 }
 
-Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
+Value* GetRFLAGSValue(IRBuilder<>& builder) {
+	LLVMContext& context = builder.getContext();
 	Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0); 
 	for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
-		Value* flagValue = getFlag(context, builder, (Flag)flag);
+		Value* flagValue = getFlag(builder, (Flag)flag);
 		int shiftAmount = flag;
 		Value* shiftedFlagValue = createShlFolder(builder,createZExtFolder(builder,flagValue,Type::getInt64Ty(context),"createrflag1"), ConstantInt::get(Type::getInt64Ty(context), shiftAmount), "createrflag2");
 		rflags = createOrFolder(builder,rflags, shiftedFlagValue,"creatingrflag");
@@ -814,10 +812,10 @@ Value* GetRFLAGSValue(LLVMContext& context, IRBuilder<>& builder) {
 }
 
 
-Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
-
+Value* GetRegisterValue(IRBuilder<>& builder, int key) {
+	
 	if (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH || key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH) {
-		return GetValueFromHighByteRegister(context, builder, key);
+		return GetValueFromHighByteRegister(builder, key);
 	}
 
 
@@ -825,7 +823,7 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
 
 
 	if (key == ZYDIS_REGISTER_RFLAGS || key == ZYDIS_REGISTER_EFLAGS) {
-		return GetRFLAGSValue(context, builder);
+		return GetRFLAGSValue(builder);
 	}
 
 	/*
@@ -845,9 +843,9 @@ Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key) {
 
 
 
-Value* SetValueToHighByteRegister(LLVMContext& context, IRBuilder<>& builder, int reg, Value* value) {
+Value* SetValueToHighByteRegister(IRBuilder<>& builder, int reg, Value* value) {
+	LLVMContext& context = builder.getContext();
 	int shiftValue = 8;
-
 	
 	int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
 	Value* fullRegisterValue = RegisterList[fullRegKey];
@@ -872,8 +870,8 @@ Value* SetValueToHighByteRegister(LLVMContext& context, IRBuilder<>& builder, in
 
 
 
-Value* SetValueToSubRegister(LLVMContext& context, IRBuilder<>& builder, int reg, Value* value) {
-	
+Value* SetValueToSubRegister(IRBuilder<>& builder, int reg, Value* value) {
+	LLVMContext& context = builder.getContext();
 	int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, static_cast<ZydisRegister>(reg));
 	Value* fullRegisterValue = RegisterList[fullRegKey];
 	fullRegisterValue = createZExtOrTruncFolder(builder,fullRegisterValue, Type::getInt64Ty(context));
@@ -917,7 +915,7 @@ Value* SetValueToSubRegister(LLVMContext& context, IRBuilder<>& builder, int reg
 }
 
 
-Value* SetValueToSubRegister2(LLVMContext& context, IRBuilder<>& builder, int reg, Value* value) {
+Value* SetValueToSubRegister2(IRBuilder<>& builder, int reg, Value* value) {
 	
 	int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
 	Value* fullRegisterValue = RegisterList[fullRegKey];
@@ -938,18 +936,18 @@ Value* SetValueToSubRegister2(LLVMContext& context, IRBuilder<>& builder, int re
 
 }
 
-void SetRegisterValue(LLVMContext& context, int key, Value* value) {
+void SetRegisterValue(int key, Value* value) {
 
 	int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP) ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key) : key;
 
 	RegisterList[newKey] = value;
 }
 
-void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value) {
+void SetRegisterValue(IRBuilder<>& builder, int key, Value* value) {
     if (
         (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH || key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) { 
 		
-        value = SetValueToSubRegister(context, builder, key, value);
+        value = SetValueToSubRegister(builder, key, value);
 		
 		
 
@@ -957,16 +955,16 @@ void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value
 
 	if ( ( (key >= ZYDIS_REGISTER_R8B) && (key <= ZYDIS_REGISTER_R15B) ) || ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_BL)) || ((key >= ZYDIS_REGISTER_SPL) && (key <= ZYDIS_REGISTER_DIL))) {
 		
-		value = SetValueToSubRegister(context, builder, key, value);
+		value = SetValueToSubRegister(builder, key, value);
 		
 	}
 
 	if (((key >= ZYDIS_REGISTER_AX) && (key <= ZYDIS_REGISTER_R15W))) {
-		value = SetValueToSubRegister2(context, builder, key, value);
+		value = SetValueToSubRegister2(builder, key, value);
 	}
 
 	if (key == ZYDIS_REGISTER_RFLAGS) {
-		SetRFLAGSValue(context, builder, value);
+		SetRFLAGSValue(builder, value);
 		return;
 	}
 
@@ -977,16 +975,14 @@ void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value
 
 
 
-Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize) {
-	
-	Value* effectiveAddress = nullptr;
+Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize) {
+	LLVMContext& context = builder.getContext();
 
-	
-	
+	Value* effectiveAddress = nullptr;
 
 	Value* baseValue = nullptr;
 	if (op.mem.base != ZYDIS_REGISTER_NONE) {
-		baseValue = GetRegisterValue(context, builder, op.mem.base);
+		baseValue = GetRegisterValue(builder, op.mem.base);
 		baseValue = createZExtFolder(builder,baseValue, Type::getInt64Ty(context));
 #ifdef _DEVELOPMENT
 		outs() << "	baseValue : ";
@@ -998,7 +994,7 @@ Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDeco
 
 	Value* indexValue = nullptr;
 	if (op.mem.index != ZYDIS_REGISTER_NONE) {
-		indexValue = GetRegisterValue(context, builder, op.mem.index);
+		indexValue = GetRegisterValue(builder, op.mem.index);
 
 		indexValue = createZExtFolder(builder,indexValue, Type::getInt64Ty(context)); 
 #ifdef _DEVELOPMENT
@@ -1146,13 +1142,13 @@ private:
 lifterMemoryBuffer globalBuffer;
 
 
-Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address) {
-
+Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address) {
+	LLVMContext& context = builder.getContext();
 	auto type = getIntSize(possiblesize, context);
 
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
-			Value* value = GetRegisterValue(context, builder, op.reg.value);
+			Value* value = GetRegisterValue(builder, op.reg.value);
 			auto opBitWidth = op.size;
 			auto typeBitWidth = dyn_cast<IntegerType>(value->getType())->getBitWidth();
 			auto new_value =
@@ -1165,7 +1161,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 				val = ConstantInt::getSigned(type, op.imm.value.s);
 			}
 			else {
-				val = ConstantInt::get(context, APInt(possiblesize, op.imm.value.u));
+				val = ConstantInt::get(context,APInt(possiblesize, op.imm.value.u)); // ?
 			}
 			return val;
 		}
@@ -1178,7 +1174,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			Value* baseValue = nullptr;
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
-				baseValue = GetRegisterValue(context, builder, op.mem.base);
+				baseValue = GetRegisterValue(builder, op.mem.base);
 				baseValue = createZExtFolder(builder,baseValue, Type::getInt64Ty(context));
 #ifdef _DEVELOPMENT
 				outs() << "	baseValue : ";
@@ -1191,7 +1187,7 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			Value* indexValue = nullptr;
 			if (op.mem.index != ZYDIS_REGISTER_NONE) {
-				indexValue = GetRegisterValue(context,builder,op.mem.index);
+				indexValue = GetRegisterValue(builder,op.mem.index);
 				indexValue = createZExtFolder(builder,indexValue, Type::getInt64Ty(context));
 #ifdef _DEVELOPMENT
 				outs() << "	indexValue : ";
@@ -1322,8 +1318,8 @@ Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 }
 
 
-Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, Value* newValue) {
-	
+Value* merge(IRBuilder<>& builder, Value* existingValue, Value* newValue) {
+	LLVMContext& context = builder.getContext();
 	unsigned existingBitWidth = existingValue->getType()->getIntegerBitWidth();
 	unsigned newBitWidth = newValue->getType()->getIntegerBitWidth();
 
@@ -1334,7 +1330,7 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 	
 	
 	APInt maskAPInt = APInt::getHighBitsSet(existingBitWidth, existingBitWidth - newBitWidth);
-	Value* mask = ConstantInt::get(context, maskAPInt);
+	Value* mask = ConstantInt::get(context,maskAPInt);
 
 	
 	Value* maskedExistingValue = createAndFolder(builder,existingValue, mask, "maskedExistingValue");
@@ -1349,13 +1345,13 @@ Value* merge(LLVMContext& context, IRBuilder<>& builder, Value* existingValue, V
 
 
 
-Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address) {
-
+Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address) {
+	LLVMContext& context = builder.getContext();
 	value = simplifyValue(value, builder.GetInsertBlock()->getParent()->getParent()->getDataLayout() );
 
 	switch (op.type) {
 		case ZYDIS_OPERAND_TYPE_REGISTER: {
-			SetRegisterValue(context, builder, op.reg.value, value);
+			SetRegisterValue(builder, op.reg.value, value);
 			return value;
 			break;
 
@@ -1371,7 +1367,7 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 			
 			Value* baseValue = nullptr;
 			if (op.mem.base != ZYDIS_REGISTER_NONE) {
-				baseValue = GetRegisterValue(context, builder, op.mem.base);
+				baseValue = GetRegisterValue(builder, op.mem.base);
 				baseValue = createZExtFolder(builder,baseValue, Type::getInt64Ty(context));
 #ifdef _DEVELOPMENT
 				outs() << "	baseValue : ";
@@ -1384,7 +1380,7 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 
 			Value* indexValue = nullptr;
 			if (op.mem.index != ZYDIS_REGISTER_NONE) {
-				indexValue = GetRegisterValue(context, builder, op.mem.index);
+				indexValue = GetRegisterValue(builder, op.mem.index);
 				indexValue = createZExtFolder(builder,indexValue, Type::getInt64Ty(context));
 #ifdef _DEVELOPMENT
 				outs() << "	indexValue : ";
@@ -1463,8 +1459,8 @@ Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedO
 }
 
 
-Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* value) {
-
+Value* getMemoryFromValue(IRBuilder<>& builder, Value* value) {
+	LLVMContext& context = builder.getContext();
 	Type* storeType = value->getType(); 
 	
 	std::vector<Value*> indices;
@@ -1478,24 +1474,26 @@ Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* val
 
 
 
-
-Value* getFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag) {
-	Value* rflag_var = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
-	Value* position = ConstantInt::get(context, APInt(64, flag));
+// delete
+Value* getFlag2(IRBuilder<>& builder, Flag flag) {
+	LLVMContext& context = builder.getContext();
+	Value* rflag_var = GetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS);
+	Value* position = ConstantInt::get(context,APInt(64, flag));
 	
-	Value* one = ConstantInt::get(context, APInt(64, 1));
+	Value* one = ConstantInt::get(context,APInt(64, 1));
 	Value* bit_position = createShlFolder(builder,one, position, "getflag-shl");
 
 	
 	Value* and_result = createAndFolder(builder,rflag_var, bit_position, "getflag-and");
-	return builder.CreateICmpNE(and_result, ConstantInt::get(context, APInt(64, 0)), "getflag-cmpne");
+	return builder.CreateICmpNE(and_result, ConstantInt::get(context,APInt(64, 0)), "getflag-cmpne");
 }
 
-Value* setFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue) {
-	Value* rflag_var = GetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS);
-	Value* position = ConstantInt::get(context, APInt(64, flag));
+Value* setFlag2(IRBuilder<>& builder, Flag flag, Value* newValue) {
+	LLVMContext& context = builder.getContext();
+	Value* rflag_var = GetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS);
+	Value* position = ConstantInt::get(context,APInt(64, flag));
 	
-	Value* one = ConstantInt::get(context, APInt(64, 1));
+	Value* one = ConstantInt::get(context,APInt(64, 1));
 	Value* bit_position = createShlFolder(builder,one, position);
 
 	Value* inverse_mask = builder.CreateNot(bit_position);
@@ -1506,25 +1504,26 @@ Value* setFlag2(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* ne
 	
 	Value* shifted_newValue = createShlFolder(builder,createZExtOrTruncFolder(builder,newValue, Type::getInt64Ty(context)), position, "flagsetweird");
 	shifted_newValue = createOrFolder(builder,cleared_rflag, shifted_newValue, "setflag-or");
-	SetRegisterValue(context, builder, ZYDIS_REGISTER_RFLAGS, shifted_newValue);
+	SetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS, shifted_newValue);
 	return shifted_newValue;
 }
 
 
 
-vector<Value*> GetRFLAGS(LLVMContext& context, IRBuilder<>& builder) {
+vector<Value*> GetRFLAGS(IRBuilder<>& builder) {
 	vector<Value*> rflags;
 	for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
-		rflags.push_back(getFlag(context, builder, (Flag)flag));
+		rflags.push_back(getFlag(builder, (Flag)flag));
 	}
 	return rflags;
 }
 
 
 
-void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, vector<Value*> value, string address) {
-	auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
+void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op, vector<Value*> value, string address) {
+	LLVMContext& context = builder.getContext();
 
+	auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
 
 	for (size_t i = 0; i < value.size(); i += 8) { 
 		Value* byteVal = ConstantInt::get(Type::getInt8Ty(context), 0); 
@@ -1559,8 +1558,9 @@ void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& 
 }
 
 // return [rsp], rsp+=8
-Value* popStack(LLVMContext& context, IRBuilder<>& builder) {
-	auto rsp = GetRegisterValue(context, builder, ZYDIS_REGISTER_RSP);
+Value* popStack(IRBuilder<>& builder) {
+	LLVMContext& context = builder.getContext();
+	auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
 	// should we get a address calculator function, do we need that?
 
 	std::vector<Value*> indices;
@@ -1573,7 +1573,7 @@ Value* popStack(LLVMContext& context, IRBuilder<>& builder) {
 
 
 	auto CI = ConstantInt::get(rsp->getType(), 8);
-	SetRegisterValue(context, ZYDIS_REGISTER_RSP, createAddFolder(builder, rsp, CI));
+	SetRegisterValue(ZYDIS_REGISTER_RSP, createAddFolder(builder, rsp, CI));
 
 
 	if (isa<ConstantInt>(rsp)) {

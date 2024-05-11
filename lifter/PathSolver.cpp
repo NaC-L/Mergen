@@ -30,7 +30,7 @@ void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv, unordered_map<Value*,
     if (registerV) {
         if (isa<Instruction>(v)) {
             auto registerI = cast<Instruction>(v);
-            SetRegisterValue(v->getContext(), registerV, v);
+            SetRegisterValue(registerV, v);
         }
     }
 
@@ -420,7 +420,7 @@ ROP_info isROP(Function* function, BasicBlock& clonedBB, uintptr_t &dest) {
     llvm::ReturnInst* returnInst = dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
     IRBuilder<> builder(&clonedBB);
-    Value* rspvalue = GetRegisterValue(clonedBB.getContext(), builder, ZYDIS_REGISTER_RSP);
+    Value* rspvalue = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
     
     if (llvm::ConstantInt* constInt = llvm::dyn_cast<llvm::ConstantInt>(rspvalue)) {
         int64_t rspval = constInt->getSExtValue();
