@@ -16,7 +16,7 @@ uintptr_t original_address = 0;
 
 
 // consider having this function in a class, later we can use multi-threading to explore different paths
-void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* data, ZyanU64 runtime_address, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, Function* function, ZyanU64 file_base) {
+void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data, ZyanU64 runtime_address, shared_ptr<vector< tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*> > > > blockAddresses, Function* function, ZyanU64 file_base) {
 
     bool run = 1;
     while (run) {
@@ -84,7 +84,7 @@ void asm_to_zydis_to_lift(LLVMContext& context, IRBuilder<>& builder, ZyanU8* da
 
 
                     
-                    liftInstruction(context, builder, instruction, blockAddresses, &run);
+                    liftInstruction(builder, instruction, blockAddresses, run);
 
                     
                     offset += instruction.info.length;
@@ -169,7 +169,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
     llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
     
-    auto RegisterList = InitRegisters(context, builder, function, runtime_address);
+    auto RegisterList = InitRegisters(builder, function, runtime_address);
 
     ZydisDisassembledInstruction instruction;
 
@@ -179,7 +179,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address, ui
 
     blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
     
-    asm_to_zydis_to_lift(context, builder, (uint8_t*)file_base, runtime_address, blockAddresses, function, file_base);
+    asm_to_zydis_to_lift(builder, (uint8_t*)file_base, runtime_address, blockAddresses, function, file_base);
 
 
     

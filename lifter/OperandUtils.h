@@ -21,35 +21,35 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS, const Twine
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS, const Twine& Name = "");
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS, const Twine& Name = "");
 
-Value* GetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key);
-void SetRegisterValue(LLVMContext& context, IRBuilder<>& builder, int key, Value* value);
-void SetRegisterValue(LLVMContext& context, int key, Value* value);
-unordered_map<int, Value*> InitRegisters(LLVMContext& context, IRBuilder<>& builder,Function* function, ZyanU64 rip);
+Value* GetRegisterValue(IRBuilder<>& builder, int key);
+void SetRegisterValue(IRBuilder<>& builder, int key, Value* value);
+void SetRegisterValue(int key, Value* value);
+unordered_map<int, Value*> InitRegisters(IRBuilder<>& builder,Function* function, ZyanU64 rip);
 
-Value* GetEffectiveAddress(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize);
+Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize);
 IntegerType* getIntSize(int size, LLVMContext& context);
 
-Value* GetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address = "");
-Value* SetOperandValue(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address = "");
-void pushFlags(LLVMContext& context, IRBuilder<>& builder, ZydisDecodedOperand& op, vector<Value*> value, string address = "");
+Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op, int possiblesize, string address = "");
+Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op, Value* value, string address = "");
+void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op, vector<Value*> value, string address = "");
 
 unordered_map<int, Value*> getRegisterList();
 
 void setRegisterList(unordered_map<int, Value*> newRegisterList);
 
-Value* setFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag, Value* newValue);
-Value* getFlag(LLVMContext& context, IRBuilder<>& builder, Flag flag);
+Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue);
+Value* getFlag(IRBuilder<>& builder, Flag flag);
 
 
 
-Value* getMemoryFromValue(LLVMContext& context, IRBuilder<>& builder, Value* value);
+Value* getMemoryFromValue(IRBuilder<>& builder, Value* value);
 
-vector<Value*> GetRFLAGS(LLVMContext& context, IRBuilder<>& builder);
+vector<Value*> GetRFLAGS(IRBuilder<>& builder);
 
 Value* getMemory();
 
 KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL);
 Value* simplifyValueLater(Value* v, const DataLayout& DL);
 unordered_map<Value*, int> flipRegisterMap();
-Value* popStack(LLVMContext& context, IRBuilder<>& builder);
+Value* popStack(IRBuilder<>& builder);
 bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT);
