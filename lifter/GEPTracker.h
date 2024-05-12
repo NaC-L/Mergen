@@ -33,13 +33,7 @@ namespace GEPStoreTracker {
 
 	DominatorTree* getDomTree();
 
-	void insertMemoryOp(Instruction* inst);
-
-	void insertInfo(ptrValue pv, idxValue av, memoryValue mv, bool isStore);
-
-	// we use this as a loadValue
-	memoryValue getValueAt(IRBuilder<>& builder, ptrValue pv, idxValue iv, unsigned int byteCount);
-
+	void insertMemoryOp(StoreInst* inst);
 
 };
 #endif

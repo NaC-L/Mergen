@@ -1236,9 +1236,6 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op, int possib
 
 			auto retval = builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
 
-			// no
-			//GEPStoreTracker::insertMemoryOp(retval);
-
 			auto KBload = analyzeValueKnownBits(retval, retval->getFunction()->getParent()->getDataLayout());
 			printvalue2(KBload)
 				if (isa<ConstantInt>(effectiveAddress)) {
@@ -1303,8 +1300,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op, int possib
 			}
 			*/
 
-			// ??
-			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, nullptr, false);
+			
 
 			printvalue(retval);
 
@@ -1444,7 +1440,6 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op, Value* val
 
 			// storeInst good, loadinst bad
 			GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
-			GEPStoreTracker::insertInfo(memoryAlloc, effectiveAddress, value, true);
 
 			return store;
 		}
@@ -1552,7 +1547,6 @@ void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op, vector<Value*> val
 		globalBuffer.addValueReference(byteVal, rspInt->getZExtValue());
 
 		GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
-		GEPStoreTracker::insertInfo(memoryAlloc, rsp, byteVal, true);
 		rsp = createAddFolder(builder, rsp, ConstantInt::get(rsp->getType(), 1));
 	}
 }
