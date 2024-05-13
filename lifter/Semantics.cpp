@@ -1909,23 +1909,24 @@ namespace arithmeticsAndLogical {
 
 	void lift_imul(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 		LLVMContext& context = builder.getContext();
-		// this is ugly
+
 		auto dest = instruction.operands[0]; // dest
 		auto src = instruction.operands[1];
 		auto src2 = (instruction.info.operand_count_visible == 3) ? instruction.operands[2] : dest; // if exists third operand
 
 		Value* Rvalue = GetOperandValue(builder, src, src.size);
 		Value* Lvalue = GetOperandValue(builder, src2, src2.size);
-
+		auto initialSize = Rvalue->getType()->getIntegerBitWidth();
+		printvalue2(initialSize)
+			Rvalue = builder.CreateSExt(Rvalue, Type::getIntNTy(context, initialSize * 2));
+		Lvalue = builder.CreateSExt(Rvalue, Type::getIntNTy(context, initialSize * 2));
 		Value* result = builder.CreateMul(Lvalue, Rvalue, "intmul");
 
 		// Flags
 		auto resultType = result->getType();
-		auto bitWidth = resultType->getIntegerBitWidth();
 
-		Value* extendedResult = builder.CreateSExt(result, Type::getIntNTy(context, bitWidth * 2), "sextResult");
-		Value* highPart = builder.CreateLShr(extendedResult, bitWidth, "highPart");
-		Value* highPartTruncated = builder.CreateTrunc(highPart, resultType, "truncatedHighPart");
+		Value* highPart = builder.CreateLShr(result, initialSize, "highPart");
+		Value* highPartTruncated = builder.CreateTrunc(highPart, Type::getIntNTy(context, initialSize), "truncatedHighPart");
 
 		Value* cf = builder.CreateICmpNE(highPartTruncated, ConstantInt::get(resultType, 0), "cf");
 		Value* of = builder.CreateICmpNE(highPartTruncated, ConstantInt::get(resultType, 0), "of");
@@ -1939,11 +1940,83 @@ namespace arithmeticsAndLogical {
 		else if (instruction.info.operand_count_visible == 2) {
 			SetOperandValue(builder, instruction.operands[0], result);
 		}
-		else { // For one operand, result goes into edx:eax
-			auto splitResult = builder.CreateTruncOrBitCast(result, Type::getInt32Ty(context), "splitResult");
+		else { // For one operand, result goes into ?dx:?ax if not a byte operation
+			auto splitResult = builder.CreateTruncOrBitCast(result, Type::getIntNTy(context, initialSize), "splitResult");
 			SetOperandValue(builder, instruction.operands[1], splitResult);
 			SetOperandValue(builder, instruction.operands[2], highPartTruncated);
 		}
+		printvalue(Lvalue)
+			printvalue(Rvalue)
+			printvalue(result)
+			printvalue(highPartTruncated)
+			printvalue(of)
+			printvalue(cf)
+	}
+
+	void lift_mul(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+		/*
+		mul rdx
+		[0] rdx
+		[1] rax
+		[2] rdx
+		[3] flags
+		*/
+		/*
+		IF (Byte operation)
+			THEN
+				AX := AL ∗ SRC;
+			ELSE (* Word or doubleword operation *)
+				IF OperandSize = 16
+					THEN
+						DX:AX := AX ∗ SRC;
+					ELSE IF OperandSize = 32
+						THEN EDX:EAX := EAX ∗ SRC; FI;
+					ELSE (* OperandSize = 64 *)
+						RDX:RAX := RAX ∗ SRC;
+				FI;
+		FI;
+		*/
+		LLVMContext& context = builder.getContext();
+		auto src = instruction.operands[0];
+		auto dest1 = instruction.operands[1]; // ax
+		auto dest2 = instruction.operands[2];
+
+		Value* Rvalue = GetOperandValue(builder, src, src.size);
+		Value* Lvalue = GetOperandValue(builder, dest1, src.size);
+
+		auto initialSize = Rvalue->getType()->getIntegerBitWidth();
+		printvalue2(initialSize)
+			Rvalue = builder.CreateZExt(Rvalue, Type::getIntNTy(context, initialSize * 2));
+		Lvalue = builder.CreateZExt(Rvalue, Type::getIntNTy(context, initialSize * 2));
+
+		Value* result = builder.CreateMul(Lvalue, Rvalue, "intmul");
+
+		// Flags
+		auto resultType = result->getType();
+
+		Value* highPart = builder.CreateLShr(result, initialSize, "highPart");
+		Value* highPartTruncated = builder.CreateTrunc(highPart, Type::getIntNTy(context, initialSize), "truncatedHighPart");
+
+		Value* cf = builder.CreateICmpNE(highPartTruncated, ConstantInt::get(resultType, 0), "cf");
+		Value* of = builder.CreateICmpNE(highPartTruncated, ConstantInt::get(resultType, 0), "of");
+
+		setFlag(builder, FLAG_CF, cf);
+		setFlag(builder, FLAG_OF, of);
+
+		auto splitResult = builder.CreateTruncOrBitCast(result, Type::getIntNTy(context, initialSize), "splitResult");
+		// if not byte operation, result goes into ?dx:?ax
+		if (src.size > 8) {
+			SetOperandValue(builder, dest1, splitResult);
+			SetOperandValue(builder, dest2, highPartTruncated);
+		}
+		printvalue(Lvalue)
+			printvalue(Rvalue)
+			printvalue(result)
+			printvalue(highPart)
+			printvalue(highPartTruncated)
+			printvalue(splitResult)
+			printvalue(of)
+			printvalue(cf)
 	}
 
 	void lift_idiv(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
@@ -2509,20 +2582,74 @@ namespace arithmeticsAndLogical {
 	}
 
 	void lift_cpuid(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
+		LLVMContext& context = builder.getContext();
 		// instruction.operands[0] = eax
 		// instruction.operands[1] = ebx
 		// instruction.operands[2] = ecx
 		// instruction.operands[3] = edx
+		/*
+
+		c++
+		#include <intrin.h>
+
+		int getcpuid() {
+			int cpuInfo[4];
+			__cpuid(cpuInfo, 1);
+			return cpuInfo[0] + cpuInfo[1];
+		}
+
+		ir
+		define dso_local noundef i32 @getcpuid() #0 {
+		  %1 = alloca [4 x i32], align 16
+		  %2 = getelementptr inbounds [4 x i32], ptr %1, i64 0, i64 0
+		  %3 = call { i32, i32, i32, i32 } asm "xchgq %rbx, ${1:q}\0Acpuid\0Axchgq %rbx, ${1:q}", "={ax},=r,={cx},={dx},0,2"(i32 1, i32 0)
+		  %4 = getelementptr inbounds [4 x i32], ptr %1, i64 0, i64 0
+		  %5 = extractvalue { i32, i32, i32, i32 } %3, 0
+		  %6 = getelementptr inbounds i32, ptr %4, i32 0
+		  store i32 %5, ptr %6, align 4
+		  %7 = extractvalue { i32, i32, i32, i32 } %3, 1
+		  %8 = getelementptr inbounds i32, ptr %4, i32 1
+		  store i32 %7, ptr %8, align 4
+		  %9 = extractvalue { i32, i32, i32, i32 } %3, 2
+		  %10 = getelementptr inbounds i32, ptr %4, i32 2
+		  store i32 %9, ptr %10, align 4
+		  %11 = extractvalue { i32, i32, i32, i32 } %3, 3
+		  %12 = getelementptr inbounds i32, ptr %4, i32 3
+		  store i32 %11, ptr %12, align 4
+
+		  %13 = getelementptr inbounds [4 x i32], ptr %1, i64 0, i64 0
+		  %14 = load i32, ptr %13, align 16
+
+		  %15 = getelementptr inbounds [4 x i32], ptr %1, i64 0, i64 1
+		  %16 = load i32, ptr %15, align 4
+		  %17 = add nsw i32 %14, %16
+		  ret i32 %17
+		}
+		opt
+		define dso_local noundef i32 @getcpuid() local_unnamed_addr {
+		  %1 = tail call { i32, i32, i32, i32 } asm "xchgq %rbx, ${1:q}\0Acpuid\0Axchgq %rbx, ${1:q}", "={ax},=r,={cx},={dx},0,2"(i32 1, i32 0) #0
+		  %2 = extractvalue { i32, i32, i32, i32 } %1, 1
+		  ret i32 %2
+		}
+
+		*/
+		// int cpuInfo[4];
+		ArrayType* CpuInfoTy = ArrayType::get(Type::getInt32Ty(context), 4);
 
 		Value* eax = GetOperandValue(builder, instruction.operands[0], instruction.operands[0].size);
+															// one is eax, other is always 0?
+		std::vector<Type*> AsmOutputs = {Type::getInt32Ty(context), Type::getInt32Ty(context),
+											 Type::getInt32Ty(context), Type::getInt32Ty(context)};
+		StructType* AsmStructType = StructType::get(context, AsmOutputs);
 
-		FunctionType* AsmFTy = FunctionType::get(llvm::StructType::create({builder.getInt32Ty(), builder.getInt32Ty(), builder.getInt32Ty(), builder.getInt32Ty()}), {builder.getInt32Ty(), builder.getInt32Ty(), builder.getInt32Ty(), builder.getInt32Ty()}, true);
-		InlineAsm* IA = InlineAsm::get(AsmFTy, "cpuid", "={ax},={bx},={cx},={dx},{ax}", true);
+		std::vector<Type*> ArgTypes = {Type::getInt32Ty(context), Type::getInt32Ty(context)};
 
-		// Inputs for cpuid
-		std::vector<Value*> Args{eax};
+		InlineAsm* IA = InlineAsm::get(FunctionType::get(AsmStructType, ArgTypes, false),
+									   "xchgq %rbx, ${1:q}\ncpuid\nxchgq %rbx, ${1:q}",
+									   "={ax},=r,={cx},={dx},0,2", true);
 
-		// Call the cpuid inline assembly
+		std::vector<Value*> Args{eax, ConstantInt::get(eax->getType(),0)};
+
 		Value* cpuidCall = builder.CreateCall(IA, Args);
 
 		Value* eaxv = builder.CreateExtractValue(cpuidCall, 0, "eax");
@@ -2851,14 +2978,14 @@ namespace flagOperation {
 		setFlag(builder, FLAG_CF, icmp);
 
 
-		auto mask = createShlFolder(builder, ConstantInt::get(Lvalue->getType(), 1), bitIndexValue, "btr-mask");
-		mask = builder.CreateNot(mask, "btr-not");
 
 
-		auto resultValue = createAndFolder(builder, Lvalue, mask, "btr-clear-" + to_string(instruction.runtime_address) + "-");
+
+		auto xor1 = createXorFolder(builder, shl, llvm::ConstantInt::get(shl->getType(), -1, true));
+		auto result = createAndFolder(builder, Lvalue, xor1);
 
 
-		SetOperandValue(builder, dest, resultValue, to_string(instruction.runtime_address));
+		SetOperandValue(builder, dest, result, to_string(instruction.runtime_address));
 
 		printvalue(Lvalue)
 			printvalue(bitIndexValue)
@@ -2866,8 +2993,8 @@ namespace flagOperation {
 			printvalue(shl)
 			printvalue(andd)
 			printvalue(icmp)
-			printvalue(mask)
-			printvalue(resultValue)
+			printvalue(xor1)
+			printvalue(result)
 
 
 	}
@@ -3201,7 +3328,7 @@ namespace flagOperation {
 		SetRegisterValue(builder, ZYDIS_REGISTER_RAX, rax);
 	}
 
-}
+	}
 
 
 
@@ -3229,8 +3356,9 @@ void liftInstruction(IRBuilder<>& builder, ZydisDisassembledInstruction& instruc
 
 		// what about ordinals???????
 		auto functionName = BinaryOperations::getName(jump_address);
+		cout << "calling : " << functionName << endl;
 		Function* externFunc = cast<Function>(M->getOrInsertFunction(functionName, externFuncType).getCallee());
-
+		// fix calling
 		auto RspRegister = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
 		auto callresult = builder.CreateCall(externFunc, {createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_RAX),Type::getInt64Ty(context)) , createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_RCX),Type::getInt64Ty(context)) , createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_RDX),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_RBX),Type::getInt64Ty(context)) , RspRegister ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_RBP),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_RSI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_RDI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_RDI),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R8),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R9),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R10),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R11),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R12),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R13),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R14),Type::getInt64Ty(context)) ,createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R15),Type::getInt64Ty(context)) , getMemory()});
 
@@ -3494,6 +3622,10 @@ void liftInstruction(IRBuilder<>& builder, ZydisDisassembledInstruction& instruc
 			break;
 		}
 
+		case ZYDIS_MNEMONIC_MUL: {
+			arithmeticsAndLogical::lift_mul(builder, instruction);
+			break;
+		}
 		case ZYDIS_MNEMONIC_IMUL: {
 			arithmeticsAndLogical::lift_imul(builder, instruction);
 			break;
