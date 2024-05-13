@@ -8,63 +8,64 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
 endif()
 
 set(CMKR_ROOT_PROJECT OFF)
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+	set(CMKR_ROOT_PROJECT ON)
+
+	# Bootstrap cmkr and automatically regenerate CMakeLists.txt
+	include("cmake/cmkr.cmake" OPTIONAL RESULT_VARIABLE CMKR_INCLUDE_RESULT)
+	if(CMKR_INCLUDE_RESULT)
+		cmkr()
+	endif()
+
+	# Enable folder support
+	set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+	# Create a configure-time dependency on cmake.toml to improve IDE support
+	configure_file(cmake.toml cmake.toml COPYONLY)
+endif()
 
 # Variables
-set(CMAKE_MODULE_PATH cmake)
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -gfull")
 
 project(Mergen)
 
 # Packages
-find_package(LLVM REQUIRED)
-include_directories(${LLVM_INCLUDE_DIRS})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS}")
+find_package(LLVM-Wrapper REQUIRED)
 
-# Subdirectory: linux-pe
-set(CMKR_CMAKE_FOLDER ${CMAKE_FOLDER})
-if(CMAKE_FOLDER)
-	set(CMAKE_FOLDER "${CMAKE_FOLDER}/linux-pe")
-else()
-	set(CMAKE_FOLDER linux-pe)
+include(FetchContent)
+
+# Fix warnings about DOWNLOAD_EXTRACT_TIMESTAMP
+if(POLICY CMP0135)
+	cmake_policy(SET CMP0135 NEW)
 endif()
-add_subdirectory(linux-pe)
-set(CMAKE_FOLDER ${CMKR_CMAKE_FOLDER})
-
-# Target: Zydis
-set(Zydis_SOURCES
-	"Zydis-4.1.0/Zydis/Zydis.c"
-	"Zydis-4.1.0/Zydis/Zydis.h"
-	cmake.toml
+message(STATUS "Fetching linux-pe (be6d1f6)...")
+FetchContent_Declare(linux-pe
+	GIT_REPOSITORY
+		"https://github.com/can1357/linux-pe"
+	GIT_TAG
+		be6d1f6
 )
+FetchContent_MakeAvailable(linux-pe)
 
-add_library(Zydis STATIC)
-
-target_sources(Zydis PRIVATE ${Zydis_SOURCES})
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${Zydis_SOURCES})
-
-add_library(Zydis::Zydis ALIAS Zydis)
-target_compile_definitions(Zydis PUBLIC
-	ZYCORE_STATIC_BUILD
-	ZYDIS_STATIC_BUILD
+message(STATUS "Fetching Zydis (v4.1.0)...")
+FetchContent_Declare(Zydis
+	GIT_REPOSITORY
+		"https://github.com/zyantific/zydis"
+	GIT_TAG
+		v4.1.0
 )
-
-target_include_directories(Zydis PUBLIC
-	Zydis-4.1.0
-)
-
-target_include_directories(Zydis PRIVATE
-	"Zydis-4.1.0/Zydis"
-)
+FetchContent_MakeAvailable(Zydis)
 
 # Target: lifter
 set(lifter_SOURCES
-	"lifter/CustomPasses.hpp"
 	"lifter/GEPTracker.cpp"
 	"lifter/OperandUtils.cpp"
 	"lifter/PathSolver.cpp"
 	"lifter/Semantics.cpp"
 	"lifter/lifter.cpp"
 	"lifter/utils.cpp"
+	"lifter/CustomPasses.hpp"
 	"lifter/GEPTracker.h"
 	"lifter/OperandUtils.h"
 	"lifter/PathSolver.h"
@@ -83,9 +84,15 @@ target_compile_features(lifter PRIVATE
 	cxx_std_20
 )
 
+if(CMAKE_SYSTEM_NAME MATCHES "Linux") # linux
+	target_compile_options(lifter PRIVATE
+		-g
+	)
+endif()
+
 target_link_libraries(lifter PRIVATE
-	Zydis::Zydis
-	LLVM
+	Zydis
+	LLVM-Wrapper
 	linux-pe
 )
 
