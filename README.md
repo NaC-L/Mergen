@@ -93,7 +93,7 @@ int maths(int a, int b, int c) {
 }
 ```
 
-This would be a high level interpretation of it. If you want to see how it really works, you can check [this file](https://github.com/NaC-L/Mergen/blob/main/teststuff/test_branches.asm).
+This would be a high level interpretation of it. If you want to see how it really works, you can check [this file](https://github.com/NaC-L/Mergen/blob/main/testcases/test_branches.asm).
 
 ```
 ...
