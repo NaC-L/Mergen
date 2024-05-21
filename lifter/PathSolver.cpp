@@ -799,7 +799,9 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
         // option, we can use jump table? similar to DFS
 
         unsigned long long option = 0;
+        timer::suspendTimer();
         cin >> option;
+        timer::resumeTimer();
         auto newValue =
             ConstantInt::get(value_with_least_possible_values->getType(),
                              possible_values[option]);

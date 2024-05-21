@@ -2,6 +2,7 @@
 #include "OperandUtils.h"
 #include "PathSolver.h"
 #include "includes.h"
+#include "utils.h"
 
 // probably move this stuff somewhere else
 
@@ -188,7 +189,9 @@ void branchHelper(
                 "output_condition.ll file ("
              << instruction.runtime_address << ") : ";
         int choice;
+        timer::suspendTimer();
         cin >> choice;
+        timer::resumeTimer();
         if (choice) {
             string block_name = instname + "-jump-" +
                                 to_string(instruction.runtime_address) + "-";

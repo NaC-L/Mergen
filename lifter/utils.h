@@ -23,3 +23,10 @@ namespace debugging {
 namespace argparser {
     void parseArguments(std::vector<std::string>& args);
 } // namespace argparser
+
+namespace timer {
+    void startTimer();
+    double stopTimer();
+    void suspendTimer();
+    void resumeTimer();
+} // namespace timer

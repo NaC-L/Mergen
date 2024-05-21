@@ -111,3 +111,40 @@ namespace argparser {
     }
 
 } // namespace argparser
+
+namespace timer {
+    using clock = std::chrono::high_resolution_clock;
+    using time_point = std::chrono::time_point<clock>;
+    using duration = std::chrono::duration<double, std::milli>;
+
+    time_point startTime;
+    duration elapsedTime{0};
+    bool running = false;
+
+    void startTimer() {
+        startTime = clock::now();
+        running = true;
+    }
+
+    double stopTimer() {
+        if (running) {
+            elapsedTime += clock::now() - startTime;
+            running = false;
+        }
+        return elapsedTime.count();
+    }
+
+    void suspendTimer() {
+        if (running) {
+            elapsedTime += clock::now() - startTime;
+            running = false;
+        }
+    }
+
+    void resumeTimer() {
+        if (!running) {
+            startTime = clock::now();
+            running = true;
+        }
+    }
+} // namespace timer
