@@ -19,3 +19,7 @@ namespace debugging {
     void doIfDebug(const std::function<void(void)>& dothis);
     template <typename T> void printValue(const T& v, const char* name);
 } // namespace debugging
+
+namespace argparser {
+    void parseArguments(std::vector<std::string>& args);
+} // namespace argparser
