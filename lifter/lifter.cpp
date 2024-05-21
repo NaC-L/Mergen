@@ -190,19 +190,20 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address,
 }
 
 int main(int argc, char* argv[]) {
-    //
+    vector<string> args(argv, argv + argc);
+    argparser::parseArguments(args);
     auto start = std::chrono::high_resolution_clock::now();
     // use parser
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <filename> <startAddr>"
+    if (args.size() < 3) {
+        std::cerr << "Usage: " << args[0] << " <filename> <startAddr>"
                   << std::endl;
         return 1;
     }
 
     // debugging::enableDebug();
 
-    const char* filename = argv[1];
-    uint64_t startAddr = std::stoull(argv[2], nullptr, 0);
+    const char* filename = args[1].c_str();
+    uint64_t startAddr = std::stoull(args[2], nullptr, 0);
 
     std::ifstream ifs(filename, std::ios::binary);
     if (!ifs.is_open()) {

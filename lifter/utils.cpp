@@ -46,7 +46,10 @@ uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva) {
 namespace debugging {
 
     bool shouldDebug = false;
-    void enableDebug() { shouldDebug = 1; }
+    void enableDebug() {
+        shouldDebug = 1;
+        cout << "Debugging enabled\n";
+    }
     void printLLVMValue(llvm::Value* v, const char* name) {
         if (!shouldDebug)
             return;
@@ -63,8 +66,7 @@ namespace debugging {
     template <typename T> void printValue(const T& v, const char* name) {
         if (!shouldDebug)
             return;
-        outs() << " " << name << " : ";
-        outs() << v << "\n";
+        outs() << " " << name << " : " << v << "\n";
         outs().flush();
     }
 
@@ -80,7 +82,32 @@ namespace debugging {
 } // namespace debugging
 
 namespace argparser {
-    void loadArguments(int argc, char** argv) {}
-} // namespace argparser
+    void printHelp() {
+        std::cerr << "Usage: " << args[0] << " <filename> <startAddr>\n"
+                  << "Options:\n"
+                  << "  -d, --enable-debug   Enable debugging mode\n"
+                  << "  -h                   Display this help message\n";
+    }
 
-namespace timer {}
+    std::map<std::string, std::function<void()>> options = {
+        {"-d", debugging::enableDebug},
+        {"--enable-debug", debugging::enableDebug},
+        {"-h", printHelp}};
+
+    void parseArguments(std::vector<std::string>& args) {
+        std::vector<std::string> newArgs;
+
+        for (const auto& arg : args) {
+            // cout << arg << "\n";
+            if (options.find(arg) != options.end())
+                options[arg]();
+            else if (*(arg.c_str()) == '-')
+                printHelp();
+            else
+                newArgs.push_back(arg);
+        }
+
+        args.swap(newArgs);
+    }
+
+} // namespace argparser
