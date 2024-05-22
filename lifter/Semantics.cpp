@@ -3169,6 +3169,27 @@ namespace flagOperation {
         SetOperandValue(builder, dest, result);
     }
 
+    void lift_stosx(IRBuilder<>& builder,
+                    ZydisDisassembledInstruction& instruction) {
+        LLVMContext& context = builder.getContext();
+
+        auto dest = instruction.operands[0]; // xdi
+        Value* destValue = GetOperandValue(builder, dest, dest.size);
+        Value* df = getFlag(builder, FLAG_DF);
+        // if df is 1, +
+        // else -
+        auto destbitwidth = dest.size;
+
+        Value* addValue = builder.CreateMul(
+            df, ConstantInt::get(Type::getInt1Ty(context), -1));
+        addValue = builder.CreateMul(
+            builder.CreateZExt(addValue, destValue->getType()),
+            ConstantInt::get(destValue->getType(), destbitwidth / 8));
+
+        Value* result = createAddFolder(builder, destValue, addValue);
+        SetOperandValue(builder, dest, result);
+    }
+
     void lift_setz(IRBuilder<>& builder,
                    ZydisDisassembledInstruction& instruction) {
         LLVMContext& context = builder.getContext();
@@ -4104,6 +4125,13 @@ void liftInstruction(
     }
 
         // set and flags
+    case ZYDIS_MNEMONIC_STOSB:
+    case ZYDIS_MNEMONIC_STOSW:
+    case ZYDIS_MNEMONIC_STOSD:
+    case ZYDIS_MNEMONIC_STOSQ: {
+        flagOperation::lift_stosx(builder, instruction);
+        break;
+    }
     case ZYDIS_MNEMONIC_SETZ: {
         flagOperation::lift_setz(builder, instruction);
         break;
