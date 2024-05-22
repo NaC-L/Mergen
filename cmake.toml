@@ -5,25 +5,27 @@ cmkr-include = "cmake/cmkr.cmake"
 [project]
 name = "Mergen"
 
+[conditions]
+windows = "WIN32"
+
 [variables]
-CMAKE_MODULE_PATH = "cmake"
+CMAKE_MODULE_PATH = "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
+CMAKE_CXX_FLAGS_DEBUG = "-O0 -gfull"
 
-[find-package.LLVM]
+[fetch-content.linux-pe]
+git = "https://github.com/can1357/linux-pe"
+tag = "be6d1f6"
 
-[subdir.linux-pe]
+[fetch-content.Zydis]
+git = "https://github.com/zyantific/zydis"
+tag = "v4.1.0"
 
-[target.Zydis]
-type = "static"
-alias = "Zydis::Zydis"
-sources = ["Zydis-4.1.0/Zydis/Zydis.c"]
-headers = ["Zydis-4.1.0/Zydis/Zydis.h"]
-include-directories = ["Zydis-4.1.0"]
-private-include-directories = ["Zydis-4.1.0/Zydis"]
-compile-definitions = ["ZYCORE_STATIC_BUILD", "ZYDIS_STATIC_BUILD"]
+[find-package.LLVM-Wrapper]
 
 [target.lifter]
 type = "executable"
-sources = ["lifter/*.cpp"]
+sources = ["lifter/*.cpp","lifter/*.hpp"]
 headers = ["lifter/*.h"]
-link-libraries = ["Zydis::Zydis", "LLVM", "linux-pe"]
+link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe"]
+windows.link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe", "Ws2_32"]
 compile-features = ["cxx_std_20"]

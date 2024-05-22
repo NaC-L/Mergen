@@ -40,7 +40,7 @@ if(POLICY CMP0135)
 	cmake_policy(SET CMP0135 NEW)
 endif()
 message(STATUS "Fetching linux-pe (be6d1f6)...")
-FetchContent_Declare(linux-pe
+FetchContent_Declare(linux-pe SYSTEM
 	GIT_REPOSITORY
 		"https://github.com/can1357/linux-pe"
 	GIT_TAG
@@ -49,7 +49,7 @@ FetchContent_Declare(linux-pe
 FetchContent_MakeAvailable(linux-pe)
 
 message(STATUS "Fetching Zydis (v4.1.0)...")
-FetchContent_Declare(Zydis
+FetchContent_Declare(Zydis SYSTEM
 	GIT_REPOSITORY
 		"https://github.com/zyantific/zydis"
 	GIT_TAG
@@ -95,6 +95,15 @@ target_link_libraries(lifter PRIVATE
 	LLVM-Wrapper
 	linux-pe
 )
+
+if(WIN32) # windows
+	target_link_libraries(lifter PRIVATE
+		Zydis
+		LLVM-Wrapper
+		linux-pe
+		Ws2_32
+	)
+endif()
 
 get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
 if(NOT CMKR_VS_STARTUP_PROJECT)
