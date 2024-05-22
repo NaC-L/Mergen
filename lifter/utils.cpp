@@ -2,6 +2,7 @@
 #include "includes.h"
 #include "nt/nt_headers.hpp"
 #include "llvm/IR/Value.h"
+#include <ratio>
 win::section_header_t*
 GetEnclosingSectionHeader(uint32_t rva, win::nt_headers_x64_t* pNTHeader) {
     auto section = pNTHeader->get_sections();
@@ -83,8 +84,7 @@ namespace debugging {
 
 namespace argparser {
     void printHelp() {
-        std::cerr << "Usage: " << args[0] << " <filename> <startAddr>\n"
-                  << "Options:\n"
+        std::cerr << "Options:\n"
                   << "  -d, --enable-debug   Enable debugging mode\n"
                   << "  -h                   Display this help message\n";
     }
