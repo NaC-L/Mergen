@@ -6,7 +6,7 @@ COPY . /root/Mergen
 
 # Install deps
 RUN apt update
-RUN apt install lsb-release wget software-properties-common gnupg cmake -y
+RUN apt install lsb-release wget software-properties-common gnupg cmake git -y
 
 RUN wget https://apt.llvm.org/llvm.sh 
 RUN chmod +x llvm.sh 
