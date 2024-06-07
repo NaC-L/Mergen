@@ -76,6 +76,7 @@ namespace debugging {
     template void printValue<long>(const long& v, const char* name);
     template void printValue<long long>(const long long& v, const char* name);
     template void printValue<KnownBits>(const KnownBits& v, const char* name);
+    template void printValue<APInt>(const APInt& v, const char* name);
     template void printValue<ROP_info>(const ROP_info& v, const char* name);
     template void printValue<unsigned long long>(const unsigned long long& v,
                                                  const char* name);
