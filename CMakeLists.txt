@@ -84,12 +84,6 @@ target_compile_features(lifter PRIVATE
 	cxx_std_20
 )
 
-if(CMAKE_SYSTEM_NAME MATCHES "Linux") # linux
-	target_compile_options(lifter PRIVATE
-		-g
-	)
-endif()
-
 target_link_libraries(lifter PRIVATE
 	Zydis
 	LLVM-Wrapper
