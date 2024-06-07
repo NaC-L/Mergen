@@ -264,19 +264,19 @@ namespace mov {
         switch (instruction.info.mnemonic) {
         case ZYDIS_MNEMONIC_MOVSX: {
             Rvalue = createSExtFolder(
-                builder, Rvalue, getIntSize(dest.size, context),
+                builder, Rvalue, Type::getIntNTy(context, dest.size),
                 "movsx-" + to_string(instruction.runtime_address) + "-");
             break;
         }
         case ZYDIS_MNEMONIC_MOVZX: {
             Rvalue = createZExtFolder(
-                builder, Rvalue, getIntSize(dest.size, context),
+                builder, Rvalue, Type::getIntNTy(context, dest.size),
                 "movzx-" + to_string(instruction.runtime_address) + "-");
             break;
         }
         case ZYDIS_MNEMONIC_MOVSXD: {
             Rvalue = createSExtFolder(
-                builder, Rvalue, getIntSize(dest.size, context),
+                builder, Rvalue, Type::getIntNTy(context, dest.size),
                 "movsxd-" + to_string(instruction.runtime_address) + "-");
             break;
         }
