@@ -30,9 +30,8 @@ bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT) {
 KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL) {
     KnownBits knownBits(64);
     knownBits.resetAll();
-    /*if (value->getType() == Type::getInt128Ty(value->getContext()))
-            return knownBits;
-    */
+    if (value->getType() == Type::getInt128Ty(value->getContext()))
+        return knownBits;
 
     return computeKnownBits(value, DL, 3);
 }
@@ -99,6 +98,8 @@ Value* simplifyLoadValue(Value* v) {
     // rework
     auto retVal = GEPStoreTracker::solveLoad(cast<LoadInst>(v), 0);
 
+    printvalue(v);
+    printvalue(retVal);
     // printvalue(retVal)
     return retVal;
 }
@@ -633,38 +634,6 @@ Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
 
 unordered_map<int, Value*> RegisterList;
 unordered_map<Flag, Value*> FlagList;
-// delet dis?
-IntegerType* getIntSize(int size, LLVMContext& context) {
-    switch (size) {
-
-    case 1: {
-        return Type::getInt1Ty(context);
-    }
-    case 8: {
-        return Type::getInt8Ty(context);
-    }
-
-    case 16: {
-        return Type::getInt16Ty(context);
-    }
-
-    case 32: {
-        return Type::getInt32Ty(context);
-    }
-
-    case 64: {
-        return Type::getInt64Ty(context);
-    }
-
-    case 128: {
-        return Type::getInt128Ty(context);
-    }
-
-    default: {
-        return Type::getIntNTy(context, size);
-    }
-    }
-}
 
 void Init_Flags(IRBuilder<>& builder) {
     LLVMContext& context = builder.getContext();
@@ -776,8 +745,8 @@ unordered_map<int, Value*> InitRegisters(IRBuilder<>& builder,
 
     LLVMContext& context = builder.getContext();
 
-    auto zero =
-        cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), 0));
+    auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
+
     auto value =
         cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
 
@@ -951,7 +920,7 @@ Value* SetValueToSubRegister2(IRBuilder<>& builder, int reg, Value* value) {
     value = createZExtFolder(builder, value, fullRegisterValue->getType());
 
     Value* updatedReg = createOrFolder(builder, maskedFullReg, value, "newreg");
-
+    printvalue(updatedReg);
     return updatedReg;
 }
 
@@ -961,8 +930,10 @@ void SetRegisterValue(int key, Value* value) {
                      ? ZydisRegisterGetLargestEnclosing(
                            ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key)
                      : key;
-
+    outs() << "newKey" << newKey << "\n";
+    printvalue(value);
     RegisterList[newKey] = value;
+    printvalue(RegisterList[newKey]);
 }
 
 void SetRegisterValue(IRBuilder<>& builder, int key, Value* value) {
@@ -1041,7 +1012,7 @@ Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
             createAddFolder(builder, effectiveAddress, dispValue, "disp_set");
     }
     printvalue(effectiveAddress) return createZExtOrTruncFolder(
-        builder, effectiveAddress, getIntSize(possiblesize, context));
+        builder, effectiveAddress, Type::getIntNTy(context, possiblesize));
 }
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Value.h"
@@ -1168,16 +1139,19 @@ lifterMemoryBuffer globalBuffer;
 Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                        int possiblesize, string address) {
     LLVMContext& context = builder.getContext();
-    auto type = getIntSize(possiblesize, context);
+    auto type = Type::getIntNTy(context, possiblesize);
 
     switch (op.type) {
     case ZYDIS_OPERAND_TYPE_REGISTER: {
         Value* value = GetRegisterValue(builder, op.reg.value);
         auto opBitWidth = op.size;
-        auto typeBitWidth =
-            dyn_cast<IntegerType>(value->getType())->getBitWidth();
-        auto new_value = createZExtOrTruncFolder(builder, value, type, "trunc");
-        return new_value;
+        auto vtype = value->getType();
+        if (isa<IntegerType>(vtype)) {
+            auto typeBitWidth = dyn_cast<IntegerType>(vtype)->getBitWidth();
+            if (typeBitWidth < 128)
+                value = createZExtOrTruncFolder(builder, value, type, "trunc");
+        }
+        return value;
     }
     case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
         ConstantInt* val;
@@ -1232,7 +1206,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
         }
         printvalue(effectiveAddress)
 
-            Type* loadType = getIntSize(possiblesize, context);
+            Type* loadType = Type::getIntNTy(context, possiblesize);
 
         std::vector<Value*> indices;
         indices.push_back(effectiveAddress);
@@ -1246,7 +1220,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
         auto KBload = analyzeValueKnownBits(
             retval, retval->getFunction()->getParent()->getDataLayout());
-        printvalue2(KBload) if (isa<ConstantInt>(effectiveAddress)) {
+        if (isa<ConstantInt>(effectiveAddress)) {
             ConstantInt* effectiveAddressInt =
                 dyn_cast<ConstantInt>(effectiveAddress);
             if (!effectiveAddressInt)
@@ -1256,6 +1230,9 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
             unsigned byteSize = loadType->getIntegerBitWidth() / 8;
 
+            if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
+                return solvedLoad;
+
             APInt value(1, 0);
             if (BinaryOperations::readMemory(addr, byteSize, value)) {
 
@@ -1264,8 +1241,6 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                 return newVal;
             }
 
-            if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
-                return solvedLoad;
             /*
             if (addr > 0 && addr < STACKP_VALUE) {
                     auto newval = globalBuffer.retrieveCombinedValue(builder,
@@ -1275,7 +1250,8 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                             printvalue(retvalStack);
                             return retvalStack;
                     }
-                    return ConstantInt::get(getIntSize(byteSize, context), 0);
+                    return ConstantInt::get(Type::getIntNTy(byteSize, context),
+            0);
             }
             */
         }
@@ -1407,7 +1383,7 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                                                dispValue, "disp_set");
         }
 
-        Type* storeType = getIntSize(op.size, context);
+        Type* storeType = Type::getIntNTy(context, op.size);
 
         std::vector<Value*> indices;
         indices.push_back(effectiveAddress);
@@ -1575,7 +1551,10 @@ Value* popStack(IRBuilder<>& builder) {
         uintptr_t addr = effectiveAddressInt->getZExtValue();
 
         unsigned byteSize = loadType->getBitWidth() / 8;
-        // should never hit
+
+        if (Value* solvedLoad = GEPStoreTracker::solveLoad(returnValue))
+            return solvedLoad;
+
         APInt value(1, 0);
         if (BinaryOperations::readMemory(addr, byteSize, value)) {
 
@@ -1583,8 +1562,6 @@ Value* popStack(IRBuilder<>& builder) {
             return newVal;
         }
 
-        if (Value* solvedLoad = GEPStoreTracker::solveLoad(returnValue))
-            return solvedLoad;
         /*
         if (addr > 0 && addr < STACKP_VALUE) {
                 auto newval = globalBuffer.retrieveCombinedValue(builder, addr,
