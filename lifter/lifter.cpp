@@ -80,9 +80,9 @@ void asm_to_zydis_to_lift(
                      (last_value == get<0>(blockAddresses->back())))) {
 
                     debugging::doIfDebug([&]() {
-                        outs() << instruction.text << "\n";
-                        outs() << "runtime: " << runtime_address << "\n";
-                        outs().flush();
+                        cout << instruction.text << "\n";
+                        cout << "runtime: " << instruction.runtime_address
+                             << endl;
                     });
                     instruction.runtime_address += instruction.info.length;
 
@@ -192,7 +192,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address,
 int main(int argc, char* argv[]) {
     vector<string> args(argv, argv + argc);
     argparser::parseArguments(args);
-    auto start = std::chrono::high_resolution_clock::now();
+    timer::startTimer();
     // use parser
     if (args.size() < 3) {
         std::cerr << "Usage: " << args[0] << " <filename> <startAddr>"
@@ -223,7 +223,6 @@ int main(int argc, char* argv[]) {
 
     auto fileBase = fileData.data();
 
-    // printsymbols(fileBase);
     auto dosHeader = (win::dos_header_t*)fileBase;
     auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
     auto sectionHeader = ntHeaders->get_sections();
@@ -238,9 +237,6 @@ int main(int argc, char* argv[]) {
 
     InitFunction_and_LiftInstructions(dataAtAddress, startAddr,
                                       (uintptr_t)fileBase);
-
-    auto elapsed = std::chrono::high_resolution_clock::now() - start;
-    long long microseconds =
-        std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
-    cout << "\n" << dec << microseconds << " microsecond has past" << endl;
+    long long milliseconds = timer::stopTimer();
+    cout << "\n" << dec << milliseconds << " milliseconds has past" << endl;
 }
