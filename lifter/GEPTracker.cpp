@@ -65,7 +65,7 @@ class lifterMemoryBuffer {
   public:
     std::vector<ValueByteReference*> buffer;
 
-    lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {}
+    lifterMemoryBuffer() : buffer(STACKP_VALUE + 0x2000, nullptr) {}
     lifterMemoryBuffer(unsigned long long bufferSize)
         : buffer(bufferSize, nullptr) {}
 
@@ -83,6 +83,8 @@ class lifterMemoryBuffer {
             delete buffer[address + i];
 
             buffer[address + i] = new ValueByteReference(value, i);
+            printvalue(value);
+            printvalue2((unsigned long)address + i);
         }
     }
 
@@ -116,7 +118,7 @@ class lifterMemoryBuffer {
         }
 
         if (firstSource == nullptr) {
-            return ConstantInt::get(Type::getIntNTy(context, byteCount), 0);
+            return ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
         }
 
         Value* result = nullptr;
@@ -128,6 +130,8 @@ class lifterMemoryBuffer {
                 auto* ref = buffer[currentAddress];
                 Value* byteValue =
                     extractByte(builder, ref->value, ref->byteOffset);
+
+                printvalue(byteValue);
                 if (!result) {
                     result = createZExtFolder(
                         builder, byteValue,
@@ -144,6 +148,7 @@ class lifterMemoryBuffer {
                 }
             }
         }
+        printvalue(result);
         return result;
     }
 
@@ -292,6 +297,7 @@ namespace GEPStoreTracker {
 
     Value* solveLoad(LoadInst* load, bool buildTime) {
         Function* F = load->getFunction();
+        printvalue(load);
 
         // replace this
         auto LoadMemLoc = MemoryLocation::get(load);
@@ -305,7 +311,7 @@ namespace GEPStoreTracker {
 
         auto loadPointer = loadPtrGEP->getPointerOperand();
         auto loadOffset = loadPtrGEP->getOperand(1);
-
+        printvalue(loadOffset);
         if (buildTime) {
             if (isa<ConstantInt>(loadOffset)) {
                 auto loadOffsetCI = cast<ConstantInt>(loadOffset);
@@ -314,11 +320,14 @@ namespace GEPStoreTracker {
                 // buffer is not stack
                 auto loadOffsetCIval = loadOffsetCI->getZExtValue();
                 if (VirtualStack.buffer.size() > loadOffsetCIval) {
+                    printvalue2(loadOffsetCIval);
                     IRBuilder<> builder(load);
                     if (auto valueExtractedFromVirtualStack =
                             VirtualStack.retrieveCombinedValue(
-                                builder, loadOffsetCIval, cloadsize))
+                                builder, loadOffsetCIval, cloadsize)) {
+                        printvalue(valueExtractedFromVirtualStack);
                         return valueExtractedFromVirtualStack;
+                    }
                 }
             }
         } else
