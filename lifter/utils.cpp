@@ -46,6 +46,12 @@ uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva) {
 
 namespace debugging {
 
+    llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
+                                  const llvm::KnownBits& KB) {
+        KB.print(OS);
+        return OS;
+    }
+
     bool shouldDebug = false;
     void enableDebug() {
         shouldDebug = 1;
