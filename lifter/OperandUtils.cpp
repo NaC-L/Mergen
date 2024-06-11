@@ -1,3 +1,4 @@
+#include "OperandUtils.h"
 #include "GEPTracker.h"
 #include "includes.h"
 
@@ -33,7 +34,13 @@ KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL) {
     if (value->getType() == Type::getInt128Ty(value->getContext()))
         return knownBits;
 
-    return computeKnownBits(value, DL, 3);
+    auto KB = computeKnownBits(value, DL, 3);
+
+    // BLAME
+    if (KB.getBitWidth() < 64)
+        (&KB)->zext(64);
+
+    return KB;
 }
 
 Value* simplifyValue(Value* v, const DataLayout& DL) {
@@ -105,7 +112,6 @@ Value* simplifyLoadValue(Value* v) {
 }
 
 Value* simplifyValueLater(Value* v, const DataLayout& DL) {
-
     // printvalue(v)
     if (!isa<Instruction>(v))
         return v;
@@ -833,8 +839,6 @@ Value* GetRegisterValue(IRBuilder<>& builder, int key) {
     }
     */
 
-    printvalue(RegisterList[newKey]);
-
     return RegisterList[newKey];
 }
 
@@ -930,8 +934,6 @@ void SetRegisterValue(int key, Value* value) {
                      ? ZydisRegisterGetLargestEnclosing(
                            ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key)
                      : key;
-    outs() << "newKey" << newKey << "\n";
-    printvalue(value);
     RegisterList[newKey] = value;
     printvalue(RegisterList[newKey]);
 }
