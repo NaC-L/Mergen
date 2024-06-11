@@ -1,7 +1,6 @@
 *.suo
 *.db*
 *.ipch
-*.ll
 *.exe
 *.ilk
 *.tlog

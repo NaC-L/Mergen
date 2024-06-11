@@ -252,7 +252,12 @@
 using namespace std;
 using namespace llvm;
 #define RIP 0x007FFFFFFF400000
-#define STACKP_VALUE 0x14FE98
+#define STACKP_VALUE 0x000000000014FCA8
+
+using RegisterMap = unordered_map<int, Value*>;
+// BB start address, BB pointer, Final registers in that RegisterMap so we can
+// use it later
+using BBInfo = tuple<uintptr_t, BasicBlock*, RegisterMap>;
 
 enum FlagOperation { SET_VALUE, SET_ONE, SET_ZERO, TOGGLE };
 
