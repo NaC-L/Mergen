@@ -10,19 +10,16 @@
 #include <cstdlib>
 #include <fstream>
 
-// do some cleanup
-vector<tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>
-    added_blocks_addresses;
+// new datatype for BBInfo? Something like a domtree
+vector<BBInfo> added_blocks_addresses;
 uintptr_t original_address = 0;
 
 // consider having this function in a class, later we can use multi-threading to
 // explore different paths
-void asm_to_zydis_to_lift(
-    IRBuilder<>& builder, ZyanU8* data, ZyanU64 runtime_address,
-    shared_ptr<
-        vector<tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>>
-        blockAddresses,
-    Function* function, ZyanU64 file_base) {
+void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
+                          ZyanU64 runtime_address,
+                          shared_ptr<vector<BBInfo>> blockAddresses,
+                          Function* function, ZyanU64 file_base) {
 
     bool run = 1;
     while (run) {
@@ -128,7 +125,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address,
     string mod_name = "my_lifting_module";
     llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
 
-    std::vector<llvm::Type*> argTypes;
+    vector<llvm::Type*> argTypes;
     argTypes.push_back(llvm::Type::getInt64Ty(context));
     argTypes.push_back(llvm::Type::getInt64Ty(context));
     argTypes.push_back(llvm::Type::getInt64Ty(context));
@@ -165,18 +162,15 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address,
 
     GEPStoreTracker::initDomTree(*function);
 
-    std::shared_ptr<std::vector<
-        std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>>
-        blockAddresses = std::make_shared<std::vector<
-            std::tuple<uintptr_t, BasicBlock*, unordered_map<int, Value*>>>>();
+    shared_ptr<vector<BBInfo>> blockAddresses = make_shared<vector<BBInfo>>();
 
     blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
 
     asm_to_zydis_to_lift(builder, (uint8_t*)file_base, runtime_address,
                          blockAddresses, function, file_base);
 
-    std::string Filename = "output.ll";
-    std::error_code EC;
+    string Filename = "output.ll";
+    error_code EC;
     llvm::raw_fd_ostream OS(Filename, EC);
 
     if (EC) {
@@ -195,28 +189,27 @@ int main(int argc, char* argv[]) {
     timer::startTimer();
     // use parser
     if (args.size() < 3) {
-        std::cerr << "Usage: " << args[0] << " <filename> <startAddr>"
-                  << std::endl;
+        cerr << "Usage: " << args[0] << " <filename> <startAddr>" << endl;
         return 1;
     }
 
     // debugging::enableDebug();
 
     const char* filename = args[1].c_str();
-    uint64_t startAddr = std::stoull(args[2], nullptr, 0);
+    uint64_t startAddr = stoull(args[2], nullptr, 0);
 
-    std::ifstream ifs(filename, std::ios::binary);
+    ifstream ifs(filename, ios::binary);
     if (!ifs.is_open()) {
-        std::cout << "Failed to open the file." << std::endl;
+        cout << "Failed to open the file." << endl;
         return 1;
     }
 
-    ifs.seekg(0, std::ios::end);
-    std::vector<uint8_t> fileData(ifs.tellg());
-    ifs.seekg(0, std::ios::beg);
+    ifs.seekg(0, ios::end);
+    vector<uint8_t> fileData(ifs.tellg());
+    ifs.seekg(0, ios::beg);
 
     if (!ifs.read((char*)fileData.data(), fileData.size())) {
-        std::cout << "Failed to read the file." << std::endl;
+        cout << "Failed to read the file." << endl;
         return 1;
     }
     ifs.close();
