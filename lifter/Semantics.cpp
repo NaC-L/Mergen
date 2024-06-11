@@ -635,10 +635,14 @@ namespace branches {
             auto registerValue = GetOperandValue(builder, src, 64);
             if (!isa<ConstantInt>(registerValue)) {
 
-                // callFunctionIR(registerValue->getName().str() + "fnc_ptr",
-                // builder); break;
-                registerValue =
-                    ConstantInt::get(Type::getInt32Ty(context), 0x1337);
+                callFunctionIR(registerValue->getName().str() + "fnc_ptr",
+                               builder);
+
+                SetOperandValue(builder, rsp, RspValue,
+                                to_string(instruction.runtime_address));
+                break;
+                // registerValue =
+                //    ConstantInt::get(Type::getInt32Ty(context), 0x1337);
 
                 // throw("trying to call an unknown value");
             }
