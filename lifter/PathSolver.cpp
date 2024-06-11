@@ -701,6 +701,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
 
         deque<llvm::Instruction*> worklist;
         std::vector<llvm::Instruction*> visited_used;
+        std::unordered_set<llvm::Instruction*> visited_used_set;
 
         // Start with the return instruction
         worklist.push_front(returnInst);
@@ -715,8 +716,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
                 llvm::Value* operand = inst->getOperand(i);
                 if (llvm::Instruction* opInst =
                         llvm::dyn_cast<llvm::Instruction>(operand)) {
-                    if (std::find(visited_used.begin(), visited_used.end(),
-                                  opInst) == visited_used.end()) {
+                    if (visited_used_set.insert(inst).second) {
                         // printvalue(opInst)
                         worklist.push_back(opInst);
                     }
