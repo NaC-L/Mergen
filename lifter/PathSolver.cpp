@@ -273,6 +273,11 @@ void final_optpass(Function* clonedFuncx) {
             changed = true;
         }
 
+        modulePassManager =
+            passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+        modulePassManager.addPass(RemovePseudoMemory());
+
+        modulePassManager.run(*module, moduleAnalysisManager);
     } while (changed);
 }
 
@@ -736,11 +741,10 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
                 llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) *
                 2;
 
-            printvalue(I)
-
-                if (!KnownVal.isConstant() && !KnownVal.hasConflict() &&
-                    possible_values < least_possible_value_value &&
-                    possible_values > 0) {
+            printvalue(I);
+            if (!KnownVal.isConstant() && !KnownVal.hasConflict() &&
+                possible_values < least_possible_value_value &&
+                possible_values > 0) {
                 least_possible_value_value = possible_values;
                 value_with_least_possible_values = cast<Value>(I);
                 bitsof_least_possible_value = KnownVal;
