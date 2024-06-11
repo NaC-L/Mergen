@@ -274,12 +274,13 @@ void final_optpass(Function* clonedFuncx) {
             changed = true;
         }
 
-        modulePassManager =
-            passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-        modulePassManager.addPass(RemovePseudoMemory());
-
-        modulePassManager.run(*module, moduleAnalysisManager);
     } while (changed);
+
+    modulePassManager =
+        passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+    modulePassManager.addPass(RemovePseudoMemory());
+
+    modulePassManager.run(*module, moduleAnalysisManager);
 }
 
 opaque_info isOpaque(Function* function) {
