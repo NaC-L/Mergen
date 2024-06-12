@@ -2,6 +2,7 @@
 #include "includes.h"
 #include "nt/nt_headers.hpp"
 #include "llvm/IR/Value.h"
+#include <llvm/Analysis/ValueLattice.h>
 #include <ratio>
 win::section_header_t*
 GetEnclosingSectionHeader(uint32_t rva, win::nt_headers_x64_t* pNTHeader) {
@@ -79,8 +80,13 @@ namespace debugging {
 
     template void printValue<unsigned long>(const unsigned long& v,
                                             const char* name);
+    template void printValue<unsigned int>(const unsigned int& v,
+                                           const char* name);
     template void printValue<long>(const long& v, const char* name);
+    template void printValue<uintptr_t>(const uintptr_t& v, const char* name);
     template void printValue<long long>(const long long& v, const char* name);
+    template void printValue<ValueLatticeElement>(const ValueLatticeElement& v,
+                                                  const char* name);
     template void printValue<KnownBits>(const KnownBits& v, const char* name);
     template void printValue<APInt>(const APInt& v, const char* name);
     template void printValue<ROP_info>(const ROP_info& v, const char* name);

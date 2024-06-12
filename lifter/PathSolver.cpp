@@ -63,10 +63,11 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
         toSimplify.pop();
         visitCount[simplifyUser]++;
         auto nsv = simplifyValueLater(simplifyUser, DL);
-        visited.insert(simplifyUser);
-        printvalue(simplifyUser) printvalue(nsv)
 
-            if (isa<GetElementPtrInst>(simplifyUser)) {
+        visited.insert(simplifyUser);
+        printvalue(simplifyUser) printvalue(nsv);
+
+        if (isa<GetElementPtrInst>(simplifyUser)) {
             for (User* user : simplifyUser->users()) {
                 // printvalue(user)
                 if (Instruction* userInst = dyn_cast<Instruction>(user)) {
@@ -274,6 +275,12 @@ void final_optpass(Function* clonedFuncx) {
         }
 
     } while (changed);
+
+    modulePassManager =
+        passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+    modulePassManager.addPass(RemovePseudoMemory());
+
+    modulePassManager.run(*module, moduleAnalysisManager);
 }
 
 opaque_info isOpaque(Function* function) {
@@ -664,8 +671,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
     llvm::ReturnInst* returnInst =
         dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
-    if (returnInst =
-            dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
+    if ((returnInst =
+             dyn_cast<llvm::ReturnInst>(function->back().getTerminator()))) {
 
         if (returnInst->getReturnValue() != nullptr) {
 
@@ -696,6 +703,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
 
         deque<llvm::Instruction*> worklist;
         std::vector<llvm::Instruction*> visited_used;
+        std::unordered_set<llvm::Instruction*> visited_used_set;
 
         // Start with the return instruction
         worklist.push_front(returnInst);
@@ -710,9 +718,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
                 llvm::Value* operand = inst->getOperand(i);
                 if (llvm::Instruction* opInst =
                         llvm::dyn_cast<llvm::Instruction>(operand)) {
-                    if (std::find(visited_used.begin(), visited_used.end(),
-                                  opInst) == visited_used.end()) {
-                        // printvalue(opInst)
+                    printvalue(opInst);
+                    if (visited_used_set.insert(opInst).second) {
                         worklist.push_back(opInst);
                     }
                 }
@@ -732,15 +739,17 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
 
             total_user++;
             KnownBits KnownVal = analyzeValueKnownBits(I, DL);
+
             unsigned int possible_values =
                 llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) *
                 2;
-
-            printvalue(I)
-
-                if (!KnownVal.isConstant() && !KnownVal.hasConflict() &&
-                    possible_values < least_possible_value_value &&
-                    possible_values > 0) {
+            possible_values = min(possible_values, KnownVal.getBitWidth() * 2);
+            printvalue(I);
+            printvalue2(possible_values);
+            printvalue2(KnownVal);
+            if (!KnownVal.isConstant() && !KnownVal.hasConflict() &&
+                possible_values < least_possible_value_value &&
+                possible_values > 0) {
                 least_possible_value_value = possible_values;
                 value_with_least_possible_values = cast<Value>(I);
                 bitsof_least_possible_value = KnownVal;
@@ -776,6 +785,12 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
         outs().flush();
         outs() << " possible values: " << least_possible_value_value << " : \n";
 
+        // print an optimized version?
+        std::string Filename = "output_trysolve.ll";
+        std::error_code EC;
+        raw_fd_ostream OS(Filename, EC);
+        function->getParent()->print(OS, nullptr);
+
         auto possible_values = getPossibleValues(
             bitsof_least_possible_value, least_possible_value_value - 1);
         auto original_value =
@@ -785,12 +800,6 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
         for (unsigned i = 0; i < max_possible_values; i++) {
             outs() << i << "-) v : " << possible_values[i] << "\n";
         }
-
-        // print an optimized version?
-        std::string Filename = "output_trysolve.ll";
-        std::error_code EC;
-        raw_fd_ostream OS(Filename, EC);
-        function->getParent()->print(OS, nullptr);
 
         cout << "\nWhich option do you select? ";
         // TODO:
