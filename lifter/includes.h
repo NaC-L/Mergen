@@ -248,9 +248,19 @@
 #include "llvm/Transforms/Vectorize/LoopVectorize.h"
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
+#include "llvm/Config/llvm-config.h"
 
 using namespace std;
 using namespace llvm;
+
+#if LLVM_VERSION_MAJOR < 17
+inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
+                              const llvm::KnownBits& KB) {
+    KB.print(OS);
+    return OS;
+}
+#endif
+
 #define RIP 0x007FFFFFFF400000
 #define STACKP_VALUE 0x000000000014FCA8
 
