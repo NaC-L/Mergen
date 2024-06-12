@@ -46,7 +46,7 @@ uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva) {
 }
 
 namespace debugging {
-
+    
     bool shouldDebug = false;
     void enableDebug() {
         shouldDebug = 1;
