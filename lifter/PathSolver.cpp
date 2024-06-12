@@ -779,9 +779,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
         value_with_least_possible_values->print(outs());
         outs() << "\n";
         outs().flush();
-        outs() << " bitsof_least_possible_value : ";
-        bitsof_least_possible_value.print(outs());
-        outs() << "\n";
+        outs() << " bitsof_least_possible_value : "
+               << bitsof_least_possible_value << "\n";
         outs().flush();
         outs() << " possible values: " << least_possible_value_value << " : \n";
 
