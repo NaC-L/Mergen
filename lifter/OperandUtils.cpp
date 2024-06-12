@@ -1021,123 +1021,6 @@ Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
 #include <cassert>
 #include <vector>
 
-// replace it with
-// https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Analysis/MemoryLocation.h#L228
-// but I think this might be better after build, not while building
-class ValueByteReference {
-  public:
-    Value* value;
-    short byteOffset;
-
-    ValueByteReference(Value* val, short offset)
-        : value(val), byteOffset(offset) {}
-};
-
-class lifterMemoryBuffer {
-  public:
-    std::vector<ValueByteReference*> buffer;
-
-    lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {}
-
-    ~lifterMemoryBuffer() {
-
-        for (auto* ref : buffer) {
-            delete ref;
-        }
-    }
-
-    void addValueReference(Value* value, unsigned address) {
-        unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
-        for (unsigned i = 0; i < valueSizeInBytes; i++) {
-
-            delete buffer[address + i];
-
-            buffer[address + i] = new ValueByteReference(value, i);
-        }
-    }
-
-    Value* retrieveCombinedValue(IRBuilder<>& builder, unsigned startAddress,
-                                 unsigned byteCount) {
-        LLVMContext& context = builder.getContext();
-        if (byteCount == 0)
-            return nullptr;
-
-        Value* firstSource = nullptr;
-        bool contiguous = true;
-
-        for (unsigned i = 0; i < byteCount && contiguous; ++i) {
-            unsigned currentAddress = startAddress + i;
-            if (currentAddress >= buffer.size() ||
-                buffer[currentAddress] == nullptr) {
-                contiguous = false;
-                break;
-            }
-            if (i == 0) {
-                firstSource = buffer[currentAddress]->value;
-            } else if (buffer[currentAddress]->value != firstSource ||
-                       buffer[currentAddress]->byteOffset != i) {
-                contiguous = false;
-            }
-        }
-
-        if (contiguous && firstSource != nullptr &&
-            byteCount == firstSource->getType()->getIntegerBitWidth() / 8) {
-            return firstSource;
-        }
-
-        // supposed to return 0 if never used, wtf?
-        if (firstSource == nullptr) {
-            return ConstantInt::get(Type::getIntNTy(context, byteCount), 0);
-        }
-
-        Value* result = nullptr;
-
-        for (unsigned i = 0; i < byteCount; i++) {
-            unsigned currentAddress = startAddress + i;
-            if (currentAddress < buffer.size() &&
-                buffer[currentAddress] != nullptr) {
-                auto* ref = buffer[currentAddress];
-                Value* byteValue =
-                    extractByte(builder, ref->value, ref->byteOffset);
-                if (!result) {
-                    result = createZExtFolder(
-                        builder, byteValue,
-                        Type::getIntNTy(builder.getContext(), byteCount * 8));
-                } else {
-                    Value* shiftedByteValue = createShlFolder(
-                        builder,
-                        createZExtFolder(builder, byteValue,
-                                         Type::getIntNTy(builder.getContext(),
-                                                         byteCount * 8)),
-                        APInt(byteCount * 8, i * 8));
-                    result = createAddFolder(builder, result, shiftedByteValue,
-                                             "extractbytesthing");
-                }
-            }
-        }
-        return result;
-    }
-
-  private:
-    Value* extractByte(IRBuilder<>& builder, Value* value,
-                       unsigned byteOffset) {
-
-        if (!value) {
-            return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
-        }
-        unsigned shiftAmount = byteOffset * 8;
-        Value* shiftedValue = createLShrFolder(
-            builder, value,
-            APInt(value->getType()->getIntegerBitWidth(), shiftAmount),
-            "extractbyte");
-        return createTruncFolder(builder, shiftedValue,
-                                 Type::getInt8Ty(builder.getContext()));
-    }
-};
-
-//
-lifterMemoryBuffer globalBuffer;
-
 Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                        int possiblesize, string address) {
     LLVMContext& context = builder.getContext();
@@ -1243,19 +1126,6 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                 return newVal;
             }
 
-            /*
-            if (addr > 0 && addr < STACKP_VALUE) {
-                    auto newval = globalBuffer.retrieveCombinedValue(builder,
-            addr, byteSize); if (newval) { auto retvalStack =
-            simplifyValue(newval,
-                                    builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
-                            printvalue(retvalStack);
-                            return retvalStack;
-                    }
-                    return ConstantInt::get(Type::getIntNTy(byteSize, context),
-            0);
-            }
-            */
         }
 
         pointer = simplifyValue(pointer, builder.GetInsertBlock()
@@ -1410,9 +1280,7 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             ConstantInt* effectiveAddressInt =
                 cast<ConstantInt>(effectiveAddress);
             auto addr = effectiveAddressInt->getZExtValue();
-            if (addr > 0 && addr < STACKP_VALUE) {
-                globalBuffer.addValueReference(value, addr);
-            }
+            
         }
 
         // storeInst good, loadinst bad
@@ -1519,7 +1387,6 @@ void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op,
             printvalue(store)
 
                 ConstantInt* rspInt = cast<ConstantInt>(rsp);
-        globalBuffer.addValueReference(byteVal, rspInt->getZExtValue());
 
         GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
         rsp =
@@ -1564,17 +1431,7 @@ Value* popStack(IRBuilder<>& builder) {
             return newVal;
         }
 
-        /*
-        if (addr > 0 && addr < STACKP_VALUE) {
-                auto newval = globalBuffer.retrieveCombinedValue(builder, addr,
-        byteSize); if (newval) { auto retval = simplifyValue(newval,
-                                builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
-                        printvalue(retval);
-                        return  retval;
-                }
-                return ConstantInt::get(loadType, 0);
-        }
-        */
+
     }
 
     return returnValue;
