@@ -1,4 +1,3 @@
-#pragma once
 #include "OperandUtils.h"
 #include "includes.h"
 
@@ -20,6 +19,8 @@ namespace BinaryOperations {
 
     bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value);
 
+    bool isWrittenTo(uint64_t addr);
+
 }; // namespace BinaryOperations
 
 namespace GEPStoreTracker {
@@ -35,4 +36,12 @@ namespace GEPStoreTracker {
     void insertMemoryOp(StoreInst* inst);
 
 }; // namespace GEPStoreTracker
+
+namespace SCCPSimplifier {
+    void init(Function* function);
+    SCCPSolver* get();
+
+    void cleanup();
+} // namespace SCCPSimplifier
+
 #endif

@@ -25,6 +25,13 @@ namespace BinaryOperations {
         return (const char*)file_base_g + rvaOffset;
     }
 
+    unordered_set<uint64_t> MemWrites;
+
+    bool isWriteTo(uint64_t addr) {
+        return MemWrites.find(addr) != MemWrites.end();
+    }
+    void WriteTo(uint64_t addr) { MemWrites.insert(addr); }
+
     // sections
     bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value) {
 
@@ -168,6 +175,32 @@ class lifterMemoryBuffer {
                                  Type::getInt8Ty(builder.getContext()));
     }
 };
+
+namespace SCCPSimplifier {
+    std::unique_ptr<SCCPSolver> solver;
+
+    void init(Function* function) {
+        auto GetTLI = [](Function& F) -> const TargetLibraryInfo& {
+            static TargetLibraryInfoImpl TLIImpl(
+                Triple(F.getParent()->getTargetTriple()));
+            static TargetLibraryInfo TLI(TLIImpl);
+            return TLI;
+        };
+
+        solver =
+            std::make_unique<SCCPSolver>(function->getParent()->getDataLayout(),
+                                         GetTLI, function->getContext());
+        solver->markBlockExecutable(&(function->front()));
+        bool ResolvedUndefs = true;
+        while (ResolvedUndefs) {
+            solver->solve();
+            ResolvedUndefs = solver->resolvedUndefsIn(*function);
+        }
+    }
+    SCCPSolver* get() { return solver.get(); }
+
+    void cleanup() { solver.reset(); }
+} // namespace SCCPSimplifier
 
 // do some cleanup
 namespace GEPStoreTracker {
