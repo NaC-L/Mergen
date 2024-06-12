@@ -12,23 +12,33 @@
 // #define _NODEV
 
 #ifndef _NODEV
-#define printvalue(x) debugging::printLLVMValue(x, #x);
+#define printvalue(x)                                                          \
+    do {                                                                       \
+        debugging::printLLVMValue(x, #x);                                      \
+    } while (0);
 // outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
-#define printvalue2(x) debugging::printValue(x, #x);
+#define printvalue2(x)                                                         \
+    do {                                                                       \
+        debugging::printValue(x, #x);                                          \
+    } while (0);
 #else
 #define printvalue(x) ((void)0);
 #define printvalue2(x) ((void)0);
 #endif // _NODEV
 
 #define printvalueforce(x)                                                     \
-    outs() << " " #x " : ";                                                    \
-    x->print(outs());                                                          \
-    outs() << "\n";                                                            \
-    outs().flush();
+    do {                                                                       \
+        outs() << " " #x " : ";                                                \
+        x->print(outs());                                                      \
+        outs() << "\n";                                                        \
+        outs().flush();                                                        \
+    } while (0);
 
 #define printvalueforce2(x)                                                    \
-    outs() << " " #x " : " << x << "\n";                                       \
-    outs().flush();
+    do {                                                                       \
+        outs() << " " #x " : " << x << "\n";                                   \
+        outs().flush();                                                        \
+    } while (0);
 
 #pragma warning(disable : 4996)
 #pragma warning(disable : 4146)
