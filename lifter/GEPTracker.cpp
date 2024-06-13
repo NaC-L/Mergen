@@ -72,7 +72,7 @@ class lifterMemoryBuffer {
   public:
     std::vector<ValueByteReference*> buffer;
 
-    lifterMemoryBuffer() : buffer(STACKP_VALUE + 0x2000, nullptr) {}
+    lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {}
     lifterMemoryBuffer(unsigned long long bufferSize)
         : buffer(bufferSize, nullptr) {}
 
