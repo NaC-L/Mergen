@@ -75,6 +75,7 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                     outs().flush();
                 }
                 */
+                debugging::increaseInstCounter();
                 ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64,
                                       runtime_address, data + offset, 15,
                                       &instruction);
@@ -238,4 +239,6 @@ int main(int argc, char* argv[]) {
                                       (uintptr_t)fileBase);
     long long milliseconds = timer::stopTimer();
     cout << "\n" << dec << milliseconds << " milliseconds has past" << endl;
+    cout << "Executed " << debugging::increaseInstCounter() - 1
+         << " total insts";
 }

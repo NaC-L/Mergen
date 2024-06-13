@@ -13,7 +13,10 @@ uintptr_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva);
 
 uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva);
 
+uintptr_t getSectionCharacteristics(void* fileBase, uintptr_t rva);
+
 namespace debugging {
+    int increaseInstCounter();
     void enableDebug();
     void printLLVMValue(llvm::Value* v, const char* name);
     void doIfDebug(const std::function<void(void)>& dothis);
