@@ -24,8 +24,7 @@ class RemovePseudoStackPass
                 stackMemory = Builder.CreateAlloca(
                     llvm::Type::getInt128Ty(M.getContext()),
                     llvm::ConstantInt::get(
-                        llvm::Type::getInt128Ty(M.getContext()),
-                        STACKP_VALUE * 10),
+                        llvm::Type::getInt128Ty(M.getContext()), STACKP_VALUE),
                     "stackmemory");
             }
             for (auto& BB : F) {
@@ -53,7 +52,7 @@ class RemovePseudoStackPass
                                 OffsetOperand)) {
                             uintptr_t constintvalue =
                                 (uintptr_t)ConstInt->getZExtValue();
-                            if (constintvalue < STACKP_VALUE + 100) {
+                            if (constintvalue < STACKP_VALUE) {
                                 GEP->setOperand((GEP->getNumOperands() - 2),
                                                 stackMemory);
                             }
