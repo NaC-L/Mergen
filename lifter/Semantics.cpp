@@ -6,8 +6,8 @@
 #include <llvm/Support/Casting.h>
 
 // probably move this stuff somewhere else
-
 void callFunctionIR(string functionName, IRBuilder<>& builder) {
+    //
     auto& context = builder.getContext();
 
     FunctionType* externFuncType = FunctionType::get(
@@ -219,26 +219,90 @@ namespace mov {
 
     void lift_movsb(IRBuilder<>& builder,
                     ZydisDisassembledInstruction& instruction) {
+
+        // DEST := SRC;
+        // [esi] = [edi]
+        // sign = DF (-1/+1)
+        // incdecv = size*sign (sb means size is 1)
+        // esi += incdecv
+        // edi += incdecv
+        //
         LLVMContext& context = builder.getContext();
-        Value* sourceValue = GetRegisterValue(builder, ZYDIS_REGISTER_RSI);
-        Value* Lvalue = GetRegisterValue(builder, ZYDIS_REGISTER_RDI);
 
-        Value* byteToMove = builder.CreateLoad(
-            Type::getInt8Ty(context), getMemoryFromValue(builder, sourceValue));
+        // Value* SRCptrvalue =
+        // GetOperandValue(builder,instruction.operands[0],instruction.operands[0].size);
 
-        builder.CreateStore(byteToMove, getMemoryFromValue(builder, Lvalue));
+        Value* DSTptrvalue = GetOperandValue(builder, instruction.operands[1],
+                                             instruction.operands[1].size);
 
-        Value* df = getFlag(builder, FLAG_DF);
+        SetOperandValue(builder, instruction.operands[0], DSTptrvalue);
 
-        Value* offset = createSelectFolder(
-            builder, df, ConstantInt::get(sourceValue->getType(), -1),
-            ConstantInt::get(sourceValue->getType(), 1));
+        bool isREP = (instruction.info.attributes & ZYDIS_ATTRIB_HAS_REP) != 0;
 
-        Value* updatedSource = createAddFolder(builder, sourceValue, offset);
-        Value* updatedDest = createAddFolder(builder, Lvalue, offset);
+        Value* DF = getFlag(builder, FLAG_DF);
+        auto one = ConstantInt::get(DF->getType(), 1);
+        // sign = (x*(x+1)) - 1
+        // v = sign * bytesize ; bytesize is 1
 
-        SetRegisterValue(builder, ZYDIS_REGISTER_RSI, updatedSource);
-        SetRegisterValue(builder, ZYDIS_REGISTER_RDI, updatedDest);
+        Value* Direction = builder.CreateSub(
+            builder.CreateMul(DF, builder.CreateAdd(DF, one)), one);
+
+        auto SRCop = instruction.operands[2 + isREP];
+        auto DSTop = instruction.operands[3 + isREP];
+
+        Value* SRCvalue = GetOperandValue(builder, SRCop, SRCop.size);
+        Value* DSTvalue = GetOperandValue(builder, DSTop, DSTop.size);
+
+        if (isREP) {
+            // if REP, instruction.operands[1] will be e/rax
+            // in that case, repeat and decrement e/rax until its 0
+
+            // we can create a loop but I dont know how that would effect our
+            // optimizations
+            Value* count = GetOperandValue(builder, instruction.operands[2],
+                                           instruction.operands[2].size);
+            if (auto countci = dyn_cast<ConstantInt>(count)) {
+                Value* UpdateSRCvalue = SRCvalue;
+                Value* UpdateDSTvalue = DSTvalue;
+                auto looptime = countci->getZExtValue();
+                printvalue2(looptime);
+
+                for (int i = looptime; i > 0; i--) {
+                    // TODO: fix this loop
+
+                    // Value* SRCptrvalue = GetOperandValue(builder,
+                    // instruction.operands[0],  instruction.operands[0].size);
+                    Value* DSTptrvalue =
+                        GetOperandValue(builder, instruction.operands[1],
+                                        instruction.operands[1].size);
+
+                    SetOperandValue(builder, instruction.operands[0],
+                                    DSTptrvalue);
+
+                    UpdateSRCvalue =
+                        builder.CreateAdd(UpdateSRCvalue, Direction);
+                    UpdateDSTvalue =
+                        builder.CreateAdd(UpdateDSTvalue, Direction);
+                    printvalue(UpdateDSTvalue) printvalue(UpdateSRCvalue);
+
+                    SetOperandValue(builder, SRCop, UpdateSRCvalue);
+                    SetOperandValue(builder, DSTop, UpdateDSTvalue);
+                }
+
+                SetOperandValue(builder, instruction.operands[2],
+                                ConstantInt::get(count->getType(), 0));
+
+                return;
+            } else {
+                throw "fix movsb";
+            }
+        }
+
+        Value* UpdateSRCvalue = builder.CreateAdd(SRCvalue, Direction);
+        Value* UpdateDSTvalue = builder.CreateAdd(DSTvalue, Direction);
+
+        SetOperandValue(builder, SRCop, UpdateSRCvalue);
+        SetOperandValue(builder, DSTop, UpdateDSTvalue);
     }
     void lift_movaps(IRBuilder<>& builder,
                      ZydisDisassembledInstruction& instruction) {
