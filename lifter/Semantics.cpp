@@ -3998,7 +3998,8 @@ void liftInstruction(IRBuilder<>& builder,
         // actually call the function first
 
         auto functionName = BinaryOperations::getName(jump_address);
-        cout << "calling : " << functionName << endl;
+        cout << "calling : " << functionName
+             << " addr: " << (uintptr_t)functionName << endl;
 
         callFunctionIR(functionName, builder);
 
