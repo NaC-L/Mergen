@@ -47,7 +47,6 @@ void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
 // also refactor this
 void simplifyUsers(Value* newValue, DataLayout& DL,
                    unordered_map<Value*, int> flippedRegisterMap) {
-    unordered_map<Value*, short> visitCount;
     unordered_set<Value*> visited;
     std::priority_queue<Instruction*, std::vector<Instruction*>,
                         InstructionDependencyOrder>
@@ -61,11 +60,13 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
     while (!toSimplify.empty()) {
         auto simplifyUser = toSimplify.top();
         toSimplify.pop();
-        visitCount[simplifyUser]++;
         auto nsv = simplifyValueLater(simplifyUser, DL);
 
         visited.insert(simplifyUser);
         printvalue(simplifyUser) printvalue(nsv);
+
+        auto solver = SCCPSimplifier::get();
+        auto nsv2 = solver->getConstantOrNull(simplifyUser);
 
         if (isa<GetElementPtrInst>(simplifyUser)) {
             for (User* user : simplifyUser->users()) {
@@ -77,10 +78,14 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
                             .end()) { // it can try to insert max 3 times here
                         toSimplify.push(userInst);
                         visited.insert(userInst);
-                        visitCount[userInst] = 0;
                     }
                 }
             }
+        }
+
+        if (nsv2 && nsv != nsv2) {
+            printvalueforce(nsv2);
+            nsv = nsv2;
         }
 
         // yes return the same value very good idea definitely wont make
@@ -88,6 +93,7 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
         if (simplifyUser == nsv) {
             continue;
         }
+        printvalueforce(nsv);
         // if can simplify, continue?
 
         // find a way to make this look not ugly, or dont. idc
@@ -99,8 +105,6 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
                 //  printvalue(userInst)
 
                 if (visited.find(userInst) == visited.end()) {
-                    // printvalue(userInst) // if we are inserting, print for
-                    // 2nd time
                     toSimplify.push(userInst);
                     visited.erase(userInst);
                 }
@@ -665,9 +669,9 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
                     string debug_filename) {
 
     PATH_info result = PATH_unsolved;
-
-    // this gets the last basicblock, either change this or make sure we respect
-    // it all the times
+    SCCPSimplifier::init(function);
+    //  this gets the last basicblock, either change this or make sure we
+    //  respect it all the times
     llvm::ReturnInst* returnInst =
         dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
@@ -757,12 +761,12 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
 
             // if constant, simplify later users?
             // simplify it aswell
-            if (KnownVal.isConstant() && !KnownVal.hasConflict()) {
-                printvalue(I) auto nsv = simplifyValueLater(I, DL);
-                printvalue(nsv) replaceAllUsesWithandReplaceRMap(
-                    I, nsv, flippedRegisterMap);
-                simplifyUsers(nsv, DL, flippedRegisterMap);
-            }
+            // if (KnownVal.isConstant() && !KnownVal.hasConflict()) {
+            printvalue(I) auto nsv = simplifyValueLater(I, DL);
+            printvalue(nsv)
+                replaceAllUsesWithandReplaceRMap(I, nsv, flippedRegisterMap);
+            simplifyUsers(nsv, DL, flippedRegisterMap);
+            //}
         }
 
         if (PATH_info solved = getReturnVal(function, dest)) {

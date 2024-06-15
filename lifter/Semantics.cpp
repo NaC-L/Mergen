@@ -7,7 +7,6 @@
 
 // probably move this stuff somewhere else
 void callFunctionIR(string functionName, IRBuilder<>& builder) {
-    //
     auto& context = builder.getContext();
 
     FunctionType* externFuncType = FunctionType::get(
@@ -81,6 +80,7 @@ void callFunctionIR(string functionName, IRBuilder<>& builder) {
 
     SetRegisterValue(builder, ZYDIS_REGISTER_RAX,
                      callresult); // rax = externalfunc()
+    // check if the function is exit or something similar to that
 }
 
 Value* computeOverflowFlagAdc(IRBuilder<>& builder, Value* Lvalue,
@@ -135,20 +135,35 @@ Value* computeAuxFlagSbb(IRBuilder<>& builder, Value* Lvalue, Value* Rvalue,
     return createICMPFolder(builder, CmpInst::ICMP_UGT, add, ci15);
 }
 
+/*
+https://graphics.stanford.edu/~seander/bithacks.html#ParityWith64Bits
+
+Compute parity of a byte using 64-bit multiply and modulus division
+unsigned char b;  // byte value to compute the parity of
+bool parity =
+  (((b * 0x0101010101010101ULL) & 0x8040201008040201ULL) % 0x1FF) & 1;
+The method above takes around 4 operations, but only works on bytes.
+*/
 Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
     LLVMContext& context = value->getContext();
 
-    Value* lsb = createAndFolder(
-        builder, value, ConstantInt::get(value->getType(), 0xFF), "lsb");
-    Value* parity = ConstantInt::get(Type::getInt1Ty(context), 1);
-    for (int i = 0; i < 8; i++) {
-        // x ^ (x << i)
-        Value* bit = createZExtOrTruncFolder(
-            builder, createLShrFolder(builder, lsb, i),
-            Type::getInt1Ty(value->getContext()), "parityflagbits");
+    Value* lsb = builder.CreateZExt(
+        createAndFolder(builder, value,
+                        ConstantInt::get(value->getType(), 0xFF), "lsb"),
+        Type::getInt64Ty(context));
 
-        parity = createXorFolder(builder, parity, bit, "parityXOR");
-    }
+    // s or u rem?
+    Value* parity = createAndFolder(
+        builder,
+        builder.CreateURem(
+            createAndFolder(
+                builder,
+                builder.CreateMul(
+                    lsb, ConstantInt::get(lsb->getType(), 0x0101010101010101)),
+                ConstantInt::get(lsb->getType(), 0x8040201008040201ULL)),
+            ConstantInt::get(lsb->getType(), 0x1FF)),
+        ConstantInt::get(lsb->getType(), 1));
+
     return parity; // Returns 1 if even parity, 0 if odd
 }
 
