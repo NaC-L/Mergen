@@ -98,7 +98,8 @@ class lifterMemoryBuffer {
     // goal : get rid of excess operations
     /*
     how?
-    create a temp var for extra contiguous values
+    create a temp var for contiguous values
+
     */
     Value* retrieveCombinedValue(IRBuilder<>& builder, unsigned startAddress,
                                  unsigned byteCount) {
@@ -275,7 +276,7 @@ namespace GEPStoreTracker {
         // mask =>
         unsigned long long mask =
             0xffffffffffffffff >>
-            64 - (num_bytes * 8); // adjust mask for bytesize
+            (64 - (num_bytes * 8)); // adjust mask for bytesize
         printvalue2(diffStart) if (diffStart <= 0) return mask;
 
         auto diffShift = abs(diffStart);
