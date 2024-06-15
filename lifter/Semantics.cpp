@@ -2732,9 +2732,10 @@ namespace arithmeticsAndLogical {
         setFlag(builder, FLAG_CF,
                 ConstantInt::getSigned(Type::getInt1Ty(context), 0));
 
-        printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
+        printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-            SetOperandValue(builder, dest, result);
+        SetOperandValue(builder, dest, result,
+                        "and" + to_string(instruction.runtime_address));
     }
 
     /*

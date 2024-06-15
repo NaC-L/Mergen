@@ -99,6 +99,7 @@ namespace debugging {
     template void printValue<unsigned int>(const unsigned int& v,
                                            const char* name);
     template void printValue<long>(const long& v, const char* name);
+    template void printValue<bool>(const bool& v, const char* name);
     template void printValue<uintptr_t>(const uintptr_t& v, const char* name);
     template void printValue<long long>(const long long& v, const char* name);
     template void printValue<ValueLatticeElement>(const ValueLatticeElement& v,

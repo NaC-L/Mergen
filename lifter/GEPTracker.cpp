@@ -110,11 +110,13 @@ class lifterMemoryBuffer {
         Value* firstSource = nullptr;
         bool contiguous = true;
 
+        // modify this loop
         for (unsigned i = 0; i < byteCount && contiguous; ++i) {
             unsigned currentAddress = startAddress + i;
             if (currentAddress >= buffer.size() ||
                 buffer[currentAddress] == nullptr) {
                 contiguous = false;
+                printvalue2(contiguous);
                 break;
             }
             if (i == 0) {
@@ -122,12 +124,14 @@ class lifterMemoryBuffer {
             } else if (buffer[currentAddress]->value != firstSource ||
                        buffer[currentAddress]->byteOffset != i) {
                 contiguous = false;
+                printvalue2(contiguous);
             }
         }
 
         if (contiguous && firstSource != nullptr &&
-            byteCount == firstSource->getType()->getIntegerBitWidth() / 8) {
-            return firstSource;
+            byteCount <= firstSource->getType()->getIntegerBitWidth() / 8) {
+            return builder.CreateTrunc(firstSource,
+                                       Type::getIntNTy(context, byteCount * 8));
         }
 
         if (firstSource == nullptr) {
@@ -148,16 +152,16 @@ class lifterMemoryBuffer {
                 if (!result) {
                     result = createZExtFolder(
                         builder, byteValue,
-                        Type::getIntNTy(builder.getContext(), byteCount * 8));
+                        Type::getIntNTy(context, byteCount * 8));
                 } else {
                     Value* shiftedByteValue = createShlFolder(
                         builder,
-                        createZExtFolder(builder, byteValue,
-                                         Type::getIntNTy(builder.getContext(),
-                                                         byteCount * 8)),
+                        createZExtFolder(
+                            builder, byteValue,
+                            Type::getIntNTy(context, byteCount * 8)),
                         APInt(byteCount * 8, i * 8));
-                    result = createAddFolder(builder, result, shiftedByteValue,
-                                             "extractbytesthing");
+                    result = createOrFolder(builder, result, shiftedByteValue,
+                                            "extractbytesthing");
                 }
             }
         }
@@ -234,7 +238,6 @@ namespace GEPStoreTracker {
     vector<Instruction*> memInfos;
 
     void insertMemoryOp(StoreInst* inst) {
-        isa<BranchInst>(inst);
         memInfos.push_back(inst);
 
         auto ptr = inst->getPointerOperand();

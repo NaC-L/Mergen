@@ -29,13 +29,70 @@ bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT) {
     return dominate;
 }
 
+using namespace llvm::PatternMatch;
+
+Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
+    Value* X = nullptr;
+    switch (I) {
+    case Instruction::And: {
+        // X & ~X
+        // how the hell we remove this zext and truncs it looks horrible
+        if ((match(op0, m_Not(m_Value(X))) && X == op1) ||
+            (match(op1, m_Not(m_Value(X))) && X == op0) ||
+            (match(op0, m_ZExt(m_Not(m_Value(X)))) &&
+             match(op1, m_ZExt(m_Specific(X)))) ||
+            (match(op1, m_ZExt(m_Not(m_Value(X)))) &&
+             match(op0, m_ZExt(m_Specific(X)))) ||
+            (match(op0, m_Trunc(m_Not(m_Value(X)))) &&
+             match(op1, m_Trunc(m_Specific(X)))) ||
+            (match(op1, m_Trunc(m_Not(m_Value(X)))) &&
+             match(op0, m_Trunc(m_Specific(X))))) {
+            auto possibleSimplify = ConstantInt::get(op1->getType(), 0);
+            printvalue(possibleSimplify);
+            return possibleSimplify;
+        }
+    }
+    case Instruction::Xor: {
+        // X ^ ~X
+        if ((match(op0, m_Not(m_Value(X))) && X == op1) ||
+            (match(op1, m_Not(m_Value(X))) && X == op0) ||
+            (match(op0, m_ZExt(m_Not(m_Value(X)))) &&
+             match(op1, m_ZExt(m_Specific(X)))) ||
+            (match(op1, m_ZExt(m_Not(m_Value(X)))) &&
+             match(op0, m_ZExt(m_Specific(X)))) ||
+            (match(op0, m_Trunc(m_Not(m_Value(X)))) &&
+             match(op1, m_Trunc(m_Specific(X)))) ||
+            (match(op1, m_Trunc(m_Not(m_Value(X)))) &&
+             match(op0, m_Trunc(m_Specific(X))))) {
+            auto possibleSimplify = ConstantInt::get(op1->getType(), -1);
+            printvalue(possibleSimplify);
+            return possibleSimplify;
+        }
+        if (match(op0, m_Specific(op1)) ||
+            (match(op0, m_Trunc(m_Value(X))) &&
+             match(op1, m_Trunc(m_Specific(X)))) ||
+            (match(op0, m_ZExt(m_Value(X))) &&
+             match(op1, m_ZExt(m_Specific(X))))) {
+            auto possibleSimplify = ConstantInt::get(op1->getType(), 0);
+            printvalue(possibleSimplify);
+            return possibleSimplify;
+        }
+    }
+    default: {
+        return nullptr;
+    }
+    }
+
+    return nullptr;
+}
+
 KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL) {
     KnownBits knownBits(64);
     knownBits.resetAll();
     if (value->getType() == Type::getInt128Ty(value->getContext()))
         return knownBits;
 
-    auto KB = computeKnownBits(value, DL, 3);
+    auto KB = computeKnownBits(value, DL, 20);
 
     // BLAME
     if (KB.getBitWidth() < 64)
@@ -390,7 +447,8 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
     KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
     KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
-
+    printvalue2(KnownLHS);
+    printvalue2(KnownRHS);
     if (Value* knownBitsAnd =
             foldOrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
         return knownBitsAnd;
@@ -401,7 +459,13 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     }
 #endif
 
-    return simplifyValue(builder.CreateOr(LHS, RHS, Name), DL);
+    auto testOr = builder.CreateOr(LHS, RHS, Name);
+    printvalue(testOr);
+
+    DataLayout DL2(builder.GetInsertBlock()->getParent()->getParent());
+    printvalue2(analyzeValueKnownBits(testOr, DL2));
+
+    return testOr;
 }
 
 Value* foldXorKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -451,7 +515,8 @@ Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
 
     if (auto V = foldXorKnownBits(builder.getContext(), KnownLHS, KnownRHS))
         return V;
-
+    if (auto simplifiedByPM = doPatternMatching(Instruction::Xor, LHS, RHS))
+        return simplifiedByPM;
     return simplifyValue(builder.CreateXor(LHS, RHS, Name), DL);
 }
 
@@ -500,7 +565,6 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
 }
 
 Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-
     if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() ||
         RHS.isUnknown() || !RHS.isConstant() ||
         LHS.getBitWidth() != RHS.getBitWidth() || RHS.getBitWidth() <= 1 ||
@@ -557,6 +621,8 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     }
 
 #endif
+    if (auto sillyResult = doPatternMatching(Instruction::And, LHS, RHS))
+        return sillyResult;
     return simplifyValue(builder.CreateAnd(LHS, RHS, Name), DL);
 }
 
@@ -568,11 +634,24 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
 #ifdef TESTFOLDER7
 
     KnownBits KnownRHS = analyzeValueKnownBits(resulttrunc, DL);
+    printvalue(V);
+    printvalue2(KnownRHS);
     if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 &&
         KnownRHS.isConstant())
         return ConstantInt::get(DestTy, KnownRHS.getConstant());
 #endif
-    return simplifyValue(resulttrunc, DL);
+    auto test = simplifyValue(resulttrunc, DL);
+    printvalue(test);
+    printvalue2(analyzeValueKnownBits(resulttrunc, DL));
+
+    // TODO: CREATE A MAP FOR AVAILABLE TRUNCs/ZEXTs/SEXTs
+    // WHY?
+    // IF %y = trunc %x exists
+    // we dont want to create %y2 = trunc %x
+    // just use %y
+    // so xor %y, %y2 => %y, %y => 0
+
+    return test;
 }
 
 Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
@@ -586,7 +665,9 @@ Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
         KnownRHS.isConstant())
         return ConstantInt::get(DestTy, KnownRHS.getConstant());
 #endif
-
+    auto test = simplifyValue(resultzext, DL);
+    printvalue(test);
+    printvalue2(analyzeValueKnownBits(resultzext, DL));
     return resultzext;
 }
 
