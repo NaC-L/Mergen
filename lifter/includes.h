@@ -237,6 +237,7 @@
 // #include "llvm/Transforms/Utils/MoveAutoInit.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/ConstantRange.h"
@@ -258,21 +259,20 @@
 #include "llvm/Transforms/Vectorize/LoopVectorize.h"
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
-#include "llvm/Config/llvm-config.h"
 
 using namespace std;
 using namespace llvm;
 
 #if LLVM_VERSION_MAJOR < 17
 inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
-                              const llvm::KnownBits& KB) {
+                                     const llvm::KnownBits& KB) {
     KB.print(OS);
     return OS;
 }
 #endif
 
 #define RIP 0x007FFFFFFF400000
-#define STACKP_VALUE 0x000000000014FCA8
+#define STACKP_VALUE 0x14FF28
 
 using RegisterMap = unordered_map<int, Value*>;
 // BB start address, BB pointer, Final registers in that RegisterMap so we can

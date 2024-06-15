@@ -1,6 +1,7 @@
 #include "OperandUtils.h"
 #include "GEPTracker.h"
 #include "includes.h"
+#include <llvm/IR/Constants.h>
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -117,6 +118,11 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
         return v;
     if (!isa<LoadInst>(v))
         return simplifyValue(v, DL);
+
+    auto solver = SCCPSimplifier::get();
+    auto nsv2 = solver->getConstantOrNull(v);
+    if (nsv2 && !isa<PoisonValue>(nsv2) && !isa<UndefValue>(nsv2))
+        return nsv2;
 
     auto loadInst = cast<LoadInst>(v);
     // printvalue(loadInst)
@@ -488,8 +494,9 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
         return ConstantInt::get(Type::getInt1Ty(builder.getContext()),
                                 v.value());
     }
-
-    return simplifyValue(builder.CreateICmp(P, LHS, RHS, Name), DL);
+    auto resultcmp = simplifyValue(builder.CreateICmp(P, LHS, RHS, Name), DL);
+    printvalue(resultcmp);
+    return resultcmp;
 }
 
 Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -1125,7 +1132,6 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                 printvalue(newVal);
                 return newVal;
             }
-
         }
 
         pointer = simplifyValue(pointer, builder.GetInsertBlock()
@@ -1280,7 +1286,6 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             ConstantInt* effectiveAddressInt =
                 cast<ConstantInt>(effectiveAddress);
             auto addr = effectiveAddressInt->getZExtValue();
-            
         }
 
         // storeInst good, loadinst bad
@@ -1430,8 +1435,6 @@ Value* popStack(IRBuilder<>& builder) {
             Constant* newVal = ConstantInt::get(loadType, value);
             return newVal;
         }
-
-
     }
 
     return returnValue;

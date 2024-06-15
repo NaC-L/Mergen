@@ -27,7 +27,7 @@ namespace BinaryOperations {
 
     unordered_set<uint64_t> MemWrites;
 
-    bool isWriteTo(uint64_t addr) {
+    bool isWrittenTo(uint64_t addr) {
         return MemWrites.find(addr) != MemWrites.end();
     }
     void WriteTo(uint64_t addr) { MemWrites.insert(addr); }
@@ -88,13 +88,18 @@ class lifterMemoryBuffer {
         for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
             delete buffer[address + i];
-
+            BinaryOperations::WriteTo(address + i);
             buffer[address + i] = new ValueByteReference(value, i);
             printvalue(value);
             printvalue2((unsigned long)address + i);
         }
     }
 
+    // goal : get rid of excess operations
+    /*
+    how?
+    create a temp var for extra contiguous values
+    */
     Value* retrieveCombinedValue(IRBuilder<>& builder, unsigned startAddress,
                                  unsigned byteCount) {
         LLVMContext& context = builder.getContext();
@@ -178,8 +183,11 @@ class lifterMemoryBuffer {
 
 namespace SCCPSimplifier {
     std::unique_ptr<SCCPSolver> solver;
-
+    unsigned long long lastinstcount = 0;
     void init(Function* function) {
+        if (function->getInstructionCount() == lastinstcount)
+            return;
+        lastinstcount = function->getInstructionCount();
         auto GetTLI = [](Function& F) -> const TargetLibraryInfo& {
             static TargetLibraryInfoImpl TLIImpl(
                 Triple(F.getParent()->getTargetTriple()));
