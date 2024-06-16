@@ -1,5 +1,6 @@
 
 
+#include "FunctionSignatures.h"
 #include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "Semantics.h"
@@ -235,6 +236,12 @@ int main(int argc, char* argv[]) {
     original_address = ADDRESS;
     cout << "address: " << ADDRESS << " filebase: " << (uintptr_t)fileBase
          << " fOffset: " << fileOffset << " RVA: " << RVA << endl;
+
+    funcsignatures::search_signatures(fileData);
+
+    for (const auto& [key, value] : funcsignatures::siglookup) {
+        value.display();
+    }
 
     long long ms = timer::getTimer();
     cout << "\n" << dec << ms << " milliseconds has past" << endl;
