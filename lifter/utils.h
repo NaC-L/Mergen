@@ -6,14 +6,25 @@
 #include <cstdint>
 #include <linuxpe>
 
-win::section_header_t*
-GetEnclosingSectionHeader(uint32_t rva, win::nt_headers_x64_t* pNTHeader);
+namespace FileHelper {
 
-uintptr_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva);
+    win::section_header_t*
+    GetEnclosingSectionHeader(uint32_t rva, win::nt_headers_x64_t* pNTHeader);
 
-uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva);
+    uintptr_t secCharacteristics(win::nt_headers_x64_t* ntHeaders,
+                                 uint32_t rva);
 
-uintptr_t getSectionCharacteristics(void* fileBase, uintptr_t rva);
+    uintptr_t getSectionCharacteristics(void* fileBase, uintptr_t rva);
+
+    uintptr_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva);
+
+    uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva);
+
+    uintptr_t fileOffsetToRVA(uintptr_t fileAddress);
+
+    void setFileBase(void* base);
+
+} // namespace FileHelper
 
 namespace debugging {
     int increaseInstCounter();
@@ -30,6 +41,7 @@ namespace argparser {
 namespace timer {
     void startTimer();
     double stopTimer();
+    double getTimer();
     void suspendTimer();
     void resumeTimer();
 } // namespace timer

@@ -21,7 +21,7 @@ namespace BinaryOperations {
         auto dosHeader = (win::dos_header_t*)file_base_g;
         auto ntHeaders = (win::nt_headers_x64_t*)((uint8_t*)file_base_g +
                                                   dosHeader->e_lfanew);
-        auto rvaOffset = RvaToFileOffset(ntHeaders, offset);
+        auto rvaOffset = FileHelper::RvaToFileOffset(ntHeaders, offset);
         return (const char*)file_base_g + rvaOffset;
     }
 
@@ -35,7 +35,8 @@ namespace BinaryOperations {
     // sections
     bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value) {
 
-        uintptr_t mappedAddr = address_to_mapped_address(file_base_g, addr);
+        uintptr_t mappedAddr =
+            FileHelper::address_to_mapped_address(file_base_g, addr);
         uintptr_t tempValue;
 
         if (mappedAddr > 0) {

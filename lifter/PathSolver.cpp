@@ -1,6 +1,7 @@
 #include "CustomPasses.hpp"
 #include "OperandUtils.h"
 #include "includes.h"
+#include <llvm/IR/Constants.h>
 
 void* file_base_g;
 ZyanU8* data_g;
@@ -65,8 +66,8 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
         visited.insert(simplifyUser);
         printvalue(simplifyUser) printvalue(nsv);
 
-        auto solver = SCCPSimplifier::get();
-        auto nsv2 = solver->getConstantOrNull(simplifyUser);
+        // auto solver = SCCPSimplifier::get();
+        // auto nsv2 = solver->getConstantOrNull(simplifyUser);
 
         if (isa<GetElementPtrInst>(simplifyUser)) {
             for (User* user : simplifyUser->users()) {
@@ -82,18 +83,20 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
                 }
             }
         }
+        /*
+                if (nsv2 && nsv != nsv2 && !isa<PoisonValue>(nsv2) &&
+                    !isa<UndefValue>(nsv2)) {
 
-        if (nsv2 && nsv != nsv2) {
-            printvalueforce(nsv2);
-            nsv = nsv2;
-        }
-
+                    printvalueforce(nsv);
+                    printvalueforce(nsv2);
+                    nsv = nsv2;
+                }
+        */
         // yes return the same value very good idea definitely wont make
         // replaceAllUsesWith loop
         if (simplifyUser == nsv) {
             continue;
         }
-        printvalueforce(nsv);
         // if can simplify, continue?
 
         // find a way to make this look not ugly, or dont. idc
@@ -669,9 +672,9 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
                     string debug_filename) {
 
     PATH_info result = PATH_unsolved;
-    SCCPSimplifier::init(function);
-    //  this gets the last basicblock, either change this or make sure we
-    //  respect it all the times
+    // SCCPSimplifier::init(function);
+    //   this gets the last basicblock, either change this or make sure we
+    //   respect it all the times
     llvm::ReturnInst* returnInst =
         dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
