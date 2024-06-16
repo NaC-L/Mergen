@@ -92,7 +92,7 @@ KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL) {
     if (value->getType() == Type::getInt128Ty(value->getContext()))
         return knownBits;
 
-    auto KB = computeKnownBits(value, DL, 20);
+    auto KB = computeKnownBits(value, DL, 0);
 
     // BLAME
     if (KB.getBitWidth() < 64)
@@ -176,11 +176,12 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
     if (!isa<LoadInst>(v))
         return simplifyValue(v, DL);
 
+    /*
     auto solver = SCCPSimplifier::get();
     auto nsv2 = solver->getConstantOrNull(v);
     if (nsv2 && !isa<PoisonValue>(nsv2) && !isa<UndefValue>(nsv2))
         return nsv2;
-
+    */
     auto loadInst = cast<LoadInst>(v);
     // printvalue(loadInst)
     auto GEP = loadInst->getOperand(loadInst->getNumOperands() - 1);
@@ -460,11 +461,6 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
 #endif
 
     auto testOr = builder.CreateOr(LHS, RHS, Name);
-    printvalue(testOr);
-
-    DataLayout DL2(builder.GetInsertBlock()->getParent()->getParent());
-    printvalue2(analyzeValueKnownBits(testOr, DL2));
-
     return testOr;
 }
 
@@ -640,10 +636,6 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
         KnownRHS.isConstant())
         return ConstantInt::get(DestTy, KnownRHS.getConstant());
 #endif
-    auto test = simplifyValue(resulttrunc, DL);
-    printvalue(test);
-    printvalue2(analyzeValueKnownBits(resulttrunc, DL));
-
     // TODO: CREATE A MAP FOR AVAILABLE TRUNCs/ZEXTs/SEXTs
     // WHY?
     // IF %y = trunc %x exists
@@ -651,7 +643,7 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
     // just use %y
     // so xor %y, %y2 => %y, %y => 0
 
-    return test;
+    return simplifyValue(resulttrunc, DL);
 }
 
 Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
@@ -665,10 +657,7 @@ Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
         KnownRHS.isConstant())
         return ConstantInt::get(DestTy, KnownRHS.getConstant());
 #endif
-    auto test = simplifyValue(resultzext, DL);
-    printvalue(test);
-    printvalue2(analyzeValueKnownBits(resultzext, DL));
-    return resultzext;
+    return simplifyValue(resultzext, DL);
 }
 
 Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,

@@ -87,8 +87,9 @@ class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
                                 OffsetOperand)) {
                             uintptr_t constintvalue =
                                 (uintptr_t)ConstInt->getZExtValue();
-                            if (uintptr_t offset = address_to_mapped_address(
-                                    file_base, constintvalue)) {
+                            if (uintptr_t offset =
+                                    FileHelper::address_to_mapped_address(
+                                        file_base, constintvalue)) {
                                 for (auto* User : GEP->users()) {
                                     if (auto* LoadInst =
                                             llvm::dyn_cast<llvm::LoadInst>(

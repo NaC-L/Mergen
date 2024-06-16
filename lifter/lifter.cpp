@@ -2,7 +2,6 @@
 
 #include "GEPTracker.h"
 #include "OperandUtils.h"
-#include "PathSolver.h"
 #include "Semantics.h"
 #include "includes.h"
 #include "nt/nt_headers.hpp"
@@ -27,8 +26,8 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
         while (blockAddresses->size() > 0) {
 
             runtime_address = get<0>(blockAddresses->back());
-            uintptr_t offset =
-                address_to_mapped_address((void*)file_base, runtime_address);
+            uintptr_t offset = FileHelper::address_to_mapped_address(
+                (void*)file_base, runtime_address);
 
             debugging::doIfDebug([&]() {
                 cout << "runtime_addr: " << runtime_address
@@ -223,17 +222,22 @@ int main(int argc, char* argv[]) {
 
     auto fileBase = fileData.data();
 
+    FileHelper::setFileBase(fileBase);
+
     auto dosHeader = (win::dos_header_t*)fileBase;
     auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
     auto sectionHeader = ntHeaders->get_sections();
     auto ADDRESS = ntHeaders->optional_header.image_base;
     uintptr_t RVA = static_cast<uintptr_t>(startAddr - ADDRESS);
-    uintptr_t fileOffset = RvaToFileOffset(ntHeaders, RVA);
+    uintptr_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
     uint8_t* dataAtAddress = fileBase + fileOffset;
     cout << hex << "0x" << (int)*dataAtAddress << endl;
     original_address = ADDRESS;
     cout << "address: " << ADDRESS << " filebase: " << (uintptr_t)fileBase
          << " fOffset: " << fileOffset << " RVA: " << RVA << endl;
+
+    long long ms = timer::getTimer();
+    cout << "\n" << dec << ms << " milliseconds has past" << endl;
 
     InitFunction_and_LiftInstructions(dataAtAddress, startAddr,
                                       (uintptr_t)fileBase);

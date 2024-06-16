@@ -77,7 +77,6 @@ void callFunctionIR(string functionName, IRBuilder<>& builder) {
                           GetRegisterValue(builder, ZYDIS_REGISTER_R15),
                           Type::getInt64Ty(context)),
          getMemory()});
-
     SetRegisterValue(builder, ZYDIS_REGISTER_RAX,
                      callresult); // rax = externalfunc()
     // check if the function is exit or something similar to that
@@ -3244,6 +3243,7 @@ namespace arithmeticsAndLogical {
 
     void lift_rdtsc(IRBuilder<>& builder,
                     ZydisDisassembledInstruction& instruction) {
+        // cout << instruction.runtime_address << "\n";
         LLVMContext& context = builder.getContext();
         auto rdtscCall =
             builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
@@ -4063,13 +4063,31 @@ void liftInstruction(IRBuilder<>& builder,
         }
     }
     */
-    uintptr_t jump_address = instruction.runtime_address;
+    // move this stuff into a wrapper
+    // start move
+    /*
+    if (instruction.runtime_address == 0x140001fdf) {
+        callFunctionIR("swprintf_s", builder);
+        cout << "calling swprintf_s"
+             << "\n";
+        auto next_jump = popStack(builder);
 
-    // maybe replace this with a forcing a ret? definitely!! inline this
-    // function, we will use it alot + there is a possiblitity that next_jump
-    // wont be a constant if its trying to jump somewhere else than our binary,
-    // call it and continue from [rsp] (apperantly also forget to check rsp
-    // value in the meantime)
+        // get [rsp], jump there
+        auto RIP_value = cast<ConstantInt>(next_jump);
+        auto jump_address = RIP_value->getZExtValue();
+
+        auto bb = BasicBlock::Create(context, "returnToOrgCF",
+                                     builder.GetInsertBlock()->getParent());
+        builder.CreateBr(bb);
+
+        blockAddresses->push_back(
+            make_tuple(jump_address, bb, getRegisterList()));
+        run = 0;
+        return;
+    }
+    */
+    cout.flush();
+    uintptr_t jump_address = instruction.runtime_address;
     APInt temp;
     if (!BinaryOperations::readMemory(jump_address, 1, temp) &&
         cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
@@ -4079,7 +4097,7 @@ void liftInstruction(IRBuilder<>& builder,
 
         auto functionName = BinaryOperations::getName(jump_address);
         cout << "calling : " << functionName
-             << " addr: " << (uintptr_t)functionName << endl;
+             << " addr: " << (uintptr_t)jump_address << endl;
 
         callFunctionIR(functionName, builder);
 
@@ -4096,6 +4114,7 @@ void liftInstruction(IRBuilder<>& builder,
         run = 0;
         return;
     }
+    // endmove
 
     switch (instruction.info.mnemonic) {
     // movs
@@ -4428,6 +4447,7 @@ void liftInstruction(IRBuilder<>& builder,
         branches::lift_call(builder, instruction, blockAddresses);
         break;
     }
+
     // set and flags
     case ZYDIS_MNEMONIC_STOSB:
     case ZYDIS_MNEMONIC_STOSW:
