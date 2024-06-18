@@ -92,6 +92,15 @@ class lifterMemoryBuffer {
             BinaryOperations::WriteTo(address + i);
             buffer[address + i] = new ValueByteReference(value, i);
             printvalue(value);
+            if (isa<ConstantInt>(value)) {
+                long long wtf = (i * 8);
+                long long mask = ((long long)0xff << wtf);
+                printvalue2(mask);
+                printvalue2(sizeof(mask));
+                long long ci = cast<ConstantInt>(value)->getZExtValue() & mask;
+                printvalue2(ci);
+                printvalue2(i);
+            }
             printvalue2((unsigned long)address + i);
         }
     }
@@ -122,8 +131,9 @@ class lifterMemoryBuffer {
             }
             if (i == 0) {
                 firstSource = buffer[currentAddress]->value;
-            } else if (buffer[currentAddress]->value != firstSource ||
-                       buffer[currentAddress]->byteOffset != i) {
+            }
+            if (buffer[currentAddress]->value != firstSource ||
+                buffer[currentAddress]->byteOffset != i) {
                 contiguous = false;
                 printvalue2(contiguous);
             }
@@ -131,6 +141,8 @@ class lifterMemoryBuffer {
 
         if (contiguous && firstSource != nullptr &&
             byteCount <= firstSource->getType()->getIntegerBitWidth() / 8) {
+            long x = 123;
+            printvalue2(x);
             return builder.CreateTrunc(firstSource,
                                        Type::getIntNTy(context, byteCount * 8));
         }
@@ -172,16 +184,18 @@ class lifterMemoryBuffer {
 
   private:
     Value* extractByte(IRBuilder<>& builder, Value* value,
-                       unsigned byteOffset) {
+                       unsigned long long byteOffset) {
 
         if (!value) {
             return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
         }
-        unsigned shiftAmount = byteOffset * 8;
+        unsigned long long shiftAmount = byteOffset * 8;
         Value* shiftedValue = createLShrFolder(
             builder, value,
             APInt(value->getType()->getIntegerBitWidth(), shiftAmount),
             "extractbyte");
+        printvalue2(shiftAmount);
+        printvalue(shiftedValue);
         return createTruncFolder(builder, shiftedValue,
                                  Type::getInt8Ty(builder.getContext()));
     }
