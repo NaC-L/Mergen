@@ -92,15 +92,6 @@ class lifterMemoryBuffer {
             BinaryOperations::WriteTo(address + i);
             buffer[address + i] = new ValueByteReference(value, i);
             printvalue(value);
-            if (isa<ConstantInt>(value)) {
-                long long wtf = (i * 8);
-                long long mask = ((long long)0xff << wtf);
-                printvalue2(mask);
-                printvalue2(sizeof(mask));
-                long long ci = cast<ConstantInt>(value)->getZExtValue() & mask;
-                printvalue2(ci);
-                printvalue2(i);
-            }
             printvalue2((unsigned long)address + i);
         }
     }
