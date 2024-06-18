@@ -163,7 +163,7 @@ Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
             ConstantInt::get(lsb->getType(), 0x1FF)),
         ConstantInt::get(lsb->getType(), 1));
     // parity
-    parity = builder.CreateNot(parity);
+    parity = builder.CreateICmpEQ(ConstantInt::get(lsb->getType(), 0), parity);
     return parity; // Returns 1 if even parity, 0 if odd
 }
 
