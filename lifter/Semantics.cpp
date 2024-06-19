@@ -1,8 +1,10 @@
-﻿#include "GEPTracker.h"
+﻿#include "FunctionSignatures.h"
+#include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "PathSolver.h"
 #include "includes.h"
 #include "utils.h"
+#include <llvm/IR/Function.h>
 #include <llvm/Support/Casting.h>
 
 // probably move this stuff somewhere else
@@ -199,7 +201,7 @@ void branchHelper(IRBuilder<>& builder,
         createZExtFolder(builder, condition, function->getReturnType());
     Value* true_jump =
         ConstantInt::get(function->getReturnType(),
-                         dest.imm.value.s + instruction.runtime_address);
+        dest.imm.value.s + instruction.runtime_address + instruction.info.length);
     Value* false_jump = ConstantInt::get(function->getReturnType(),
                                          instruction.runtime_address);
     Value* next_jump =
@@ -703,7 +705,7 @@ namespace branches {
 
         string block_name = "jmp-call";
 
-        uintptr_t jump_address = instruction.runtime_address;
+        uintptr_t jump_address = instruction.runtime_address + instruction.info.length;
         switch (src.type) {
         case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
             jump_address += src.imm.value.s;
@@ -923,8 +925,7 @@ namespace branches {
 
         SetRegisterValue(builder, ZYDIS_REGISTER_RIP, newRip);
 
-        uintptr_t test = dest.imm.value.s + instruction.runtime_address;
-        // cout << "jmp address: " << test << "\n";
+        uintptr_t test = dest.imm.value.s + instruction.runtime_address + instruction.info.length;
 
         string block_name = "jmp-" + to_string(test) + "-";
         auto bb = BasicBlock::Create(context, block_name.c_str(),
@@ -4044,78 +4045,10 @@ namespace flagOperation {
 
 } // namespace flagOperation
 
-void liftInstruction(IRBuilder<>& builder,
-                     ZydisDisassembledInstruction& instruction,
-                     shared_ptr<vector<BBInfo>> blockAddresses, bool& run) {
-
-    LLVMContext& context = builder.getContext();
-    // RIP gets updated before execution of the instruction.
-    auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                      instruction.runtime_address);
-    SetRegisterValue(builder, ZYDIS_REGISTER_RIP, val);
-    auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
-    printvalue(rsp);
-
-    /*
-    if (auto rspc = dyn_cast<ConstantInt>(rsp)) {
-        if (!(rspc->getZExtValue() % 8 == 0)) {
-            outs() << "rsp not aligned!";
-            outs().flush();
-        }
-    }
-    */
-    // move this stuff into a wrapper
-    // start move
-    /*
-    if (instruction.runtime_address == 0x140001fdf) {
-        callFunctionIR("swprintf_s", builder);
-        cout << "calling swprintf_s"
-             << "\n";
-        auto next_jump = popStack(builder);
-
-        // get [rsp], jump there
-        auto RIP_value = cast<ConstantInt>(next_jump);
-        auto jump_address = RIP_value->getZExtValue();
-
-        auto bb = BasicBlock::Create(context, "returnToOrgCF",
-                                     builder.GetInsertBlock()->getParent());
-        builder.CreateBr(bb);
-
-        blockAddresses->push_back(
-            make_tuple(jump_address, bb, getRegisterList()));
-        run = 0;
-        return;
-    }
-    */
-    cout.flush();
-    uintptr_t jump_address = instruction.runtime_address;
-    APInt temp;
-    if (!BinaryOperations::readMemory(jump_address, 1, temp) &&
-        cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
-        auto bb = BasicBlock::Create(context, "returnToOrgCF",
-                                     builder.GetInsertBlock()->getParent());
-        // actually call the function first
-
-        auto functionName = BinaryOperations::getName(jump_address);
-        cout << "calling : " << functionName
-             << " addr: " << (uintptr_t)jump_address << endl;
-
-        callFunctionIR(functionName, builder);
-
-        auto next_jump = popStack(builder);
-
-        // get [rsp], jump there
-        auto RIP_value = cast<ConstantInt>(next_jump);
-        jump_address = RIP_value->getZExtValue();
-
-        builder.CreateBr(bb);
-
-        blockAddresses->push_back(
-            make_tuple(jump_address, bb, getRegisterList()));
-        run = 0;
-        return;
-    }
-    // endmove
+void liftInstructionSemantics(IRBuilder<>& builder,
+                              ZydisDisassembledInstruction& instruction,
+                              shared_ptr<vector<BBInfo>> blockAddresses,
+                              bool& run) {
 
     switch (instruction.info.mnemonic) {
     // movs
@@ -4608,4 +4541,68 @@ void liftInstruction(IRBuilder<>& builder,
         exit(-2);
     }
     }
+}
+
+void liftInstruction(IRBuilder<>& builder,
+                     ZydisDisassembledInstruction& instruction,
+                     shared_ptr<vector<BBInfo>> blockAddresses, bool& run) {
+    LLVMContext& context = builder.getContext();
+    // RIP gets updated before execution of the instruction.
+    auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
+                                      instruction.runtime_address + instruction.info.length);
+    SetRegisterValue(builder, ZYDIS_REGISTER_RIP, val);
+    auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
+    printvalue(rsp);
+
+    // I hate how getFunctionInfo returns a string pointer
+    if (auto fname =
+            funcsignatures::getFunctionInfo(instruction.runtime_address)) {
+        callFunctionIR(fname->c_str(), builder);
+        cout << "calling" << fname->c_str() << "\n";
+        auto next_jump = popStack(builder);
+
+        // get [rsp], jump there
+        auto RIP_value = cast<ConstantInt>(next_jump);
+        auto jump_address = RIP_value->getZExtValue();
+
+        auto bb = BasicBlock::Create(context, "returnToOrgCF",
+                                     builder.GetInsertBlock()->getParent());
+        builder.CreateBr(bb);
+
+        blockAddresses->push_back(
+            make_tuple(jump_address, bb, getRegisterList()));
+        run = 0;
+        return;
+    }
+
+    uintptr_t jump_address = instruction.runtime_address;
+    APInt temp;
+    if (!BinaryOperations::readMemory(jump_address, 1, temp) &&
+        cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
+        auto bb = BasicBlock::Create(context, "returnToOrgCF",
+                                     builder.GetInsertBlock()->getParent());
+        // actually call the function first
+
+        auto functionName = BinaryOperations::getName(jump_address);
+        cout << "calling : " << functionName
+             << " addr: " << (uintptr_t)jump_address << endl;
+
+        callFunctionIR(functionName, builder);
+
+        auto next_jump = popStack(builder);
+
+        // get [rsp], jump there
+        auto RIP_value = cast<ConstantInt>(next_jump);
+        jump_address = RIP_value->getZExtValue();
+
+        builder.CreateBr(bb);
+
+        blockAddresses->push_back(
+            make_tuple(jump_address, bb, getRegisterList()));
+        run = 0;
+        return;
+    }
+
+    // do something for prefixes like rep here
+    liftInstructionSemantics(builder, instruction, blockAddresses, run);
 }

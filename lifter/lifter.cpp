@@ -88,7 +88,7 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                         cout << "runtime: " << instruction.runtime_address
                              << endl;
                     });
-                    instruction.runtime_address += instruction.info.length;
+                    //instruction.runtime_address += instruction.info.length;
 
                     liftInstruction(builder, instruction, blockAddresses, run);
 
@@ -238,7 +238,7 @@ int main(int argc, char* argv[]) {
          << " fOffset: " << fileOffset << " RVA: " << RVA << endl;
 
     funcsignatures::search_signatures(fileData);
-
+    funcsignatures::createOffsetMap();
     for (const auto& [key, value] : funcsignatures::siglookup) {
         value.display();
     }

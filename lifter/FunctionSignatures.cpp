@@ -6,6 +6,24 @@
 
 namespace funcsignatures {
 
+    // replace functioninfo with std::string
+    // so we can pass arguments
+    std::unordered_map<uintptr_t, std::string> functions;
+
+    void createOffsetMap() {
+        for (auto value : siglookup) {
+            for (auto offsets : value.second.offsets) {
+                functions[offsets] = value.second.name;
+            }
+        }
+    }
+
+    std::string* getFunctionInfo(uintptr_t addr) {
+        if (functions.count(addr) == 0)
+            return nullptr;
+        return &(functions[addr]);
+    }
+
     functioninfo::functioninfo(const std::string& Name) : name(Name) {}
 
     void functioninfo::add_offset(uintptr_t offset) {
@@ -28,9 +46,10 @@ namespace funcsignatures {
     // dummy values
     std::unordered_map<std::vector<unsigned char>, functioninfo, VectorHash>
         siglookup{
-            {{0x40, 0x53, 0x48, 0x83, 0xec, 0x20, 0x48, 0x8B, 0xD9, 0x48, 0x8D,
-              0x0D, 0x10, 0x07, 0x00, 0x00},
-             functioninfo("test")},
+            {{0x55, 0x48, 0x81, 0xEC, 0xA0, 00, 00, 00, 0x48, 0x8D, 0xAC, 0x24,
+              0x80, 00, 00, 00},
+             functioninfo("??$?6U?$char_traits@D@std@@@std@@YAAEAV?$basic_"
+                          "ostream@DU?$char_traits@D@std@@@0@AEAV10@PEBD@Z")},
 
             {{0x48, 0x8B, 0xC4, 0x48, 0x89, 0x58, 0x08, 0x48, 0x89, 0x68, 0x10,
               0x48, 0x89, 0x70, 0x18, 0x48, 0x89, 0x78, 0x20, 0x41, 0x56, 0x48,
