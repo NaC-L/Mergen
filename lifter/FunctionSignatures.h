@@ -61,7 +61,8 @@ namespace funcsignatures {
     search_signatures(const std::vector<unsigned char>& data);
     std::vector<unsigned char> convertToVector(const unsigned char* data,
                                                size_t size);
-
+    void createOffsetMap();
+    std::string* getFunctionInfo(uintptr_t addr);
     extern std::unordered_map<std::vector<unsigned char>, functioninfo,
                               VectorHash>
         siglookup;
