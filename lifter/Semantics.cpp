@@ -201,9 +201,11 @@ void branchHelper(IRBuilder<>& builder,
         createZExtFolder(builder, condition, function->getReturnType());
     Value* true_jump =
         ConstantInt::get(function->getReturnType(),
-        dest.imm.value.s + instruction.runtime_address + instruction.info.length);
-    Value* false_jump = ConstantInt::get(function->getReturnType(),
-                                         instruction.runtime_address);
+                         dest.imm.value.s + instruction.runtime_address +
+                             instruction.info.length);
+    Value* false_jump =
+        ConstantInt::get(function->getReturnType(),
+                         instruction.runtime_address + instruction.info.length);
     Value* next_jump =
         createSelectFolder(builder, condition, true_jump, false_jump);
     auto lastinst = builder.CreateRet(next_jump);
@@ -705,7 +707,8 @@ namespace branches {
 
         string block_name = "jmp-call";
 
-        uintptr_t jump_address = instruction.runtime_address + instruction.info.length;
+        uintptr_t jump_address =
+            instruction.runtime_address + instruction.info.length;
         switch (src.type) {
         case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
             jump_address += src.imm.value.s;
@@ -925,7 +928,8 @@ namespace branches {
 
         SetRegisterValue(builder, ZYDIS_REGISTER_RIP, newRip);
 
-        uintptr_t test = dest.imm.value.s + instruction.runtime_address + instruction.info.length;
+        uintptr_t test = dest.imm.value.s + instruction.runtime_address +
+                         instruction.info.length;
 
         string block_name = "jmp-" + to_string(test) + "-";
         auto bb = BasicBlock::Create(context, block_name.c_str(),
@@ -4549,7 +4553,8 @@ void liftInstruction(IRBuilder<>& builder,
     LLVMContext& context = builder.getContext();
     // RIP gets updated before execution of the instruction.
     auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                      instruction.runtime_address + instruction.info.length);
+                                      instruction.runtime_address +
+                                          instruction.info.length);
     SetRegisterValue(builder, ZYDIS_REGISTER_RIP, val);
     auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
     printvalue(rsp);
