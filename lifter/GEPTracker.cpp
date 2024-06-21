@@ -84,7 +84,7 @@ class lifterMemoryBuffer {
         }
     }
 
-    void addValueReference(Value* value, unsigned address) {
+    void addValueReference(Value* value, uint64_t address) {
         unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
         for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
@@ -132,8 +132,6 @@ class lifterMemoryBuffer {
 
         if (contiguous && firstSource != nullptr &&
             byteCount <= firstSource->getType()->getIntegerBitWidth() / 8) {
-            long x = 123;
-            printvalue2(x);
             return builder.CreateTrunc(firstSource,
                                        Type::getIntNTy(context, byteCount * 8));
         }
@@ -517,9 +515,10 @@ namespace GEPStoreTracker {
                 printvalue(reverseMask);
 
                 // overhead
-                auto cleared_retval =
-                    createAndFolder(builder, retval, reverseMask,
-                                    retval->getName() + ".cleared");
+                auto cleared_retval = createAndFolder(
+                    builder, retval,
+                    builder.CreateTrunc(reverseMask, retval->getType()),
+                    retval->getName() + ".cleared");
                 // cleared_retval = 0 & 0; clear retval
                 // cleared_retval = retval & 0xff_ff_ff_ff_00_00_00_00
 

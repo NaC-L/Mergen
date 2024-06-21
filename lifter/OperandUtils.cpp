@@ -448,8 +448,6 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
     KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
     KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
-    printvalue2(KnownLHS);
-    printvalue2(KnownRHS);
     if (Value* knownBitsAnd =
             foldOrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
         return knownBitsAnd;
@@ -556,7 +554,6 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
                                 v.value());
     }
     auto resultcmp = simplifyValue(builder.CreateICmp(P, LHS, RHS, Name), DL);
-    printvalue(resultcmp);
     return resultcmp;
 }
 
@@ -630,8 +627,6 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
 #ifdef TESTFOLDER7
 
     KnownBits KnownRHS = analyzeValueKnownBits(resulttrunc, DL);
-    printvalue(V);
-    printvalue2(KnownRHS);
     if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 &&
         KnownRHS.isConstant())
         return ConstantInt::get(DestTy, KnownRHS.getConstant());
@@ -863,7 +858,7 @@ Value* GetValueFromHighByteRegister(IRBuilder<>& builder, int reg) {
 
 void SetRFLAGSValue(IRBuilder<>& builder, Value* value) {
     LLVMContext& context = builder.getContext();
-    printvalue(value) for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
+    for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
         int shiftAmount = flag;
         Value* shiftedFlagValue = createLShrFolder(
             builder, value, ConstantInt::get(value->getType(), shiftAmount),
@@ -981,9 +976,9 @@ Value* SetValueToSubRegister(IRBuilder<>& builder, int reg, Value* value) {
 
     printvalue(fullRegisterValue) printvalue(maskValue)
         printvalue(maskedFullReg) printvalue(extendedValue)
-            printvalue(updatedReg)
+            printvalue(updatedReg);
 
-                RegisterList[fullRegKey] = updatedReg;
+    RegisterList[fullRegKey] = updatedReg;
 
     return updatedReg;
 }
@@ -1057,7 +1052,7 @@ Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
         baseValue = GetRegisterValue(builder, op.mem.base);
         baseValue =
             createZExtFolder(builder, baseValue, Type::getInt64Ty(context));
-        printvalue(baseValue)
+        printvalue(baseValue);
     }
 
     Value* indexValue = nullptr;
@@ -1066,7 +1061,8 @@ Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
         indexValue =
             createZExtFolder(builder, indexValue, Type::getInt64Ty(context));
-        printvalue(indexValue) if (op.mem.scale > 1) {
+        printvalue(indexValue);
+        if (op.mem.scale > 1) {
             Value* scaleValue =
                 ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
             indexValue = builder.CreateMul(indexValue, scaleValue, "mul_ea");
@@ -1090,8 +1086,9 @@ Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
         effectiveAddress =
             createAddFolder(builder, effectiveAddress, dispValue, "disp_set");
     }
-    printvalue(effectiveAddress) return createZExtOrTruncFolder(
-        builder, effectiveAddress, Type::getIntNTy(context, possiblesize));
+    printvalue(effectiveAddress);
+    return createZExtOrTruncFolder(builder, effectiveAddress,
+                                   Type::getIntNTy(context, possiblesize));
 }
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Value.h"
@@ -1134,7 +1131,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             baseValue = GetRegisterValue(builder, op.mem.base);
             baseValue =
                 createZExtFolder(builder, baseValue, Type::getInt64Ty(context));
-            printvalue(baseValue)
+            printvalue(baseValue);
         }
 
         Value* indexValue = nullptr;
@@ -1142,7 +1139,8 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             indexValue = GetRegisterValue(builder, op.mem.index);
             indexValue = createZExtFolder(builder, indexValue,
                                           Type::getInt64Ty(context));
-            printvalue(indexValue) if (op.mem.scale > 1) {
+            printvalue(indexValue);
+            if (op.mem.scale > 1) {
                 Value* scaleValue =
                     ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
                 indexValue = builder.CreateMul(indexValue, scaleValue);
@@ -1166,9 +1164,9 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             effectiveAddress = createAddFolder(builder, effectiveAddress,
                                                dispValue, "memory_addr");
         }
-        printvalue(effectiveAddress)
+        printvalue(effectiveAddress);
 
-            Type* loadType = Type::getIntNTy(context, possiblesize);
+        Type* loadType = Type::getIntNTy(context, possiblesize);
 
         std::vector<Value*> indices;
         indices.push_back(effectiveAddress);
@@ -1191,7 +1189,6 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             uintptr_t addr = effectiveAddressInt->getZExtValue();
 
             unsigned byteSize = loadType->getIntegerBitWidth() / 8;
-
             if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
                 return solvedLoad;
 
@@ -1297,7 +1294,7 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             baseValue = GetRegisterValue(builder, op.mem.base);
             baseValue =
                 createZExtFolder(builder, baseValue, Type::getInt64Ty(context));
-            printvalue(baseValue)
+            printvalue(baseValue);
         }
 
         Value* indexValue = nullptr;
@@ -1305,7 +1302,8 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             indexValue = GetRegisterValue(builder, op.mem.index);
             indexValue = createZExtFolder(builder, indexValue,
                                           Type::getInt64Ty(context));
-            printvalue(indexValue) if (op.mem.scale > 1) {
+            printvalue(indexValue);
+            if (op.mem.scale > 1) {
                 Value* scaleValue =
                     ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
                 indexValue =
@@ -1347,11 +1345,11 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
         Value* store = builder.CreateStore(value, pointer);
 
-        printvalue(effectiveAddress) printvalue(pointer)
-            // if effectiveAddress is not pointing at stack, its probably self
-            // modifying code if effectiveAddress and value is consant we can
-            // say its a self modifying code and modify the binary
-            if (isa<ConstantInt>(effectiveAddress)) {
+        printvalue(effectiveAddress) printvalue(pointer);
+        // if effectiveAddress is not pointing at stack, its probably self
+        // modifying code if effectiveAddress and value is consant we can
+        // say its a self modifying code and modify the binary
+        if (isa<ConstantInt>(effectiveAddress)) {
 
             ConstantInt* effectiveAddressInt =
                 cast<ConstantInt>(effectiveAddress);
@@ -1459,9 +1457,9 @@ void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op,
         auto store = builder.CreateStore(byteVal, pointer, "storebyte");
 
         printvalue(rsp) printvalue(pointer) printvalue(byteVal)
-            printvalue(store)
+            printvalue(store);
 
-                ConstantInt* rspInt = cast<ConstantInt>(rsp);
+        ConstantInt* rspInt = cast<ConstantInt>(rsp);
 
         GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
         rsp =
