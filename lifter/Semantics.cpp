@@ -3515,18 +3515,21 @@ namespace flagOperation {
 
         auto dest = instruction.operands[0]; // xdi
         Value* destValue = GetOperandValue(builder, dest, dest.size);
-        Value* df = getFlag(builder, FLAG_DF);
+        Value* resultValue =
+            GetOperandValue(builder, instruction.operands[1], dest.size);
+        Value* DF = getFlag(builder, FLAG_DF);
         // if df is 1, +
         // else -
         auto destbitwidth = dest.size;
 
-        Value* addValue = builder.CreateMul(
-            df, ConstantInt::get(Type::getInt1Ty(context), -1));
-        addValue = builder.CreateMul(
-            createZExtFolder(builder, addValue, destValue->getType()),
-            ConstantInt::get(destValue->getType(), destbitwidth / 8));
+        auto one = ConstantInt::get(DF->getType(), 1);
+        Value* Direction = builder.CreateSub(
+            builder.CreateMul(DF, builder.CreateAdd(DF, one)), one);
 
-        Value* result = createAddFolder(builder, destValue, addValue);
+        Value* result = createAddFolder(
+            builder, destValue,
+            builder.CreateMul(Direction,
+                              ConstantInt::get(DF->getType(), destbitwidth)));
         SetOperandValue(builder, dest, result);
     }
 
@@ -4580,7 +4583,8 @@ void liftInstruction(IRBuilder<>& builder,
         return;
     }
 
-    uintptr_t jump_address = instruction.runtime_address;
+    uintptr_t jump_address =
+        instruction.runtime_address + instruction.info.length;
     APInt temp;
     if (!BinaryOperations::readMemory(jump_address, 1, temp) &&
         cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
