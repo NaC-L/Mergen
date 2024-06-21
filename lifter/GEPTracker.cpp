@@ -71,16 +71,12 @@ class ValueByteReference {
 
 class lifterMemoryBuffer {
   public:
-    std::vector<ValueByteReference*> buffer;
-
-    lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {}
-    lifterMemoryBuffer(unsigned long long bufferSize)
-        : buffer(bufferSize, nullptr) {}
+    std::unordered_map<uint64_t, ValueByteReference*> buffer;
 
     ~lifterMemoryBuffer() {
 
-        for (auto* ref : buffer) {
-            delete ref;
+        for (auto& ref : buffer) {
+            delete buffer[ref.first];
         }
     }
 
