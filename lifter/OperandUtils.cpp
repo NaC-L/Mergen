@@ -734,10 +734,11 @@ void Init_Flags(IRBuilder<>& builder) {
     FlagList[FLAG_RESERVED1] = one;
 }
 
+// ???
 Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
     LLVMContext& context = builder.getContext();
     newValue = createTruncFolder(builder, newValue, Type::getInt1Ty(context));
-
+    printvalue2((long)flag) printvalue(newValue);
     if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
         flag == FLAG_DF)
         return nullptr;

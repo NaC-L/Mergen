@@ -545,13 +545,18 @@ namespace cmov {
         auto src = instruction.operands[1];
 
         Value* sf = getFlag(builder, FLAG_SF);
-        sf = createICMPFolder(builder, CmpInst::ICMP_EQ, sf,
-                              ConstantInt::get(Type::getInt1Ty(context), 0));
+        Value* of = getFlag(builder, FLAG_OF);
+        Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ, sf, of);
 
         Value* Rvalue = GetOperandValue(builder, src, dest.size);
         Value* Lvalue = GetOperandValue(builder, dest, dest.size);
+        printvalue(sf);
+        printvalue(of);
+        printvalue(condition);
+        printvalue(Lvalue);
+        printvalue(Rvalue);
 
-        Value* result = createSelectFolder(builder, sf, Rvalue, Lvalue);
+        Value* result = createSelectFolder(builder, condition, Rvalue, Lvalue);
 
         SetOperandValue(builder, dest, result);
     }
@@ -1580,10 +1585,10 @@ namespace arithmeticsAndLogical {
             createICMPFolder(builder, CmpInst::ICMP_NE, Rvalue,
                              ConstantInt::get(Rvalue->getType(), 0), "zero");
 
-        printvalue(Rvalue) printvalue(result) printvalue(sf)
-            // OF is not cleared?
+        printvalue(Rvalue) printvalue(result) printvalue(sf);
+        // OF is not cleared?
 
-            Value* of;
+        Value* of;
         if (dest.size > 32)
             of = ConstantInt::getSigned(Rvalue->getType(), 0);
         else {
@@ -1782,7 +1787,8 @@ namespace arithmeticsAndLogical {
         Value* sf = computeSignFlag(builder, result);
         Value* zf = computeZeroFlag(builder, result);
         Value* pf = computeParityFlag(builder, result);
-
+        printvalue(sf);
+        printvalue(result);
         setFlag(builder, FLAG_CF, cfValue);
         setFlag(builder, FLAG_OF, of);
         setFlag(builder, FLAG_SF, sf);
@@ -2714,7 +2720,7 @@ namespace arithmeticsAndLogical {
         auto sf = computeSignFlag(builder, result);
         auto zf = computeZeroFlag(builder, result);
         auto pf = computeParityFlag(builder, result);
-
+        printvalue(sf);
         // The OF and CF flags are cleared; the SF, ZF, and PF flags are set
         // according to the result. The state of the AF flag is undefined.
 
