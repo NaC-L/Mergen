@@ -71,12 +71,16 @@ class ValueByteReference {
 
 class lifterMemoryBuffer {
   public:
-    std::unordered_map<uint64_t, ValueByteReference*> buffer;
+    std::vector<ValueByteReference*> buffer;
+
+    lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {}
+    lifterMemoryBuffer(unsigned long long bufferSize)
+        : buffer(bufferSize, nullptr) {}
 
     ~lifterMemoryBuffer() {
 
-        for (auto& ref : buffer) {
-            delete buffer[ref.first];
+        for (auto* ref : buffer) {
+            delete ref;
         }
     }
 
@@ -86,6 +90,7 @@ class lifterMemoryBuffer {
 
             delete buffer[address + i];
             BinaryOperations::WriteTo(address + i);
+            printvalue2(address + i);
             buffer[address + i] = new ValueByteReference(value, i);
             printvalue(value);
             printvalue2((unsigned long)address + i);
@@ -101,8 +106,10 @@ class lifterMemoryBuffer {
     Value* retrieveCombinedValue(IRBuilder<>& builder, unsigned startAddress,
                                  unsigned byteCount) {
         LLVMContext& context = builder.getContext();
-        if (byteCount == 0)
+        if (byteCount == 0) {
+
             return nullptr;
+        }
 
         Value* firstSource = nullptr;
         bool contiguous = true;
@@ -136,7 +143,9 @@ class lifterMemoryBuffer {
             return ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
         }
 
-        Value* result = nullptr;
+        // when do we want to return nullptr and when do we want to return 0 ?
+        Value* result =
+            ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
 
         for (unsigned i = 0; i < byteCount; i++) {
             unsigned currentAddress = startAddress + i;
@@ -364,6 +373,7 @@ namespace GEPStoreTracker {
                 // todo: replace the condition to check if CI is in buffer where
                 // buffer is not stack
                 auto loadOffsetCIval = loadOffsetCI->getZExtValue();
+                printvalue2(loadOffsetCIval);
                 if (VirtualStack.buffer.size() > loadOffsetCIval) {
                     printvalue2(loadOffsetCIval);
                     IRBuilder<> builder(load);
@@ -489,9 +499,10 @@ namespace GEPStoreTracker {
                         createShlFolder(builder, maskedinst, (diff) * 8);
                     mask = createShlFolder(builder, mask, (diff) * 8);
                 } else if (diff < 0) {
-                    maskedinst =
-                        createLShrFolder(builder, maskedinst, -(diff) * 8);
-                    mask = createLShrFolder(builder, mask, -(diff) * 8);
+                    maskedinst = createLShrFolder(builder, maskedinst,
+                                                  -(diff) * 8, "clevername");
+                    mask = createLShrFolder(builder, mask, -(diff) * 8,
+                                            "stupidname");
                 }
                 // maskedinst = maskedinst
                 // maskedinst = 0x4433221100000000

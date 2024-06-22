@@ -10,7 +10,14 @@
 // probably move this stuff somewhere else
 void callFunctionIR(string functionName, IRBuilder<>& builder) {
     auto& context = builder.getContext();
-
+    /*
+    if (functionName == "GetTickCount64") {
+        SetRegisterValue(
+            builder, ZYDIS_REGISTER_RAX,
+            ConstantInt::get(builder.getInt64Ty(), 1)); // rax = externalfunc()
+        return;
+    }
+    */
     FunctionType* externFuncType = FunctionType::get(
         Type::getInt64Ty(context),
         {llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
@@ -86,54 +93,54 @@ void callFunctionIR(string functionName, IRBuilder<>& builder) {
 
 Value* computeOverflowFlagAdc(IRBuilder<>& builder, Value* Lvalue,
                               Value* Rvalue, Value* cf, Value* add) {
-    auto cfc = createZExtOrTruncFolder(builder, cf, add->getType());
-    auto ofAdd = createAddFolder(builder, add, cfc);
-    auto xor0 = createXorFolder(builder, Lvalue, ofAdd);
-    auto xor1 = createXorFolder(builder, Rvalue, ofAdd);
-    auto ofAnd = createAndFolder(builder, xor0, xor1);
+    auto cfc = createZExtOrTruncFolder(builder, cf, add->getType(), "ofadc1");
+    auto ofAdd = createAddFolder(builder, add, cfc, "ofadc2");
+    auto xor0 = createXorFolder(builder, Lvalue, ofAdd, "ofadc3");
+    auto xor1 = createXorFolder(builder, Rvalue, ofAdd, "ofadc4");
+    auto ofAnd = createAndFolder(builder, xor0, xor1, "ofadc5");
     return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd,
-                            ConstantInt::get(ofAnd->getType(), 0));
+                            ConstantInt::get(ofAnd->getType(), 0), "ofadc6");
 }
 
 Value* computeOverflowFlagAdd(IRBuilder<>& builder, Value* Lvalue,
                               Value* Rvalue, Value* add) {
-    auto xor0 = createXorFolder(builder, Lvalue, add);
-    auto xor1 = createXorFolder(builder, Rvalue, add);
-    auto ofAnd = createAndFolder(builder, xor0, xor1);
+    auto xor0 = createXorFolder(builder, Lvalue, add, "ofadd");
+    auto xor1 = createXorFolder(builder, Rvalue, add, "ofadd1");
+    auto ofAnd = createAndFolder(builder, xor0, xor1, "ofadd2");
     return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd,
-                            ConstantInt::get(ofAnd->getType(), 0));
+                            ConstantInt::get(ofAnd->getType(), 0), "ofadd3");
 }
 
 Value* computeOverflowFlagSub(IRBuilder<>& builder, Value* Lvalue,
                               Value* Rvalue, Value* sub) {
-    auto xor0 = createXorFolder(builder, Lvalue, Rvalue);
-    auto xor1 = createXorFolder(builder, Lvalue, sub);
-    auto ofAnd = createAndFolder(builder, xor0, xor1);
+    auto xor0 = createXorFolder(builder, Lvalue, Rvalue, "ofsub");
+    auto xor1 = createXorFolder(builder, Lvalue, sub, "ofsub1");
+    auto ofAnd = createAndFolder(builder, xor0, xor1, "ofsub2");
     return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd,
-                            ConstantInt::get(ofAnd->getType(), 0));
+                            ConstantInt::get(ofAnd->getType(), 0), "ofsub3");
 }
 
 Value* computeOverflowFlagSbb(IRBuilder<>& builder, Value* Lvalue,
                               Value* Rvalue, Value* cf, Value* sub) {
-    auto cfc = createZExtOrTruncFolder(builder, cf, sub->getType());
-    auto ofSub = createSubFolder(builder, sub, cfc);
-    auto xor0 = createXorFolder(builder, Lvalue, Rvalue);
-    auto xor1 = createXorFolder(builder, Lvalue, ofSub);
-    auto ofAnd = createAndFolder(builder, xor0, xor1);
+    auto cfc = createZExtOrTruncFolder(builder, cf, sub->getType(), "ofsbb");
+    auto ofSub = createSubFolder(builder, sub, cfc, "ofsbb1");
+    auto xor0 = createXorFolder(builder, Lvalue, Rvalue, "ofsbb2");
+    auto xor1 = createXorFolder(builder, Lvalue, ofSub, "ofsbb3");
+    auto ofAnd = createAndFolder(builder, xor0, xor1, "ofsbb4");
     return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd,
-                            ConstantInt::get(ofAnd->getType(), 0));
+                            ConstantInt::get(ofAnd->getType(), 0), "ofsbb5");
 }
 
 Value* computeAuxFlagSbb(IRBuilder<>& builder, Value* Lvalue, Value* Rvalue,
                          Value* cf) {
     auto ci15 = ConstantInt::get(Lvalue->getType(), 15);
-    auto and0 = createAndFolder(builder, Lvalue, ci15);
-    auto and1 = createAndFolder(builder, Rvalue, ci15);
-    auto sub = createSubFolder(builder, and0, and1);
+    auto and0 = createAndFolder(builder, Lvalue, ci15, "auxsbb1");
+    auto and1 = createAndFolder(builder, Rvalue, ci15, "auxsbb2");
+    auto sub = createSubFolder(builder, and0, and1, "auxsbb3");
 
-    auto cfc = createZExtOrTruncFolder(builder, cf, sub->getType());
-    auto add = createAddFolder(builder, sub, cfc);
-    return createICMPFolder(builder, CmpInst::ICMP_UGT, add, ci15);
+    auto cfc = createZExtOrTruncFolder(builder, cf, sub->getType(), "auxsbb4");
+    auto add = createAddFolder(builder, sub, cfc, "auxsbb5");
+    return createICMPFolder(builder, CmpInst::ICMP_UGT, add, ci15, "auxsbb6");
 }
 
 /*
@@ -160,12 +167,14 @@ Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
             createAndFolder(
                 builder,
                 builder.CreateMul(
-                    lsb, ConstantInt::get(lsb->getType(), 0x0101010101010101)),
-                ConstantInt::get(lsb->getType(), 0x8040201008040201ULL)),
-            ConstantInt::get(lsb->getType(), 0x1FF)),
-        ConstantInt::get(lsb->getType(), 1));
+                    lsb, ConstantInt::get(lsb->getType(), 0x0101010101010101),
+                    "pf1"),
+                ConstantInt::get(lsb->getType(), 0x8040201008040201ULL), "pf2"),
+            ConstantInt::get(lsb->getType(), 0x1FF), "pf3"),
+        ConstantInt::get(lsb->getType(), 1), "pf4");
     // parity
-    parity = builder.CreateICmpEQ(ConstantInt::get(lsb->getType(), 0), parity);
+    parity = builder.CreateICmpEQ(ConstantInt::get(lsb->getType(), 0), parity,
+                                  "pf5");
     return parity; // Returns 1 if even parity, 0 if odd
 }
 
@@ -363,7 +372,7 @@ namespace mov {
         }
         }
         printvalue(Rvalue);
-        if ((src.type == ZYDIS_OPERAND_TYPE_IMMEDIATE)) {
+        if (src.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
             Rvalue = GetOperandValue(builder, src, dest.size);
         }
 
@@ -1831,7 +1840,7 @@ namespace arithmeticsAndLogical {
         auto cfShl = createShlFolder(builder, Lvalue, cfRvalue);
         auto cfIntT = cast<IntegerType>(cfShl->getType());
         auto cfRightCount = ConstantInt::get(cfIntT, cfIntT->getBitWidth() - 1);
-        auto cfLow = createLShrFolder(builder, cfShl, cfRightCount);
+        auto cfLow = createLShrFolder(builder, cfShl, cfRightCount, "lowcfshr");
         cfValue = createSelectFolder(
             builder, countIsNotZero,
             createZExtOrTruncFolder(builder, cfLow, Type::getInt1Ty(context)),
@@ -2043,10 +2052,13 @@ namespace arithmeticsAndLogical {
         auto newOF = createXorFolder(
             builder,
             createLShrFolder(builder, Lvalue,
-                             ConstantInt::get(Lvalue->getType(), bitWidth - 1)),
+                             ConstantInt::get(Lvalue->getType(), bitWidth - 1),
+                             "subof"),
             createLShrFolder(
                 builder, resultValue,
-                ConstantInt::get(resultValue->getType(), bitWidth - 1)));
+                ConstantInt::get(resultValue->getType(), bitWidth - 1),
+                "subof2"),
+            "subxorof");
         auto of = createSelectFolder(
             builder, isOne,
             createZExtOrTruncFolder(builder, newOF, Type::getInt1Ty(context)),
@@ -2100,14 +2112,16 @@ namespace arithmeticsAndLogical {
             builder, CmpInst::ICMP_EQ, effectiveCountValue,
             ConstantInt::get(effectiveCountValue->getType(), 1));
         Value* mostSignificantBitOfDest = createLShrFolder(
-            builder, Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1));
+            builder, Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),
+            "shlmsbdest");
         mostSignificantBitOfDest = createAndFolder(
             builder, mostSignificantBitOfDest,
             ConstantInt::get(mostSignificantBitOfDest->getType(), 1),
             "shrdmsb");
         Value* mostSignificantBitOfResult = createLShrFolder(
             builder, resultValue,
-            ConstantInt::get(resultValue->getType(), bitWidth - 1));
+            ConstantInt::get(resultValue->getType(), bitWidth - 1),
+            "shlmsbresult");
         mostSignificantBitOfResult = createAndFolder(
             builder, mostSignificantBitOfResult,
             ConstantInt::get(mostSignificantBitOfResult->getType(), 1),
@@ -2777,9 +2791,9 @@ namespace arithmeticsAndLogical {
         Value* shiftedLeft = createShlFolder(builder, Lvalue, Rvalue);
         Value* shiftedRight = createLShrFolder(
             builder, Lvalue,
-            createSubFolder(builder,
-                            ConstantInt::get(Rvalue->getType(), bitWidth),
-                            Rvalue));
+            createSubFolder(
+                builder, ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue),
+            "rol");
         Value* result = createOrFolder(builder, shiftedLeft, shiftedRight);
 
         Value* lastBit = createAndFolder(builder, shiftedRight,
@@ -2871,7 +2885,8 @@ namespace arithmeticsAndLogical {
                 builder, size,
                 ConstantInt::get(
                     context,
-                    APInt(Rvalue->getType()->getIntegerBitWidth(), 2))));
+                    APInt(Rvalue->getType()->getIntegerBitWidth(), 2))),
+            "ror2ndmsb");
         auto ofDefined = createZExtOrTruncFolder(
             builder, createXorFolder(builder, msb, secondMsb), cf->getType());
         auto isOneBitRotation = createICMPFolder(
@@ -4544,6 +4559,12 @@ void liftInstructionSemantics(IRBuilder<>& builder,
         cout << "not implemented: " << instruction.info.mnemonic
              << " runtime: " << hex << instruction.runtime_address << " "
              << instruction.text << "\n";
+
+        std::string Filename = "output_notimplemented.ll";
+        std::error_code EC;
+        raw_fd_ostream OS(Filename, EC);
+        builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+
         throw std::runtime_error("not implemented");
         exit(-2);
     }
