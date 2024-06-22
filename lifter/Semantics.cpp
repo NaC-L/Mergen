@@ -1907,6 +1907,12 @@ namespace arithmeticsAndLogical {
         auto dest = instruction.operands[0];
 
         auto Lvalue = GetOperandValue(builder, dest, dest.size);
+        // if 16bit, 0 it
+        if (dest.size == 16) {
+            Value* zero = ConstantInt::get(Lvalue->getType(), 0);
+            SetOperandValue(builder, dest, zero);
+            return;
+        }
         Value* newswappedvalue = ConstantInt::get(Lvalue->getType(), 0);
         Value* mask = ConstantInt::get(Lvalue->getType(), 0xff);
         for (int i = 0; i < Lvalue->getType()->getIntegerBitWidth() / 8; i++) {
