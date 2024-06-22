@@ -555,8 +555,8 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
     llvm::ReturnInst* returnInst =
         dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
-    if (returnInst =
-            dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
+    if ((returnInst =
+             dyn_cast<llvm::ReturnInst>(function->back().getTerminator()))) {
 
         if (returnInst->getReturnValue() != nullptr) {
 
@@ -640,8 +640,8 @@ JMP_info isJOP(Function* function, uintptr_t& dest) {
         llvm::raw_fd_ostream OS2(Filename2, EC2);
         clonedFunc->print(OS2);
     });
-    if (returnInst =
-            dyn_cast<llvm::ReturnInst>(clonedFunc->back().getTerminator())) {
+    if ((returnInst =
+             dyn_cast<llvm::ReturnInst>(clonedFunc->back().getTerminator()))) {
 
         if (returnInst->getReturnValue() != nullptr) {
 
