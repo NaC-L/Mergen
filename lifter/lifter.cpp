@@ -68,7 +68,6 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
             ZydisDisassembledInstruction instruction;
 
             for (; run && runtime_address > 0;) {
-
                 if (BinaryOperations::isWrittenTo(runtime_address)) {
                     printvalueforce2(runtime_address);
                     outs() << "SelfModifyingCode!\n";
@@ -88,7 +87,7 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                         cout << "runtime: " << instruction.runtime_address
                              << endl;
                     });
-                    //instruction.runtime_address += instruction.info.length;
+                    // instruction.runtime_address += instruction.info.length;
 
                     liftInstruction(builder, instruction, blockAddresses, run);
 

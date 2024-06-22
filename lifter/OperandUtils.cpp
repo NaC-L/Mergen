@@ -48,9 +48,12 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
             (match(op1, m_Trunc(m_Not(m_Value(X)))) &&
              match(op0, m_Trunc(m_Specific(X))))) {
             auto possibleSimplify = ConstantInt::get(op1->getType(), 0);
-            printvalue(possibleSimplify);
             return possibleSimplify;
         }
+        // ~X & ~X
+
+        if (match(op0, m_Not(m_Value(X))) && X == op1)
+            return op0;
     }
     case Instruction::Xor: {
         // X ^ ~X
@@ -1189,6 +1192,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             uintptr_t addr = effectiveAddressInt->getZExtValue();
 
             unsigned byteSize = loadType->getIntegerBitWidth() / 8;
+
             if (Value* solvedLoad = GEPStoreTracker::solveLoad(retval))
                 return solvedLoad;
 
