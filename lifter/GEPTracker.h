@@ -3,11 +3,6 @@
 
 #ifndef GEPTracker_H
 #define GEPTracker_H
-using memoryValue = Value*;
-using idxValue = Value*;
-using ptrValue = Value*;
-
-using memoryInfo = tuple<ptrValue, idxValue, memoryValue, bool>;
 
 namespace BinaryOperations {
 
@@ -34,6 +29,8 @@ namespace GEPStoreTracker {
     DominatorTree* getDomTree();
 
     void insertMemoryOp(StoreInst* inst);
+
+    void updateMemoryOp(StoreInst* inst);
 
 }; // namespace GEPStoreTracker
 
