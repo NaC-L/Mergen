@@ -1,7 +1,6 @@
+#include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "includes.h"
-
-using memoryInfo = map<uint64_t, Instruction*>;
 
 namespace BinaryOperations {
     void* file_base_g;
@@ -62,11 +61,12 @@ namespace BinaryOperations {
 
 class ValueByteReference {
   public:
+    Instruction* storeInst;
     Value* value;
     short byteOffset;
 
-    ValueByteReference(Value* val, short offset)
-        : value(val), byteOffset(offset) {}
+    ValueByteReference(Instruction* inst, Value* val, short offset)
+        : storeInst(inst), value(val), byteOffset(offset) {}
 };
 
 class lifterMemoryBuffer {
@@ -84,15 +84,36 @@ class lifterMemoryBuffer {
         }
     }
 
-    void addValueReference(Value* value, uint64_t address) {
+    void addValueReference(Instruction* inst, Value* value, uint64_t address) {
         unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
         for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
             delete buffer[address + i];
             BinaryOperations::WriteTo(address + i);
             printvalue2(address + i);
-            buffer[address + i] = new ValueByteReference(value, i);
+            buffer[address + i] = new ValueByteReference(inst, value, i);
             printvalue(value);
+            printvalue2((unsigned long)address + i);
+        }
+    }
+
+    void updateValueReference(Instruction* inst, Value* value,
+                              uint64_t address) {
+        unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
+        for (unsigned i = 0; i < valueSizeInBytes; i++) {
+            auto existingValue = buffer[address + i];
+            auto DT = GEPStoreTracker::getDomTree();
+
+            if (comesBefore(inst, existingValue->storeInst, *DT)) {
+                continue;
+            }
+
+            printvalue2(address + i);
+
+            buffer[address + i] = new ValueByteReference(inst, value, i);
+
+            printvalue(value);
+
             printvalue2((unsigned long)address + i);
         }
     }
@@ -245,6 +266,31 @@ namespace GEPStoreTracker {
     }
 
     vector<Instruction*> memInfos;
+    void updateMemoryOp(StoreInst* inst) {
+
+        // have to update memInfos aswell
+        // memInfos.push_back(inst);
+
+        auto ptr = inst->getPointerOperand();
+        if (!isa<GetElementPtrInst>(ptr))
+            return;
+
+        auto gepInst = cast<GetElementPtrInst>(ptr);
+        auto gepPtr = gepInst->getPointerOperand();
+        if (gepPtr != getMemory())
+            return;
+
+        auto gepOffset = gepInst->getOperand(1);
+        if (!isa<ConstantInt>(gepOffset))
+            return;
+
+        auto gepOffsetCI = cast<ConstantInt>(gepOffset);
+        if (gepOffsetCI->getZExtValue() < VirtualStack.buffer.size()) {
+            auto updatingstack = inst;
+            VirtualStack.updateValueReference(inst, inst->getValueOperand(),
+                                              gepOffsetCI->getZExtValue());
+        }
+    }
 
     void insertMemoryOp(StoreInst* inst) {
         memInfos.push_back(inst);
@@ -264,7 +310,7 @@ namespace GEPStoreTracker {
 
         auto gepOffsetCI = cast<ConstantInt>(gepOffset);
         if (gepOffsetCI->getZExtValue() < VirtualStack.buffer.size())
-            VirtualStack.addValueReference(inst->getValueOperand(),
+            VirtualStack.addValueReference(inst, inst->getValueOperand(),
                                            gepOffsetCI->getZExtValue());
     }
 

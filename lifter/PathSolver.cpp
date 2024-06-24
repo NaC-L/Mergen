@@ -2,6 +2,8 @@
 #include "OperandUtils.h"
 #include "includes.h"
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/Support/Casting.h>
 
 void* file_base_g;
 ZyanU8* data_g;
@@ -35,7 +37,28 @@ void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
 
     v->replaceAllUsesWith(nv);
 
+    // redundant?
     v = nv;
+
+    // dont ask me this i dont know
+
+    // users start from latest user
+    std::vector<User*> users;
+    for (auto& use : v->uses()) {
+        users.push_back(use.getUser());
+    }
+
+    // iterate over the users in reverse order
+    for (auto it = users.rbegin(); it != users.rend(); ++it) {
+        User* user = *it;
+        if (auto GEPuser = dyn_cast<GetElementPtrInst>(user)) {
+            for (auto StoreUser : GEPuser->users()) {
+                if (auto SI = dyn_cast<StoreInst>(StoreUser)) {
+                    GEPStoreTracker::updateMemoryOp(SI);
+                }
+            }
+        }
+    }
 }
 
 // simplify Users with BFS
@@ -71,12 +94,10 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
 
         if (isa<GetElementPtrInst>(simplifyUser)) {
             for (User* user : simplifyUser->users()) {
-                // printvalue(user)
                 if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-
                     if (visited.find(userInst) ==
-                        visited
-                            .end()) { // it can try to insert max 3 times here
+                        visited.end()) { // it can try to insert max 3 times
+                                         // here
                         toSimplify.push(userInst);
                         visited.insert(userInst);
                     }
