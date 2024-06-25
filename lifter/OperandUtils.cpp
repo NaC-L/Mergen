@@ -37,6 +37,7 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
     case Instruction::And: {
         // X & ~X
         // how the hell we remove this zext and truncs it looks horrible
+
         if ((match(op0, m_Not(m_Value(X))) && X == op1) ||
             (match(op1, m_Not(m_Value(X))) && X == op0) ||
             (match(op0, m_ZExt(m_Not(m_Value(X)))) &&
@@ -54,6 +55,8 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
 
         if (match(op0, m_Not(m_Value(X))) && X == op1)
             return op0;
+
+        break;
     }
     case Instruction::Xor: {
         // X ^ ~X
@@ -80,6 +83,7 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
             printvalue(possibleSimplify);
             return possibleSimplify;
         }
+        break;
     }
     default: {
         return nullptr;
@@ -541,6 +545,8 @@ std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS,
         return KnownBits::slt(LHS, RHS);
     case CmpInst::ICMP_SLE:
         return KnownBits::sle(LHS, RHS);
+    default:
+        return nullopt;
     }
 
     return nullopt;
@@ -581,7 +587,6 @@ Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name) {
 #ifdef TESTFOLDER
-
     if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
         if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS))
             return ConstantInt::get(RHS->getType(),
@@ -609,17 +614,23 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
 
     if (Value* knownBitsAnd =
             foldAndKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+        printvalue(knownBitsAnd);
         return knownBitsAnd;
     }
     if (Value* knownBitsAnd =
             foldAndKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
+        printvalue(knownBitsAnd);
         return knownBitsAnd;
     }
 
 #endif
-    if (auto sillyResult = doPatternMatching(Instruction::And, LHS, RHS))
+    if (auto sillyResult = doPatternMatching(Instruction::And, LHS, RHS)) {
+        printvalue(sillyResult);
         return sillyResult;
-    return simplifyValue(builder.CreateAnd(LHS, RHS, Name), DL);
+    }
+    auto result = simplifyValue(builder.CreateAnd(LHS, RHS, Name), DL);
+    printvalue(result);
+    return result;
 }
 
 // - probably not needed anymore
