@@ -1,9 +1,7 @@
-#include "OperandUtils.h"
-#include "includes.h"
-
 #ifndef GEPTracker_H
 #define GEPTracker_H
 
+#include "includes.h"
 namespace BinaryOperations {
 
     const char* getName(unsigned long long offset);
