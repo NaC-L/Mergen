@@ -74,7 +74,6 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                     outs().flush();
                 }
 
-                debugging::increaseInstCounter();
                 ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64,
                                       runtime_address, data + offset, 15,
                                       &instruction);
@@ -82,8 +81,10 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                 if ((blockAddresses->size() == 0 ||
                      (last_value == get<0>(blockAddresses->back())))) {
 
+                    auto counter = debugging::increaseInstCounter() - 1;
                     debugging::doIfDebug([&]() {
-                        cout << instruction.text << "\n";
+                        cout << hex << counter << ":" << instruction.text
+                             << "\n";
                         cout << "runtime: " << instruction.runtime_address
                              << endl;
                     });

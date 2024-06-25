@@ -17,7 +17,7 @@ void callFunctionIR(string functionName, IRBuilder<>& builder) {
             ConstantInt::get(builder.getInt64Ty(), 1)); // rax = externalfunc()
         return;
     }
-    */
+*/
     FunctionType* externFuncType = FunctionType::get(
         Type::getInt64Ty(context),
         {llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
@@ -299,7 +299,8 @@ namespace mov {
                     // TODO: fix this loop
 
                     // Value* SRCptrvalue = GetOperandValue(builder,
-                    // instruction.operands[0],  instruction.operands[0].size);
+                    // instruction.operands[0],
+                    // instruction.operands[0].size);
                     Value* DSTptrvalue =
                         GetOperandValue(builder, instruction.operands[1],
                                         instruction.operands[1].size);
@@ -315,6 +316,9 @@ namespace mov {
 
                     SetOperandValue(builder, SRCop, UpdateSRCvalue);
                     SetOperandValue(builder, DSTop, UpdateDSTvalue);
+                    // bad cheat
+                    if (i > 1)
+                        debugging::increaseInstCounter();
                 }
 
                 SetOperandValue(builder, instruction.operands[2],
@@ -368,6 +372,9 @@ namespace mov {
             Rvalue = createSExtFolder(
                 builder, Rvalue, Type::getIntNTy(context, dest.size),
                 "movsxd-" + to_string(instruction.runtime_address) + "-");
+            break;
+        }
+        default: {
             break;
         }
         }
@@ -429,7 +436,6 @@ namespace cmov {
 
     void lift_cmovz(IRBuilder<>& builder,
                     ZydisDisassembledInstruction& instruction) {
-        instruction.info.raw.disp.value;
         auto dest = instruction.operands[0];
         auto src = instruction.operands[1];
 
@@ -748,6 +754,8 @@ namespace branches {
             jump_address = registerCValue->getZExtValue();
             break;
         }
+        default:
+            break;
         }
 
         auto bb = BasicBlock::Create(context, block_name.c_str(),
@@ -2223,6 +2231,8 @@ namespace arithmeticsAndLogical {
                                   op2LowerNibble, "add_af");
             break;
         }
+        default:
+            break;
         }
 
         /*
