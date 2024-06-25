@@ -5,7 +5,6 @@
 #include "OperandUtils.h"
 #include "includes.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Passes/PassBuilder.h"
 #include <llvm/IR/Instructions.h>
 
 class RemovePseudoStackPass
@@ -214,9 +213,9 @@ class RemovePseudoMemory : public llvm::PassInfoMixin<RemovePseudoMemory> {
                 Inst->eraseFromParent();
             }
             toRemove.clear();
-            return hasChanged ? llvm::PreservedAnalyses::none()
-                              : llvm::PreservedAnalyses::all();
         }
+        return hasChanged ? llvm::PreservedAnalyses::none()
+                          : llvm::PreservedAnalyses::all();
     }
 };
 

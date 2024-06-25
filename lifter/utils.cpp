@@ -73,7 +73,7 @@ namespace FileHelper {
         return RvaToFileOffset(ntHeaders, ADDRESS);
     }
 
- uintptr_t fileOffsetToRVA(uintptr_t offset) {
+    uintptr_t fileOffsetToRVA(uintptr_t offset) {
         if (!fileBase)
             return 0;
         auto dosHeader = (win::dos_header_t*)fileBase;
@@ -86,7 +86,8 @@ namespace FileHelper {
             if (offset >= sectionHeader->ptr_raw_data &&
                 offset < (sectionHeader->ptr_raw_data +
                           sectionHeader->size_raw_data)) {
-                return ntHeaders->optional_header.image_base + offset - sectionHeader->ptr_raw_data +
+                return ntHeaders->optional_header.image_base + offset -
+                       sectionHeader->ptr_raw_data +
                        sectionHeader->virtual_address;
             }
         }
@@ -95,7 +96,7 @@ namespace FileHelper {
 
 } // namespace FileHelper
 namespace debugging {
-    int ic = 0;
+    int ic = 1;
     int increaseInstCounter() { return ++ic; }
     bool shouldDebug = false;
     void enableDebug() {
@@ -135,8 +136,6 @@ namespace debugging {
     template void printValue<KnownBits>(const KnownBits& v, const char* name);
     template void printValue<APInt>(const APInt& v, const char* name);
     template void printValue<ROP_info>(const ROP_info& v, const char* name);
-    template void printValue<unsigned long long>(const unsigned long long& v,
-                                                 const char* name);
 
 } // namespace debugging
 

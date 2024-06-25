@@ -268,9 +268,6 @@ namespace GEPStoreTracker {
     vector<Instruction*> memInfos;
     void updateMemoryOp(StoreInst* inst) {
 
-        // have to update memInfos aswell
-        // memInfos.push_back(inst);
-
         auto ptr = inst->getPointerOperand();
         if (!isa<GetElementPtrInst>(ptr))
             return;
