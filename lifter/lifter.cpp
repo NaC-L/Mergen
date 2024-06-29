@@ -88,27 +88,11 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                         cout << "runtime: " << instruction.runtime_address
                              << endl;
                     });
-                    // instruction.runtime_address += instruction.info.length;
 
                     liftInstruction(builder, instruction, blockAddresses, run);
 
                     offset += instruction.info.length;
                     runtime_address += instruction.info.length;
-
-                    // whats the purpose of this ????
-                    // maybe change it to a queue
-                    // maybe remove XD?
-                    /*
-                    for (auto& b_address : added_blocks_addresses) {
-                            if (get<0>(b_address) - file_base == offset) {
-                                    auto nextBB = get<1>(b_address);
-                                    builder.CreateBr(nextBB);
-                                    builder.SetInsertPoint(nextBB);
-                                    run = 0;
-                                    break;
-                            }
-                    }
-                    */
 
                 } else {
                     break;

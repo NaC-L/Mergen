@@ -71,19 +71,13 @@ class ValueByteReference {
 
 class lifterMemoryBuffer {
   public:
-    std::vector<ValueByteReference*> buffer;
-
-    lifterMemoryBuffer() : buffer(STACKP_VALUE, nullptr) {}
-    lifterMemoryBuffer(unsigned long long bufferSize)
-        : buffer(bufferSize, nullptr) {}
-
+    std::unordered_map<unsigned long long, ValueByteReference*> buffer;
     ~lifterMemoryBuffer() {
 
-        for (auto* ref : buffer) {
-            delete ref;
+        for (auto& ref : buffer) {
+            delete buffer[ref.first];
         }
     }
-
     void addValueReference(Instruction* inst, Value* value, uint64_t address) {
         unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
         for (unsigned i = 0; i < valueSizeInBytes; i++) {
@@ -309,6 +303,7 @@ namespace GEPStoreTracker {
         if (gepOffsetCI->getZExtValue() < VirtualStack.buffer.size())
             VirtualStack.addValueReference(inst, inst->getValueOperand(),
                                            gepOffsetCI->getZExtValue());
+        BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
     }
 
     bool overlaps(uint64_t addr1, uint64_t size1, uint64_t addr2,
@@ -490,12 +485,7 @@ namespace GEPStoreTracker {
             unsigned long storeBitSize =
                 storeInst->getValueOperand()->getType()->getIntegerBitWidth() /
                 8;
-            // outs() << " \nstoreBitSize: " << storeBYTESize << " \n normal
-            // size: " <<
-            // storeInst->getValueOperand()->getType()->getIntegerBitWidth() <<
-            // "\n"; outs().flush(); if (std::max(loadOffsetValue,
-            // memOffsetValue) < std::min(loadOffsetValue + cloadsize,
-            // memOffsetValue + MemLoc.Size.getValue() )) {
+
             if (overlaps(loadOffsetValue, cloadsize, memOffsetValue,
                          storeBitSize)) {
 
@@ -558,13 +548,11 @@ namespace GEPStoreTracker {
 
                 // clear mask from retval so we can merge
                 // this will be a NOT operation for sure
-                //
-                // overhead
+
                 auto reverseMask = builder.CreateNot(mask);
 
                 printvalue(reverseMask);
 
-                // overhead
                 auto cleared_retval = createAndFolder(
                     builder, retval,
                     builder.CreateTrunc(reverseMask, retval->getType()),
