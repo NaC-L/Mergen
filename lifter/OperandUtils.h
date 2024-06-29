@@ -61,8 +61,8 @@ void SetRegisterValue(IRBuilder<>& builder, int key, Value* value);
 
 void SetRegisterValue(int key, Value* value);
 
-unordered_map<int, Value*> InitRegisters(IRBuilder<>& builder,
-                                         Function* function, ZyanU64 rip);
+RegisterMap InitRegisters(IRBuilder<>& builder, Function* function,
+                          ZyanU64 rip);
 
 Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
                            int possiblesize);
@@ -78,9 +78,9 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op,
                vector<Value*> value, string address = "");
 
-unordered_map<int, Value*> getRegisterList();
+RegisterMap getRegisters();
 
-void setRegisterList(unordered_map<int, Value*> newRegisterList);
+void setRegisters(RegisterMap newRegisterList);
 
 Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue);
 
@@ -96,7 +96,7 @@ KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL);
 
 Value* simplifyValueLater(Value* v, const DataLayout& DL);
 
-unordered_map<Value*, int> flipRegisterMap();
+ReverseRegisterMap flipRegisterMap();
 
 Value* popStack(IRBuilder<>& builder);
 

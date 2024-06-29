@@ -37,7 +37,7 @@ class RemovePseudoStackPass
                         // printvalue(memory)
 
                         if (memory != MemoryOperand)
-                            continue; // this is a good(!) solution
+                            continue;
 
                         auto* OffsetOperand =
                             GEP->getOperand(GEP->getNumOperands() - 1);

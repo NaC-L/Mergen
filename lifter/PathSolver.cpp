@@ -20,7 +20,7 @@ struct InstructionDependencyOrder {
 };
 
 void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
-                                      unordered_map<Value*, int> rVMap) {
+                                      ReverseRegisterMap rVMap) {
 
     // if two values are same, we go in a infinite loop
     if (v == nv)
@@ -70,7 +70,7 @@ void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
 //
 // also refactor this
 void simplifyUsers(Value* newValue, DataLayout& DL,
-                   unordered_map<Value*, int> flippedRegisterMap) {
+                   ReverseRegisterMap flippedRegisterMap) {
     unordered_set<Value*> visited;
     std::priority_queue<Instruction*, std::vector<Instruction*>,
                         InstructionDependencyOrder>
@@ -89,9 +89,6 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
         visited.insert(simplifyUser);
         printvalue(simplifyUser) printvalue(nsv);
 
-        // auto solver = SCCPSimplifier::get();
-        // auto nsv2 = solver->getConstantOrNull(simplifyUser);
-
         if (isa<GetElementPtrInst>(simplifyUser)) {
             for (User* user : simplifyUser->users()) {
                 if (Instruction* userInst = dyn_cast<Instruction>(user)) {
@@ -104,30 +101,15 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
                 }
             }
         }
-        /*
-                if (nsv2 && nsv != nsv2 && !isa<PoisonValue>(nsv2) &&
-                    !isa<UndefValue>(nsv2)) {
 
-                    printvalueforce(nsv);
-                    printvalueforce(nsv2);
-                    nsv = nsv2;
-                }
-        */
-        // yes return the same value very good idea definitely wont make
-        // replaceAllUsesWith loop
+        // if values are identical, we will get into a loop and cant simplify
         if (simplifyUser == nsv) {
             continue;
         }
         // if can simplify, continue?
 
-        // find a way to make this look not ugly, or dont. idc
         for (User* user : simplifyUser->users()) {
-            // printvalue(nsv)
-            // printvalue(user)
             if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-                //  push if not visited
-                //  printvalue(userInst)
-
                 if (visited.find(userInst) == visited.end()) {
                     toSimplify.push(userInst);
                     visited.erase(userInst);
@@ -135,12 +117,7 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
             }
         }
 
-        // printvalue(simplifyUser, simplify)
-        // printvalue(nsv, with)
-
         replaceAllUsesWithandReplaceRMap(simplifyUser, nsv, flippedRegisterMap);
-
-        // simplifyUser->replaceAllUsesWith(nsv);
     }
 }
 PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
@@ -259,12 +236,6 @@ void final_optpass(Function* clonedFuncx) {
     modulePassManager.run(*module, moduleAnalysisManager);
 }
 
-// this is not really needed anymore except for debugging purposes.
-// we can merge isROP with isJOP, maybe merge and pass a string so it will know
-// what to save the debug file as
-
-ValueMap<const Value*, Value*> mapHoldValues;
-
 llvm::ValueToValueMapTy* flipVMap(const ValueToValueMapTy& VMap) {
 
     ValueToValueMapTy* RevMap = new llvm::ValueToValueMapTy;
@@ -278,10 +249,6 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
                     string debug_filename) {
 
     PATH_info result = PATH_unsolved;
-    // SCCPSimplifier::init(function);
-    //   this gets the last basicblock, either change this or make sure we
-    //   respect it all the times
-
     if (llvm::ConstantInt* constInt =
             dyn_cast<llvm::ConstantInt>(simplifyValue)) {
         dest = constInt->getZExtValue();
@@ -289,16 +256,10 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
         return result;
     }
 
-    // llvm::ValueToValueMapTy VMap;
-    // llvm::Function* clonedFunctmp = llvm::CloneFunction(function, VMap); ?
-
     auto flippedRegisterMap = flipRegisterMap();
 
     while (dest == 0) {
 
-        // check if returnInst is solveable?
-
-        // make this into a function?
         if (PATH_info solved =
                 getConstraintVal(function, simplifyValue, dest)) {
             if (solved == PATH_solved) {
@@ -318,7 +279,6 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
             worklist.pop_front();
             visited_used.emplace_back(inst);
 
-            // printvalue(inst)
             for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i) {
                 llvm::Value* operand = inst->getOperand(i);
                 if (llvm::Instruction* opInst =
@@ -380,7 +340,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
 
         //  cout << "Total user: " << total_user << "\n";
         if (least_possible_value_value == 0)
-            throw("something went terribly");
+            throw("something went wrong");
 
         outs() << " value_with_least_possible_values: ";
         value_with_least_possible_values->print(outs());
@@ -399,8 +359,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
 
         auto possible_values = getPossibleValues(
             bitsof_least_possible_value, least_possible_value_value - 1);
-        auto original_value =
-            value_with_least_possible_values; //(*rVMap)[value_with_least_possible_values];
+        auto original_value = value_with_least_possible_values;
 
         unsigned max_possible_values = possible_values.size();
         for (unsigned i = 0; i < max_possible_values; i++) {
@@ -410,10 +369,11 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
         cout << "\nWhich option do you select? ";
         // TODO:
         // store current state
-        // select some option
-        // after that option is explored to the end, create a branch to that
-        // option, we can use jump table? similar to DFS
-
+        // make it identify assumptions
+        // create a new lifter state
+        // should look like
+        // Lifter(function, basicblock, assumptions, registermap, memorymap)
+        //
         unsigned long long option = 0;
         timer::suspendTimer();
         cin >> option;

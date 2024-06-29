@@ -275,6 +275,7 @@ inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
 #define RIP 0x007FFFFFFF400000
 #define STACKP_VALUE 0x14FF28
 
+using ReverseRegisterMap = unordered_map<Value*, int>;
 using RegisterMap = unordered_map<int, Value*>;
 // BB start address, BB pointer, Final registers in that RegisterMap so we can
 // use it later

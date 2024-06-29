@@ -45,7 +45,7 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
             builder.SetInsertPoint(nextBasicBlock);
 
             // will use this for exploring multiple branches
-            setRegisterList(get<2>(blockAddresses->back()));
+            setRegisters(get<2>(blockAddresses->back()));
             //
 
             // update only when its needed
