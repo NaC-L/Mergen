@@ -139,23 +139,26 @@ void simplifyUsers(Value* newValue, DataLayout& DL,
         // printvalue(nsv, with)
 
         replaceAllUsesWithandReplaceRMap(simplifyUser, nsv, flippedRegisterMap);
+
         // simplifyUser->replaceAllUsesWith(nsv);
     }
 }
-PATH_info getReturnVal(llvm::Function* function, uint64_t& dest) {
+PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
+                           uint64_t& dest) {
     PATH_info result = PATH_unsolved;
-    if (auto returnInst =
-            dyn_cast<llvm::ReturnInst>(function->back().getTerminator())) {
-        printvalue(returnInst) if (returnInst->getReturnValue() != nullptr) {
+    printvalue(constraint);
+    auto simplified_constraint = simplifyValueLater(
+        constraint,
+        function->getParent()->getDataLayout()); // this is such a hack
+    printvalue(simplified_constraint);
 
-            if (llvm::ConstantInt* constInt =
-                    dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
-                printvalue(constInt) dest = constInt->getZExtValue();
-                result = PATH_solved;
-                return result;
-            }
-        }
+    if (llvm::ConstantInt* constInt =
+            dyn_cast<llvm::ConstantInt>(simplified_constraint)) {
+        printvalue(constInt) dest = constInt->getZExtValue();
+        result = PATH_solved;
+        return result;
     }
+
     return result;
 }
 
@@ -271,28 +274,19 @@ llvm::ValueToValueMapTy* flipVMap(const ValueToValueMapTy& VMap) {
     return RevMap;
 }
 
-PATH_info solvePath(Function* function, uintptr_t& dest,
+PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
                     string debug_filename) {
 
     PATH_info result = PATH_unsolved;
     // SCCPSimplifier::init(function);
     //   this gets the last basicblock, either change this or make sure we
     //   respect it all the times
-    llvm::ReturnInst* returnInst =
-        dyn_cast<llvm::ReturnInst>(function->back().getTerminator());
 
-    if ((returnInst =
-             dyn_cast<llvm::ReturnInst>(function->back().getTerminator()))) {
-
-        if (returnInst->getReturnValue() != nullptr) {
-
-            if (llvm::ConstantInt* constInt =
-                    dyn_cast<llvm::ConstantInt>(returnInst->getReturnValue())) {
-                dest = constInt->getZExtValue();
-                result = PATH_solved;
-                return result;
-            }
-        }
+    if (llvm::ConstantInt* constInt =
+            dyn_cast<llvm::ConstantInt>(simplifyValue)) {
+        dest = constInt->getZExtValue();
+        result = PATH_solved;
+        return result;
     }
 
     // llvm::ValueToValueMapTy VMap;
@@ -305,7 +299,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
         // check if returnInst is solveable?
 
         // make this into a function?
-        if (PATH_info solved = getReturnVal(function, dest)) {
+        if (PATH_info solved =
+                getConstraintVal(function, simplifyValue, dest)) {
             if (solved == PATH_solved) {
                 return solved;
             }
@@ -316,7 +311,7 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
         std::unordered_set<llvm::Instruction*> visited_used_set;
 
         // Start with the return instruction
-        worklist.push_front(returnInst);
+        worklist.push_front(cast<Instruction>(simplifyValue));
 
         while (!worklist.empty()) {
             llvm::Instruction* inst = worklist.front();
@@ -369,13 +364,15 @@ PATH_info solvePath(Function* function, uintptr_t& dest,
             // simplify it aswell
             // if (KnownVal.isConstant() && !KnownVal.hasConflict()) {
             printvalue(I) auto nsv = simplifyValueLater(I, DL);
-            printvalue(nsv)
-                replaceAllUsesWithandReplaceRMap(I, nsv, flippedRegisterMap);
+            printvalue(nsv);
+
+            replaceAllUsesWithandReplaceRMap(I, nsv, flippedRegisterMap);
             simplifyUsers(nsv, DL, flippedRegisterMap);
             //}
         }
 
-        if (PATH_info solved = getReturnVal(function, dest)) {
+        if (PATH_info solved =
+                getConstraintVal(function, simplifyValue, dest)) {
             if (solved == PATH_solved) {
                 return solved;
             }
