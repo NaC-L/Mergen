@@ -32,11 +32,12 @@ namespace GEPStoreTracker {
 
 }; // namespace GEPStoreTracker
 
+/*
 namespace SCCPSimplifier {
     void init(Function* function);
     SCCPSolver* get();
 
     void cleanup();
 } // namespace SCCPSimplifier
-
+*/
 #endif
