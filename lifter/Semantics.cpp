@@ -222,7 +222,8 @@ void branchHelper(IRBuilder<>& builder,
     auto ripval = GetRegisterValue(builder, ZYDIS_REGISTER_RIP);
     auto result = newRip;
     uintptr_t destination = 0;
-    PATH_info pathInfo = solvePath(function, destination, "output_jump");
+    PATH_info pathInfo =
+        solvePath(function, destination, next_jump, "output_jump");
 
     ValueToValueMapTy VMap_test;
 
@@ -849,7 +850,8 @@ namespace branches {
             return;
         }
 
-        PATH_info pathInfo = solvePath(function, destination, "output_ret");
+        PATH_info pathInfo =
+            solvePath(function, destination, realval, "output_ret");
 
         block->setName("previousret_block");
 
@@ -921,7 +923,7 @@ namespace branches {
 
             uintptr_t destination = 0;
             PATH_info pathInfo =
-                solvePath(function, destination, "output_jump");
+                solvePath(function, destination, trunc, "output_jump");
 
             ValueToValueMapTy VMap_test;
 
@@ -2455,7 +2457,7 @@ namespace arithmeticsAndLogical {
 
         Value* Rvalue = GetOperandValue(builder, src, dest1.size);
         Value* Lvalue = GetOperandValue(builder, dest1, dest1.size);
-
+ 
         unsigned long initialSize = Rvalue->getType()->getIntegerBitWidth();
         printvalue2(initialSize);
         Rvalue = createZExtFolder(builder, Rvalue,
@@ -4572,7 +4574,7 @@ void liftInstructionSemantics(IRBuilder<>& builder,
         flagOperation::lift_cbw(builder, instruction);
         break;
     }
-
+    case ZYDIS_MNEMONIC_PAUSE:
     case ZYDIS_MNEMONIC_NOP: {
         break;
     }
