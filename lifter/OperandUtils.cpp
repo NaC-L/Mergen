@@ -162,40 +162,29 @@ Value* simplifyLoadValue(Value* v) {
     Value* idxv = GEPInst->getOperand(1);
     unsigned byteCount = v->getType()->getIntegerBitWidth() / 8;
 
-    // printvalue(v)
-    // printvalue(pv)
-    // printvalue(idxv)
-    // printvalue2(byteCount)
+    printvalue(v) printvalue(pv) printvalue(idxv) printvalue2(byteCount);
 
-    // rework
     auto retVal = GEPStoreTracker::solveLoad(cast<LoadInst>(v), 0);
 
     printvalue(v);
     printvalue(retVal);
-    // printvalue(retVal)
     return retVal;
 }
 
 Value* simplifyValueLater(Value* v, const DataLayout& DL) {
-    // printvalue(v)
+    printvalue(v);
     if (!isa<Instruction>(v))
         return v;
     if (!isa<LoadInst>(v))
         return simplifyValue(v, DL);
 
-    /*
-    auto solver = SCCPSimplifier::get();
-    auto nsv2 = solver->getConstantOrNull(v);
-    if (nsv2 && !isa<PoisonValue>(nsv2) && !isa<UndefValue>(nsv2))
-        return nsv2;
-    */
     auto loadInst = cast<LoadInst>(v);
-    // printvalue(loadInst)
+    printvalue(loadInst);
     auto GEP = loadInst->getOperand(loadInst->getNumOperands() - 1);
-    // printvalue(GEP)
+    printvalue(GEP);
     auto gepInst = cast<GetElementPtrInst>(GEP);
     auto effectiveAddress = gepInst->getOperand(gepInst->getNumOperands() - 1);
-    // printvalue(effectiveAddress)
+    printvalue(effectiveAddress);
     if (!isa<ConstantInt>(effectiveAddress)) {
         return v;
     }
@@ -213,20 +202,7 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
     }
 
     unsigned byteSize = v->getType()->getIntegerBitWidth() / 8;
-    /*
-            uintptr_t mappedAddr =
-       address_to_mapped_address(file_base_g_operand, addr); uintptr_t
-       tempValue;
 
-            if (mappedAddr > 0) {
-                    std::memcpy(&tempValue, reinterpret_cast<const
-       void*>(data_g_operand + mappedAddr), byteSize);
-
-                    APInt readValue(byteSize * 8, tempValue);
-                    Constant* newVal = ConstantInt::get(v->getType(),
-       readValue); if (newVal) return newVal;
-            }
-    */
     APInt value;
     if (BinaryOperations::readMemory(addr, byteSize, value)) {
         Constant* newVal = ConstantInt::get(v->getType(), value);
@@ -766,22 +742,7 @@ Value* getFlag(IRBuilder<>& builder, Flag flag) {
     return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-// remove dis?
-void Init_Flags2(IRBuilder<>& builder) {
-    LLVMContext& context = builder.getContext();
-
-    auto zero =
-        (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 0);
-    auto value =
-        (ConstantInt*)ConstantInt::getSigned(Type::getInt64Ty(context), 2);
-
-    auto flags = RegisterList[ZYDIS_REGISTER_RFLAGS];
-
-    auto new_flag = createAddFolder(builder, zero, value);
-
-    RegisterList[ZYDIS_REGISTER_RFLAGS] = new_flag;
-}
-
+// lmao, move this to a namespace at least
 unordered_map<int, Value*> getRegisterList() { return RegisterList; }
 
 void setRegisterList(unordered_map<int, Value*> newRegisterList) {
@@ -789,13 +750,10 @@ void setRegisterList(unordered_map<int, Value*> newRegisterList) {
 }
 
 Value* memoryAlloc;
-
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
 
-// replace it so that we can select we want rcx, rdx, r8, r9 and rest pushed to
-// stack or everything is unknown
-
+// todo?
 unordered_map<Value*, int> flipRegisterMap() {
     unordered_map<Value*, int> RevMap;
     for (const auto& pair : RegisterList) {
@@ -957,7 +915,7 @@ Value* SetValueToHighByteRegister(IRBuilder<>& builder, int reg, Value* value) {
     return newRegisterValue;
 }
 
-Value* SetValueToSubRegister(IRBuilder<>& builder, int reg, Value* value) {
+Value* SetValueToSubRegister_8b(IRBuilder<>& builder, int reg, Value* value) {
     LLVMContext& context = builder.getContext();
     int fullRegKey = ZydisRegisterGetLargestEnclosing(
         ZYDIS_MACHINE_MODE_LONG_64, static_cast<ZydisRegister>(reg));
@@ -998,7 +956,7 @@ Value* SetValueToSubRegister(IRBuilder<>& builder, int reg, Value* value) {
     return updatedReg;
 }
 
-Value* SetValueToSubRegister2(IRBuilder<>& builder, int reg, Value* value) {
+Value* SetValueToSubRegister_16b(IRBuilder<>& builder, int reg, Value* value) {
 
     int fullRegKey = ZydisRegisterGetLargestEnclosing(
         ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
@@ -1029,18 +987,18 @@ void SetRegisterValue(IRBuilder<>& builder, int key, Value* value) {
     if ((key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
          key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) {
 
-        value = SetValueToSubRegister(builder, key, value);
+        value = SetValueToSubRegister_8b(builder, key, value);
     }
 
     if (((key >= ZYDIS_REGISTER_R8B) && (key <= ZYDIS_REGISTER_R15B)) ||
         ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_BL)) ||
         ((key >= ZYDIS_REGISTER_SPL) && (key <= ZYDIS_REGISTER_DIL))) {
 
-        value = SetValueToSubRegister(builder, key, value);
+        value = SetValueToSubRegister_8b(builder, key, value);
     }
 
     if (((key >= ZYDIS_REGISTER_AX) && (key <= ZYDIS_REGISTER_R15W))) {
-        value = SetValueToSubRegister2(builder, key, value);
+        value = SetValueToSubRegister_16b(builder, key, value);
     }
 
     if (key == ZYDIS_REGISTER_RFLAGS) {
@@ -1105,10 +1063,6 @@ Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
     return createZExtOrTruncFolder(builder, effectiveAddress,
                                    Type::getIntNTy(context, possiblesize));
 }
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Value.h"
-#include <cassert>
-#include <vector>
 
 Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                        int possiblesize, string address) {
@@ -1222,37 +1176,6 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                                              ->getParent()
                                              ->getDataLayout());
 
-        /*
-        if (isa<ConstantExpr>(pointer)) {
-                if (Value* MapValue = GetMemoryValueFromMap(pointer)) {
-                         return createZExtOrTruncFolder(builder,MapValue,
-        loadType);
-                }
-                if (Operator* op = dyn_cast<Operator>(pointer)) {
-                        if (ConstantInt* CI =
-        dyn_cast<ConstantInt>(op->getOperand(0))) { uintptr_t addr =
-        CI->getZExtValue(); uintptr_t mappedAddr =
-        address_to_mapped_address(file_base_g_operand, addr);
-
-                                if (mappedAddr > 0) {
-                                        unsigned byteSize =
-        loadType->getIntegerBitWidth() / 8;
-
-                                        uintptr_t tempvalue;
-                                        std::memcpy(&tempvalue,
-        reinterpret_cast<const void*>(data_g_operand + mappedAddr), byteSize);
-
-
-                                        APInt readValue(byteSize * 8,
-        tempvalue); Constant* newVal = ConstantInt::get(loadType, readValue);
-        return newVal;
-
-                                }
-                        }
-                }
-        }
-        */
-
         printvalue(retval);
 
         return retval;
@@ -1262,30 +1185,6 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
         exit(-1);
     }
     }
-}
-
-Value* merge(IRBuilder<>& builder, Value* existingValue, Value* newValue) {
-    LLVMContext& context = builder.getContext();
-    unsigned existingBitWidth = existingValue->getType()->getIntegerBitWidth();
-    unsigned newBitWidth = newValue->getType()->getIntegerBitWidth();
-
-    if (newBitWidth >= existingBitWidth) {
-
-        return newValue;
-    }
-
-    APInt maskAPInt =
-        APInt::getHighBitsSet(existingBitWidth, existingBitWidth - newBitWidth);
-    Value* mask = ConstantInt::get(context, maskAPInt);
-
-    Value* maskedExistingValue =
-        createAndFolder(builder, existingValue, mask, "maskedExistingValue");
-
-    Value* extendedNewValue = createZExtFolder(
-        builder, newValue, existingValue->getType(), "extendedNewValue");
-
-    return createOrFolder(builder, maskedExistingValue, extendedNewValue,
-                          "mergedValue");
 }
 
 Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
@@ -1397,53 +1296,6 @@ Value* getMemoryFromValue(IRBuilder<>& builder, Value* value) {
                                        indices, "GEPSTOREVALUE");
 
     return pointer;
-}
-
-// delete
-Value* getFlag2(IRBuilder<>& builder, Flag flag) {
-    LLVMContext& context = builder.getContext();
-    Value* rflag_var = GetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS);
-    Value* position = ConstantInt::get(context, APInt(64, flag));
-
-    Value* one = ConstantInt::get(context, APInt(64, 1));
-    Value* bit_position =
-        createShlFolder(builder, one, position, "getflag-shl");
-
-    Value* and_result =
-        createAndFolder(builder, rflag_var, bit_position, "getflag-and");
-    return builder.CreateICmpNE(
-        and_result, ConstantInt::get(context, APInt(64, 0)), "getflag-cmpne");
-}
-
-Value* setFlag2(IRBuilder<>& builder, Flag flag, Value* newValue) {
-    LLVMContext& context = builder.getContext();
-    Value* rflag_var = GetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS);
-    Value* position = ConstantInt::get(context, APInt(64, flag));
-
-    Value* one = ConstantInt::get(context, APInt(64, 1));
-    Value* bit_position = createShlFolder(builder, one, position);
-
-    Value* inverse_mask = builder.CreateNot(bit_position);
-
-    Value* cleared_rflag =
-        createAndFolder(builder, rflag_var, inverse_mask, "setflag2");
-
-    Value* shifted_newValue = createShlFolder(
-        builder,
-        createZExtOrTruncFolder(builder, newValue, Type::getInt64Ty(context)),
-        position, "flagsetweird");
-    shifted_newValue =
-        createOrFolder(builder, cleared_rflag, shifted_newValue, "setflag-or");
-    SetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS, shifted_newValue);
-    return shifted_newValue;
-}
-
-vector<Value*> GetRFLAGS(IRBuilder<>& builder) {
-    vector<Value*> rflags;
-    for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
-        rflags.push_back(getFlag(builder, (Flag)flag));
-    }
-    return rflags;
 }
 
 void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op,
