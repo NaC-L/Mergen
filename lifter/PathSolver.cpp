@@ -30,7 +30,7 @@ void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
 
     if (registerV) {
         if (isa<Instruction>(v)) {
-            auto registerI = cast<Instruction>(v);
+            // auto registerI = cast<Instruction>(v);
             SetRegisterValue(registerV, v);
         }
     }
@@ -245,8 +245,7 @@ llvm::ValueToValueMapTy* flipVMap(const ValueToValueMapTy& VMap) {
     return RevMap;
 }
 
-PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
-                    string debug_filename) {
+PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue) {
 
     PATH_info result = PATH_unsolved;
     if (llvm::ConstantInt* constInt =
@@ -297,12 +296,9 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
 
         DataLayout DL(function->getParent());
 
-        int total_user = 0;
         // find the VWLPV(value with least possible values) that builds up to
         // the returnValue
         for (auto I : visited_used) {
-
-            total_user++;
             KnownBits KnownVal = analyzeValueKnownBits(I, DL);
 
             unsigned int possible_values =

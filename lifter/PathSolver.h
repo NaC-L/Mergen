@@ -3,5 +3,4 @@
 
 void final_optpass(Function* clonedFuncx);
 
-PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue,
-                    string debug_filename);
+PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue);

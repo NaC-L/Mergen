@@ -53,7 +53,7 @@ namespace FileHelper {
             if (rva >= sectionHeader->virtual_address &&
                 rva < (sectionHeader->virtual_address +
                        sectionHeader->virtual_size)) {
-                if (true || sectionHeader->characteristics.mem_execute ||
+                if (sectionHeader->characteristics.mem_execute ||
                     (sectionHeader->characteristics.mem_read &&
                      !sectionHeader->characteristics.mem_write)) // remove?
                     return rva - sectionHeader->virtual_address +

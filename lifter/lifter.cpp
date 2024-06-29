@@ -19,7 +19,7 @@ uintptr_t original_address = 0;
 void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                           ZyanU64 runtime_address,
                           shared_ptr<vector<BBInfo>> blockAddresses,
-                          Function* function, ZyanU64 file_base) {
+                          ZyanU64 file_base) {
 
     bool run = 1;
     while (run) {
@@ -49,8 +49,6 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
             //
 
             // update only when its needed
-            auto F = nextBasicBlock->getParent();
-
             blockAddresses->pop_back();
 
             BinaryOperations::initBases((void*)file_base, data);
@@ -65,8 +63,6 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                 last_value = 0;
             }
 
-            ZydisDisassembledInstruction instruction;
-
             for (; run && runtime_address > 0;) {
                 if (BinaryOperations::isWrittenTo(runtime_address)) {
                     printvalueforce2(runtime_address);
@@ -74,12 +70,14 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
                     outs().flush();
                 }
 
-                ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64,
-                                      runtime_address, data + offset, 15,
-                                      &instruction);
-
                 if ((blockAddresses->size() == 0 ||
                      (last_value == get<0>(blockAddresses->back())))) {
+
+                    // why tf compiler tells this is unused?
+                    ZydisDisassembledInstruction instruction;
+                    ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64,
+                                          runtime_address, data + offset, 15,
+                                          &instruction);
 
                     auto counter = debugging::increaseInstCounter() - 1;
                     debugging::doIfDebug([&]() {
@@ -103,7 +101,7 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
     }
 }
 
-void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address,
+void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
                                        uintptr_t file_base) {
     ZydisDecoder decoder;
     ZydisFormatter formatter;
@@ -149,8 +147,6 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address,
 
     auto RegisterList = InitRegisters(builder, function, runtime_address);
 
-    ZydisDisassembledInstruction instruction;
-
     GEPStoreTracker::initDomTree(*function);
 
     shared_ptr<vector<BBInfo>> blockAddresses = make_shared<vector<BBInfo>>();
@@ -158,7 +154,7 @@ void InitFunction_and_LiftInstructions(ZyanU8* data, ZyanU64 runtime_address,
     blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
 
     asm_to_zydis_to_lift(builder, (uint8_t*)file_base, runtime_address,
-                         blockAddresses, function, file_base);
+                         blockAddresses, file_base);
 
     string Filename = "output.ll";
     error_code EC;
@@ -211,7 +207,6 @@ int main(int argc, char* argv[]) {
 
     auto dosHeader = (win::dos_header_t*)fileBase;
     auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
-    auto sectionHeader = ntHeaders->get_sections();
     auto ADDRESS = ntHeaders->optional_header.image_base;
     uintptr_t RVA = static_cast<uintptr_t>(startAddr - ADDRESS);
     uintptr_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
@@ -230,8 +225,7 @@ int main(int argc, char* argv[]) {
     long long ms = timer::getTimer();
     cout << "\n" << dec << ms << " milliseconds has past" << endl;
 
-    InitFunction_and_LiftInstructions(dataAtAddress, startAddr,
-                                      (uintptr_t)fileBase);
+    InitFunction_and_LiftInstructions(startAddr, (uintptr_t)fileBase);
     long long milliseconds = timer::stopTimer();
     cout << "\n" << dec << milliseconds << " milliseconds has past" << endl;
     cout << "Executed " << debugging::increaseInstCounter() - 1
