@@ -1,5 +1,7 @@
 #pragma once
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif // _CRT_SECURE_NO_WARNINGS
 #define _SILENCE_ALL_CXX20_DEPRECATION_WARNINGS
 #define _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS
 #ifndef ZYDIS_STATIC_BUILD
@@ -52,7 +54,9 @@
 #include <vector>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif // NOMINMAX
 #else
 #endif // _WIN32
 

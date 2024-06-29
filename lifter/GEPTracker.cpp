@@ -63,7 +63,7 @@ class ValueByteReference {
   public:
     Instruction* storeInst;
     Value* value;
-    short byteOffset;
+    unsigned short byteOffset;
 
     ValueByteReference(Instruction* inst, Value* val, short offset)
         : storeInst(inst), value(val), byteOffset(offset) {}
@@ -277,7 +277,6 @@ namespace GEPStoreTracker {
 
         auto gepOffsetCI = cast<ConstantInt>(gepOffset);
         if (gepOffsetCI->getZExtValue() < VirtualStack.buffer.size()) {
-            auto updatingstack = inst;
             VirtualStack.updateValueReference(inst, inst->getValueOperand(),
                                               gepOffsetCI->getZExtValue());
         }
@@ -496,17 +495,13 @@ namespace GEPStoreTracker {
                 if (!retval)
                     retval = ConstantInt::get(load->getType(), 0);
 
-                long sizeExceeded = max((int)((memOffsetValue + storeBitSize) -
-                                              (loadOffsetValue + cloadsize)),
-                                        0);
                 Value* mask = ConstantInt::get(
                     storedInst->getType(),
                     createmask(loadOffsetValue, loadOffsetValue + cloadsize,
                                memOffsetValue, memOffsetValue + storeBitSize));
 
-                printvalue(mask)
+                printvalue(mask);
 
-                    auto bb = inst->getParent();
                 IRBuilder<> builder(load);
                 // we dont have to calculate knownbits if its a constant
                 auto maskedinst = createAndFolder(

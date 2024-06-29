@@ -105,7 +105,7 @@ namespace funcsignatures {
     AhoCorasick::search(const std::vector<unsigned char>& text) {
         std::vector<std::pair<int, int>> results;
         int current = 0;
-        for (int i = 0; i < text.size(); ++i) {
+        for (uint64_t i = 0; i < text.size(); ++i) {
             while (current != -1 &&
                    trie[current].children.count(text[i]) == 0) {
                 current = trie[current].fail;

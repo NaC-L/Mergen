@@ -146,7 +146,6 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 Value* simplifyLoadValue(Value* v) {
 
     Instruction* inst = cast<Instruction>(v);
-    Module* M = (inst->getModule());
     Function& F = *inst->getFunction();
 
     llvm::IRBuilder<> builder(&*F.getEntryBlock().getFirstInsertionPt());
@@ -730,8 +729,6 @@ Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
         flag == FLAG_DF)
         return nullptr;
 
-    auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
-
     return FlagList[flag] = newValue;
 }
 Value* getFlag(IRBuilder<>& builder, Flag flag) {
@@ -742,7 +739,6 @@ Value* getFlag(IRBuilder<>& builder, Flag flag) {
     return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-// lmao, move this to a namespace at least
 RegisterMap getRegisters() { return Registers; }
 
 void setRegisters(RegisterMap newRegisters) { Registers = newRegisters; }
@@ -1070,7 +1066,6 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
     switch (op.type) {
     case ZYDIS_OPERAND_TYPE_REGISTER: {
         Value* value = GetRegisterValue(builder, op.reg.value);
-        auto opBitWidth = op.size;
         auto vtype = value->getType();
         if (isa<IntegerType>(vtype)) {
             auto typeBitWidth = dyn_cast<IntegerType>(vtype)->getBitWidth();
@@ -1242,8 +1237,6 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                                                dispValue, "disp_set");
         }
 
-        Type* storeType = Type::getIntNTy(context, op.size);
-
         std::vector<Value*> indices;
         indices.push_back(effectiveAddress);
 
@@ -1262,14 +1255,7 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
         // if effectiveAddress is not pointing at stack, its probably self
         // modifying code if effectiveAddress and value is consant we can
         // say its a self modifying code and modify the binary
-        if (isa<ConstantInt>(effectiveAddress)) {
 
-            ConstantInt* effectiveAddressInt =
-                cast<ConstantInt>(effectiveAddress);
-            auto addr = effectiveAddressInt->getZExtValue();
-        }
-
-        // storeInst good, loadinst bad
         GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
 
         return store;
@@ -1285,7 +1271,6 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
 Value* getMemoryFromValue(IRBuilder<>& builder, Value* value) {
     LLVMContext& context = builder.getContext();
-    Type* storeType = value->getType();
 
     std::vector<Value*> indices;
     indices.push_back(value);
@@ -1343,8 +1328,7 @@ vector<Value*> GetRFLAGS(IRBuilder<>& builder) {
     return rflags;
 }
 
-void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op,
-               vector<Value*> value, string address) {
+void pushFlags(IRBuilder<>& builder, vector<Value*> value, string address) {
     LLVMContext& context = builder.getContext();
 
     auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
@@ -1371,8 +1355,6 @@ void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
         printvalue(rsp) printvalue(pointer) printvalue(byteVal)
             printvalue(store);
-
-        ConstantInt* rspInt = cast<ConstantInt>(rsp);
 
         GEPStoreTracker::insertMemoryOp(cast<StoreInst>(store));
         rsp =

@@ -188,7 +188,6 @@ class RemovePseudoMemory : public llvm::PassInfoMixin<RemovePseudoMemory> {
         Value* memory = getMemory();
 
         bool hasChanged = false;
-        Value* stackMemory = NULL;
         for (auto& F : M) {
             for (auto& BB : F) {
                 for (auto& I : BB) {

@@ -75,8 +75,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                        Value* value, string address = "");
 
-void pushFlags(IRBuilder<>& builder, ZydisDecodedOperand& op,
-               vector<Value*> value, string address = "");
+void pushFlags(IRBuilder<>& builder, vector<Value*> value, string address = "");
 
 RegisterMap getRegisters();
 
