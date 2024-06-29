@@ -239,8 +239,7 @@ void branchHelper(IRBuilder<>& builder,
 
         builder.CreateBr(bb);
 
-        blockAddresses->push_back(
-            make_tuple(destination, bb, getRegisterList()));
+        blockAddresses->push_back(make_tuple(destination, bb, getRegisters()));
     }
 }
 
@@ -769,8 +768,7 @@ namespace branches {
 
         printvalue2(jump_address);
 
-        blockAddresses->push_back(
-            make_tuple(jump_address, bb, getRegisterList()));
+        blockAddresses->push_back(make_tuple(jump_address, bb, getRegisters()));
     }
 
     int ret_count = 0;
@@ -884,7 +882,7 @@ namespace branches {
             builder.CreateBr(bb);
 
             blockAddresses->push_back(
-                make_tuple(destination, bb, getRegisterList()));
+                make_tuple(destination, bb, getRegisters()));
             run = 0;
         }
     }
@@ -941,7 +939,7 @@ namespace branches {
                 builder.CreateBr(bb);
 
                 blockAddresses->push_back(
-                    make_tuple(destination, bb, getRegisterList()));
+                    make_tuple(destination, bb, getRegisters()));
                 run = 0;
             }
             run = 0;
@@ -961,7 +959,7 @@ namespace branches {
 
         builder.CreateBr(bb);
 
-        blockAddresses->push_back(make_tuple(test, bb, getRegisterList()));
+        blockAddresses->push_back(make_tuple(test, bb, getRegisters()));
         run = 0;
     }
 
@@ -2457,7 +2455,7 @@ namespace arithmeticsAndLogical {
 
         Value* Rvalue = GetOperandValue(builder, src, dest1.size);
         Value* Lvalue = GetOperandValue(builder, dest1, dest1.size);
- 
+
         unsigned long initialSize = Rvalue->getType()->getIntegerBitWidth();
         printvalue2(initialSize);
         Rvalue = createZExtFolder(builder, Rvalue,
@@ -4622,8 +4620,7 @@ void liftInstruction(IRBuilder<>& builder,
                                      builder.GetInsertBlock()->getParent());
         builder.CreateBr(bb);
 
-        blockAddresses->push_back(
-            make_tuple(jump_address, bb, getRegisterList()));
+        blockAddresses->push_back(make_tuple(jump_address, bb, getRegisters()));
         run = 0;
         return;
     }
@@ -4651,8 +4648,7 @@ void liftInstruction(IRBuilder<>& builder,
 
         builder.CreateBr(bb);
 
-        blockAddresses->push_back(
-            make_tuple(jump_address, bb, getRegisterList()));
+        blockAddresses->push_back(make_tuple(jump_address, bb, getRegisters()));
         run = 0;
         return;
     }
