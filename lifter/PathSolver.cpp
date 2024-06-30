@@ -262,6 +262,8 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue) {
         if (PATH_info solved =
                 getConstraintVal(function, simplifyValue, dest)) {
             if (solved == PATH_solved) {
+                outs() << "Solved the constraint and moving to next path\n";
+                outs().flush();
                 return solved;
             }
         }
