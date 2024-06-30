@@ -1131,7 +1131,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
         std::vector<Value*> indices;
         indices.push_back(effectiveAddress);
         Value* memoryOperand = memoryAlloc;
-        if (op.mem.segment == ZYDIS_REGISTER_FS)
+        if (op.mem.segment == ZYDIS_REGISTER_GS)
             memoryOperand = TEB;
 
         Value* pointer =
@@ -1242,7 +1242,7 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
         indices.push_back(effectiveAddress);
 
         auto memoryOperand = memoryAlloc;
-        if (op.mem.segment == ZYDIS_REGISTER_FS)
+        if (op.mem.segment == ZYDIS_REGISTER_GS)
             memoryOperand = TEB;
 
         Value* pointer =
