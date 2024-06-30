@@ -395,6 +395,5 @@ PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue) {
         // re-run program
 #endif
     }
-    function->eraseFromParent();
     return result;
 }
