@@ -132,6 +132,7 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
     argTypes.push_back(llvm::Type::getInt64Ty(context));
     argTypes.push_back(llvm::Type::getInt64Ty(context));
     argTypes.push_back(llvm::PointerType::get(context, 0));
+    argTypes.push_back(llvm::PointerType::get(context, 0)); // temp fix TEB
 
     auto functionType =
         llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);

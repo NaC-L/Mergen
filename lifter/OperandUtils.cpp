@@ -739,11 +739,12 @@ Value* getFlag(IRBuilder<>& builder, Flag flag) {
     return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
+// for love of god this is so ugly
 RegisterMap getRegisters() { return Registers; }
-
 void setRegisters(RegisterMap newRegisters) { Registers = newRegisters; }
 
 Value* memoryAlloc;
+Value* TEB;
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
 
@@ -767,20 +768,17 @@ RegisterMap InitRegisters(IRBuilder<>& builder, Function* function,
     auto argEnd = function->arg_end();
     for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
 
-        /*if ((zydisRegister == ZYDIS_REGISTER_RSP) || (zydisRegister ==
-        ZYDIS_REGISTER_ESP)) {
-
-                zydisRegister++;
-                continue;
-        }*/
-
         Argument* arg = &*argIt;
         arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
 
         if (std::next(argIt) == argEnd) {
             arg->setName("memory");
             memoryAlloc = arg;
+        } else if (std::next(argIt, 2) == argEnd) {
+            arg->setName("TEB");
+            TEB = arg;
         } else {
+            arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
             Registers[(ZydisRegister)zydisRegister] = arg;
             zydisRegister++;
         }
@@ -1132,9 +1130,12 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
         std::vector<Value*> indices;
         indices.push_back(effectiveAddress);
+        Value* memoryOperand = memoryAlloc;
+        if (op.mem.segment == ZYDIS_REGISTER_FS)
+            memoryOperand = TEB;
 
         Value* pointer =
-            builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices,
+            builder.CreateGEP(Type::getInt8Ty(context), memoryOperand, indices,
                               "GEPLoadxd-" + address + "-");
 
         auto retval =
@@ -1240,8 +1241,12 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
         std::vector<Value*> indices;
         indices.push_back(effectiveAddress);
 
+        auto memoryOperand = memoryAlloc;
+        if (op.mem.segment == ZYDIS_REGISTER_FS)
+            memoryOperand = TEB;
+
         Value* pointer =
-            builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc, indices,
+            builder.CreateGEP(Type::getInt8Ty(context), memoryOperand, indices,
                               "GEPSTORE-" + address + "-");
 
         pointer = simplifyValue(pointer, builder.GetInsertBlock()
