@@ -12,7 +12,7 @@ namespace funcsignatures {
         functioninfo(const std::string& Name);
 
         std::string name;
-        std::vector<unsigned int> args;
+        std::vector<uint8_t> args;
 
         std::vector<uint64_t> offsets;
         void add_offset(uint64_t offset);
