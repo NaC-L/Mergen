@@ -343,3 +343,6 @@ enum PATH_info {
     PATH_unsolved = 0,
     PATH_solved = 1,
 };
+
+// 8 << (arg.argtype.size - 1)
+enum ArgType { NONE = 0, I8 = 1, I16 = 2, I32 = 3, I64 = 4 };
