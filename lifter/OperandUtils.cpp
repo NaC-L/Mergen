@@ -159,7 +159,7 @@ Value* simplifyLoadValue(Value* v) {
 
     Value* pv = GEPInst->getPointerOperand();
     Value* idxv = GEPInst->getOperand(1);
-    unsigned byteCount = v->getType()->getIntegerBitWidth() / 8;
+    uint32_t byteCount = v->getType()->getIntegerBitWidth() / 8;
 
     printvalue(v) printvalue(pv) printvalue(idxv) printvalue2(byteCount);
 
@@ -724,7 +724,7 @@ void Init_Flags(IRBuilder<>& builder) {
 Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
     LLVMContext& context = builder.getContext();
     newValue = createTruncFolder(builder, newValue, Type::getInt1Ty(context));
-    printvalue2((long)flag) printvalue(newValue);
+    printvalue2((int32_t)flag) printvalue(newValue);
     if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
         flag == FLAG_DF)
         return nullptr;

@@ -286,7 +286,7 @@ namespace mov {
             if (auto countci = dyn_cast<ConstantInt>(count)) {
                 Value* UpdateSRCvalue = SRCvalue;
                 Value* UpdateDSTvalue = DSTvalue;
-                auto looptime = countci->getZExtValue();
+                uint64_t looptime = countci->getZExtValue();
                 printvalue2(looptime);
 
                 for (int i = looptime; i > 0; i--) {
@@ -808,8 +808,8 @@ namespace branches {
         if (llvm::ConstantInt* constInt =
                 llvm::dyn_cast<llvm::ConstantInt>(rspvalue)) {
             int64_t rspval = constInt->getSExtValue();
-            printvalue2(rspval) result =
-                rspval == STACKP_VALUE ? REAL_return : ROP_return;
+            printvalue2(rspval);
+            result = rspval == STACKP_VALUE ? REAL_return : ROP_return;
         }
         printvalue2(result);
         if (result == REAL_return) {
@@ -940,7 +940,7 @@ namespace branches {
         SetRegisterValue(builder, ZYDIS_REGISTER_RIP, newRip);
 
         uint64_t test = dest.imm.value.s + instruction.runtime_address +
-                         instruction.info.length;
+                        instruction.info.length;
 
         string block_name = "jmp-" + to_string(test) + "-";
         auto bb = BasicBlock::Create(context, block_name.c_str(),
@@ -1675,8 +1675,8 @@ namespace arithmeticsAndLogical {
         Value* countValue = GetOperandValue(builder, count, dest.size);
 
         Value* zero = ConstantInt::get(countValue->getType(), 0);
-        unsigned long bitWidth = Lvalue->getType()->getIntegerBitWidth();
-        unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
+        uint8_t bitWidth = Lvalue->getType()->getIntegerBitWidth();
+        uint8_t maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
         Value* clampedCount = createAndFolder(
             builder, countValue, ConstantInt::get(countValue->getType(), maskC),
@@ -1716,10 +1716,10 @@ namespace arithmeticsAndLogical {
         Value* sf = computeSignFlag(builder, result);
         Value* zf = computeZeroFlag(builder, result);
         Value* pf = computeParityFlag(builder, result);
-        printvalue(Lvalue) printvalue2(bitWidth) printvalue(countValue)
-            printvalue(clampedCount) printvalue(result) printvalue(isNotZero)
-                printvalue(cfValue) printvalue(oldcf)
-                    setFlag(builder, FLAG_CF, cfValue);
+        printvalue(Lvalue) printvalue2(bitWidth) printvalue(countValue);
+        printvalue(clampedCount) printvalue(result) printvalue(isNotZero);
+        printvalue(cfValue) printvalue(oldcf);
+        setFlag(builder, FLAG_CF, cfValue);
         setFlag(builder, FLAG_OF, of);
         setFlag(builder, FLAG_SF, sf);
         setFlag(builder, FLAG_ZF, zf);
@@ -2327,7 +2327,7 @@ namespace arithmeticsAndLogical {
 
         Value* Rvalue = GetOperandValue(builder, src, src.size);
         Value* Lvalue = GetOperandValue(builder, src2, src2.size);
-        unsigned long initialSize = src.size;
+        uint8_t initialSize = src.size;
         printvalue2(initialSize);
         printvalue(Rvalue);
         printvalue(Lvalue);
@@ -2441,7 +2441,7 @@ namespace arithmeticsAndLogical {
         Value* Rvalue = GetOperandValue(builder, src, dest1.size);
         Value* Lvalue = GetOperandValue(builder, dest1, dest1.size);
 
-        unsigned long initialSize = Rvalue->getType()->getIntegerBitWidth();
+        uint8_t initialSize = Rvalue->getType()->getIntegerBitWidth();
         printvalue2(initialSize);
         Rvalue = createZExtFolder(builder, Rvalue,
                                   Type::getIntNTy(context, initialSize * 2));
@@ -2562,7 +2562,7 @@ namespace arithmeticsAndLogical {
                                        Type::getIntNTy(context, src.size * 2));
         dividendHigh =
             createZExtFolder(builder, dividendHigh, dividendLow->getType());
-        long bitWidth = src.size;
+        uint8_t bitWidth = src.size;
 
         dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
         printvalue2(bitWidth);
@@ -2625,7 +2625,7 @@ namespace arithmeticsAndLogical {
                                        Type::getIntNTy(context, src.size * 2));
         dividendHigh =
             createZExtFolder(builder, dividendHigh, dividendLow->getType());
-        long bitWidth = src.size;
+        uint8_t bitWidth = src.size;
 
         dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
         printvalue2(bitWidth);
