@@ -4,7 +4,7 @@
 #include "includes.h"
 namespace BinaryOperations {
 
-    const char* getName(unsigned long long offset);
+    const char* getName(uint64_t offset);
 
     void initBases(void* file_base, ZyanU8* data);
 
