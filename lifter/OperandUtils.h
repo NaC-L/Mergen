@@ -64,6 +64,8 @@ void SetRegisterValue(int key, Value* value);
 RegisterMap InitRegisters(IRBuilder<>& builder, Function* function,
                           ZyanU64 rip);
 
+Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress);
+
 Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
                            int possiblesize);
 

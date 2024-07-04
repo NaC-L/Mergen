@@ -1056,6 +1056,22 @@ Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
                                    Type::getIntNTy(context, possiblesize));
 }
 
+Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress) {
+
+    LLVMContext& context = builder.getContext();
+    std::vector<Value*> indices;
+    indices.push_back(effectiveAddress);
+
+    auto memoryOperand = memoryAlloc;
+    //
+    // if (segment == ZYDIS_REGISTER_GS)
+    //     memoryOperand = TEB;
+
+    Value* pointer =
+        builder.CreateGEP(Type::getInt8Ty(context), memoryOperand, indices);
+    return pointer;
+}
+
 Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
                        int possiblesize, string address) {
     LLVMContext& context = builder.getContext();
