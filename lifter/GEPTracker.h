@@ -10,7 +10,7 @@ namespace BinaryOperations {
 
     void getBases(void** file_base, ZyanU8** data);
 
-    bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value);
+    bool readMemory(uint64_t addr, unsigned byteSize, APInt& value);
 
     bool isWrittenTo(uint64_t addr);
 

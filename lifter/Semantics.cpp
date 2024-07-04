@@ -217,7 +217,7 @@ void branchHelper(IRBuilder<>& builder,
         createSelectFolder(builder, condition, true_jump, false_jump);
     auto lastinst = builder.CreateRet(next_jump);
 
-    uintptr_t destination = 0;
+    uint64_t destination = 0;
     PATH_info pathInfo = solvePath(function, destination, next_jump);
 
     ValueToValueMapTy VMap_test;
@@ -719,7 +719,7 @@ namespace branches {
 
         string block_name = "jmp-call";
 
-        uintptr_t jump_address =
+        uint64_t jump_address =
             instruction.runtime_address + instruction.info.length;
         switch (src.type) {
         case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
@@ -801,7 +801,7 @@ namespace branches {
             function->getParent()->print(OS, nullptr);
         });
 
-        uintptr_t destination = 0;
+        uint64_t destination = 0;
 
         ROP_info result = ROP_return;
 
@@ -909,7 +909,7 @@ namespace branches {
                 function->print(OS);
             });
 
-            uintptr_t destination = 0;
+            uint64_t destination = 0;
             PATH_info pathInfo = solvePath(function, destination, trunc);
 
             ValueToValueMapTy VMap_test;
@@ -939,7 +939,7 @@ namespace branches {
 
         SetRegisterValue(builder, ZYDIS_REGISTER_RIP, newRip);
 
-        uintptr_t test = dest.imm.value.s + instruction.runtime_address +
+        uint64_t test = dest.imm.value.s + instruction.runtime_address +
                          instruction.info.length;
 
         string block_name = "jmp-" + to_string(test) + "-";
@@ -4618,7 +4618,7 @@ void liftInstruction(IRBuilder<>& builder,
         return;
     }
 
-    uintptr_t jump_address =
+    uint64_t jump_address =
         instruction.runtime_address + instruction.info.length;
     APInt temp;
     if (!BinaryOperations::readMemory(jump_address, 1, temp) &&
@@ -4629,7 +4629,7 @@ void liftInstruction(IRBuilder<>& builder,
 
         auto functionName = BinaryOperations::getName(jump_address);
         cout << "calling : " << functionName
-             << " addr: " << (uintptr_t)jump_address << endl;
+             << " addr: " << (uint64_t)jump_address << endl;
 
         callFunctionIR(functionName, builder);
 

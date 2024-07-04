@@ -245,7 +245,7 @@ llvm::ValueToValueMapTy* flipVMap(const ValueToValueMapTy& VMap) {
     return RevMap;
 }
 
-PATH_info solvePath(Function* function, uintptr_t& dest, Value* simplifyValue) {
+PATH_info solvePath(Function* function, uint64_t& dest, Value* simplifyValue) {
 
     PATH_info result = PATH_unsolved;
     if (llvm::ConstantInt* constInt =

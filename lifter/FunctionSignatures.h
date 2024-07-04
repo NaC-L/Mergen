@@ -10,10 +10,12 @@ namespace funcsignatures {
 
     struct functioninfo {
         functioninfo(const std::string& Name);
-        std::string name;
-        std::vector<uintptr_t> offsets;
 
-        void add_offset(uintptr_t offset);
+        std::string name;
+        std::vector<unsigned int> args;
+
+        std::vector<uint64_t> offsets;
+        void add_offset(uint64_t offset);
         void display() const;
     };
 
@@ -62,7 +64,7 @@ namespace funcsignatures {
     std::vector<unsigned char> convertToVector(const unsigned char* data,
                                                size_t size);
     void createOffsetMap();
-    std::string* getFunctionInfo(uintptr_t addr);
+    std::string* getFunctionInfo(uint64_t addr);
     extern std::unordered_map<std::vector<unsigned char>, functioninfo,
                               VectorHash>
         siglookup;

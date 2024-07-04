@@ -283,7 +283,7 @@ using ReverseRegisterMap = unordered_map<Value*, int>;
 using RegisterMap = unordered_map<int, Value*>;
 // BB start address, BB pointer, Final registers in that RegisterMap so we can
 // use it later
-using BBInfo = tuple<uintptr_t, BasicBlock*, RegisterMap>;
+using BBInfo = tuple<uint64_t, BasicBlock*, RegisterMap>;
 
 enum FlagOperation { SET_VALUE, SET_ONE, SET_ZERO, TOGGLE };
 
