@@ -1,29 +1,35 @@
 #include "FunctionSignatures.h"
 #include "utils.h"
 #include <iostream>
+#include <llvm/Transforms/Utils/SCCPSolver.h>
 #include <queue>
 
 namespace funcsignatures {
+    // TODO: this is ugly
 
-    // replace functioninfo with std::string
-    // so we can pass arguments
-    std::unordered_map<uint64_t, std::string> functions;
+    std::unordered_map<uint64_t, functioninfo> functions;
+    std::unordered_map<std::string, functioninfo> functionsByName;
 
     void createOffsetMap() {
         for (auto value : siglookup) {
             for (auto offsets : value.second.offsets) {
-                functions[offsets] = value.second.name;
+                functions[offsets] = value.second;
             }
+            functionsByName[value.second.name] = value.second;
         }
     }
 
-    std::string* getFunctionInfo(uint64_t addr) {
+    functioninfo* getFunctionInfo(uint64_t addr) {
         if (functions.count(addr) == 0)
             return nullptr;
         return &(functions[addr]);
     }
 
-    functioninfo::functioninfo(const std::string& Name) : name(Name) {}
+    functioninfo* getFunctionInfo(std::string name) {
+        if (functionsByName.count(name) == 0)
+            return nullptr;
+        return &(functionsByName[name]);
+    }
 
     void functioninfo::add_offset(uint64_t offset) {
         offsets.push_back(FileHelper::fileOffsetToRVA(offset));
@@ -37,12 +43,6 @@ namespace funcsignatures {
         std::cout << "end" << std::endl;
     }
 
-    siginfo::siginfo(const std::vector<unsigned char>& Bytes) : bytes(Bytes) {}
-    siginfo::siginfo(const std::vector<unsigned char>& Bytes,
-                     const std::vector<unsigned char>& Args)
-        : bytes(Bytes), args(Args) {}
-
-    // dummy values
     std::unordered_map<std::vector<unsigned char>, functioninfo, VectorHash>
         siglookup{
             {{0x55, 0x48, 0x81, 0xEC, 0xA0, 00, 00, 00, 0x48, 0x8D, 0xAC, 0x24,
@@ -52,7 +52,12 @@ namespace funcsignatures {
 
             {{0x4C, 0x8B, 0xDC, 0x4D, 0x89, 0x43, 0x18, 0x4D, 0x89, 0x4B, 0x20,
               0x48, 0x83, 0xEC, 0x38},
-             functioninfo("swprintf_s")}};
+             functioninfo("swprintf_s",
+                          {
+                              funcArgInfo(ZYDIS_REGISTER_RCX, I64, 1),
+                              funcArgInfo(ZYDIS_REGISTER_RDX, I64, 0),
+                              funcArgInfo(ZYDIS_REGISTER_R8, I64, 1),
+                          })}};
 
     AhoCorasick::AhoCorasick(
         const std::unordered_map<std::vector<unsigned char>, functioninfo,
