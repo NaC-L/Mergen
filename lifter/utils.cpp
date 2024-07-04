@@ -25,7 +25,7 @@ namespace FileHelper {
     }
 
     uint64_t secCharacteristics(win::nt_headers_x64_t* ntHeaders,
-                                 uint32_t rva) {
+                                uint32_t rva) {
         auto sectionHeader = ntHeaders->get_sections();
         for (int i = 0; i < ntHeaders->file_header.num_sections;
              i++, sectionHeader++) {
@@ -123,14 +123,15 @@ namespace debugging {
         outs().flush();
     }
 
-    template void printValue<unsigned long>(const unsigned long& v,
-                                            const char* name);
-    template void printValue<unsigned int>(const unsigned int& v,
-                                           const char* name);
-    template void printValue<long>(const long& v, const char* name);
-    template void printValue<bool>(const bool& v, const char* name);
     template void printValue<uint64_t>(const uint64_t& v, const char* name);
-    template void printValue<long long>(const long long& v, const char* name);
+    template void printValue<uint32_t>(const uint32_t& v, const char* name);
+    template void printValue<uint16_t>(const uint16_t& v, const char* name);
+    template void printValue<uint8_t>(const uint8_t& v, const char* name);
+    template void printValue<int64_t>(const int64_t& v, const char* name);
+    template void printValue<int32_t>(const int32_t& v, const char* name);
+    template void printValue<int16_t>(const int16_t& v, const char* name);
+    template void printValue<int8_t>(const int8_t& v, const char* name);
+    template void printValue<bool>(const bool& v, const char* name);
     template void printValue<ValueLatticeElement>(const ValueLatticeElement& v,
                                                   const char* name);
     template void printValue<KnownBits>(const KnownBits& v, const char* name);

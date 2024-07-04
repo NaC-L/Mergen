@@ -16,7 +16,7 @@ namespace BinaryOperations {
         *data = data_g;
     }
 
-    const char* getName(unsigned long long offset) {
+    const char* getName(uint64_t offset) {
         auto dosHeader = (win::dos_header_t*)file_base_g;
         auto ntHeaders = (win::nt_headers_x64_t*)((uint8_t*)file_base_g +
                                                   dosHeader->e_lfanew);
@@ -71,7 +71,7 @@ class ValueByteReference {
 
 class lifterMemoryBuffer {
   public:
-    std::unordered_map<unsigned long long, ValueByteReference*> buffer;
+    std::unordered_map<uint64_t, ValueByteReference*> buffer;
     ~lifterMemoryBuffer() {
 
         for (auto& ref : buffer) {
@@ -87,7 +87,7 @@ class lifterMemoryBuffer {
             printvalue2(address + i);
             buffer[address + i] = new ValueByteReference(inst, value, i);
             printvalue(value);
-            printvalue2((unsigned long)address + i);
+            printvalue2((uint64_t)address + i);
         }
     }
 
@@ -108,7 +108,7 @@ class lifterMemoryBuffer {
 
             printvalue(value);
 
-            printvalue2((unsigned long)address + i);
+            printvalue2((uint64_t)address + i);
         }
     }
 
@@ -194,12 +194,12 @@ class lifterMemoryBuffer {
 
   private:
     Value* extractByte(IRBuilder<>& builder, Value* value,
-                       unsigned long long byteOffset) {
+                       uint64_t byteOffset) {
 
         if (!value) {
             return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
         }
-        unsigned long long shiftAmount = byteOffset * 8;
+        uint64_t shiftAmount = byteOffset * 8;
         Value* shiftedValue = createLShrFolder(
             builder, value,
             APInt(value->getType()->getIntegerBitWidth(), shiftAmount),
@@ -213,7 +213,7 @@ class lifterMemoryBuffer {
 
 namespace SCCPSimplifier {
     std::unique_ptr<SCCPSolver> solver;
-    unsigned long long lastinstcount = 0;
+    uint64_t lastinstcount = 0;
     void init(Function* function) {
         if (function->getInstructionCount() == lastinstcount)
             return;
@@ -313,23 +313,24 @@ namespace GEPStoreTracker {
         return std::max(addr1, addr2) < std::min(addr1 + size1, addr2 + size2);
     }
 
-    uint64_t createmask(unsigned long a1, unsigned long a2, unsigned long b1,
-                        unsigned long b2) {
+    uint64_t createmask(uint64_t a1, uint64_t a2, uint64_t b1, uint64_t b2) {
 
         auto start_overlap = max(a1, b1);
         auto end_overlap = min(a2, b2);
-        long diffStart = a1 - b1;
+        int64_t diffStart = a1 - b1;
 
-        printvalue2(start_overlap) printvalue2(end_overlap)
-            // If there is no overlap
-            if (start_overlap > end_overlap) return 0;
+        printvalue2(start_overlap) printvalue2(end_overlap);
+        // If there is no overlap
+        if (start_overlap > end_overlap)
+            return 0;
 
         auto num_bytes = end_overlap - start_overlap;
         // mask =>
-        unsigned long long mask =
-            0xffffffffffffffff >>
-            (64 - (num_bytes * 8)); // adjust mask for bytesize
-        printvalue2(diffStart) if (diffStart <= 0) return mask;
+        uint64_t mask = 0xffffffffffffffff >>
+                        (64 - (num_bytes * 8)); // adjust mask for bytesize
+        printvalue2(diffStart);
+        if (diffStart <= 0)
+            return mask;
 
         auto diffShift = abs(diffStart);
 
@@ -477,25 +478,24 @@ namespace GEPStoreTracker {
             if (!isa<ConstantInt>(offset) || !isa<ConstantInt>(loadOffset))
                 continue;
 
-            unsigned long memOffsetValue =
-                cast<ConstantInt>(offset)->getZExtValue();
-            unsigned long loadOffsetValue =
+            uint64_t memOffsetValue = cast<ConstantInt>(offset)->getZExtValue();
+            uint64_t loadOffsetValue =
                 cast<ConstantInt>(loadOffset)->getZExtValue();
 
-            unsigned long diff = memOffsetValue - loadOffsetValue;
+            uint64_t diff = memOffsetValue - loadOffsetValue;
 
             // this is bytesize, not bitsize
-            unsigned long storeBitSize =
+            uint64_t storeBitSize =
                 storeInst->getValueOperand()->getType()->getIntegerBitWidth() /
                 8;
 
             if (overlaps(loadOffsetValue, cloadsize, memOffsetValue,
                          storeBitSize)) {
 
-                printvalue2(diff) printvalue2(memOffsetValue)
-                    printvalue2(loadOffsetValue) printvalue2(storeBitSize)
+                printvalue2(diff) printvalue2(memOffsetValue);
+                printvalue2(loadOffsetValue) printvalue2(storeBitSize);
 
-                        auto storedInst = inst->getOperand(0);
+                auto storedInst = inst->getOperand(0);
                 if (!retval)
                     retval = ConstantInt::get(load->getType(), 0);
 
