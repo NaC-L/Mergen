@@ -4,12 +4,119 @@
 #include "PathSolver.h"
 #include "includes.h"
 #include "utils.h"
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Type.h>
 #include <llvm/Support/Casting.h>
 
-// probably move this stuff somewhere else
-void callFunctionIR(string functionName, IRBuilder<>& builder) {
+FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
+                            LLVMContext& context) {
+    if (!funcInfo) {
+        FunctionType* externFuncType = FunctionType::get(
+            Type::getInt64Ty(context),
+            {llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
+             llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
+             llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
+             llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
+             llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
+             llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
+             llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
+             llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context)},
+            false);
+
+        return externFuncType;
+    }
+    std::vector<llvm::Type*> argTypes;
+    for (const auto& arg : funcInfo->args) {
+        llvm::Type* type = nullptr;
+        type = llvm::Type::getIntNTy(context, 8 << (arg.argtype.size - 1));
+
+        if (arg.argtype.isPtr) {
+            type = type->getPointerTo();
+        }
+        argTypes.push_back(type);
+    }
+
+    return llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes,
+                                   false);
+}
+
+vector<Value*> parseArgs(funcsignatures::functioninfo* funcInfo,
+                         IRBuilder<>& builder) {
     auto& context = builder.getContext();
+
+    auto RspRegister = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
+    if (!funcInfo)
+        return {createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_RAX),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_RCX),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_RDX),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_RBX),
+                                 Type::getInt64Ty(context)),
+                RspRegister,
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_RBP),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_RSI),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_RDI),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_RDI),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_R8),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_R9),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_R10),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_R11),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_R12),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_R13),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_R14),
+                                 Type::getInt64Ty(context)),
+                createZExtFolder(builder,
+                                 GetRegisterValue(builder, ZYDIS_REGISTER_R15),
+                                 Type::getInt64Ty(context)),
+                getMemory()};
+
+    std::vector<Value*> args;
+    for (const auto& arg : funcInfo->args) {
+        Value* argValue = GetRegisterValue(builder, arg.reg);
+        argValue = createZExtOrTruncFolder(
+            builder, argValue,
+            Type::getIntNTy(context, 8 << (arg.argtype.size - 1)));
+        if (arg.argtype.isPtr)
+            argValue = ConvertIntToPTR(builder, argValue);
+        //  now convert to pointer if its a pointer
+        args.push_back(argValue);
+    }
+    return args;
+}
+
+// probably move this stuff somewhere else
+void callFunctionIR(string functionName, IRBuilder<>& builder,
+                    funcsignatures::functioninfo* funcInfo) {
+    auto& context = builder.getContext();
+
     /*
     if (functionName == "GetTickCount64") {
         SetRegisterValue(
@@ -17,75 +124,22 @@ void callFunctionIR(string functionName, IRBuilder<>& builder) {
             ConstantInt::get(builder.getInt64Ty(), 1)); // rax = externalfunc()
         return;
     }
-*/
-    FunctionType* externFuncType = FunctionType::get(
-        Type::getInt64Ty(context),
-        {llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context)},
-        false);
+    */
+
+    // TODO: lololololololol wtf
+    if (!funcInfo) {
+        // try to get funcinfo from name
+        funcInfo = funcsignatures::getFunctionInfo(functionName);
+    }
+    FunctionType* externFuncType = parseArgsType(funcInfo, context);
     auto M = builder.GetInsertBlock()->getParent()->getParent();
 
     // what about ordinals???????
     Function* externFunc = cast<Function>(
         M->getOrInsertFunction(functionName, externFuncType).getCallee());
     // fix calling
-    auto RspRegister = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
-    auto callresult = builder.CreateCall(
-        externFunc,
-        {createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_RAX),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_RCX),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_RDX),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_RBX),
-                          Type::getInt64Ty(context)),
-         RspRegister,
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_RBP),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_RSI),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_RDI),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_RDI),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R8),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder, GetRegisterValue(builder, ZYDIS_REGISTER_R9),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_R10),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_R11),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_R12),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_R13),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_R14),
-                          Type::getInt64Ty(context)),
-         createZExtFolder(builder,
-                          GetRegisterValue(builder, ZYDIS_REGISTER_R15),
-                          Type::getInt64Ty(context)),
-         getMemory()});
+    vector<Value*> args = parseArgs(funcInfo, builder);
+    auto callresult = builder.CreateCall(externFunc, args);
     SetRegisterValue(builder, ZYDIS_REGISTER_RAX,
                      callresult); // rax = externalfunc()
     // check if the function is exit or something similar to that
@@ -732,7 +786,7 @@ namespace branches {
             if (!isa<ConstantInt>(registerValue)) {
 
                 callFunctionIR(registerValue->getName().str() + "fnc_ptr",
-                               builder);
+                               builder, nullptr);
 
                 SetOperandValue(builder, rsp, RspValue,
                                 to_string(instruction.runtime_address));
@@ -4599,10 +4653,10 @@ void liftInstruction(IRBuilder<>& builder,
     printvalue(rsp);
 
     // I hate how getFunctionInfo returns a string pointer
-    if (auto fname =
+    if (auto funcInfo =
             funcsignatures::getFunctionInfo(instruction.runtime_address)) {
-        callFunctionIR(fname->c_str(), builder);
-        cout << "calling" << fname->c_str() << "\n";
+        callFunctionIR(funcInfo->name.c_str(), builder, funcInfo);
+        cout << "calling: " << funcInfo->name.c_str() << "\n";
         auto next_jump = popStack(builder);
 
         // get [rsp], jump there
@@ -4631,7 +4685,7 @@ void liftInstruction(IRBuilder<>& builder,
         cout << "calling : " << functionName
              << " addr: " << (uint64_t)jump_address << endl;
 
-        callFunctionIR(functionName, builder);
+        callFunctionIR(functionName, builder, nullptr);
 
         auto next_jump = popStack(builder);
 
