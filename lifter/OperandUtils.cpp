@@ -192,7 +192,7 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
     if (!effectiveAddressInt)
         return nullptr;
 
-    uintptr_t addr = effectiveAddressInt->getZExtValue();
+    uint64_t addr = effectiveAddressInt->getZExtValue();
 
     // also the second case
     if (addr > 0 && addr < STACKP_VALUE) {
@@ -365,7 +365,7 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     return simplifyValue(builder.CreateLShr(LHS, RHS, Name), DL);
 }
 
-Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS,
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uint64_t RHS,
                        const Twine& Name) {
     return createShlFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS),
                            Name);
@@ -377,7 +377,7 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS,
                            Name);
 }
 
-Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS,
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, uint64_t RHS,
                         const Twine& Name) {
     return createLShrFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS),
                             Name);
@@ -1149,7 +1149,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
             if (!effectiveAddressInt)
                 return nullptr;
 
-            uintptr_t addr = effectiveAddressInt->getZExtValue();
+            uint64_t addr = effectiveAddressInt->getZExtValue();
 
             unsigned byteSize = loadType->getIntegerBitWidth() / 8;
 
@@ -1390,7 +1390,7 @@ Value* popStack(IRBuilder<>& builder) {
         if (!effectiveAddressInt)
             return nullptr;
 
-        uintptr_t addr = effectiveAddressInt->getZExtValue();
+        uint64_t addr = effectiveAddressInt->getZExtValue();
 
         unsigned byteSize = loadType->getBitWidth() / 8;
 

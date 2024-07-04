@@ -7,7 +7,7 @@ namespace funcsignatures {
 
     // replace functioninfo with std::string
     // so we can pass arguments
-    std::unordered_map<uintptr_t, std::string> functions;
+    std::unordered_map<uint64_t, std::string> functions;
 
     void createOffsetMap() {
         for (auto value : siglookup) {
@@ -17,7 +17,7 @@ namespace funcsignatures {
         }
     }
 
-    std::string* getFunctionInfo(uintptr_t addr) {
+    std::string* getFunctionInfo(uint64_t addr) {
         if (functions.count(addr) == 0)
             return nullptr;
         return &(functions[addr]);
@@ -25,7 +25,7 @@ namespace funcsignatures {
 
     functioninfo::functioninfo(const std::string& Name) : name(Name) {}
 
-    void functioninfo::add_offset(uintptr_t offset) {
+    void functioninfo::add_offset(uint64_t offset) {
         offsets.push_back(FileHelper::fileOffsetToRVA(offset));
     }
 

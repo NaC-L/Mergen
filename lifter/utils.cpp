@@ -24,7 +24,7 @@ namespace FileHelper {
         return 0;
     }
 
-    uintptr_t secCharacteristics(win::nt_headers_x64_t* ntHeaders,
+    uint64_t secCharacteristics(win::nt_headers_x64_t* ntHeaders,
                                  uint32_t rva) {
         auto sectionHeader = ntHeaders->get_sections();
         for (int i = 0; i < ntHeaders->file_header.num_sections;
@@ -38,7 +38,7 @@ namespace FileHelper {
         return 0;
     }
 
-    uintptr_t getSectionCharacteristics(void* fileBase, uintptr_t rva) {
+    uint64_t getSectionCharacteristics(void* fileBase, uint64_t rva) {
         auto dosHeader = (win::dos_header_t*)fileBase;
         auto ntHeaders =
             (win::nt_headers_x64_t*)((uint8_t*)fileBase + dosHeader->e_lfanew);
@@ -46,7 +46,7 @@ namespace FileHelper {
         return secCharacteristics(ntHeaders, ADDRESS);
     }
 
-    uintptr_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva) {
+    uint64_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva) {
         auto sectionHeader = ntHeaders->get_sections();
         for (int i = 0; i < ntHeaders->file_header.num_sections;
              i++, sectionHeader++) {
@@ -65,7 +65,7 @@ namespace FileHelper {
         return 0;
     }
 
-    uintptr_t address_to_mapped_address(void* fileBase, uintptr_t rva) {
+    uint64_t address_to_mapped_address(void* fileBase, uint64_t rva) {
         auto dosHeader = (win::dos_header_t*)fileBase;
         auto ntHeaders =
             (win::nt_headers_x64_t*)((uint8_t*)fileBase + dosHeader->e_lfanew);
@@ -73,7 +73,7 @@ namespace FileHelper {
         return RvaToFileOffset(ntHeaders, ADDRESS);
     }
 
-    uintptr_t fileOffsetToRVA(uintptr_t offset) {
+    uint64_t fileOffsetToRVA(uint64_t offset) {
         if (!fileBase)
             return 0;
         auto dosHeader = (win::dos_header_t*)fileBase;
@@ -129,7 +129,7 @@ namespace debugging {
                                            const char* name);
     template void printValue<long>(const long& v, const char* name);
     template void printValue<bool>(const bool& v, const char* name);
-    template void printValue<uintptr_t>(const uintptr_t& v, const char* name);
+    template void printValue<uint64_t>(const uint64_t& v, const char* name);
     template void printValue<long long>(const long long& v, const char* name);
     template void printValue<ValueLatticeElement>(const ValueLatticeElement& v,
                                                   const char* name);

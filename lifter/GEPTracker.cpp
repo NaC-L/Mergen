@@ -32,11 +32,11 @@ namespace BinaryOperations {
     void WriteTo(uint64_t addr) { MemWrites.insert(addr); }
 
     // sections
-    bool readMemory(uintptr_t addr, unsigned byteSize, APInt& value) {
+    bool readMemory(uint64_t addr, unsigned byteSize, APInt& value) {
 
-        uintptr_t mappedAddr =
+        uint64_t mappedAddr =
             FileHelper::address_to_mapped_address(file_base_g, addr);
-        uintptr_t tempValue;
+        uint64_t tempValue;
 
         if (mappedAddr > 0) {
             std::memcpy(&tempValue,
@@ -164,6 +164,7 @@ class lifterMemoryBuffer {
 
         for (unsigned i = 0; i < byteCount; i++) {
             unsigned currentAddress = startAddress + i;
+
             if (currentAddress < buffer.size() &&
                 buffer[currentAddress] != nullptr) {
                 auto* ref = buffer[currentAddress];
@@ -276,6 +277,7 @@ namespace GEPStoreTracker {
             return;
 
         auto gepOffsetCI = cast<ConstantInt>(gepOffset);
+
         if (gepOffsetCI->getZExtValue() < VirtualStack.buffer.size()) {
             VirtualStack.updateValueReference(inst, inst->getValueOperand(),
                                               gepOffsetCI->getZExtValue());
@@ -299,6 +301,7 @@ namespace GEPStoreTracker {
             return;
 
         auto gepOffsetCI = cast<ConstantInt>(gepOffset);
+
         if (gepOffsetCI->getZExtValue() < VirtualStack.buffer.size())
             VirtualStack.addValueReference(inst, inst->getValueOperand(),
                                            gepOffsetCI->getZExtValue());
@@ -411,6 +414,7 @@ namespace GEPStoreTracker {
                 // buffer is not stack
                 auto loadOffsetCIval = loadOffsetCI->getZExtValue();
                 printvalue2(loadOffsetCIval);
+
                 if (VirtualStack.buffer.size() > loadOffsetCIval) {
                     printvalue2(loadOffsetCIval);
                     IRBuilder<> builder(load);

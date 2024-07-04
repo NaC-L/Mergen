@@ -49,8 +49,8 @@ class RemovePseudoStackPass
 
                         if (auto* ConstInt = llvm::dyn_cast<llvm::ConstantInt>(
                                 OffsetOperand)) {
-                            uintptr_t constintvalue =
-                                (uintptr_t)ConstInt->getZExtValue();
+                            uint64_t constintvalue =
+                                (uint64_t)ConstInt->getZExtValue();
                             if (constintvalue < STACKP_VALUE) {
                                 GEP->setOperand((GEP->getNumOperands() - 2),
                                                 stackMemory);
@@ -65,6 +65,7 @@ class RemovePseudoStackPass
     }
 };
 
+// refactor
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
   public:
     void* file_base;
@@ -84,9 +85,9 @@ class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
                             GEP->getOperand(GEP->getNumOperands() - 1);
                         if (auto* ConstInt = llvm::dyn_cast<llvm::ConstantInt>(
                                 OffsetOperand)) {
-                            uintptr_t constintvalue =
-                                (uintptr_t)ConstInt->getZExtValue();
-                            if (uintptr_t offset =
+                            uint64_t constintvalue =
+                                (uint64_t)ConstInt->getZExtValue();
+                            if (uint64_t offset =
                                     FileHelper::address_to_mapped_address(
                                         file_base, constintvalue)) {
                                 for (auto* User : GEP->users()) {
@@ -98,7 +99,7 @@ class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 
                                         unsigned byteSize =
                                             loadType->getIntegerBitWidth() / 8;
-                                        uintptr_t tempvalue;
+                                        uint64_t tempvalue;
 
                                         std::memcpy(
                                             &tempvalue,

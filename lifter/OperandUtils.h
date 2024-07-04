@@ -40,7 +40,7 @@ Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
 Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                         const Twine& Name = "");
 
-Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS,
+Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, uint64_t RHS,
                         const Twine& Name = "");
 
 Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS,
@@ -49,7 +49,7 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS,
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name = "");
 
-Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uintptr_t RHS,
+Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uint64_t RHS,
                        const Twine& Name = "");
 
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS,
