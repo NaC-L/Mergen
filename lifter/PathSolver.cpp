@@ -229,8 +229,9 @@ void final_optpass(Function* clonedFuncx) {
 
   modulePassManager =
       passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-  modulePassManager.addPass(PromotePseudoMemory());
+
   modulePassManager.addPass(ResizeAllocatedStackPass());
+  modulePassManager.addPass(PromotePseudoMemory());
 
   modulePassManager.run(*module, moduleAnalysisManager);
 }
