@@ -5,6 +5,7 @@
 #include "OperandUtils.h"
 #include "includes.h"
 #include "llvm/IR/PassManager.h"
+#include <llvm/Analysis/WithCache.h>
 #include <llvm/IR/Instructions.h>
 
 class PromotePseudoStackPass
@@ -191,6 +192,78 @@ public:
         Inst->eraseFromParent();
       }
       toPromote.clear();
+    }
+    return hasChanged ? llvm::PreservedAnalyses::none()
+                      : llvm::PreservedAnalyses::all();
+  }
+};
+class ResizeAllocatedStackPass
+    : public llvm::PassInfoMixin<ResizeAllocatedStackPass> {
+public:
+  llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
+
+    std::vector<llvm::Instruction*> toResize;
+
+    uint64_t smallest = -1;
+    bool hasChanged = false;
+
+    for (auto& F : M) {
+      if (F.isDeclaration())
+        continue;
+      Instruction* Allocated = &(F.getEntryBlock().front());
+      // Assuming printvalueforce and printvalueforce2 are functions you have
+      // defined
+      printvalueforce(Allocated);
+      for (auto& BB : F) {
+        for (auto& I : BB) {
+          if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
+            if (GEP->getOperand(0) == Allocated) {
+              auto offset = GEP->getOperand(1);
+              toResize.push_back(GEP);
+              // early continue if offset is a constant
+              if (ConstantInt* offsetCI = dyn_cast<ConstantInt>(offset)) {
+                smallest = std::min(offsetCI->getZExtValue(), smallest);
+                continue;
+              }
+              auto offsetKB = computeKnownBits(offset, M.getDataLayout());
+              printvalueforce2(offsetKB);
+              auto StackSize = APInt(64, STACKP_VALUE);
+              auto SSKB = KnownBits::makeConstant(StackSize);
+              if (KnownBits::ult(offsetKB, SSKB)) {
+                // minimum of offsetKB
+                smallest =
+                    std::min(offsetKB.getMinValue().getZExtValue(), smallest);
+              }
+            }
+          }
+        }
+      }
+      IRBuilder<> builder(M.getContext());
+      auto allocainst = cast<AllocaInst>(Allocated);
+      auto allocaType = allocainst->getAllocatedType();
+
+      auto allocationSize = M.getDataLayout().getTypeAllocSize(allocaType) / 16;
+
+      auto newSize = allocationSize - smallest;
+
+      Type* newType =
+          ArrayType::get(Type::getInt8Ty(allocainst->getContext()), newSize);
+
+      builder.SetInsertPoint(allocainst);
+      AllocaInst* newAlloca = builder.CreateAlloca(
+          newType, nullptr, allocainst->getName() + ".resized");
+
+      allocainst->replaceAllUsesWith(newAlloca);
+      allocainst->eraseFromParent();
+
+      for (llvm::Instruction* GEPInst : toResize) {
+        builder.SetInsertPoint(GEPInst->getPrevNode());
+        auto val = GEPInst->getOperand(1);
+        Value* newval = builder.CreateSub(val, builder.getInt64(smallest));
+        val->replaceAllUsesWith(newval);
+      }
+
+      toResize.clear();
     }
     return hasChanged ? llvm::PreservedAnalyses::none()
                       : llvm::PreservedAnalyses::all();
