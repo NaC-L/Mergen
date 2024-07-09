@@ -4,31 +4,31 @@
 #include "includes.h"
 namespace BinaryOperations {
 
-    const char* getName(uint64_t offset);
+  const char* getName(uint64_t offset);
 
-    void initBases(void* file_base, ZyanU8* data);
+  void initBases(void* file_base, ZyanU8* data);
 
-    void getBases(void** file_base, ZyanU8** data);
+  void getBases(void** file_base, ZyanU8** data);
 
-    bool readMemory(uint64_t addr, unsigned byteSize, APInt& value);
+  bool readMemory(uint64_t addr, unsigned byteSize, APInt& value);
 
-    bool isWrittenTo(uint64_t addr);
+  bool isWrittenTo(uint64_t addr);
 
 }; // namespace BinaryOperations
 
 namespace GEPStoreTracker {
 
-    void initDomTree(Function& F);
+  void initDomTree(Function& F);
 
-    void updateDomTree(Function& F);
+  void updateDomTree(Function& F);
 
-    Value* solveLoad(LoadInst* inst, bool buildTime = 1);
+  Value* solveLoad(LoadInst* inst, bool buildTime = 1);
 
-    DominatorTree* getDomTree();
+  DominatorTree* getDomTree();
 
-    void insertMemoryOp(StoreInst* inst);
+  void insertMemoryOp(StoreInst* inst);
 
-    void updateMemoryOp(StoreInst* inst);
+  void updateMemoryOp(StoreInst* inst);
 
 }; // namespace GEPStoreTracker
 
