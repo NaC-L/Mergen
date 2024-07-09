@@ -254,7 +254,7 @@ public:
       auto allocaType = allocainst->getAllocatedType();
 
       auto allocationSize = M.getDataLayout().getTypeAllocSize(allocaType) / 16;
-
+      // / 16 because i128 is (i) 8 x 16
       auto newSize = allocationSize - smallest;
 
       Type* newType =
