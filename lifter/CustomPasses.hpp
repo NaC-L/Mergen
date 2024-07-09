@@ -30,6 +30,7 @@ public:
         for (auto& I : BB) {
           if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
 
+            // TODO: prettify here!!!
             auto* MemoryOperand = GEP->getOperand(GEP->getNumOperands() - 2);
             // printvalue(MemoryOperand)
             // printvalue(memory)
@@ -40,14 +41,22 @@ public:
             auto* OffsetOperand = GEP->getOperand(GEP->getNumOperands() - 1);
             // printvalue(OffsetOperand)
 
-            if (!isa<ConstantInt>(OffsetOperand))
-              continue; // ??? also we can use knwonbits here but
-                        // MEH
+            if (isa<ConstantInt>(OffsetOperand)) {
+              if (auto* ConstInt =
+                      llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
+                uint64_t constintvalue = (uint64_t)ConstInt->getZExtValue();
+                if (constintvalue < STACKP_VALUE) {
+                  GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
+                }
+              }
+            } else if (!isa<ConstantInt>(OffsetOperand)) {
+              auto offsetKB =
+                  computeKnownBits(OffsetOperand, M.getDataLayout());
+              auto StackSize = APInt(64, STACKP_VALUE);
 
-            if (auto* ConstInt =
-                    llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
-              uint64_t constintvalue = (uint64_t)ConstInt->getZExtValue();
-              if (constintvalue < STACKP_VALUE) {
+              auto SSKB = KnownBits::makeConstant(StackSize);
+              if (KnownBits::ult(offsetKB, SSKB)) {
+                // minimum of offsetKB
                 GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
               }
             }
@@ -211,9 +220,9 @@ public:
       if (F.isDeclaration())
         continue;
       Instruction* Allocated = &(F.getEntryBlock().front());
-      // Assuming printvalueforce and printvalueforce2 are functions you have
-      // defined
-      printvalueforce(Allocated);
+
+      if (!isa<AllocaInst>(Allocated))
+        continue;
       for (auto& BB : F) {
         for (auto& I : BB) {
           if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
@@ -226,7 +235,6 @@ public:
                 continue;
               }
               auto offsetKB = computeKnownBits(offset, M.getDataLayout());
-              printvalueforce2(offsetKB);
               auto StackSize = APInt(64, STACKP_VALUE);
               auto SSKB = KnownBits::makeConstant(StackSize);
               if (KnownBits::ult(offsetKB, SSKB)) {
