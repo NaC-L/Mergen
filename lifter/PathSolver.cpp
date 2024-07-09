@@ -215,7 +215,7 @@ void final_optpass(Function* clonedFuncx) {
         passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
     modulePassManager.addPass(GEPLoadPass());
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
-    modulePassManager.addPass(RemovePseudoStackPass());
+    modulePassManager.addPass(PromotePseudoStackPass());
 
     modulePassManager.run(*module, moduleAnalysisManager);
 
@@ -229,7 +229,7 @@ void final_optpass(Function* clonedFuncx) {
 
   modulePassManager =
       passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
-  modulePassManager.addPass(RemovePseudoMemory());
+  modulePassManager.addPass(PromotePseudoMemory());
 
   modulePassManager.run(*module, moduleAnalysisManager);
 }
