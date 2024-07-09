@@ -49,17 +49,18 @@ public:
                   GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
                 }
               }
-            } else if (!isa<ConstantInt>(OffsetOperand)) {
-              auto offsetKB =
-                  computeKnownBits(OffsetOperand, M.getDataLayout());
-              auto StackSize = APInt(64, STACKP_VALUE);
-
-              auto SSKB = KnownBits::makeConstant(StackSize);
-              if (KnownBits::ult(offsetKB, SSKB)) {
-                // minimum of offsetKB
-                GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
-              }
+              continue;
             }
+            // if OffsetOperand is not a constant:
+            auto offsetKB = computeKnownBits(OffsetOperand, M.getDataLayout());
+            auto StackSize = APInt(64, STACKP_VALUE);
+
+            auto SSKB = KnownBits::makeConstant(StackSize);
+            if (KnownBits::ult(offsetKB, SSKB)) {
+              // minimum of offsetKB
+              GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
+            }
+            // endif
           }
         }
       }
@@ -234,6 +235,7 @@ public:
                 smallest = std::min(offsetCI->getZExtValue(), smallest);
                 continue;
               }
+              // if offsetCI is not a constant
               auto offsetKB = computeKnownBits(offset, M.getDataLayout());
               auto StackSize = APInt(64, STACKP_VALUE);
               auto SSKB = KnownBits::makeConstant(StackSize);
@@ -242,6 +244,7 @@ public:
                 smallest =
                     std::min(offsetKB.getMinValue().getZExtValue(), smallest);
               }
+              // endif
             }
           }
         }
