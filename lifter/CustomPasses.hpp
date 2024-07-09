@@ -7,8 +7,8 @@
 #include "llvm/IR/PassManager.h"
 #include <llvm/IR/Instructions.h>
 
-class RemovePseudoStackPass
-    : public llvm::PassInfoMixin<RemovePseudoStackPass> {
+class PromotePseudoStackPass
+    : public llvm::PassInfoMixin<PromotePseudoStackPass> {
 public:
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
@@ -161,11 +161,11 @@ convert
 to
 %GEPLoadxd-5368713239- = inttoptr i64 5368725620 to ptr
 */
-class RemovePseudoMemory : public llvm::PassInfoMixin<RemovePseudoMemory> {
+class PromotePseudoMemory : public llvm::PassInfoMixin<PromotePseudoMemory> {
 public:
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
-    std::vector<llvm::Instruction*> toRemove;
+    std::vector<llvm::Instruction*> toPromote;
     Value* memory = getMemory();
 
     bool hasChanged = false;
@@ -179,7 +179,7 @@ public:
 
               GEP->replaceAllUsesWith(newPTR);
 
-              toRemove.push_back(GEP);
+              toPromote.push_back(GEP);
 
               hasChanged = true;
             }
@@ -187,10 +187,10 @@ public:
         }
       }
 
-      for (llvm::Instruction* Inst : toRemove) {
+      for (llvm::Instruction* Inst : toPromote) {
         Inst->eraseFromParent();
       }
-      toRemove.clear();
+      toPromote.clear();
     }
     return hasChanged ? llvm::PreservedAnalyses::none()
                       : llvm::PreservedAnalyses::all();
