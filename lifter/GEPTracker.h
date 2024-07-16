@@ -3,7 +3,7 @@
 
 #include "includes.h"
 
-enum Assumption { Real, Assumed };
+enum Assumption { Real, Assumed }; // add None
 
 struct SolvedMemoryValue {
   Value* val;

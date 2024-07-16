@@ -112,8 +112,8 @@ public:
 
   */
   SolvedMemoryValue retrieveCombinedValue(IRBuilder<>& builder,
-                                          unsigned startAddress,
-                                          unsigned byteCount) {
+                                          uint64_t startAddress,
+                                          uint64_t byteCount) {
     LLVMContext& context = builder.getContext();
     if (byteCount == 0) {
 
@@ -124,8 +124,8 @@ public:
     bool contiguous = true;
 
     // modify this loop
-    for (unsigned i = 0; i < byteCount && contiguous; ++i) {
-      unsigned currentAddress = startAddress + i;
+    for (uint64_t i = 0; i < byteCount && contiguous; ++i) {
+      uint64_t currentAddress = startAddress + i;
       if (buffer[currentAddress] == nullptr) {
         contiguous = false;
         printvalue2(contiguous);
@@ -156,17 +156,19 @@ public:
     }
 
     // when do we want to return nullptr and when do we want to return 0 ?
-    Value* resultVal =
-        ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
-    SolvedMemoryValue result = SolvedMemoryValue(resultVal, Assumed);
+    SolvedMemoryValue result = SolvedMemoryValue(
+        ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0), Assumed);
 
-    for (unsigned i = 0; i < byteCount; i++) {
-      unsigned currentAddress = startAddress + i;
+    // this fucks the constants somehow
+    // FIX: value, (start, end), instead of Or'ing each bytes we can check if we
+    // can not break down values into bytes and merge it all again
+    for (uint64_t i = 0; i < byteCount; ++i) {
+      uint64_t currentAddress = startAddress + i;
 
       if (buffer[currentAddress] != nullptr) {
-        auto* ref = buffer[currentAddress];
+        ValueByteReference* ref = buffer[currentAddress];
         Value* byteValue = extractByte(builder, ref->value, ref->byteOffset);
-
+        printvalue2(i);
         printvalue(byteValue);
 
         Value* shiftedByteValue = createShlFolder(
@@ -283,7 +285,7 @@ namespace GEPStoreTracker {
       return;
 
     auto gepOffset = gepInst->getOperand(1);
-    if (!isa<ConstantInt>(gepOffset))
+    if (!isa<ConstantInt>(gepOffset)) // fix!!!!
       return;
 
     auto gepOffsetCI = cast<ConstantInt>(gepOffset);
@@ -398,10 +400,8 @@ namespace GEPStoreTracker {
         // todo: replace the condition to check if CI is in buffer where
         // buffer is not stack
         auto loadOffsetCIval = loadOffsetCI->getZExtValue();
-        printvalue2(loadOffsetCIval);
 
         if (STACKP_VALUE > loadOffsetCIval) {
-          printvalue2(loadOffsetCIval);
           IRBuilder<> builder(load);
           auto valueExtractedFromVirtualStack =
               VirtualStack.retrieveCombinedValue(builder, loadOffsetCIval,
