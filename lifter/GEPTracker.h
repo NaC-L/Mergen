@@ -2,6 +2,15 @@
 #define GEPTracker_H
 
 #include "includes.h"
+
+enum Assumption { Real, Assumed };
+
+struct SolvedMemoryValue {
+  Value* val;
+  Assumption assumption;
+  SolvedMemoryValue(Value* v, Assumption a) : val(v), assumption(a) {};
+};
+
 namespace BinaryOperations {
 
   const char* getName(uint64_t offset);
@@ -22,7 +31,7 @@ namespace GEPStoreTracker {
 
   void updateDomTree(Function& F);
 
-  Value* solveLoad(LoadInst* inst, bool buildTime = 1);
+  SolvedMemoryValue solveLoad(LoadInst* inst, bool buildTime = 1);
 
   DominatorTree* getDomTree();
 
