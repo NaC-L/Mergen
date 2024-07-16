@@ -98,7 +98,7 @@ KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL) {
   if (value->getType() == Type::getInt128Ty(value->getContext()))
     return knownBits;
 
-  auto KB = computeKnownBits(value, DL, 0);
+  auto KB = computeKnownBits(value, DL);
 
   // BLAME
   if (KB.getBitWidth() < 64)
@@ -195,7 +195,6 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
   if (addr > 0 && addr < STACKP_VALUE) {
     auto SLV = simplifyLoadValue(v);
     if (SLV.val)
-
       return SLV.val;
   }
 
@@ -516,6 +515,7 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
   KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
   KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+  printvalue2(KnownLHS) printvalue2(KnownRHS);
   if (Value* knownBitsAnd =
           foldOrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
     return knownBitsAnd;
@@ -526,7 +526,11 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
   }
 #endif
 
-  return createInstruction(builder, Instruction::Or, LHS, RHS, nullptr, Name);
+  auto result =
+      createInstruction(builder, Instruction::Or, LHS, RHS, nullptr, Name);
+  KnownBits KnownResult = analyzeValueKnownBits(result, DL);
+  printvalue2(KnownResult);
+  return result;
 }
 
 Value* foldXorKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -655,6 +659,7 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
   if (std::optional<bool> v = foldKnownBits(P, KnownLHS, KnownRHS)) {
     return ConstantInt::get(Type::getInt1Ty(builder.getContext()), v.value());
   }
+  printvalue2(KnownLHS) printvalue2(KnownRHS);
   printvalue(LHS) printvalue(RHS);
   if (auto patternCheck = ICMPPatternMatcher(builder, P, LHS, RHS, Name)) {
     printvalue(patternCheck);
@@ -733,13 +738,14 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
                          const Twine& Name) {
   Value* resulttrunc = builder.CreateTrunc(V, DestTy, Name);
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-#ifdef TESTFOLDER7
 
-  KnownBits KnownRHS = analyzeValueKnownBits(resulttrunc, DL);
-  if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 &&
-      KnownRHS.isConstant())
-    return ConstantInt::get(DestTy, KnownRHS.getConstant());
-#endif
+  KnownBits KnownLHS = analyzeValueKnownBits(V, DL);
+  printvalue2(KnownLHS);
+  KnownBits KnownTruncResult = analyzeValueKnownBits(resulttrunc, DL);
+  printvalue2(KnownTruncResult);
+  if (!KnownTruncResult.hasConflict() && KnownTruncResult.getBitWidth() > 1 &&
+      KnownTruncResult.isConstant())
+    return ConstantInt::get(DestTy, KnownTruncResult.getConstant());
   // TODO: CREATE A MAP FOR AVAILABLE TRUNCs/ZEXTs/SEXTs
   // WHY?
   // IF %y = trunc %x exists
@@ -1285,16 +1291,19 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
       APInt value(1, 0);
       SolvedMemoryValue solvedLoad = GEPStoreTracker::solveLoad(retval);
       if (solvedLoad.val) {
-        if (solvedLoad.assumption == Real && solvedLoad.val)
+        if (solvedLoad.assumption == Real) {
+          printvalue(solvedLoad.val);
           return solvedLoad.val;
-
-        if (BinaryOperations::readMemory(addr, byteSize, value)) {
-          Constant* newVal = ConstantInt::get(loadType, value);
-          printvalue(newVal);
-          return newVal;
         }
-        if (solvedLoad.val)
+        if (BinaryOperations::readMemory(addr, byteSize, value)) {
+          Constant* newVal_assumption = ConstantInt::get(loadType, value);
+          printvalue(newVal_assumption);
+          return newVal_assumption;
+        }
+        if (solvedLoad.val) {
+          printvalue(solvedLoad.val);
           return solvedLoad.val;
+        }
       }
 
       if (BinaryOperations::readMemory(addr, byteSize, value)) {
