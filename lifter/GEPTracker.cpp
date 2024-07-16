@@ -71,12 +71,7 @@ public:
 class lifterMemoryBuffer {
 public:
   std::unordered_map<uint64_t, ValueByteReference*> buffer;
-  ~lifterMemoryBuffer() {
 
-    for (auto& ref : buffer) {
-      delete buffer[ref.first];
-    }
-  }
   void addValueReference(Instruction* inst, Value* value, uint64_t address) {
     unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
     for (unsigned i = 0; i < valueSizeInBytes; i++) {
@@ -116,12 +111,13 @@ public:
   create a temp var for contiguous values
 
   */
-  Value* retrieveCombinedValue(IRBuilder<>& builder, unsigned startAddress,
-                               unsigned byteCount) {
+  SolvedMemoryValue retrieveCombinedValue(IRBuilder<>& builder,
+                                          unsigned startAddress,
+                                          unsigned byteCount) {
     LLVMContext& context = builder.getContext();
     if (byteCount == 0) {
 
-      return nullptr;
+      return SolvedMemoryValue(nullptr, Assumed);
     }
 
     Value* firstSource = nullptr;
@@ -130,8 +126,7 @@ public:
     // modify this loop
     for (unsigned i = 0; i < byteCount && contiguous; ++i) {
       unsigned currentAddress = startAddress + i;
-      if (currentAddress >= buffer.size() ||
-          buffer[currentAddress] == nullptr) {
+      if (buffer[currentAddress] == nullptr) {
         contiguous = false;
         printvalue2(contiguous);
         break;
@@ -148,41 +143,42 @@ public:
 
     if (contiguous && firstSource != nullptr &&
         byteCount <= firstSource->getType()->getIntegerBitWidth() / 8) {
-      return builder.CreateTrunc(firstSource,
-                                 Type::getIntNTy(context, byteCount * 8));
+      return SolvedMemoryValue(
+          builder.CreateTrunc(firstSource,
+                              Type::getIntNTy(context, byteCount * 8)),
+          Real); // ?
     }
 
     if (firstSource == nullptr) {
-      return ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
+      return SolvedMemoryValue(
+          ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0),
+          Assumed);
     }
 
     // when do we want to return nullptr and when do we want to return 0 ?
-    Value* result =
+    Value* resultVal =
         ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
+    SolvedMemoryValue result = SolvedMemoryValue(resultVal, Assumed);
 
     for (unsigned i = 0; i < byteCount; i++) {
       unsigned currentAddress = startAddress + i;
 
-      if (currentAddress < buffer.size() && buffer[currentAddress] != nullptr) {
+      if (buffer[currentAddress] != nullptr) {
         auto* ref = buffer[currentAddress];
         Value* byteValue = extractByte(builder, ref->value, ref->byteOffset);
 
         printvalue(byteValue);
-        if (!result) {
-          result = createZExtFolder(builder, byteValue,
-                                    Type::getIntNTy(context, byteCount * 8));
-        } else {
-          Value* shiftedByteValue = createShlFolder(
-              builder,
-              createZExtFolder(builder, byteValue,
-                               Type::getIntNTy(context, byteCount * 8)),
-              APInt(byteCount * 8, i * 8));
-          result = createOrFolder(builder, result, shiftedByteValue,
-                                  "extractbytesthing");
-        }
+
+        Value* shiftedByteValue = createShlFolder(
+            builder,
+            createZExtFolder(builder, byteValue,
+                             Type::getIntNTy(context, byteCount * 8)),
+            APInt(byteCount * 8, i * 8));
+        result.val = createOrFolder(builder, result.val, shiftedByteValue,
+                                    "extractbytesthing");
+        result.assumption = Real;
       }
     }
-    printvalue(result);
     return result;
   }
 
@@ -270,10 +266,8 @@ namespace GEPStoreTracker {
 
     auto gepOffsetCI = cast<ConstantInt>(gepOffset);
 
-    if (gepOffsetCI->getZExtValue() < VirtualStack.buffer.size()) {
-      VirtualStack.updateValueReference(inst, inst->getValueOperand(),
-                                        gepOffsetCI->getZExtValue());
-    }
+    VirtualStack.updateValueReference(inst, inst->getValueOperand(),
+                                      gepOffsetCI->getZExtValue());
   }
 
   void insertMemoryOp(StoreInst* inst) {
@@ -294,9 +288,8 @@ namespace GEPStoreTracker {
 
     auto gepOffsetCI = cast<ConstantInt>(gepOffset);
 
-    if (gepOffsetCI->getZExtValue() < VirtualStack.buffer.size())
-      VirtualStack.addValueReference(inst, inst->getValueOperand(),
-                                     gepOffsetCI->getZExtValue());
+    VirtualStack.addValueReference(inst, inst->getValueOperand(),
+                                   gepOffsetCI->getZExtValue());
     BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
   }
 
@@ -381,7 +374,7 @@ namespace GEPStoreTracker {
     }
   }
 
-  Value* solveLoad(LoadInst* load, bool buildTime) {
+  SolvedMemoryValue solveLoad(LoadInst* load, bool buildTime) {
     Function* F = load->getFunction();
     printvalue(load);
 
@@ -407,13 +400,13 @@ namespace GEPStoreTracker {
         auto loadOffsetCIval = loadOffsetCI->getZExtValue();
         printvalue2(loadOffsetCIval);
 
-        if (VirtualStack.buffer.size() > loadOffsetCIval) {
+        if (STACKP_VALUE > loadOffsetCIval) {
           printvalue2(loadOffsetCIval);
           IRBuilder<> builder(load);
-          if (auto valueExtractedFromVirtualStack =
-                  VirtualStack.retrieveCombinedValue(builder, loadOffsetCIval,
-                                                     cloadsize)) {
-            printvalue(valueExtractedFromVirtualStack);
+          auto valueExtractedFromVirtualStack =
+              VirtualStack.retrieveCombinedValue(builder, loadOffsetCIval,
+                                                 cloadsize);
+          if (valueExtractedFromVirtualStack.val) {
             return valueExtractedFromVirtualStack;
           }
         }
@@ -564,7 +557,7 @@ namespace GEPStoreTracker {
         debugging::doIfDebug([&]() { cout << "-------------------\n"; });
       }
     }
-    return retval;
+    return SolvedMemoryValue(retval, Real);
   }
 
 }; // namespace GEPStoreTracker
