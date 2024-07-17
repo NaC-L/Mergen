@@ -150,23 +150,45 @@ public:
         printvalue2(contiguous);
       }
 
-      if (values.empty() ||
-          (buffer[currentAddress] && values.back().isRef &&
-           values.back().valinfo.ref->value !=
-               buffer[currentAddress]
-                   ->value) || // if its a reference and not same
-          (!buffer[currentAddress] && !values.back().isRef &&
-           values.back().valinfo.memoryAddress !=
-               currentAddress) // if not a reference and not same
+      if (buffer[currentAddress] && buffer[currentAddress]->value) {
+        printvalue(buffer[currentAddress]->value);
+        printvalue2(buffer[currentAddress]->byteOffset);
+        if (!values.empty() && values.back().isRef) {
+          printvalue2(values.back().valinfo.ref->byteOffset);
+
+          printvalue2(buffer[currentAddress]->byteOffset - values.back().end +
+                      values.back().start);
+
+          printvalue(values.back().valinfo.ref->value);
+
+          printvalue2((uint64_t)values.back().end);
+
+          printvalue2((uint64_t)values.back().start);
+        }
+      }
+      // push if
+      if (values.empty() ||                                 // empty or
+          (buffer[currentAddress] && values.back().isRef && // ( its a reference
+           (values.back().valinfo.ref->value !=
+                buffer[currentAddress]
+                    ->value || // and references are not same or
+            values.back().valinfo.ref->byteOffset !=
+                buffer[currentAddress]->byteOffset - values.back().end +
+                    values.back().start)) //  reference offset is not directly
+                                          //  next value )
       ) {
 
-        if (buffer[currentAddress])
+        if (buffer[currentAddress]) {
+          bool pushing = 1;
+          printvalue2(pushing);
           values.push_back(
               ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
-        else {
+        } else {
           values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
         }
       } else {
+        bool increasing = 1;
+        printvalue2(increasing);
         ++values.back().end;
       }
     }
@@ -214,7 +236,7 @@ public:
         result = createOrFolder(builder, result, shiftedByteValue,
                                 "extractbytesthing");
       }
-      m++;
+      m += bytesize;
     }
 
     return result;
@@ -231,11 +253,21 @@ private:
     }
 
     uint64_t byteCount = endOffset - startOffset;
+
     uint64_t shiftAmount = startOffset * 8;
+
+    printvalue2(endOffset);
+
+    printvalue2(startOffset);
+    printvalue2(byteCount);
+    printvalue2(shiftAmount);
+
     Value* shiftedValue = createLShrFolder(
         builder, value,
         APInt(value->getType()->getIntegerBitWidth(), shiftAmount),
         "extractbytes");
+    printvalue(value);
+    printvalue(shiftedValue);
 
     Value* truncatedValue = createTruncFolder(
         builder, shiftedValue, Type::getIntNTy(context, byteCount * 8));
