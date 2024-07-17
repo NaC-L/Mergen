@@ -5,12 +5,6 @@
 
 enum Assumption { Real, Assumed }; // add None
 
-struct SolvedMemoryValue {
-  Value* val;
-  Assumption assumption;
-  SolvedMemoryValue(Value* v, Assumption a) : val(v), assumption(a) {};
-};
-
 namespace BinaryOperations {
 
   const char* getName(uint64_t offset);
@@ -31,7 +25,7 @@ namespace GEPStoreTracker {
 
   void updateDomTree(Function& F);
 
-  SolvedMemoryValue solveLoad(LoadInst* inst, bool buildTime = 1);
+  Value* solveLoad(LoadInst* inst, bool buildTime = 1);
 
   DominatorTree* getDomTree();
 
