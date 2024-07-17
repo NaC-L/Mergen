@@ -528,8 +528,6 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
 
   auto result =
       createInstruction(builder, Instruction::Or, LHS, RHS, nullptr, Name);
-  KnownBits KnownResult = analyzeValueKnownBits(result, DL);
-  printvalue2(KnownResult);
   return result;
 }
 
@@ -739,8 +737,6 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
   Value* resulttrunc = builder.CreateTrunc(V, DestTy, Name);
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 
-  KnownBits KnownLHS = analyzeValueKnownBits(V, DL);
-  printvalue2(KnownLHS);
   KnownBits KnownTruncResult = analyzeValueKnownBits(resulttrunc, DL);
   printvalue2(KnownTruncResult);
   if (!KnownTruncResult.hasConflict() && KnownTruncResult.getBitWidth() > 1 &&

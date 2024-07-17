@@ -147,25 +147,8 @@ public:
           buffer[currentAddress]->value != buffer[startAddress]->value ||
           buffer[currentAddress]->byteOffset != i) {
         contiguous = false; // non-contiguous value
-        printvalue2(contiguous);
       }
 
-      if (buffer[currentAddress] && buffer[currentAddress]->value) {
-        printvalue(buffer[currentAddress]->value);
-        printvalue2(buffer[currentAddress]->byteOffset);
-        if (!values.empty() && values.back().isRef) {
-          printvalue2(values.back().valinfo.ref->byteOffset);
-
-          printvalue2(buffer[currentAddress]->byteOffset - values.back().end +
-                      values.back().start);
-
-          printvalue(values.back().valinfo.ref->value);
-
-          printvalue2((uint64_t)values.back().end);
-
-          printvalue2((uint64_t)values.back().start);
-        }
-      }
       // push if
       if (values.empty() ||                                 // empty or
           (buffer[currentAddress] && values.back().isRef && // ( its a reference
@@ -179,16 +162,12 @@ public:
       ) {
 
         if (buffer[currentAddress]) {
-          bool pushing = 1;
-          printvalue2(pushing);
           values.push_back(
               ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
         } else {
           values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
         }
       } else {
-        bool increasing = 1;
-        printvalue2(increasing);
         ++values.back().end;
       }
     }
