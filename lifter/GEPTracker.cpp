@@ -70,13 +70,28 @@ public:
 
 class ValueByteReferenceRange {
 public:
-  ValueByteReference* ref;
+  union val {
+    ValueByteReference* ref;
+    uint64_t memoryAddress;
+
+    val(ValueByteReference* vref) : ref(vref) {}
+    val(uint64_t addr) : memoryAddress(addr) {}
+
+  } valinfo;
+  bool isRef;
+
+  // size info, we can make this smaller because they can only be 0-8 range
+  // (maybe higher for avx)
   uint8_t start;
   uint8_t end;
 
   ValueByteReferenceRange(ValueByteReference* vref, uint8_t startv,
                           uint8_t endv)
-      : ref(vref), start(startv), end(endv) {}
+      : valinfo(vref), start(startv), end(endv), isRef(true) {}
+
+  // Constructor for ValueByteReferenceRange using memoryAddress
+  ValueByteReferenceRange(uint64_t addr, uint8_t startv, uint8_t endv)
+      : valinfo(addr), start(startv), end(endv), isRef(false) {}
 };
 
 class lifterMemoryBuffer {
@@ -116,26 +131,16 @@ public:
     }
   }
 
-  // goal : get rid of excess operations
-  /*
-  how?
-  create a temp var for contiguous values
-
-  */
-  SolvedMemoryValue retrieveCombinedValue(IRBuilder<>& builder,
-                                          uint64_t startAddress,
-                                          uint64_t byteCount) {
+  Value* retrieveCombinedValue(IRBuilder<>& builder, uint64_t startAddress,
+                               uint64_t byteCount) {
     LLVMContext& context = builder.getContext();
     if (byteCount == 0) {
-      return SolvedMemoryValue(nullptr, Assumed);
+      return nullptr;
     }
 
     bool contiguous = true;
 
-    // if no value, assume its 0. We can only assume its 0 if its on stack
-    // what if its a partial? move this to somewhere else and refine
-
-    vector<ValueByteReferenceRange> values;
+    vector<ValueByteReferenceRange> values; // we can just create an array here
     for (uint64_t i = 0; i < byteCount; ++i) {
       uint64_t currentAddress = startAddress + i;
       if (buffer[currentAddress] == nullptr ||
@@ -146,11 +151,21 @@ public:
       }
 
       if (values.empty() ||
-          (values.back().ref != buffer[currentAddress] &&
-           (values.back().ref && buffer[currentAddress] &&
-            values.back().ref->value != buffer[currentAddress]->value))) {
-        values.push_back(
-            ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
+          (buffer[currentAddress] && values.back().isRef &&
+           values.back().valinfo.ref->value !=
+               buffer[currentAddress]
+                   ->value) || // if its a reference and not same
+          (!buffer[currentAddress] && !values.back().isRef &&
+           values.back().valinfo.memoryAddress !=
+               currentAddress) // if not a reference and not same
+      ) {
+
+        if (buffer[currentAddress])
+          values.push_back(
+              ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
+        else {
+          values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
+        }
       } else {
         ++values.back().end;
       }
@@ -158,27 +173,37 @@ public:
 
     // if value is contiguous and value exists but we are trying to load a
     // truncated value
+    // no need for this ?
+    /*
     if (contiguous && buffer[startAddress] &&
         byteCount <=
             buffer[startAddress]->value->getType()->getIntegerBitWidth() / 8) {
-      return SolvedMemoryValue(
-          builder.CreateTrunc(buffer[startAddress]->value,
-                              Type::getIntNTy(context, byteCount * 8)),
-          Real); // ?
+      return builder.CreateTrunc(buffer[startAddress]->value,
+                                 Type::getIntNTy(context, byteCount * 8)); // ?
     }
+    */
 
     // when do we want to return nullptr and when do we want to return 0?
-    SolvedMemoryValue result = SolvedMemoryValue(
-        ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0), Assumed);
+    // we almost always want to return a value
+    Value* result =
+        ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
 
     int m = 0;
     for (auto v : values) {
-      if (v.ref != nullptr) {
-        printvalue(v.ref->value) printvalue2(v.ref->byteOffset)
-            printvalue2(v.ref->byteOffset + v.end - v.start);
-        Value* byteValue =
-            extractBytes(builder, v.ref->value, v.ref->byteOffset,
-                         v.ref->byteOffset + v.end - v.start);
+      Value* byteValue = nullptr;
+      unsigned bytesize = v.end - v.start;
+
+      APInt mem_value(1, 0);
+      if (v.isRef && v.valinfo.ref != nullptr) {
+        byteValue = extractBytes(builder, v.valinfo.ref->value,
+                                 v.valinfo.ref->byteOffset,
+                                 v.valinfo.ref->byteOffset + bytesize);
+      } else if (!v.isRef &&
+                 BinaryOperations::readMemory(v.valinfo.memoryAddress, bytesize,
+                                              mem_value)) {
+        byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
+      }
+      if (byteValue) {
         printvalue(byteValue);
 
         Value* shiftedByteValue = createShlFolder(
@@ -186,9 +211,8 @@ public:
             createZExtFolder(builder, byteValue,
                              Type::getIntNTy(context, byteCount * 8)),
             APInt(byteCount * 8, m * 8));
-        result.val = createOrFolder(builder, result.val, shiftedByteValue,
-                                    "extractbytesthing");
-        result.assumption = Real;
+        result = createOrFolder(builder, result, shiftedByteValue,
+                                "extractbytesthing");
       }
       m++;
     }
@@ -393,7 +417,7 @@ namespace GEPStoreTracker {
     }
   }
 
-  SolvedMemoryValue solveLoad(LoadInst* load, bool buildTime) {
+  Value* solveLoad(LoadInst* load, bool buildTime) {
     Function* F = load->getFunction();
     printvalue(load);
 
@@ -414,15 +438,13 @@ namespace GEPStoreTracker {
       if (isa<ConstantInt>(loadOffset)) {
         auto loadOffsetCI = cast<ConstantInt>(loadOffset);
 
-        // todo: replace the condition to check if CI is in buffer where
-        // buffer is not stack
         auto loadOffsetCIval = loadOffsetCI->getZExtValue();
 
         IRBuilder<> builder(load);
         auto valueExtractedFromVirtualStack =
             VirtualStack.retrieveCombinedValue(builder, loadOffsetCIval,
                                                cloadsize);
-        if (valueExtractedFromVirtualStack.val) {
+        if (valueExtractedFromVirtualStack) {
           return valueExtractedFromVirtualStack;
         }
       }
@@ -572,7 +594,7 @@ namespace GEPStoreTracker {
         debugging::doIfDebug([&]() { cout << "-------------------\n"; });
       }
     }
-    return SolvedMemoryValue(retval, Real);
+    return retval;
   }
 
 }; // namespace GEPStoreTracker

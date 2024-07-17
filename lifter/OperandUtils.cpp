@@ -141,7 +141,7 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
   return v;
 }
 
-SolvedMemoryValue simplifyLoadValue(Value* v) {
+Value* simplifyLoadValue(Value* v) {
 
   Instruction* inst = cast<Instruction>(v);
   Function& F = *inst->getFunction();
@@ -151,7 +151,7 @@ SolvedMemoryValue simplifyLoadValue(Value* v) {
   auto GEPVal = LInst->getPointerOperand();
 
   if (!isa<GetElementPtrInst>(GEPVal))
-    return SolvedMemoryValue(nullptr, Assumed);
+    return nullptr;
 
   auto GEPInst = cast<GetElementPtrInst>(GEPVal);
 
@@ -191,11 +191,11 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 
   uint64_t addr = effectiveAddressInt->getZExtValue();
 
-  // also the second case
+  // test here
   if (addr > 0 && addr < STACKP_VALUE) {
     auto SLV = simplifyLoadValue(v);
-    if (SLV.val)
-      return SLV.val;
+    if (SLV)
+      return SLV;
   }
 
   unsigned byteSize = v->getType()->getIntegerBitWidth() / 8;
@@ -1289,28 +1289,9 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
       unsigned byteSize = loadType->getIntegerBitWidth() / 8;
 
       APInt value(1, 0);
-      SolvedMemoryValue solvedLoad = GEPStoreTracker::solveLoad(retval);
-      if (solvedLoad.val) {
-        if (solvedLoad.assumption == Real) {
-          printvalue(solvedLoad.val);
-          return solvedLoad.val;
-        }
-        if (BinaryOperations::readMemory(addr, byteSize, value)) {
-          Constant* newVal_assumption = ConstantInt::get(loadType, value);
-          printvalue(newVal_assumption);
-          return newVal_assumption;
-        }
-        if (solvedLoad.val) {
-          printvalue(solvedLoad.val);
-          return solvedLoad.val;
-        }
-      }
-
-      if (BinaryOperations::readMemory(addr, byteSize, value)) {
-
-        Constant* newVal = ConstantInt::get(loadType, value);
-        printvalue(newVal);
-        return newVal;
+      Value* solvedLoad = GEPStoreTracker::solveLoad(retval);
+      if (solvedLoad) {
+        return solvedLoad;
       }
     }
 
@@ -1536,18 +1517,9 @@ Value* popStack(IRBuilder<>& builder) {
     unsigned byteSize = loadType->getBitWidth() / 8;
 
     APInt value(1, 0);
-    SolvedMemoryValue solvedLoad = GEPStoreTracker::solveLoad(returnValue);
-    if (solvedLoad.val) {
-      if (solvedLoad.assumption == Real)
-        return solvedLoad.val;
-
-      if (BinaryOperations::readMemory(addr, byteSize, value)) {
-        Constant* newVal = ConstantInt::get(loadType, value);
-        printvalue(newVal);
-        return newVal;
-      }
-      if (solvedLoad.val)
-        return solvedLoad.val;
+    Value* solvedLoad = GEPStoreTracker::solveLoad(returnValue);
+    if (solvedLoad) {
+      return solvedLoad;
     }
   }
 
