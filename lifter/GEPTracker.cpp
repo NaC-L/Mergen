@@ -116,52 +116,39 @@ public:
                                           uint64_t byteCount) {
     LLVMContext& context = builder.getContext();
     if (byteCount == 0) {
-
       return SolvedMemoryValue(nullptr, Assumed);
     }
 
-    Value* firstSource = nullptr;
     bool contiguous = true;
 
-    // modify this loop
-    for (uint64_t i = 0; i < byteCount && contiguous; ++i) {
+    // if no value, assume its 0. We can only assume its 0 if its on stack
+    // what if its a partial? move this to somewhere else and refine
+
+    for (uint64_t i = 0; i < byteCount; ++i) {
       uint64_t currentAddress = startAddress + i;
-      if (buffer[currentAddress] == nullptr) {
-        contiguous = false;
-        printvalue2(contiguous);
-        break;
-      }
-      if (i == 0) {
-        firstSource = buffer[currentAddress]->value;
-      }
-      if (buffer[currentAddress]->value != firstSource ||
+      if (buffer[currentAddress] == nullptr ||
+          buffer[currentAddress]->value != buffer[startAddress]->value ||
           buffer[currentAddress]->byteOffset != i) {
-        contiguous = false;
+        contiguous = false; // non-contiguous value
         printvalue2(contiguous);
       }
     }
 
-    if (contiguous && firstSource != nullptr &&
-        byteCount <= firstSource->getType()->getIntegerBitWidth() / 8) {
+    // if value is contiguous and value exists but we are trying to load a
+    // truncated value
+    if (contiguous && buffer[startAddress] &&
+        byteCount <=
+            buffer[startAddress]->value->getType()->getIntegerBitWidth() / 8) {
       return SolvedMemoryValue(
-          builder.CreateTrunc(firstSource,
+          builder.CreateTrunc(buffer[startAddress]->value,
                               Type::getIntNTy(context, byteCount * 8)),
           Real); // ?
     }
 
-    if (firstSource == nullptr) {
-      return SolvedMemoryValue(
-          ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0),
-          Assumed);
-    }
-
-    // when do we want to return nullptr and when do we want to return 0 ?
+    // when do we want to return nullptr and when do we want to return 0?
     SolvedMemoryValue result = SolvedMemoryValue(
         ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0), Assumed);
 
-    // this fucks the constants somehow
-    // FIX: value, (start, end), instead of Or'ing each bytes we can check if we
-    // can not break down values into bytes and merge it all again
     for (uint64_t i = 0; i < byteCount; ++i) {
       uint64_t currentAddress = startAddress + i;
 
@@ -181,6 +168,7 @@ public:
         result.assumption = Real;
       }
     }
+
     return result;
   }
 
