@@ -68,6 +68,17 @@ public:
       : storeInst(inst), value(val), byteOffset(offset) {}
 };
 
+class ValueByteReferenceRange {
+public:
+  ValueByteReference* ref;
+  uint8_t start;
+  uint8_t end;
+
+  ValueByteReferenceRange(ValueByteReference* vref, uint8_t startv,
+                          uint8_t endv)
+      : ref(vref), start(startv), end(endv) {}
+};
+
 class lifterMemoryBuffer {
 public:
   std::unordered_map<uint64_t, ValueByteReference*> buffer;
@@ -124,6 +135,7 @@ public:
     // if no value, assume its 0. We can only assume its 0 if its on stack
     // what if its a partial? move this to somewhere else and refine
 
+    vector<ValueByteReferenceRange> values;
     for (uint64_t i = 0; i < byteCount; ++i) {
       uint64_t currentAddress = startAddress + i;
       if (buffer[currentAddress] == nullptr ||
@@ -131,6 +143,16 @@ public:
           buffer[currentAddress]->byteOffset != i) {
         contiguous = false; // non-contiguous value
         printvalue2(contiguous);
+      }
+
+      if (values.empty() ||
+          (values.back().ref != buffer[currentAddress] &&
+           (values.back().ref && buffer[currentAddress] &&
+            values.back().ref->value != buffer[currentAddress]->value))) {
+        values.push_back(
+            ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
+      } else {
+        ++values.back().end;
       }
     }
 
@@ -149,44 +171,51 @@ public:
     SolvedMemoryValue result = SolvedMemoryValue(
         ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0), Assumed);
 
-    for (uint64_t i = 0; i < byteCount; ++i) {
-      uint64_t currentAddress = startAddress + i;
-
-      if (buffer[currentAddress] != nullptr) {
-        ValueByteReference* ref = buffer[currentAddress];
-        Value* byteValue = extractByte(builder, ref->value, ref->byteOffset);
-        printvalue2(i);
+    int m = 0;
+    for (auto v : values) {
+      if (v.ref != nullptr) {
+        printvalue(v.ref->value) printvalue2(v.ref->byteOffset)
+            printvalue2(v.ref->byteOffset + v.end - v.start);
+        Value* byteValue =
+            extractBytes(builder, v.ref->value, v.ref->byteOffset,
+                         v.ref->byteOffset + v.end - v.start);
         printvalue(byteValue);
 
         Value* shiftedByteValue = createShlFolder(
             builder,
             createZExtFolder(builder, byteValue,
                              Type::getIntNTy(context, byteCount * 8)),
-            APInt(byteCount * 8, i * 8));
+            APInt(byteCount * 8, m * 8));
         result.val = createOrFolder(builder, result.val, shiftedByteValue,
                                     "extractbytesthing");
         result.assumption = Real;
       }
+      m++;
     }
 
     return result;
   }
 
 private:
-  Value* extractByte(IRBuilder<>& builder, Value* value, uint64_t byteOffset) {
+  Value* extractBytes(IRBuilder<>& builder, Value* value, uint64_t startOffset,
+                      uint64_t endOffset) {
+    LLVMContext& context = builder.getContext();
 
     if (!value) {
-      return ConstantInt::get(Type::getInt8Ty(builder.getContext()), 0);
+      return ConstantInt::get(
+          Type::getIntNTy(context, (endOffset - startOffset) * 8), 0);
     }
-    uint64_t shiftAmount = byteOffset * 8;
+
+    uint64_t byteCount = endOffset - startOffset;
+    uint64_t shiftAmount = startOffset * 8;
     Value* shiftedValue = createLShrFolder(
         builder, value,
         APInt(value->getType()->getIntegerBitWidth(), shiftAmount),
-        "extractbyte");
-    printvalue2(shiftAmount);
-    printvalue(shiftedValue);
-    return createTruncFolder(builder, shiftedValue,
-                             Type::getInt8Ty(builder.getContext()));
+        "extractbytes");
+
+    Value* truncatedValue = createTruncFolder(
+        builder, shiftedValue, Type::getIntNTy(context, byteCount * 8));
+    return truncatedValue;
   }
 };
 
@@ -389,14 +418,12 @@ namespace GEPStoreTracker {
         // buffer is not stack
         auto loadOffsetCIval = loadOffsetCI->getZExtValue();
 
-        if (STACKP_VALUE > loadOffsetCIval) {
-          IRBuilder<> builder(load);
-          auto valueExtractedFromVirtualStack =
-              VirtualStack.retrieveCombinedValue(builder, loadOffsetCIval,
-                                                 cloadsize);
-          if (valueExtractedFromVirtualStack.val) {
-            return valueExtractedFromVirtualStack;
-          }
+        IRBuilder<> builder(load);
+        auto valueExtractedFromVirtualStack =
+            VirtualStack.retrieveCombinedValue(builder, loadOffsetCIval,
+                                               cloadsize);
+        if (valueExtractedFromVirtualStack.val) {
+          return valueExtractedFromVirtualStack;
         }
       }
     } else
