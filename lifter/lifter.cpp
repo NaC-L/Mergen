@@ -204,13 +204,20 @@ int main(int argc, char* argv[]) {
   auto dosHeader = (win::dos_header_t*)fileBase;
   auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
   auto ADDRESS = ntHeaders->optional_header.image_base;
+  auto imageSize = ntHeaders->optional_header.size_image;
+  auto stackSize = ntHeaders->optional_header.size_stack_reserve;
+  GEPStoreTracker::markMemPaged(STACKP_VALUE - stackSize,
+                                STACKP_VALUE + stackSize);
+  GEPStoreTracker::markMemPaged(ADDRESS, ADDRESS + imageSize);
+
   uint64_t RVA = static_cast<uint64_t>(startAddr - ADDRESS);
   uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
   uint8_t* dataAtAddress = fileBase + fileOffset;
   cout << hex << "0x" << (int)*dataAtAddress << endl;
   original_address = ADDRESS;
-  cout << "address: " << ADDRESS << " filebase: " << (uint64_t)fileBase
-       << " fOffset: " << fileOffset << " RVA: " << RVA << endl;
+  cout << "address: " << ADDRESS << " imageSize: " << imageSize
+       << " filebase: " << (uint64_t)fileBase << " fOffset: " << fileOffset
+       << " RVA: " << RVA << endl;
 
   funcsignatures::search_signatures(fileData);
   funcsignatures::createOffsetMap();

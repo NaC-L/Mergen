@@ -23,15 +23,19 @@ namespace GEPStoreTracker {
 
   void initDomTree(Function& F);
 
+  DominatorTree* getDomTree();
+
   void updateDomTree(Function& F);
 
-  Value* solveLoad(LoadInst* inst, bool buildTime = 1);
+  void updateMemoryOp(StoreInst* inst);
 
-  DominatorTree* getDomTree();
+  void markMemPaged(uint64_t start, uint64_t end);
+
+  bool isMemPaged(uint64_t address);
 
   void insertMemoryOp(StoreInst* inst);
 
-  void updateMemoryOp(StoreInst* inst);
+  Value* solveLoad(LoadInst* inst, bool buildTime = 1);
 
 }; // namespace GEPStoreTracker
 
