@@ -1,6 +1,7 @@
 #include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "includes.h"
+#include <llvm/Support/ErrorHandling.h>
 
 namespace BinaryOperations {
   void* file_base_g;
@@ -283,12 +284,12 @@ namespace SCCPSimplifier {
 } // namespace SCCPSimplifier
 
 // do some cleanup
+// rename it to MemoryTracker ?
 namespace GEPStoreTracker {
   DominatorTree* DT;
   BasicBlock* lastBB = nullptr;
 
-  // Apparently this is a faster solution for runtime, but it uses more
-  // memory.
+  // best to use whenever possible
   lifterMemoryBuffer VirtualStack;
 
   void initDomTree(Function& F) { DT = new DominatorTree(F); }
@@ -324,6 +325,22 @@ namespace GEPStoreTracker {
                                       gepOffsetCI->getZExtValue());
   }
 
+  map<uint64_t, uint64_t> pageMap;
+
+  void markMemPaged(uint64_t start, uint64_t end) {
+    //
+    pageMap[start] = end;
+  }
+
+  bool isMemPaged(uint64_t address) {
+    // ideally we want to be able to do this with KnownBits aswell
+    auto it = pageMap.upper_bound(address);
+    if (it == pageMap.begin())
+      return false;
+    --it;
+    return address >= it->first && address < it->second;
+  }
+
   void insertMemoryOp(StoreInst* inst) {
     memInfos.push_back(inst);
 
@@ -337,10 +354,18 @@ namespace GEPStoreTracker {
       return;
 
     auto gepOffset = gepInst->getOperand(1);
-    if (!isa<ConstantInt>(gepOffset)) // fix!!!!
+    if (!isa<ConstantInt>(gepOffset)) // we also want to do operations with the
+                                      // memory when we can assume a range or
+                                      // writing to an unk location (ofc paged)
       return;
 
     auto gepOffsetCI = cast<ConstantInt>(gepOffset);
+
+    if (!isMemPaged(gepOffsetCI->getZExtValue())) {
+      bool memory_is_not_paged = 1;
+      printvalueforce2(memory_is_not_paged);
+      throw "mem not paged";
+    }
 
     VirtualStack.addValueReference(inst, inst->getValueOperand(),
                                    gepOffsetCI->getZExtValue());
