@@ -1,6 +1,7 @@
 #include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "includes.h"
+#include <llvm/Analysis/ValueTracking.h>
 #include <llvm/Support/ErrorHandling.h>
 
 namespace BinaryOperations {
@@ -341,6 +342,80 @@ namespace GEPStoreTracker {
     return address >= it->first && address < it->second;
   }
 
+  enum isPaged { MEMORY_PAGED, MEMORY_MIGHT_BE_PAGED, MEMORY_NOT_PAGED };
+
+  isPaged isValuePaged(Value* address, const DataLayout& DL) {
+    if (isa<ConstantInt>(address)) {
+      return isMemPaged(cast<ConstantInt>(address)->getZExtValue())
+                 ? MEMORY_PAGED
+                 : MEMORY_NOT_PAGED;
+    }
+    auto KBofAddress = analyzeValueKnownBits(address, DL);
+
+    for (const auto& page : pageMap) {
+      uint64_t start = page.first;
+      uint64_t end = page.second;
+      // KBofAddress >= start && KBofAddress < end
+      // paged
+      // but if we cant say otherwise, then it might be paged
+
+      auto KBstart = KnownBits::makeConstant(APInt(64, start));
+      auto KBend = KnownBits::makeConstant(APInt(64, end));
+
+      if (KnownBits::uge(KBofAddress, KBstart) &&
+          KnownBits::ult(KBofAddress, KBend)) {
+        return MEMORY_PAGED;
+      }
+
+      if (!(KnownBits::uge(KBofAddress, KBend) ||
+            KnownBits::ult(KBofAddress, KBstart))) {
+        return MEMORY_MIGHT_BE_PAGED;
+      }
+    }
+
+    return MEMORY_NOT_PAGED;
+  }
+
+  void pagedCheck(Value* address, const DataLayout& DL) {
+    isPaged paged = isValuePaged(address, DL);
+    switch (paged) {
+    case MEMORY_NOT_PAGED: {
+      cout << "\nmemory is not paged, so we(more likely) or the program "
+              "probably do some incorrect stuff "
+              "we abort to avoid incorrect output\n"
+           << endl;
+      abort();
+      break;
+    }
+    case MEMORY_MIGHT_BE_PAGED: {
+      // something something if flag turned on print some data
+      break;
+    }
+    case MEMORY_PAGED: {
+      // nothing
+      break;
+    }
+    }
+  }
+
+  void loadMemoryOp(LoadInst* inst) {
+    auto ptr = inst->getPointerOperand();
+    if (!isa<GetElementPtrInst>(ptr))
+      return;
+
+    auto gepInst = cast<GetElementPtrInst>(ptr);
+    auto gepPtr = gepInst->getPointerOperand();
+    if (gepPtr != getMemory())
+      return;
+
+    auto gepOffset = gepInst->getOperand(1);
+
+    pagedCheck(gepOffset,
+               inst->getParent()->getParent()->getParent()->getDataLayout());
+    return;
+  }
+
+  // rename func name to indicate its only for store
   void insertMemoryOp(StoreInst* inst) {
     memInfos.push_back(inst);
 
@@ -354,18 +429,16 @@ namespace GEPStoreTracker {
       return;
 
     auto gepOffset = gepInst->getOperand(1);
+
+    pagedCheck(gepOffset,
+               inst->getParent()->getParent()->getParent()->getDataLayout());
+
     if (!isa<ConstantInt>(gepOffset)) // we also want to do operations with the
                                       // memory when we can assume a range or
                                       // writing to an unk location (ofc paged)
       return;
 
     auto gepOffsetCI = cast<ConstantInt>(gepOffset);
-
-    if (!isMemPaged(gepOffsetCI->getZExtValue())) {
-      bool memory_is_not_paged = 1;
-      printvalueforce2(memory_is_not_paged);
-      throw "mem not paged";
-    }
 
     VirtualStack.addValueReference(inst, inst->getValueOperand(),
                                    gepOffsetCI->getZExtValue());

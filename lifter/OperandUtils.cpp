@@ -885,6 +885,9 @@ ReverseRegisterMap flipRegisterMap() {
 RegisterMap InitRegisters(IRBuilder<>& builder, Function* function,
                           ZyanU64 rip) {
 
+  // rsp
+  // rsp_unaligned = %rsp % 16
+  // rsp_aligned_to16 = rsp - rsp_unaligned
   int zydisRegister = ZYDIS_REGISTER_RAX;
 
   auto argEnd = function->arg_end();
@@ -1272,8 +1275,8 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
     auto retval =
         builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
 
-    auto KBload = analyzeValueKnownBits(
-        retval, retval->getFunction()->getParent()->getDataLayout());
+    GEPStoreTracker::loadMemoryOp(retval);
+
     if (isa<ConstantInt>(effectiveAddress)) {
       ConstantInt* effectiveAddressInt =
           dyn_cast<ConstantInt>(effectiveAddress);
