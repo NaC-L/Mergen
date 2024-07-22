@@ -35,6 +35,8 @@ namespace GEPStoreTracker {
 
   void insertMemoryOp(StoreInst* inst);
 
+  void loadMemoryOp(LoadInst* inst);
+
   Value* solveLoad(LoadInst* inst, bool buildTime = 1);
 
 }; // namespace GEPStoreTracker
