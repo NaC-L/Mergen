@@ -387,11 +387,10 @@ namespace GEPStoreTracker {
     isPaged paged = isValuePaged(address, DL);
     switch (paged) {
     case MEMORY_NOT_PAGED: {
-      cout << "\nmemory is not paged, so we(more likely) or the program "
-              "probably do some incorrect stuff "
-              "we abort to avoid incorrect output\n"
-           << endl;
-      abort();
+      llvm_unreachable_internal(
+          "\nmemory is not paged, so we(more likely) or the program "
+          "probably do some incorrect stuff "
+          "we abort to avoid incorrect output\n");
       break;
     }
     case MEMORY_MIGHT_BE_PAGED: {

@@ -4526,13 +4526,13 @@ void liftInstructionSemantics(IRBuilder<>& builder,
          << " runtime: " << hex << instruction.runtime_address << " "
          << instruction.text << "\n";
 
-    std::string Filename = "output_notimplemented.ll";
-    std::error_code EC;
-    raw_fd_ostream OS(Filename, EC);
-    builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
-
-    throw std::runtime_error("not implemented");
-    exit(-2);
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_notimplemented.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+    });
+    llvm_unreachable_internal("Instruction not implemented");
   }
   }
 }
@@ -4602,6 +4602,7 @@ void liftInstruction(IRBuilder<>& builder,
     // done something wrong;
     outs() << "done something wrong";
     __builtin_unreachable();
+    llvm_unreachable_internal("Trying to execute invalid external function");
   }
 
   // do something for prefixes like rep here
