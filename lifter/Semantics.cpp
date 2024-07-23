@@ -4600,8 +4600,6 @@ void liftInstruction(IRBuilder<>& builder,
   }
   if (!isReadable && !isImport) {
     // done something wrong;
-    outs() << "done something wrong";
-    __builtin_unreachable();
     llvm_unreachable_internal("Trying to execute invalid external function");
   }
 
