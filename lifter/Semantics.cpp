@@ -1963,6 +1963,22 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     setFlag(builder, FLAG_SF, sf);
     setFlag(builder, FLAG_ZF, zf);
   }
+  
+  void lift_not(IRBuilder<>& builder,
+                ZydisDisassembledInstruction& instruction) {
+
+    auto dest = instruction.operands[0];
+
+    auto Rvalue = GetOperandValue(builder, dest, dest.size);
+    Rvalue = builder.CreateNot(
+        Rvalue, "realnot-" + to_string(instruction.runtime_address) + "-");
+    SetOperandValue(builder, dest, Rvalue,
+                    to_string(instruction.runtime_address));
+
+    printvalue(Rvalue);
+    //  Flags Affected
+    // None
+  }
 
   void lift_xchg(IRBuilder<>& builder,
                  ZydisDisassembledInstruction& instruction) {
