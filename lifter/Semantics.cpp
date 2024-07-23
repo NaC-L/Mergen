@@ -8,6 +8,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/ErrorHandling.h>
 
 FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
                             LLVMContext& context) {
@@ -111,7 +112,6 @@ void callFunctionIR(string functionName, IRBuilder<>& builder,
   }
   */
 
-  // TODO: lololololololol wtf
   if (!funcInfo) {
     // try to get funcinfo from name
     funcInfo = funcsignatures::getFunctionInfo(functionName);
