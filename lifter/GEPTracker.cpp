@@ -25,6 +25,13 @@ namespace BinaryOperations {
     auto rvaOffset = FileHelper::RvaToFileOffset(ntHeaders, offset);
     return (const char*)file_base_g + rvaOffset;
   }
+  bool isImport(uint64_t addr) {
+    APInt tmp;
+    auto dosHeader = (win::dos_header_t*)file_base_g;
+    auto ntHeaders =
+        (win::nt_headers_x64_t*)((uint8_t*)file_base_g + dosHeader->e_lfanew);
+    return readMemory(ntHeaders->optional_header.image_base + addr, 1, tmp);
+  }
 
   unordered_set<uint64_t> MemWrites;
 

@@ -1988,10 +1988,10 @@ namespace arithmeticsAndLogical {
     auto Rvalue = GetOperandValue(builder, src, src.size);
     auto Lvalue = GetOperandValue(builder, dest, dest.size);
 
-    printvalue(Lvalue) printvalue(Rvalue)
+    printvalue(Lvalue) printvalue(Rvalue);
 
-        SetOperandValue(builder, dest, Rvalue,
-                        to_string(instruction.runtime_address));
+    SetOperandValue(builder, dest, Rvalue,
+                    to_string(instruction.runtime_address));
     ;
     SetOperandValue(builder, src, Lvalue);
   }
@@ -4317,7 +4317,6 @@ void liftInstructionSemantics(IRBuilder<>& builder,
   }
   case ZYDIS_MNEMONIC_AND: {
     arithmeticsAndLogical::lift_and(builder, instruction);
-
     break;
   }
   case ZYDIS_MNEMONIC_ROR: {
@@ -4335,6 +4334,7 @@ void liftInstructionSemantics(IRBuilder<>& builder,
     arithmeticsAndLogical::lift_push(builder, instruction);
     break;
   }
+  case ZYDIS_MNEMONIC_PUSHF:
   case ZYDIS_MNEMONIC_PUSHFQ: {
     arithmeticsAndLogical::lift_pushfq(builder, instruction);
     break;
@@ -4343,6 +4343,7 @@ void liftInstructionSemantics(IRBuilder<>& builder,
     arithmeticsAndLogical::lift_pop(builder, instruction);
     break;
   }
+  case ZYDIS_MNEMONIC_POPF:
   case ZYDIS_MNEMONIC_POPFQ: {
     arithmeticsAndLogical::lift_popfq(builder, instruction);
     break;
@@ -4548,7 +4549,6 @@ void liftInstruction(IRBuilder<>& builder,
   auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
   printvalue(rsp);
 
-  // I hate how getFunctionInfo returns a string pointer
   if (auto funcInfo =
           funcsignatures::getFunctionInfo(instruction.runtime_address)) {
     callFunctionIR(funcInfo->name.c_str(), builder, funcInfo);
@@ -4568,10 +4568,14 @@ void liftInstruction(IRBuilder<>& builder,
     return;
   }
 
+  // if really an import, jump_address + imagebase should return a string (?)
   uint64_t jump_address = instruction.runtime_address + instruction.info.length;
   APInt temp;
-  if (!BinaryOperations::readMemory(jump_address, 1, temp) &&
+  bool isReadable = BinaryOperations::readMemory(jump_address, 1, temp);
+  bool isImport = BinaryOperations::isImport(jump_address);
+  if (!isReadable && isImport &&
       cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
+    printvalueforce2(jump_address);
     auto bb = BasicBlock::Create(context, "returnToOrgCF",
                                  builder.GetInsertBlock()->getParent());
     // actually call the function first
@@ -4593,6 +4597,11 @@ void liftInstruction(IRBuilder<>& builder,
     blockAddresses->push_back(make_tuple(jump_address, bb, getRegisters()));
     run = 0;
     return;
+  }
+  if (!isReadable && !isImport) {
+    // done something wrong;
+    outs() << "done something wrong";
+    __builtin_unreachable();
   }
 
   // do something for prefixes like rep here
