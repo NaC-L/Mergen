@@ -6,6 +6,8 @@
 #include "utils.h"
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Type.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
@@ -245,15 +247,15 @@ void branchHelper(IRBuilder<>& builder,
   auto function = block->getParent();
 
   auto dest = instruction.operands[0];
-  Value* true_jump = ConstantInt::get(
-      function->getReturnType(),
-      dest.imm.value.s + instruction.runtime_address + instruction.info.length);
+  auto true_jump_addr =
+      dest.imm.value.s + instruction.runtime_address + instruction.info.length;
+  Value* true_jump =
+      ConstantInt::get(function->getReturnType(), true_jump_addr);
+  auto false_jump_addr = instruction.runtime_address + instruction.info.length;
   Value* false_jump =
-      ConstantInt::get(function->getReturnType(),
-                       instruction.runtime_address + instruction.info.length);
+      ConstantInt::get(function->getReturnType(), false_jump_addr);
   Value* next_jump =
       createSelectFolder(builder, condition, true_jump, false_jump);
-  auto lastinst = builder.CreateRet(next_jump);
 
   uint64_t destination = 0;
   PATH_info pathInfo = solvePath(function, destination, next_jump);
@@ -265,7 +267,6 @@ void branchHelper(IRBuilder<>& builder,
   // "\n";
   if (pathInfo == PATH_solved) {
 
-    lastinst->eraseFromParent();
     string block_name = "jmp-" + to_string(destination) + "-";
     auto bb = BasicBlock::Create(context, block_name.c_str(),
                                  builder.GetInsertBlock()->getParent());
@@ -273,6 +274,24 @@ void branchHelper(IRBuilder<>& builder,
     builder.CreateBr(bb);
 
     blockAddresses->push_back(make_tuple(destination, bb, getRegisters()));
+  }
+
+  if (pathInfo == PATH_unsolved) {
+
+    auto cinst = cast<ICmpInst>(condition);
+    auto bb_true = BasicBlock::Create(context, "bb_true",
+                                      builder.GetInsertBlock()->getParent());
+
+    auto bb_false = BasicBlock::Create(context, "bb_false",
+                                       builder.GetInsertBlock()->getParent());
+
+    auto BR = builder.CreateCondBr(condition, bb_true, bb_false);
+    GetSimplifyQuery::RegisterBranch(BR);
+    blockAddresses->push_back(
+        make_tuple(true_jump_addr, bb_true, getRegisters()));
+
+    blockAddresses->push_back(
+        make_tuple(false_jump_addr, bb_false, getRegisters()));
   }
 }
 
@@ -860,7 +879,7 @@ namespace branches {
 
       // function->print(outs());
 
-      final_optpass(originalFunc_finalnopt);
+      // final_optpass(originalFunc_finalnopt);
       debugging::doIfDebug([&]() {
         std::string Filename = "output_finalopt.ll";
         std::error_code EC;
@@ -1374,171 +1393,213 @@ namespace arithmeticsAndLogical {
   FI;
   */
 
-void lift_rcl(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-  LLVMContext& context = builder.getContext();
-  auto dest = instruction.operands[0];
-  auto count = instruction.operands[1];
+  void lift_rcl(IRBuilder<>& builder,
+                ZydisDisassembledInstruction& instruction) {
+    LLVMContext& context = builder.getContext();
+    auto dest = instruction.operands[0];
+    auto count = instruction.operands[1];
 
-  Value* Lvalue = GetOperandValue(builder, dest, dest.size);
-  Value* countValue = GetOperandValue(builder, count, dest.size);
-  Value* carryFlag = getFlag(builder, FLAG_CF);
+    Value* Lvalue = GetOperandValue(builder, dest, dest.size);
+    Value* countValue = GetOperandValue(builder, count, dest.size);
+    Value* carryFlag = getFlag(builder, FLAG_CF);
 
-  unsigned long bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
+    unsigned long bitWidth = Lvalue->getType()->getIntegerBitWidth();
+    unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
-  // Calculate actual count
-  Value* countMask = ConstantInt::get(countValue->getType(), maskC);
-  Value* actualCount = createAndFolder(builder, countValue, countMask, "actualCount");
+    // Calculate actual count
+    Value* countMask = ConstantInt::get(countValue->getType(), maskC);
+    Value* actualCount =
+        createAndFolder(builder, countValue, countMask, "actualCount");
 
-  // Extend Lvalue to double width
-  Type* wideType = Type::getIntNTy(context, dest.size * 2);
-  Value* wideLvalue = createZExtFolder(builder, Lvalue, wideType);
+    // Extend Lvalue to double width
+    Type* wideType = Type::getIntNTy(context, dest.size * 2);
+    Value* wideLvalue = createZExtFolder(builder, Lvalue, wideType);
 
-  // Shift the carry flag into the LSB
-  Value* cf_extended = createZExtFolder(builder, carryFlag, wideType);
-  Value* shiftedInCF = createOrFolder(builder, wideLvalue, cf_extended, "shiftedincf");
+    // Shift the carry flag into the LSB
+    Value* cf_extended = createZExtFolder(builder, carryFlag, wideType);
+    Value* shiftedInCF =
+        createOrFolder(builder, wideLvalue, cf_extended, "shiftedincf");
 
-  // Perform the rotation
-  Value* shiftAmount = createZExtFolder(builder, actualCount, wideType);
-  Value* bitWidthPlusOne = ConstantInt::get(wideType, bitWidth + 1);
-  Value* inverseShiftAmount = createSubFolder(builder, bitWidthPlusOne, shiftAmount);
+    // Perform the rotation
+    Value* shiftAmount = createZExtFolder(builder, actualCount, wideType);
+    Value* bitWidthPlusOne = ConstantInt::get(wideType, bitWidth + 1);
+    Value* inverseShiftAmount =
+        createSubFolder(builder, bitWidthPlusOne, shiftAmount);
 
-  Value* leftShifted = createShlFolder(builder, shiftedInCF, shiftAmount, "leftshifted");
-  Value* rightShifted = createLShrFolder(builder, shiftedInCF, inverseShiftAmount, "rightshifted");
-  Value* rotated = createOrFolder(builder, leftShifted, rightShifted);
+    Value* leftShifted =
+        createShlFolder(builder, shiftedInCF, shiftAmount, "leftshifted");
+    Value* rightShifted = createLShrFolder(builder, shiftedInCF,
+                                           inverseShiftAmount, "rightshifted");
+    Value* rotated = createOrFolder(builder, leftShifted, rightShifted);
 
-  // Extract the result and new carry flag
-  Value* result = createTruncFolder(builder, rotated, Lvalue->getType());
-  Value* newCFShifted = createLShrFolder(builder, rotated, ConstantInt::get(wideType, bitWidth));
-  Value* newCF = createTruncFolder(builder, newCFShifted, Type::getInt1Ty(context), "rclnewcf");
+    // Extract the result and new carry flag
+    Value* result = createTruncFolder(builder, rotated, Lvalue->getType());
+    Value* newCFShifted = createLShrFolder(
+        builder, rotated, ConstantInt::get(wideType, bitWidth));
+    Value* newCF = createTruncFolder(builder, newCFShifted,
+                                     Type::getInt1Ty(context), "rclnewcf");
 
-  // Calculate OF (only valid when count == 1)
-  Value* resultMSB = createLShrFolder(builder, result, ConstantInt::get(result->getType(), bitWidth - 1));
-  Value* msbAfterRotate = createTruncFolder(builder, resultMSB, Type::getInt1Ty(context), "rclmsbafterrotate");
+    // Calculate OF (only valid when count == 1)
+    Value* resultMSB = createLShrFolder(
+        builder, result, ConstantInt::get(result->getType(), bitWidth - 1));
+    Value* msbAfterRotate = createTruncFolder(
+        builder, resultMSB, Type::getInt1Ty(context), "rclmsbafterrotate");
 
-  Value* one = ConstantInt::get(actualCount->getType(), 1);
-  Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ, actualCount, one);
+    Value* one = ConstantInt::get(actualCount->getType(), 1);
+    Value* isCountOne =
+        createICMPFolder(builder, CmpInst::ICMP_EQ, actualCount, one);
 
-  Value* newOF = createXorFolder(builder, newCF, msbAfterRotate);
-  Value* currentOF = getFlag(builder, FLAG_OF);
-  newOF = createSelectFolder(builder, isCountOne, newOF, currentOF);
+    Value* newOF = createXorFolder(builder, newCF, msbAfterRotate);
+    Value* currentOF = getFlag(builder, FLAG_OF);
+    newOF = createSelectFolder(builder, isCountOne, newOF, currentOF);
 
-  // Set the result and flags
-  SetOperandValue(builder, dest, result);
-  setFlag(builder, FLAG_CF, newCF);
-  setFlag(builder, FLAG_OF, newOF);
+    // Set the result and flags
+    SetOperandValue(builder, dest, result);
+    setFlag(builder, FLAG_CF, newCF);
+    setFlag(builder, FLAG_OF, newOF);
 
-  // Debug output
-  printvalue(Lvalue);
-  printvalue(countValue);
-  printvalue(carryFlag);
-  printvalue(actualCount);
-  printvalue(shiftedInCF);
-  printvalue(rotated);
-  printvalue(result);
-  printvalue(newCF);
-  printvalue(newOF);
-}
+    // Debug output
+    printvalue(Lvalue);
+    printvalue(countValue);
+    printvalue(carryFlag);
+    printvalue(actualCount);
+    printvalue(shiftedInCF);
+    printvalue(rotated);
+    printvalue(result);
+    printvalue(newCF);
+    printvalue(newOF);
+  }
 
-/*
-        (* RCL and RCR Instructions *)
-SIZE := OperandSize;
-CASE (determine count) OF
-        SIZE := 8: tempCOUNT := (COUNT AND 1FH) MOD 9;
-        SIZE := 16: tempCOUNT := (COUNT AND 1FH) MOD 17;
-        SIZE := 32: tempCOUNT := COUNT AND 1FH;
-        SIZE := 64: tempCOUNT := COUNT AND 3FH;
-ESAC;
-IF OperandSize = 64
-        THEN COUNTMASK = 3FH;
-        ELSE COUNTMASK = 1FH;
-FI;
-(* RCR Instruction Operation *)
-IF (COUNT & COUNTMASK) = 1
-        THEN OF := MSB(DEST) XOR CF;
-        ELSE OF is undefined;
-FI;
-WHILE (tempCOUNT ≠ 0)
-        DO
-        tempCF := LSB(SRC);
-        DEST := (DEST / 2) + (CF * 2SIZE);
-        CF := tempCF;
-        tempCOUNT := tempCOUNT – 1;
-        OD;
-ELIHW;
+  /*
+          (* RCL and RCR Instructions *)
+  SIZE := OperandSize;
+  CASE (determine count) OF
+          SIZE := 8: tempCOUNT := (COUNT AND 1FH) MOD 9;
+          SIZE := 16: tempCOUNT := (COUNT AND 1FH) MOD 17;
+          SIZE := 32: tempCOUNT := COUNT AND 1FH;
+          SIZE := 64: tempCOUNT := COUNT AND 3FH;
+  ESAC;
+  IF OperandSize = 64
+          THEN COUNTMASK = 3FH;
+          ELSE COUNTMASK = 1FH;
+  FI;
+  (* RCR Instruction Operation *)
+  IF (COUNT & COUNTMASK) = 1
+          THEN OF := MSB(DEST) XOR CF;
+          ELSE OF is undefined;
+  FI;
+  WHILE (tempCOUNT ≠ 0)
+          DO
+          tempCF := LSB(SRC);
+          DEST := (DEST / 2) + (CF * 2SIZE);
+          CF := tempCF;
+          tempCOUNT := tempCOUNT – 1;
+          OD;
+  ELIHW;
 
-*/
-void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
-  LLVMContext& context = builder.getContext();
-  auto dest = instruction.operands[0];
-  auto count = instruction.operands[1];
+  */
+  void lift_rcr(IRBuilder<>& builder,
+                ZydisDisassembledInstruction& instruction) {
+    LLVMContext& context = builder.getContext();
+    auto dest = instruction.operands[0];
+    auto count = instruction.operands[1];
 
-  Value* Lvalue = GetOperandValue(builder, dest, dest.size);
-  Value* countValue = GetOperandValue(builder, count, dest.size);
-  Value* carryFlag = getFlag(builder, FLAG_CF);
+    Value* Lvalue = GetOperandValue(builder, dest, dest.size);
+    Value* countValue = GetOperandValue(builder, count, dest.size);
+    Value* carryFlag = getFlag(builder, FLAG_CF);
 
-  unsigned long bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
+    unsigned long bitWidth = Lvalue->getType()->getIntegerBitWidth();
+    unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
-  // Calculate actual count
-  Value* countMask = ConstantInt::get(countValue->getType(), maskC);
-  Value* actualCount = createAndFolder(builder, countValue, countMask, "actualCount");
+    // Calculate actual count
+    Value* countMask = ConstantInt::get(countValue->getType(), maskC);
+    Value* actualCount =
+        createAndFolder(builder, countValue, countMask, "actualCount");
 
-  // Extend Lvalue to double width and shift left by 1 to make room for CF
-  Type* wideType = Type::getIntNTy(context, dest.size * 2);
-  Value* wideLvalue = createZExtFolder(builder, Lvalue, wideType);
-  Value* shiftedLvalue =
-      createShlFolder(builder, wideLvalue, ConstantInt::get(wideType, 1));
+    // Extend Lvalue to double width and shift left by 1 to make room for CF
+    Type* wideType = Type::getIntNTy(context, dest.size * 2);
+    Value* wideLvalue = createZExtFolder(builder, Lvalue, wideType);
+    Value* shiftedLvalue =
+        createShlFolder(builder, wideLvalue, ConstantInt::get(wideType, 1));
 
-  // Insert the carry flag into the MSB
-  Value* cf_extended = createZExtFolder(builder, carryFlag, wideType);
-  Value* shiftedCF = createShlFolder(builder, cf_extended, ConstantInt::get(wideType, bitWidth));
-  Value* shiftedInCF = createOrFolder(builder, shiftedLvalue, shiftedCF, "shiftedincf");
+    // Insert the carry flag into the MSB
+    Value* cf_extended = createZExtFolder(builder, carryFlag, wideType);
+    Value* shiftedCF = createShlFolder(builder, cf_extended,
+                                       ConstantInt::get(wideType, bitWidth));
+    Value* shiftedInCF =
+        createOrFolder(builder, shiftedLvalue, shiftedCF, "shiftedincf");
 
-  // Perform the rotation
-  Value* shiftAmount = createZExtFolder(builder, actualCount, wideType);
-  Value* bitWidthPlusOne = ConstantInt::get(wideType, bitWidth + 1);
-  Value* inverseShiftAmount = createSubFolder(builder, bitWidthPlusOne, shiftAmount);
+    // Perform the rotation
+    Value* shiftAmount = createZExtFolder(builder, actualCount, wideType);
+    Value* bitWidthPlusOne = ConstantInt::get(wideType, bitWidth + 1);
+    Value* inverseShiftAmount =
+        createSubFolder(builder, bitWidthPlusOne, shiftAmount);
 
-  Value* rightShifted = createLShrFolder(builder, shiftedInCF, shiftAmount, "rightshifted");
-  Value* leftShifted = createShlFolder(builder, shiftedInCF, inverseShiftAmount, "leftshifted");
-  Value* rotated = createOrFolder(builder, rightShifted, leftShifted);
+    Value* rightShifted =
+        createLShrFolder(builder, shiftedInCF, shiftAmount, "rightshifted");
+    Value* leftShifted = createShlFolder(builder, shiftedInCF,
+                                         inverseShiftAmount, "leftshifted");
+    Value* rotated = createOrFolder(builder, rightShifted, leftShifted);
 
-  // Extract the result and new carry flag
-  Value* shiftedResult = createLShrFolder(builder, rotated, ConstantInt::get(wideType, 1));
-  Value* result = createTruncFolder(builder, shiftedResult, Lvalue->getType());
-  Value* newCF = createTruncFolder(builder, rotated, Type::getInt1Ty(context), "rcrnewcf");
+    // Extract the result and new carry flag
+    Value* shiftedResult =
+        createLShrFolder(builder, rotated, ConstantInt::get(wideType, 1));
+    Value* result =
+        createTruncFolder(builder, shiftedResult, Lvalue->getType());
+    Value* newCF = createTruncFolder(builder, rotated, Type::getInt1Ty(context),
+                                     "rcrnewcf");
 
-  // Calculate OF (only valid when count == 1)
-  Value* resultMSB = createLShrFolder(builder, result, ConstantInt::get(result->getType(), bitWidth - 1));
-  Value* msbAfterRotate = createTruncFolder(builder, resultMSB, Type::getInt1Ty(context), "rcrmsbafterrotate");
+    // Calculate OF (only valid when count == 1)
+    Value* resultMSB = createLShrFolder(
+        builder, result, ConstantInt::get(result->getType(), bitWidth - 1));
+    Value* msbAfterRotate = createTruncFolder(
+        builder, resultMSB, Type::getInt1Ty(context), "rcrmsbafterrotate");
 
-  Value* LvalueMSB = createLShrFolder(builder, Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1));
-  Value* msbBeforeRotate = createTruncFolder(builder, LvalueMSB, Type::getInt1Ty(context), "rcrmsbbeforerotate");
+    Value* LvalueMSB = createLShrFolder(
+        builder, Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1));
+    Value* msbBeforeRotate = createTruncFolder(
+        builder, LvalueMSB, Type::getInt1Ty(context), "rcrmsbbeforerotate");
 
-  Value* one = ConstantInt::get(actualCount->getType(), 1);
-  Value* isCountOne = createICMPFolder(builder, CmpInst::ICMP_EQ, actualCount, one);
+    Value* one = ConstantInt::get(actualCount->getType(), 1);
+    Value* isCountOne =
+        createICMPFolder(builder, CmpInst::ICMP_EQ, actualCount, one);
 
-  Value* newOF = createXorFolder(builder, msbBeforeRotate, msbAfterRotate);
-  Value* currentOF = getFlag(builder, FLAG_OF);
-  newOF = createSelectFolder(builder, isCountOne, newOF, currentOF);
+    Value* newOF = createXorFolder(builder, msbBeforeRotate, msbAfterRotate);
+    Value* currentOF = getFlag(builder, FLAG_OF);
+    newOF = createSelectFolder(builder, isCountOne, newOF, currentOF);
 
-  // Set the result and flags
-  SetOperandValue(builder, dest, result);
-  setFlag(builder, FLAG_CF, newCF);
-  setFlag(builder, FLAG_OF, newOF);
+    // Set the result and flags
+    SetOperandValue(builder, dest, result);
+    setFlag(builder, FLAG_CF, newCF);
+    setFlag(builder, FLAG_OF, newOF);
 
-  // Debug output
-  printvalue(Lvalue);
-  printvalue(countValue);
-  printvalue(carryFlag);
-  printvalue(actualCount);
-  printvalue(shiftedInCF);
-  printvalue(rotated);
-  printvalue(result);
-  printvalue(newCF);
-  printvalue(newOF);
-}
+    // Debug output
+    printvalue(Lvalue);
+    printvalue(countValue);
+    printvalue(carryFlag);
+    printvalue(actualCount);
+    printvalue(shiftedInCF);
+    printvalue(rotated);
+    printvalue(result);
+    printvalue(newCF);
+    printvalue(newOF);
+  }
+
+  void lift_not(IRBuilder<>& builder,
+                ZydisDisassembledInstruction& instruction) {
+
+    auto dest = instruction.operands[0];
+
+    auto Rvalue = GetOperandValue(builder, dest, dest.size);
+    Rvalue = builder.CreateNot(
+        Rvalue, "realnot-" + to_string(instruction.runtime_address) + "-");
+    SetOperandValue(builder, dest, Rvalue,
+                    to_string(instruction.runtime_address));
+
+    printvalue(Rvalue);
+    //  Flags Affected
+    // None
+  }
 
   void lift_neg(IRBuilder<>& builder,
                 ZydisDisassembledInstruction& instruction) {
@@ -1796,6 +1857,18 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         builder, CmpInst::ICMP_UGT, clampedCountValue,
         ConstantInt::get(clampedCountValue->getType(), bitWidth - 1));
     result = createSelectFolder(builder, isZeroed, zero, result);
+    /*
+    The CF flag contains the value of the last bit shifted out of the
+    destination operand; it is undefined for SHL and SHR instructions where the
+    count is greater than or equal to the size (in bits) of the destination
+    operand. The OF flag is affected only for 1-bit shifts (see “Description”
+    above); otherwise, it is undefined. The SF, ZF, and PF flags are set
+    according to the result. If the count is 0, the flags are not affected. For
+    a non-zero count, the AF flag is undefined.
+
+    if we do 0010 << 3, then 1 is shifted out last
+    0010 >> (4-3) is the result
+    */
 
     Value* cfValue = createLShrFolder(
         builder, Lvalue,
@@ -1963,17 +2036,11 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     setFlag(builder, FLAG_SF, sf);
     setFlag(builder, FLAG_ZF, zf);
   }
-  
-  void lift_not(IRBuilder<>& builder,
-                ZydisDisassembledInstruction& instruction) {
 
     auto dest = instruction.operands[0];
 
-    auto Rvalue = GetOperandValue(builder, dest, dest.size);
-    Rvalue = builder.CreateNot(
-        Rvalue, "realnot-" + to_string(instruction.runtime_address) + "-");
-    SetOperandValue(builder, dest, Rvalue,
-                    to_string(instruction.runtime_address));
+    // Apply the mask to the source operand
+    Value* result = createAndFolder(builder, src1V, mask);
 
     printvalue(Rvalue);
     //  Flags Affected
@@ -3836,6 +3903,37 @@ namespace flagOperation {
     SetRegisterValue(builder, ZYDIS_REGISTER_AH, Rvalue);
   }
 
+  void lift_sahf(IRBuilder<>& builder) {
+
+    LLVMContext& context = builder.getContext();
+
+    auto ah = GetRegisterValue(builder, ZYDIS_REGISTER_AH);
+    // RFLAGS(SF:ZF:0:AF:0:PF:1:CF) := AH;
+    //
+    auto cf = builder.CreateAnd(ah, (1 << FLAG_CF));
+    // + 2
+    auto pf = builder.CreateAnd(ah, (1 << FLAG_PF));
+    auto af = builder.CreateAnd(ah, (1 << FLAG_AF));
+    auto zf = builder.CreateAnd(ah, (1 << FLAG_ZF));
+    auto sf = builder.CreateAnd(ah, (1 << FLAG_SF));
+    setFlag(builder, FLAG_CF, cf);
+    setFlag(builder, FLAG_PF, pf);
+    setFlag(builder, FLAG_AF, af);
+    setFlag(builder, FLAG_ZF, zf);
+    setFlag(builder, FLAG_SF, sf);
+  }
+
+  void lift_std(IRBuilder<>& builder) {
+    LLVMContext& context = builder.getContext();
+
+    setFlag(builder, FLAG_DF, ConstantInt::get(Type::getInt1Ty(context), 1));
+  }
+  void lift_cld(IRBuilder<>& builder) {
+    LLVMContext& context = builder.getContext();
+
+    setFlag(builder, FLAG_DF, ConstantInt::get(Type::getInt1Ty(context), 0));
+  }
+
   void lift_stc(IRBuilder<>& builder) {
     LLVMContext& context = builder.getContext();
 
@@ -3858,15 +3956,6 @@ namespace flagOperation {
     Value* clearedCF = ConstantInt::get(Type::getInt1Ty(context), 0);
 
     setFlag(builder, FLAG_CF, clearedCF);
-  }
-
-  void lift_cld(IRBuilder<>& builder) {
-
-    LLVMContext& context = builder.getContext();
-
-    Value* clearedDF = ConstantInt::get(Type::getInt1Ty(context), 0);
-
-    setFlag(builder, FLAG_DF, clearedDF);
   }
 
   void lift_cli(IRBuilder<>& builder) {
@@ -4464,6 +4553,18 @@ void liftInstructionSemantics(IRBuilder<>& builder,
     flagOperation::lift_lahf(builder);
     break;
   }
+  case ZYDIS_MNEMONIC_SAHF: {
+    flagOperation::lift_sahf(builder);
+    break;
+  }
+  case ZYDIS_MNEMONIC_STD: {
+    flagOperation::lift_std(builder);
+    break;
+  }
+  case ZYDIS_MNEMONIC_CLD: {
+    flagOperation::lift_cld(builder);
+    break;
+  }
   case ZYDIS_MNEMONIC_STC: {
     flagOperation::lift_stc(builder);
     break;
@@ -4474,10 +4575,6 @@ void liftInstructionSemantics(IRBuilder<>& builder,
   }
   case ZYDIS_MNEMONIC_CLC: {
     flagOperation::lift_clc(builder);
-    break;
-  }
-  case ZYDIS_MNEMONIC_CLD: {
-    flagOperation::lift_cld(builder);
     break;
   }
   case ZYDIS_MNEMONIC_CLI: {

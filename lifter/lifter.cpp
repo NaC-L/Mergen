@@ -3,12 +3,14 @@
 #include "FunctionSignatures.h"
 #include "GEPTracker.h"
 #include "OperandUtils.h"
+#include "PathSolver.h"
 #include "Semantics.h"
 #include "includes.h"
 #include "nt/nt_headers.hpp"
 #include "utils.h"
 #include <cstdlib>
 #include <fstream>
+
 
 // new datatype for BBInfo? Something like a domtree
 vector<BBInfo> added_blocks_addresses;
@@ -95,6 +97,7 @@ void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
     }
     run = 0;
   }
+  final_optpass(builder.GetInsertBlock()->getParent());
 }
 
 void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
