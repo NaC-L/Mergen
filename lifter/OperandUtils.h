@@ -1,6 +1,14 @@
 #pragma once
 #include "includes.h"
 
+namespace GetSimplifyQuery {
+
+  void RegisterBranch(BranchInst* BI);
+
+  SimplifyQuery createSimplifyQuery(Function* fnc);
+
+} // namespace GetSimplifyQuery
+
 Value* simplifyValue(Value* v, const DataLayout& DL);
 
 KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL);
