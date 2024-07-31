@@ -1,32 +1,32 @@
 FROM ubuntu:22.04
 
-ENTRYPOINT [ "/bin/bash" ]
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update && apt-get install -y \
+    lsb-release \
+    wget \
+    software-properties-common \
+    gnupg \
+    cmake \
+    git \
+    curl
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    wget https://apt.llvm.org/llvm.sh \
+    && chmod +x llvm.sh \
+    && ./llvm.sh 18 \
+    && rm llvm.sh
 
 COPY . /root/Mergen
 
-# Install deps
-RUN apt update
-RUN apt install lsb-release wget software-properties-common gnupg cmake git -y
+RUN ln -s /usr/bin/clang-18 /usr/bin/clang \
+    && ln -s /usr/bin/clang-cpp-18 /usr/bin/clang-cpp \
+    && ln -s /usr/bin/clang-cpp-18 /usr/bin/clang++
 
-RUN wget https://apt.llvm.org/llvm.sh 
-RUN chmod +x llvm.sh 
-RUN ./llvm.sh 18
-
-
-
-# Create symlinks
-RUN ln -s /usr/bin/clang-18 /usr/bin/clang
-RUN ln -s /usr/bin/clang-cpp-18 /usr/bin/clang-cpp
-RUN ln -s /usr/bin/clang-cpp-18 /usr/bin/clang++
-
-
-# Prepare enviroment variables before building
 ENV CC /usr/bin/clang
 ENV CXX /usr/bin/clang++
 
-
-# Build
 RUN mkdir /root/Mergen/build
 WORKDIR /root/Mergen/build
-RUN cmake ..
-RUN cmake --build . -j `nproc`
+RUN cmake .. && cmake --build . -j $(nproc)
+
+ENTRYPOINT [ "/root/Mergen/build/lifter" ]
