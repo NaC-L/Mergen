@@ -28,4 +28,5 @@ RUN mkdir /root/Mergen/build
 WORKDIR /root/Mergen/build
 RUN cmake .. && cmake --build . -j $(nproc)
 
-ENTRYPOINT [ "/root/Mergen/build/lifter" ]
+WORKDIR /data
+ENTRYPOINT ["/bin/sh", "-c", "/root/Mergen/build/lifter \"$1\" \"$2\" ", "--"]
