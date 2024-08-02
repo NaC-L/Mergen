@@ -364,16 +364,7 @@ namespace mov {
     SetOperandValue(builder, SRCop, UpdateSRCvalue);
     SetOperandValue(builder, DSTop, UpdateDSTvalue);
   }
-  void lift_movaps(IRBuilder<>& builder,
-                   ZydisDisassembledInstruction& instruction) {
-    auto dest = instruction.operands[0];
-    auto src = instruction.operands[1];
 
-    auto Rvalue = GetOperandValue(builder, src, src.size,
-                                  to_string(instruction.runtime_address));
-    SetOperandValue(builder, dest, Rvalue,
-                    to_string(instruction.runtime_address));
-  }
   void lift_mov(IRBuilder<>& builder,
                 ZydisDisassembledInstruction& instruction) {
     LLVMContext& context = builder.getContext();
@@ -4039,12 +4030,7 @@ void liftInstructionSemantics(IRBuilder<>& builder,
                               bool& run) {
 
   switch (instruction.info.mnemonic) {
-  // movs
-  case ZYDIS_MNEMONIC_MOVAPS: {
-    mov::lift_movaps(builder, instruction);
-    break;
-  }
-  case ZYDIS_MNEMONIC_MOVUPS:
+  // mov s
   case ZYDIS_MNEMONIC_MOVZX:
   case ZYDIS_MNEMONIC_MOVSX:
   case ZYDIS_MNEMONIC_MOVSXD:
