@@ -6,8 +6,6 @@
 
 #define DEFINE_FUNCTION(name) void lift_##name()
 
-#define DEFINE_FUNCTION2(name) void lift_##name()
-
 class lifterClass {
 public:
   lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder) {};
@@ -136,7 +134,7 @@ public:
   DEFINE_FUNCTION(xadd);
   DEFINE_FUNCTION(test);
   DEFINE_FUNCTION(cmp);
-  DEFINE_FUNCTION2(rdtsc);
+  DEFINE_FUNCTION(rdtsc);
   DEFINE_FUNCTION(cpuid);
   //
   DEFINE_FUNCTION(setnz);
@@ -162,12 +160,14 @@ public:
   DEFINE_FUNCTION(bsr);
   DEFINE_FUNCTION(bsf);
   DEFINE_FUNCTION(btc);
-  DEFINE_FUNCTION2(lahf);
-  DEFINE_FUNCTION2(stc);
-  DEFINE_FUNCTION2(cmc);
-  DEFINE_FUNCTION2(clc);
-  DEFINE_FUNCTION2(cld);
-  DEFINE_FUNCTION2(cli);
+  DEFINE_FUNCTION(lahf);
+  DEFINE_FUNCTION(sahf);
+  DEFINE_FUNCTION(std);
+  DEFINE_FUNCTION(stc);
+  DEFINE_FUNCTION(cmc);
+  DEFINE_FUNCTION(clc);
+  DEFINE_FUNCTION(cld);
+  DEFINE_FUNCTION(cli);
   DEFINE_FUNCTION(cwd);
   DEFINE_FUNCTION(cdq);
   DEFINE_FUNCTION(cqo);
