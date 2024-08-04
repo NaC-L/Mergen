@@ -5,6 +5,55 @@
 
 enum Assumption { Real, Assumed }; // add None
 
+class ValueByteReference {
+public:
+  Instruction* storeInst;
+  Value* value;
+  unsigned short byteOffset;
+
+  ValueByteReference(Instruction* inst, Value* val, short offset)
+      : storeInst(inst), value(val), byteOffset(offset) {}
+};
+
+class ValueByteReferenceRange {
+public:
+  union val {
+    ValueByteReference* ref;
+    uint64_t memoryAddress;
+
+    val(ValueByteReference* vref) : ref(vref) {}
+    val(uint64_t addr) : memoryAddress(addr) {}
+
+  } valinfo;
+  bool isRef;
+
+  // size info, we can make this smaller because they can only be 0-8 range
+  // (maybe higher for avx)
+  uint8_t start;
+  uint8_t end;
+
+  ValueByteReferenceRange(ValueByteReference* vref, uint8_t startv,
+                          uint8_t endv)
+      : valinfo(vref), start(startv), end(endv), isRef(true) {}
+
+  // Constructor for ValueByteReferenceRange using memoryAddress
+  ValueByteReferenceRange(uint64_t addr, uint8_t startv, uint8_t endv)
+      : valinfo(addr), start(startv), end(endv), isRef(false) {}
+};
+
+class lifterMemoryBuffer {
+public:
+  std::unordered_map<uint64_t, ValueByteReference*> buffer;
+  void addValueReference(Instruction* inst, Value* value, uint64_t address);
+  Value* retrieveCombinedValue(IRBuilder<>& builder, uint64_t startAddress,
+                               uint64_t byteCount, Value* orgLoad);
+  void updateValueReference(Instruction* inst, Value* value, uint64_t address);
+
+private:
+  Value* extractBytes(IRBuilder<>& builder, Value* value, uint64_t startOffset,
+                      uint64_t endOffset);
+};
+
 namespace BinaryOperations {
 
   const char* getName(uint64_t offset);

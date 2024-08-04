@@ -67,204 +67,164 @@ namespace BinaryOperations {
 
 }; // namespace BinaryOperations
 
-class ValueByteReference {
-public:
-  Instruction* storeInst;
-  Value* value;
-  unsigned short byteOffset;
+void lifterMemoryBuffer::addValueReference(Instruction* inst, Value* value,
+                                           uint64_t address) {
+  unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
+  for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
-  ValueByteReference(Instruction* inst, Value* val, short offset)
-      : storeInst(inst), value(val), byteOffset(offset) {}
-};
-
-class ValueByteReferenceRange {
-public:
-  union val {
-    ValueByteReference* ref;
-    uint64_t memoryAddress;
-
-    val(ValueByteReference* vref) : ref(vref) {}
-    val(uint64_t addr) : memoryAddress(addr) {}
-
-  } valinfo;
-  bool isRef;
-
-  // size info, we can make this smaller because they can only be 0-8 range
-  // (maybe higher for avx)
-  uint8_t start;
-  uint8_t end;
-
-  ValueByteReferenceRange(ValueByteReference* vref, uint8_t startv,
-                          uint8_t endv)
-      : valinfo(vref), start(startv), end(endv), isRef(true) {}
-
-  // Constructor for ValueByteReferenceRange using memoryAddress
-  ValueByteReferenceRange(uint64_t addr, uint8_t startv, uint8_t endv)
-      : valinfo(addr), start(startv), end(endv), isRef(false) {}
-};
-
-class lifterMemoryBuffer {
-public:
-  std::unordered_map<uint64_t, ValueByteReference*> buffer;
-
-  void addValueReference(Instruction* inst, Value* value, uint64_t address) {
-    unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
-    for (unsigned i = 0; i < valueSizeInBytes; i++) {
-
-      delete buffer[address + i];
-      BinaryOperations::WriteTo(address + i);
-      printvalue2(address + i);
-      buffer[address + i] = new ValueByteReference(inst, value, i);
-      printvalue(value);
-      printvalue2((uint64_t)address + i);
-    }
-  }
-
-  void updateValueReference(Instruction* inst, Value* value, uint64_t address) {
-    unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
-    for (unsigned i = 0; i < valueSizeInBytes; i++) {
-      auto existingValue = buffer[address + i];
-      auto DT = GEPStoreTracker::getDomTree();
-
-      if (comesBefore(inst, existingValue->storeInst, *DT)) {
-        continue;
-      }
-
-      printvalue2(address + i);
-
-      buffer[address + i] = new ValueByteReference(inst, value, i);
-
-      printvalue(value);
-
-      printvalue2((uint64_t)address + i);
-    }
-  }
-
-  Value* retrieveCombinedValue(IRBuilder<>& builder, uint64_t startAddress,
-                               uint64_t byteCount, Value* orgLoad) {
-    LLVMContext& context = builder.getContext();
-    if (byteCount == 0) {
-      return nullptr;
-    }
-
-    bool contiguous = true;
-
-    vector<ValueByteReferenceRange> values; // we can just create an array here
-    for (uint64_t i = 0; i < byteCount; ++i) {
-      uint64_t currentAddress = startAddress + i;
-      if (buffer[currentAddress] == nullptr ||
-          buffer[currentAddress]->value != buffer[startAddress]->value ||
-          buffer[currentAddress]->byteOffset != i) {
-        contiguous = false; // non-contiguous value
-      }
-
-      // push if
-      if (values.empty() ||                                 // empty or
-          (buffer[currentAddress] && values.back().isRef && // ( its a reference
-           (values.back().valinfo.ref->value !=
-                buffer[currentAddress]
-                    ->value || // and references are not same or
-            values.back().valinfo.ref->byteOffset !=
-                buffer[currentAddress]->byteOffset - values.back().end +
-                    values.back().start)) //  reference offset is not directly
-                                          //  next value )
-      ) {
-
-        if (buffer[currentAddress]) {
-          values.push_back(
-              ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
-        } else {
-          values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
-        }
-      } else {
-        ++values.back().end;
-      }
-    }
-
-    // if value is contiguous and value exists but we are trying to load a
-    // truncated value
-    // no need for this ?
-    /*
-    if (contiguous && buffer[startAddress] &&
-        byteCount <=
-            buffer[startAddress]->value->getType()->getIntegerBitWidth() / 8) {
-      return builder.CreateTrunc(buffer[startAddress]->value,
-                                 Type::getIntNTy(context, byteCount * 8)); // ?
-    }
-    */
-
-    // when do we want to return nullptr and when do we want to return 0?
-    // we almost always want to return a value
-    Value* result =
-        ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
-
-    int m = 0;
-    for (auto v : values) {
-      Value* byteValue = nullptr;
-      unsigned bytesize = v.end - v.start;
-
-      APInt mem_value(1, 0);
-      if (v.isRef && v.valinfo.ref != nullptr) {
-        byteValue = extractBytes(builder, v.valinfo.ref->value,
-                                 v.valinfo.ref->byteOffset,
-                                 v.valinfo.ref->byteOffset + bytesize);
-      } else if (!v.isRef &&
-                 BinaryOperations::readMemory(v.valinfo.memoryAddress, bytesize,
-                                              mem_value)) {
-        byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
-      } else if (!v.isRef) {
-        // llvm_unreachable_internal("uh...");
-        byteValue = extractBytes(builder, orgLoad, m, m + bytesize);
-      }
-      if (byteValue) {
-        printvalue(byteValue);
-
-        Value* shiftedByteValue = createShlFolder(
-            builder,
-            createZExtFolder(builder, byteValue,
-                             Type::getIntNTy(context, byteCount * 8)),
-            APInt(byteCount * 8, m * 8));
-        result = createOrFolder(builder, result, shiftedByteValue,
-                                "extractbytesthing");
-      }
-      m += bytesize;
-    }
-
-    return result;
-  }
-
-private:
-  Value* extractBytes(IRBuilder<>& builder, Value* value, uint64_t startOffset,
-                      uint64_t endOffset) {
-    LLVMContext& context = builder.getContext();
-
-    if (!value) {
-      return ConstantInt::get(
-          Type::getIntNTy(context, (endOffset - startOffset) * 8), 0);
-    }
-
-    uint64_t byteCount = endOffset - startOffset;
-
-    uint64_t shiftAmount = startOffset * 8;
-
-    printvalue2(endOffset);
-
-    printvalue2(startOffset);
-    printvalue2(byteCount);
-    printvalue2(shiftAmount);
-
-    Value* shiftedValue = createLShrFolder(
-        builder, value,
-        APInt(value->getType()->getIntegerBitWidth(), shiftAmount),
-        "extractbytes");
+    delete buffer[address + i];
+    BinaryOperations::WriteTo(address + i);
+    printvalue2(address + i);
+    buffer[address + i] = new ValueByteReference(inst, value, i);
     printvalue(value);
-    printvalue(shiftedValue);
-
-    Value* truncatedValue = createTruncFolder(
-        builder, shiftedValue, Type::getIntNTy(context, byteCount * 8));
-    return truncatedValue;
+    printvalue2((uint64_t)address + i);
   }
-};
+}
+
+void lifterMemoryBuffer::updateValueReference(Instruction* inst, Value* value,
+                                              uint64_t address) {
+  unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
+  for (unsigned i = 0; i < valueSizeInBytes; i++) {
+    auto existingValue = buffer[address + i];
+    auto DT = GEPStoreTracker::getDomTree();
+
+    if (comesBefore(inst, existingValue->storeInst, *DT)) {
+      continue;
+    }
+
+    printvalue2(address + i);
+
+    buffer[address + i] = new ValueByteReference(inst, value, i);
+
+    printvalue(value);
+
+    printvalue2((uint64_t)address + i);
+  }
+}
+
+Value* lifterMemoryBuffer::retrieveCombinedValue(IRBuilder<>& builder,
+                                                 uint64_t startAddress,
+                                                 uint64_t byteCount,
+                                                 Value* orgLoad) {
+  LLVMContext& context = builder.getContext();
+  if (byteCount == 0) {
+    return nullptr;
+  }
+
+  bool contiguous = true;
+
+  vector<ValueByteReferenceRange> values; // we can just create an array here
+  for (uint64_t i = 0; i < byteCount; ++i) {
+    uint64_t currentAddress = startAddress + i;
+    if (buffer[currentAddress] == nullptr ||
+        buffer[currentAddress]->value != buffer[startAddress]->value ||
+        buffer[currentAddress]->byteOffset != i) {
+      contiguous = false; // non-contiguous value
+    }
+
+    // push if
+    if (values.empty() ||                                 // empty or
+        (buffer[currentAddress] && values.back().isRef && // ( its a reference
+         (values.back().valinfo.ref->value !=
+              buffer[currentAddress]->value || // and references are not same or
+          values.back().valinfo.ref->byteOffset !=
+              buffer[currentAddress]->byteOffset - values.back().end +
+                  values.back().start)) //  reference offset is not directly
+                                        //  next value )
+    ) {
+
+      if (buffer[currentAddress]) {
+        values.push_back(
+            ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
+      } else {
+        values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
+      }
+    } else {
+      ++values.back().end;
+    }
+  }
+
+  // if value is contiguous and value exists but we are trying to load a
+  // truncated value
+  // no need for this ?
+  /*
+  if (contiguous && buffer[startAddress] &&
+      byteCount <=
+          buffer[startAddress]->value->getType()->getIntegerBitWidth() / 8) {
+    return builder.CreateTrunc(buffer[startAddress]->value,
+                               Type::getIntNTy(context, byteCount * 8)); // ?
+  }
+  */
+
+  // when do we want to return nullptr and when do we want to return 0?
+  // we almost always want to return a value
+  Value* result = ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
+
+  int m = 0;
+  for (auto v : values) {
+    Value* byteValue = nullptr;
+    unsigned bytesize = v.end - v.start;
+
+    APInt mem_value(1, 0);
+    if (v.isRef && v.valinfo.ref != nullptr) {
+      byteValue =
+          extractBytes(builder, v.valinfo.ref->value, v.valinfo.ref->byteOffset,
+                       v.valinfo.ref->byteOffset + bytesize);
+    } else if (!v.isRef && BinaryOperations::readMemory(v.valinfo.memoryAddress,
+                                                        bytesize, mem_value)) {
+      byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
+    } else if (!v.isRef) {
+      // llvm_unreachable_internal("uh...");
+      byteValue = extractBytes(builder, orgLoad, m, m + bytesize);
+    }
+    if (byteValue) {
+      printvalue(byteValue);
+
+      Value* shiftedByteValue = createShlFolder(
+          builder,
+          createZExtFolder(builder, byteValue,
+                           Type::getIntNTy(context, byteCount * 8)),
+          APInt(byteCount * 8, m * 8));
+      result = createOrFolder(builder, result, shiftedByteValue,
+                              "extractbytesthing");
+    }
+    m += bytesize;
+  }
+
+  return result;
+}
+
+Value* lifterMemoryBuffer::extractBytes(IRBuilder<>& builder, Value* value,
+                                        uint64_t startOffset,
+                                        uint64_t endOffset) {
+  LLVMContext& context = builder.getContext();
+
+  if (!value) {
+    return ConstantInt::get(
+        Type::getIntNTy(context, (endOffset - startOffset) * 8), 0);
+  }
+
+  uint64_t byteCount = endOffset - startOffset;
+
+  uint64_t shiftAmount = startOffset * 8;
+
+  printvalue2(endOffset);
+
+  printvalue2(startOffset);
+  printvalue2(byteCount);
+  printvalue2(shiftAmount);
+
+  Value* shiftedValue = createLShrFolder(
+      builder, value,
+      APInt(value->getType()->getIntegerBitWidth(), shiftAmount),
+      "extractbytes");
+  printvalue(value);
+  printvalue(shiftedValue);
+
+  Value* truncatedValue = createTruncFolder(
+      builder, shiftedValue, Type::getIntNTy(context, byteCount * 8));
+  return truncatedValue;
+}
 
 namespace SCCPSimplifier {
   std::unique_ptr<SCCPSolver> solver;
@@ -723,13 +683,14 @@ namespace GEPStoreTracker {
 // %m1 = getelementptr i8, %memory, i64 0
 // %m2 = getelementptr i8, %memory, i64 4
 // %m3 = getelementptr i8, %memory, i64 8
-// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 55 [4] 44 33 22
-// 11 [8] store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m3 => [0] 88 77 66 55 [4] 44
-// 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16] %x = load i64, ptr %m2 => [0]
-// 88 77 66 55 [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16] now: %x =
-// 44 33 22 11 AC AB FF EE => 0xEE_FF_AB_AC_11_22_33_44 %p1 =
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 55 [4] 44 33
+// 22 11 [8] store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m3 => [0] 88 77 66 55
+// [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA [16] %x = load i64, ptr
+// %m2 => [0] 88 77 66 55 [4] 44 33 22 11 [8] AC AB FF EE [12] DD CC BB AA
+// [16] now: %x = 44 33 22 11 AC AB FF EE => 0xEE_FF_AB_AC_11_22_33_44 %p1 =
 // 0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_FF_00_00_00_00 %p2 =
-// 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_00_00_FF_FF_FF_FF %p3 = 0 %p1.shift = %p1
+// 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_00_00_FF_FF_FF_FF %p3 = 0 %p1.shift =
+// %p1
 // >> 4(diff)*8 %p2.shift = %p2 << 4(diff)*8 %p4 = %p1.shift | %p2.shift
 //
 // overwriting example
@@ -739,15 +700,15 @@ namespace GEPStoreTracker {
 // %m1 = getelementptr i8, %memory, i64 0
 // %m2 = getelementptr i8, %memory, i64 2
 // %m3 = getelementptr i8, %memory, i64 8
-// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 [2] 66 55 [4] 44 33
-// 22 11 [8] store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m2 => [0] 88 77 [2] AC AB
-// [4] FF EE DD CC [8] BB AA [10] %x = load i64, ptr %m1 => [0] 88 77 [2] AC AB
-// [4] FF EE DD CC [8] BB AA [10] now: %x = 88 77 AC AB FF EE DD CC =>
-// 0xCC_DD_EE_FF_AB_AC_11_22 %p1 = 0x11_22_33_44_55_66_77_88 & -1 %p2 =
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 [2] 66 55 [4] 44
+// 33 22 11 [8] store i64 0xAA_BB_CC_DD_EE_FF_AB_AC, ptr %m2 => [0] 88 77 [2]
+// AC AB [4] FF EE DD CC [8] BB AA [10] %x = load i64, ptr %m1 => [0] 88 77
+// [2] AC AB [4] FF EE DD CC [8] BB AA [10] now: %x = 88 77 AC AB FF EE DD CC
+// => 0xCC_DD_EE_FF_AB_AC_11_22 %p1 = 0x11_22_33_44_55_66_77_88 & -1 %p2 =
 // 0xAA_BB_CC_DD_EE_FF_AB_AC & 0x00_00_FF_FF_FF_FF_FF_FF %p2.shifted = %p2 <<
 // 2*8 %mask.shifted = 0x00_00_FF_FF_FF_FF_FF_FF << 2*8 =>
-// 0xFF_FF_FF_FF_FF_FF_00_00 %reverse.mask.shifted = 0xFF_FF %p1.masked = %p1 &
-// %reverse.mask.shifted %retval = %p2.shifted | %p1.masked
+// 0xFF_FF_FF_FF_FF_FF_00_00 %reverse.mask.shifted = 0xFF_FF %p1.masked = %p1
+// & %reverse.mask.shifted %retval = %p2.shifted | %p1.masked
 //
 // overwriting example WITH DIFFERENT TYPES
 //
@@ -756,13 +717,14 @@ namespace GEPStoreTracker {
 // %m1 = getelementptr i8, %memory, i64 0
 // %m2 = getelementptr i8, %memory, i64 3
 // %m3 = getelementptr i8, %memory, i64 8
-// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33 22
-// [7] 11 [8] store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66 [3]
-// DD CC BB AA [7] 11 [8] %x = load i64, ptr %m1                       => [0] 88
-// 77 66 [3] DD CC BB AA [7] 11 [8] now: %x=[0] 88 77 66 [3] DD CC BB AA [7] 11
-// [8] => 0x11_AA_BB_CC_DD_66_77_88 %p1 = 0x11_22_33_44_55_66_77_88 & -1 %p2 =
-// 0xAA_BB_CC_DD & 0xFF_FF_FF_FF %p2.shifted = %p2 << 1*8                 =>
-// 0xAA_BB_CC_DD << 8 => 0x_AA_BB_CC_DD_00 %mask.shifted = 0xFF_FF_FF_FF << 1*8
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33
+// 22 [7] 11 [8] store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66
+// [3] DD CC BB AA [7] 11 [8] %x = load i64, ptr %m1                       =>
+// [0] 88 77 66 [3] DD CC BB AA [7] 11 [8] now: %x=[0] 88 77 66 [3] DD CC BB
+// AA [7] 11 [8] => 0x11_AA_BB_CC_DD_66_77_88 %p1 = 0x11_22_33_44_55_66_77_88
+// & -1 %p2 = 0xAA_BB_CC_DD & 0xFF_FF_FF_FF %p2.shifted = %p2 << 1*8 =>
+// 0xAA_BB_CC_DD << 8 => 0x_AA_BB_CC_DD_00 %mask.shifted = 0xFF_FF_FF_FF <<
+// 1*8
 // => 0x00_00_00_FF_FF_FF_FF_00 %reverse.mask.shifted =
 // 0xFF_FF_FF_00_00_00_00_FF %p1.masked = %p1 & %reverse.mask.shifted =>
 // 0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_00_00_00_00_FF =>
@@ -777,12 +739,12 @@ namespace GEPStoreTracker {
 // %m1 = getelementptr i8, %memory, i64 0
 // %m2 = getelementptr i8, %memory, i64 6
 // %m3 = getelementptr i8, %memory, i64 8
-// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33 [6]
-// 22 11 [8] store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66 [3] 55
-// 44 33 [6] DD CC [8] BB AA [10] %x = load i64, ptr %m1 => [0] 88 77 66 [3] 55
-// 44 33 [6] DD CC [8] BB AA [10] now: %x=[0] 88 77 66 [3] 55 44 33 [6] DD CC
-// [8] => 0xCC_DD_33_44_55_66_77_88 %p1 = 0x11_22_33_44_55_66_77_88 & -1 %p2 =
-// 0xAA_BB_CC_DD & 0x00_00_FF_FF %p2.shifted = %p2 << 6*8                 =>
+// store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [0] 88 77 66 [3] 55 44 33
+// [6] 22 11 [8] store i32 0xAA_BB_CC_DD, ptr %m2             => [0] 88 77 66
+// [3] 55 44 33 [6] DD CC [8] BB AA [10] %x = load i64, ptr %m1 => [0] 88 77
+// 66 [3] 55 44 33 [6] DD CC [8] BB AA [10] now: %x=[0] 88 77 66 [3] 55 44 33
+// [6] DD CC [8] => 0xCC_DD_33_44_55_66_77_88 %p1 = 0x11_22_33_44_55_66_77_88
+// & -1 %p2 = 0xAA_BB_CC_DD & 0x00_00_FF_FF %p2.shifted = %p2 << 6*8 =>
 // 0xCC_DD << 48 => 0xCC_DD_00_00_00_00_00_00 %mask.shifted = 0xFF_FF_FF_FF <<
 // 6*8     => 0xFF_FF_00_00_00_00_00_00 %reverse.mask.shifted =
 // 0x00_00_FF_FF_FF_FF_FF_FF %p1.masked = %p1 & %reverse.mask.shifted =>
@@ -801,12 +763,12 @@ namespace GEPStoreTracker {
 // %m3 = getelementptr i8, %memory, i64 16
 // store i64 0x11_22_33_44_55_66_77_88, ptr %m1 => [7] ?? [8] 88 77 66 [11] 55
 // 44 33 22 11 [16] store i32 0xAA_BB_CC_DD, ptr %m2             => [7] DD [8]
-// CC BB AA [11] 55 44 33 22 11 [16] %x = load i64, ptr %m1 => [7] DD [8] CC BB
-// AA [11] 55 44 33 22 11 [16] now: %x=[7] DD [8] CC BB AA [11] 55 44 33 22 11
-// [16] => 0xCC_DD_33_44_55_66_77_88 %p1 = 0x11_22_33_44_55_66_77_88 & -1 %p2 =
-// 0xAA_BB_CC_DD & 0xFF_FF_FF_00 (0xFF ^ -1) %p2.shifted = %p2 << 1*8 =>
-// 0xAA_BB_CC_00 >> 8 => 0xAA_BB_CC => 0x00_00_00_00_00_AA_BB_CC %mask.shifted =
-// 0xFF_FF_FF_00 >> 1*8     => 0xFF_FF_FF %reverse.mask.shifted =
+// CC BB AA [11] 55 44 33 22 11 [16] %x = load i64, ptr %m1 => [7] DD [8] CC
+// BB AA [11] 55 44 33 22 11 [16] now: %x=[7] DD [8] CC BB AA [11] 55 44 33 22
+// 11 [16] => 0xCC_DD_33_44_55_66_77_88 %p1 = 0x11_22_33_44_55_66_77_88 & -1
+// %p2 = 0xAA_BB_CC_DD & 0xFF_FF_FF_00 (0xFF ^ -1) %p2.shifted = %p2 << 1*8 =>
+// 0xAA_BB_CC_00 >> 8 => 0xAA_BB_CC => 0x00_00_00_00_00_AA_BB_CC %mask.shifted
+// = 0xFF_FF_FF_00 >> 1*8     => 0xFF_FF_FF %reverse.mask.shifted =
 // 0xFF_FF_FF_FF_FF_00_00_00 %p1.masked = %p1 & %reverse.mask.shifted =>
 // 0x11_22_33_44_55_66_77_88 & 0xFF_FF_FF_FF_FF_00_00_00 =>
 // 0x11_22_33_44_55_00_00_00 %retval = %p2.shifted | %p1.masked       =>

@@ -5,95 +5,73 @@
 #include "OperandUtils.h"
 #include "Semantics.h"
 #include "includes.h"
+#include "lifterClass.h"
 #include "nt/nt_headers.hpp"
 #include "utils.h"
 #include <cstdlib>
 #include <fstream>
 
-// new datatype for BBInfo? Something like a domtree
-vector<BBInfo> added_blocks_addresses;
+vector<lifterClass*> lifters;
 uint64_t original_address = 0;
 
 // consider having this function in a class, later we can use multi-threading to
 // explore different paths
-void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
-                          ZyanU64 runtime_address,
-                          shared_ptr<vector<BBInfo>> blockAddresses,
+void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address,
                           ZyanU64 file_base) {
 
-  bool run = 1;
-  while (run) {
+  while (lifters.size() > 0) {
+    lifterClass* lifter = lifters.back();
+    runtime_address = get<0>(lifter->blockInfo);
+    uint64_t offset = FileHelper::address_to_mapped_address((void*)file_base,
+                                                            runtime_address);
 
-    while (blockAddresses->size() > 0) {
+    debugging::doIfDebug([&]() {
+      cout << "runtime_addr: " << runtime_address << " offset:" << offset
+           << " byte there: 0x" << (int)*(uint8_t*)(file_base + offset) << endl;
+      cout << "offset: " << offset << " file_base?: " << original_address
+           << " runtime: " << runtime_address << endl;
+    });
 
-      runtime_address = get<0>(blockAddresses->back());
-      uint64_t offset = FileHelper::address_to_mapped_address((void*)file_base,
-                                                              runtime_address);
+    auto nextBasicBlock = get<1>(lifter->blockInfo);
 
+    lifter->builder.SetInsertPoint(nextBasicBlock);
+
+    // will use this for exploring multiple branches
+    lifter->setRegisters(get<2>(lifter->blockInfo));
+    //
+
+    BinaryOperations::initBases((void*)file_base, data);
+
+    lifter->run = 1;
+
+    for (; lifter->run && runtime_address > 0;) {
+      if (BinaryOperations::isWrittenTo(runtime_address)) {
+        printvalueforce2(runtime_address);
+        outs() << "SelfModifyingCode!\n";
+        outs().flush();
+      }
+
+      // why tf compiler tells this is unused?
+      ZydisDisassembledInstruction instruction;
+      ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, runtime_address,
+                            data + offset, 15, &instruction);
+
+      auto counter = debugging::increaseInstCounter() - 1;
       debugging::doIfDebug([&]() {
-        cout << "runtime_addr: " << runtime_address << " offset:" << offset
-             << " byte there: 0x" << (int)*(uint8_t*)(file_base + offset)
-             << endl;
-        cout << "offset: " << offset << " file_base?: " << original_address
-             << " runtime: " << runtime_address << endl;
+        cout << hex << counter << ":" << instruction.text << "\n";
+        cout << "runtime: " << instruction.runtime_address << endl;
       });
 
-      auto nextBasicBlock = get<1>(blockAddresses->back());
-      added_blocks_addresses.push_back(blockAddresses->back());
+      lifter->liftInstruction(instruction);
+      if (lifter->finished) {
 
-      builder.SetInsertPoint(nextBasicBlock);
-
-      // will use this for exploring multiple branches
-      setRegisters(get<2>(blockAddresses->back()));
-      //
-
-      // update only when its needed
-      blockAddresses->pop_back();
-
-      BinaryOperations::initBases((void*)file_base, data);
-      size_t last_value;
-
-      bool run = 1;
-
-      if (!blockAddresses->empty()) {
-        last_value = get<0>(blockAddresses->back());
-      } else {
-
-        last_value = 0;
+        lifter->run = 0;
+        lifters.pop_back();
       }
 
-      for (; run && runtime_address > 0;) {
-        if (BinaryOperations::isWrittenTo(runtime_address)) {
-          printvalueforce2(runtime_address);
-          outs() << "SelfModifyingCode!\n";
-          outs().flush();
-        }
-
-        if ((blockAddresses->size() == 0 ||
-             (last_value == get<0>(blockAddresses->back())))) {
-
-          // why tf compiler tells this is unused?
-          ZydisDisassembledInstruction instruction;
-          ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, runtime_address,
-                                data + offset, 15, &instruction);
-
-          auto counter = debugging::increaseInstCounter() - 1;
-          debugging::doIfDebug([&]() {
-            cout << hex << counter << ":" << instruction.text << "\n";
-            cout << "runtime: " << instruction.runtime_address << endl;
-          });
-
-          liftInstruction(builder, instruction, blockAddresses, run);
-
-          offset += instruction.info.length;
-          runtime_address += instruction.info.length;
-
-        } else {
-          break;
-        }
-      }
+      offset += instruction.info.length;
+      runtime_address += instruction.info.length;
     }
-    run = 0;
   }
 }
 
@@ -141,16 +119,16 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
   auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
   llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
-  auto RegisterList = InitRegisters(builder, function, runtime_address);
+  // auto RegisterList = InitRegisters(builder, function, runtime_address);
 
   GEPStoreTracker::initDomTree(*function);
+  lifterClass* main = new lifterClass(builder);
+  auto RegisterList = main->InitRegisters(function, runtime_address);
+  main->blockInfo = make_tuple(runtime_address, bb, RegisterList);
+  // blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
+  lifters.push_back(main);
 
-  shared_ptr<vector<BBInfo>> blockAddresses = make_shared<vector<BBInfo>>();
-
-  blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
-
-  asm_to_zydis_to_lift(builder, (uint8_t*)file_base, runtime_address,
-                       blockAddresses, file_base);
+  asm_to_zydis_to_lift((uint8_t*)file_base, runtime_address, file_base);
 
   string Filename = "output.ll";
   error_code EC;
