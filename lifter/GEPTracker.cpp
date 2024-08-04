@@ -141,7 +141,7 @@ public:
   }
 
   Value* retrieveCombinedValue(IRBuilder<>& builder, uint64_t startAddress,
-                               uint64_t byteCount) {
+                               uint64_t byteCount, Value* orgLoad) {
     LLVMContext& context = builder.getContext();
     if (byteCount == 0) {
       return nullptr;
@@ -212,6 +212,9 @@ public:
                  BinaryOperations::readMemory(v.valinfo.memoryAddress, bytesize,
                                               mem_value)) {
         byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
+      } else if (!v.isRef) {
+        // llvm_unreachable_internal("uh...");
+        byteValue = extractBytes(builder, orgLoad, m, m + bytesize);
       }
       if (byteValue) {
         printvalue(byteValue);
@@ -558,7 +561,7 @@ namespace GEPStoreTracker {
         IRBuilder<> builder(load);
         auto valueExtractedFromVirtualStack =
             VirtualStack.retrieveCombinedValue(builder, loadOffsetCIval,
-                                               cloadsize);
+                                               cloadsize, load);
         if (valueExtractedFromVirtualStack) {
           return valueExtractedFromVirtualStack;
         }
