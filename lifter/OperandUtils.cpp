@@ -1271,12 +1271,6 @@ Value* lifterClass::GetOperandValue(ZydisDecodedOperand& op, int possiblesize,
           dyn_cast<ConstantInt>(effectiveAddress);
       if (!effectiveAddressInt)
         return nullptr;
-
-      uint64_t addr = effectiveAddressInt->getZExtValue();
-
-      unsigned byteSize = loadType->getIntegerBitWidth() / 8;
-
-      APInt value(1, 0);
       Value* solvedLoad = GEPStoreTracker::solveLoad(retval);
       if (solvedLoad) {
         return solvedLoad;
@@ -1462,11 +1456,6 @@ Value* lifterClass::popStack() {
     if (!effectiveAddressInt)
       return nullptr;
 
-    uint64_t addr = effectiveAddressInt->getZExtValue();
-
-    unsigned byteSize = loadType->getBitWidth() / 8;
-
-    APInt value(1, 0);
     Value* solvedLoad = GEPStoreTracker::solveLoad(returnValue);
     if (solvedLoad) {
       return solvedLoad;
