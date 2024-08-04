@@ -2,7 +2,12 @@
 #include "GEPTracker.h"
 #include "includes.h"
 #include "lifterClass.h"
+#include <llvm/Analysis/DomConditionCache.h>
+#include <llvm/Analysis/InstructionSimplify.h>
+#include <llvm/Analysis/SimplifyQuery.h>
+#include <llvm/Analysis/ValueLattice.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Instructions.h>
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -15,6 +20,81 @@
 #define TESTFOLDERshl
 #define TESTFOLDERshr
 #endif
+
+using namespace PatternMatch;
+
+static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
+  auto AddAffected = [&Affected](Value* V) {
+    if (isa<Argument>(V) || isa<GlobalValue>(V)) {
+      Affected.push_back(V);
+    } else if (auto* I = dyn_cast<Instruction>(V)) {
+      Affected.push_back(I);
+
+      // Peek through unary operators to find the source of the condition.
+
+      Value* Op;
+      if (match(I, m_PtrToInt(m_Value(Op)))) {
+        if (isa<Instruction>(Op) || isa<Argument>(Op))
+          Affected.push_back(Op);
+      }
+    }
+  };
+
+  ICmpInst::Predicate Pred;
+  Value* A;
+  if (match(Cond, m_ICmp(Pred, m_Value(A), m_Constant()))) {
+    AddAffected(A);
+
+    if (ICmpInst::isEquality(Pred)) {
+      Value* X;
+      // (X & C) or (X | C) or (X ^ C).
+      // (X << C) or (X >>_s C) or (X >>_u C).
+      if (match(A, m_BitwiseLogic(m_Value(X), m_ConstantInt())) ||
+          match(A, m_Shift(m_Value(X), m_ConstantInt())))
+        AddAffected(X);
+    } else {
+      Value* X;
+      // Handle (A + C1) u< C2, which is the canonical form of A > C3 && A < C4.
+      if (match(A, m_Add(m_Value(X), m_ConstantInt())))
+        AddAffected(X);
+    }
+  }
+}
+
+namespace GetSimplifyQuery {
+
+  vector<BranchInst*> BIlist;
+  void RegisterBranch(BranchInst* BI) {
+    //
+    BIlist.push_back(BI);
+  }
+
+  SimplifyQuery createSimplifyQuery(Function* fnc, Instruction* Inst) {
+    AssumptionCache AC(*fnc);
+    auto DT = GEPStoreTracker::getDomTree();
+    auto DL = fnc->getParent()->getDataLayout();
+    static TargetLibraryInfoImpl TLIImpl(
+        Triple(fnc->getParent()->getTargetTriple()));
+    static TargetLibraryInfo TLI(TLIImpl);
+
+    DomConditionCache* DC = new DomConditionCache();
+
+    for (auto BI : BIlist) {
+
+      DC->registerBranch(BI);
+      SmallVector<Value*, 16> Affected;
+      findAffectedValues(BI->getCondition(), Affected);
+      for (auto idk : Affected) {
+        printvalue(idk);
+      }
+    }
+
+    SimplifyQuery SQ(DL, &TLI, DT, &AC, Inst, true, true, DC);
+
+    return SQ;
+  }
+
+} // namespace GetSimplifyQuery
 
 // returns if a comes before b
 bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT) {
@@ -299,6 +379,7 @@ Value* createInstruction(IRBuilder<>& builder, unsigned opcode, Value* operand1,
   InstructionKey key = {opcode, operand1, operand2, destType};
 
   Value* newValue = cache.getOrCreate(builder, key, Name);
+
   return simplifyValue(newValue, DL);
 }
 
@@ -320,6 +401,126 @@ Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True,
   return simplifyValue(builder.CreateSelect(C, True, False, Name), DL);
 }
 
+static void computeKnownBitsFromCmp(const Value* V, CmpInst::Predicate Pred,
+                                    Value* LHS, Value* RHS, KnownBits& Known,
+                                    const SimplifyQuery& Q) {
+  if (RHS->getType()->isPointerTy()) {
+    // Handle comparison of pointer to null explicitly, as it will not be
+    // covered by the m_APInt() logic below.
+    if (LHS == V && match(RHS, m_Zero())) {
+      switch (Pred) {
+      case ICmpInst::ICMP_EQ:
+        Known.setAllZero();
+        break;
+      case ICmpInst::ICMP_SGE:
+      case ICmpInst::ICMP_SGT:
+        Known.makeNonNegative();
+        break;
+      case ICmpInst::ICMP_SLT:
+        Known.makeNegative();
+        break;
+      default:
+        break;
+      }
+    }
+    return;
+  }
+
+  unsigned BitWidth = Known.getBitWidth();
+  auto m_V =
+      m_CombineOr(m_Specific(V), m_PtrToIntSameSize(Q.DL, m_Specific(V)));
+
+  const APInt *Mask, *C;
+  uint64_t ShAmt;
+  switch (Pred) {
+  case ICmpInst::ICMP_EQ:
+    // assume(V = C)
+    if (match(LHS, m_V) && match(RHS, m_APInt(C))) {
+      Known = Known.unionWith(KnownBits::makeConstant(*C));
+      // assume(V & Mask = C)
+    } else if (match(LHS, m_And(m_V, m_APInt(Mask))) &&
+               match(RHS, m_APInt(C))) {
+      // For one bits in Mask, we can propagate bits from C to V.
+      Known.Zero |= ~*C & *Mask;
+      Known.One |= *C & *Mask;
+      // assume(V | Mask = C)
+    } else if (match(LHS, m_Or(m_V, m_APInt(Mask))) && match(RHS, m_APInt(C))) {
+      // For zero bits in Mask, we can propagate bits from C to V.
+      Known.Zero |= ~*C & ~*Mask;
+      Known.One |= *C & ~*Mask;
+      // assume(V ^ Mask = C)
+    } else if (match(LHS, m_Xor(m_V, m_APInt(Mask))) &&
+               match(RHS, m_APInt(C))) {
+      // Equivalent to assume(V == Mask ^ C)
+      Known = Known.unionWith(KnownBits::makeConstant(*C ^ *Mask));
+      // assume(V << ShAmt = C)
+    } else if (match(LHS, m_Shl(m_V, m_ConstantInt(ShAmt))) &&
+               match(RHS, m_APInt(C)) && ShAmt < BitWidth) {
+      // For those bits in C that are known, we can propagate them to known
+      // bits in V shifted to the right by ShAmt.
+      KnownBits RHSKnown = KnownBits::makeConstant(*C);
+      RHSKnown.Zero.lshrInPlace(ShAmt);
+      RHSKnown.One.lshrInPlace(ShAmt);
+      Known = Known.unionWith(RHSKnown);
+      // assume(V >> ShAmt = C)
+    } else if (match(LHS, m_Shr(m_V, m_ConstantInt(ShAmt))) &&
+               match(RHS, m_APInt(C)) && ShAmt < BitWidth) {
+      KnownBits RHSKnown = KnownBits::makeConstant(*C);
+      // For those bits in RHS that are known, we can propagate them to known
+      // bits in V shifted to the right by C.
+      Known.Zero |= RHSKnown.Zero << ShAmt;
+      Known.One |= RHSKnown.One << ShAmt;
+    }
+    break;
+  case ICmpInst::ICMP_NE: {
+    // assume (V & B != 0) where B is a power of 2
+    const APInt* BPow2;
+    if (match(LHS, m_And(m_V, m_Power2(BPow2))) && match(RHS, m_Zero()))
+      Known.One |= *BPow2;
+    break;
+  }
+  default:
+    const APInt* Offset = nullptr;
+    if (match(LHS, m_CombineOr(m_V, m_Add(m_V, m_APInt(Offset)))) &&
+        match(RHS, m_APInt(C))) {
+      ConstantRange LHSRange = ConstantRange::makeAllowedICmpRegion(Pred, *C);
+      if (Offset)
+        LHSRange = LHSRange.sub(*Offset);
+      Known = Known.unionWith(LHSRange.toKnownBits());
+    }
+    break;
+  }
+}
+
+void getKnownBitsFromContext(const Value* V, KnownBits& Known, unsigned Depth,
+                             const SimplifyQuery& Q) {
+  if (!Q.CxtI)
+    return;
+  if (Q.DC && Q.DT) {
+
+    // Handle dominating conditions.
+    for (BranchInst* BI : Q.DC->conditionsFor(V)) {
+      auto* Cmp = dyn_cast<ICmpInst>(BI->getCondition());
+      printvalue(BI->getCondition());
+      if (!Cmp)
+        continue;
+      BasicBlockEdge Edge0(BI->getParent(), BI->getSuccessor(0));
+      if (Q.DT->dominates(Edge0, Q.CxtI->getParent()))
+        computeKnownBitsFromCmp(V, Cmp->getPredicate(), Cmp->getOperand(0),
+                                Cmp->getOperand(1), Known, Q);
+
+      BasicBlockEdge Edge1(BI->getParent(), BI->getSuccessor(1));
+      if (Q.DT->dominates(Edge1, Q.CxtI->getParent()))
+        computeKnownBitsFromCmp(V, Cmp->getInversePredicate(),
+                                Cmp->getOperand(0), Cmp->getOperand(1), Known,
+                                Q);
+    }
+
+    if (Known.hasConflict())
+      Known.resetAll();
+  }
+}
+
 Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name) {
 #ifdef TESTFOLDER3
@@ -333,7 +534,24 @@ Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
       return LHS;
   }
 #endif
-  return createInstruction(builder, Instruction::Add, LHS, RHS, nullptr, Name);
+
+  auto addret =
+      createInstruction(builder, Instruction::Add, LHS, RHS, nullptr, Name);
+
+  auto SQ = GetSimplifyQuery::createSimplifyQuery(
+      builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(addret));
+
+  KnownBits LHSKB(64);
+  getKnownBitsFromContext(LHS, LHSKB, 0, SQ);
+
+  KnownBits RHSKB(64);
+  getKnownBitsFromContext(LHS, RHSKB, 0, SQ);
+
+  auto tryCompute = KnownBits::computeForAddSub(1, 0, LHSKB, RHSKB);
+  if (tryCompute.isConstant() && !tryCompute.hasConflict())
+    return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
+                           tryCompute.getConstant().getZExtValue());
+  return addret;
 }
 
 Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
@@ -345,7 +563,24 @@ Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
   }
 #endif
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  return createInstruction(builder, Instruction::Sub, LHS, RHS, nullptr, Name);
+  // sub x, y => add x, -y
+  auto subret = createInstruction(builder, Instruction::Add, LHS,
+                                  builder.CreateNeg(RHS), nullptr, Name);
+  auto SQ = GetSimplifyQuery::createSimplifyQuery(
+      builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(subret));
+
+  KnownBits LHSKB(64);
+  getKnownBitsFromContext(LHS, LHSKB, 0, SQ);
+
+  KnownBits RHSKB(64);
+  getKnownBitsFromContext(LHS, RHSKB, 0, SQ);
+
+  auto tryCompute = KnownBits::computeForAddSub(0, 0, LHSKB, RHSKB);
+  if (tryCompute.isConstant() && !tryCompute.hasConflict())
+    return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
+                           tryCompute.getConstant().getZExtValue());
+
+  return subret;
 }
 
 Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -643,8 +878,25 @@ Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
     break;
   }
   default: {
-    return nullptr;
+    break;
   }
+  }
+  // c = add a, b
+  // cmp x, c, 0
+  // =>
+  // cmp x, a, -b
+
+  // lhs is a bin op
+  if (auto* AddInst = dyn_cast<BinaryOperator>(LHS)) {
+    auto binOpcode = AddInst->getOpcode();
+    if (binOpcode == Instruction::Add || binOpcode == Instruction::Sub) {
+      Value* A = AddInst->getOperand(0);
+      Value* B = AddInst->getOperand(1);
+      if (binOpcode == Instruction::Add)
+        B = builder.CreateNeg(B);
+      Value* NewB = builder.CreateAdd(RHS, B);
+      return builder.CreateICmp(P, A, NewB, Name);
+    }
   }
   return nullptr;
 }
@@ -665,6 +917,10 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
     return patternCheck;
   }
   auto resultcmp = simplifyValue(builder.CreateICmp(P, LHS, RHS, Name), DL);
+  auto SQ = GetSimplifyQuery::createSimplifyQuery(
+      builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(resultcmp));
+  if (auto x = simplifyICmpInst(P, LHS, RHS, SQ))
+    return x;
   return resultcmp;
 }
 

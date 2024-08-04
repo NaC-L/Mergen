@@ -3,6 +3,7 @@
 #include "FunctionSignatures.h"
 #include "GEPTracker.h"
 #include "OperandUtils.h"
+#include "PathSolver.h"
 #include "Semantics.h"
 #include "includes.h"
 #include "lifterClass.h"
@@ -130,6 +131,7 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
 
   asm_to_zydis_to_lift((uint8_t*)file_base, runtime_address, file_base);
 
+  final_optpass(function);
   string Filename = "output.ll";
   error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);
