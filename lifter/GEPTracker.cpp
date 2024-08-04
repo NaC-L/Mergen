@@ -243,6 +243,9 @@ namespace SCCPSimplifier {
     solver = std::make_unique<SCCPSolver>(
         function->getParent()->getDataLayout(), GetTLI, function->getContext());
     solver->markBlockExecutable(&(function->front()));
+
+    for (Argument& AI : function->args())
+      solver->markOverdefined(&AI);
     bool ResolvedUndefs = true;
     while (ResolvedUndefs) {
       solver->solve();

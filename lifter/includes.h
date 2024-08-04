@@ -324,7 +324,7 @@ enum Flag {
   FLAG_AES = 30,   // AES key schedule loaded flag
   FLAG_AI = 31,    // Alternate Instruction Set enabled
   // reserved above 32-63
-  FLAGS_END = 64
+  FLAGS_END = 32
 };
 
 enum opaque_info { NOT_OPAQUE = 0, OPAQUE_TRUE = 1, OPAQUE_FALSE = 2 };

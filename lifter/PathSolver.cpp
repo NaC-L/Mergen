@@ -4,6 +4,7 @@
 #include "lifterClass.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Casting.h>
 
 void* file_base_g;
@@ -214,6 +215,7 @@ void final_optpass(Function* clonedFuncx) {
 
     modulePassManager =
         passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+
     modulePassManager.addPass(GEPLoadPass());
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
     modulePassManager.addPass(PromotePseudoStackPass());
@@ -257,142 +259,13 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     return result;
   }
 
-  auto flippedRegisterMap = flipRegisterMap();
-
-  while (dest == 0) {
-
-    if (PATH_info solved = getConstraintVal(function, simplifyValue, dest)) {
-      if (solved == PATH_solved) {
-        outs() << "Solved the constraint and moving to next path\n";
-        outs().flush();
-        return solved;
-      }
+  if (PATH_info solved = getConstraintVal(function, simplifyValue, dest)) {
+    if (solved == PATH_solved) {
+      outs() << "Solved the constraint and moving to next path\n";
+      outs().flush();
+      return solved;
     }
-
-    deque<llvm::Instruction*> worklist;
-    std::vector<llvm::Instruction*> visited_used;
-    std::unordered_set<llvm::Instruction*> visited_used_set;
-
-    // Start with the return instruction
-    worklist.push_front(cast<Instruction>(simplifyValue));
-
-    while (!worklist.empty()) {
-      llvm::Instruction* inst = worklist.front();
-      worklist.pop_front();
-      visited_used.emplace_back(inst);
-
-      for (unsigned i = 0, e = inst->getNumOperands(); i != e; ++i) {
-        llvm::Value* operand = inst->getOperand(i);
-        if (llvm::Instruction* opInst =
-                llvm::dyn_cast<llvm::Instruction>(operand)) {
-          printvalue(opInst);
-          if (visited_used_set.insert(opInst).second) {
-            worklist.push_back(opInst);
-          }
-        }
-      }
-    }
-
-    Value* value_with_least_possible_values = nullptr;
-    unsigned int least_possible_value_value = INT_MAX;
-    KnownBits bitsof_least_possible_value(64);
-
-    DataLayout DL(function->getParent());
-
-    // find the VWLPV(value with least possible values) that builds up to
-    // the returnValue
-    for (auto I : visited_used) {
-      KnownBits KnownVal = analyzeValueKnownBits(I, DL);
-
-      unsigned int possible_values =
-          llvm::popcount(~(KnownVal.Zero | KnownVal.One).getZExtValue()) * 2;
-      possible_values = min(possible_values, KnownVal.getBitWidth() * 2);
-      printvalue(I);
-      printvalue2(possible_values);
-      printvalue2(KnownVal);
-      if (!KnownVal.isConstant() && !KnownVal.hasConflict() &&
-          possible_values < least_possible_value_value && possible_values > 0) {
-        least_possible_value_value = possible_values;
-        value_with_least_possible_values = cast<Value>(I);
-        bitsof_least_possible_value = KnownVal;
-      }
-
-      // if constant, simplify later users?
-      // simplify it aswell
-      // if (KnownVal.isConstant() && !KnownVal.hasConflict()) {
-      printvalue(I) auto nsv = simplifyValueLater(I, DL);
-      printvalue(nsv);
-
-      replaceAllUsesWithandReplaceRMap(I, nsv, flippedRegisterMap);
-      simplifyUsers(nsv, DL, flippedRegisterMap);
-      //}
-    }
-
-    if (PATH_info solved = getConstraintVal(function, simplifyValue, dest)) {
-      if (solved == PATH_solved) {
-        return solved;
-      }
-    }
-
-    //  cout << "Total user: " << total_user << "\n";
-    if (least_possible_value_value == 0)
-      throw("something went wrong");
-
-    outs() << " value_with_least_possible_values: ";
-    value_with_least_possible_values->print(outs());
-    outs() << "\n";
-    outs().flush();
-    outs() << " bitsof_least_possible_value : " << bitsof_least_possible_value
-           << "\n";
-    outs().flush();
-    outs() << " possible values: " << least_possible_value_value << " : \n";
-
-    // print an optimized version?
-    std::string Filename = "output_trysolve.ll";
-    std::error_code EC;
-    raw_fd_ostream OS(Filename, EC);
-    function->getParent()->print(OS, nullptr);
-
-    auto possible_values = getPossibleValues(bitsof_least_possible_value,
-                                             least_possible_value_value - 1);
-    auto original_value = value_with_least_possible_values;
-
-    unsigned max_possible_values = possible_values.size();
-    for (unsigned i = 0; i < max_possible_values; i++) {
-      outs() << i << "-) v : " << possible_values[i] << "\n";
-    }
-
-    cout << "\nWhich option do you select? ";
-    // TODO:
-    // store current state
-    // make it identify assumptions
-    // create a new lifter state
-    // should look like
-    // Lifter(function, basicblock, assumptions, registermap, memorymap)
-    //
-    unsigned long long option = 0;
-    timer::suspendTimer();
-    cin >> option;
-    timer::resumeTimer();
-    auto newValue = ConstantInt::get(
-        value_with_least_possible_values->getType(), possible_values[option]);
-
-    // replace original value with the value we selected
-    replaceAllUsesWithandReplaceRMap(original_value, newValue,
-                                     flippedRegisterMap);
-    // original_value->replaceAllUsesWith(newValue);
-
-    // simplify later usages
-    simplifyUsers(newValue, DL, flippedRegisterMap);
-
-#ifdef _DEBUG
-    std::string Filename3 = "output_trysolve2.ll";
-    std::error_code EC3;
-    raw_fd_ostream OS3(Filename3, EC3);
-    function->print(OS3, nullptr);
-    // receive input, replace the value with received input
-    // re-run program
-#endif
   }
+
   return result;
 }

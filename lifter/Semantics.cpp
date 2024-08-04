@@ -7,6 +7,8 @@
 #include "utils.h"
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Type.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
@@ -242,16 +244,16 @@ void lifterClass::branchHelper(Value* condition, string instname,
   auto function = block->getParent();
 
   auto dest = instruction->operands[0];
+  auto true_jump_addr = dest.imm.value.s + instruction->runtime_address +
+                        instruction->info.length;
   Value* true_jump =
-      ConstantInt::get(function->getReturnType(),
-                       dest.imm.value.s + instruction->runtime_address +
-                           instruction->info.length);
+      ConstantInt::get(function->getReturnType(), true_jump_addr);
+  auto false_jump_addr =
+      instruction->runtime_address + instruction->info.length;
   Value* false_jump =
-      ConstantInt::get(function->getReturnType(),
-                       instruction->runtime_address + instruction->info.length);
+      ConstantInt::get(function->getReturnType(), false_jump_addr);
   Value* next_jump =
       createSelectFolder(builder, condition, true_jump, false_jump);
-  auto lastinst = builder.CreateRet(next_jump);
 
   uint64_t destination = 0;
   PATH_info pathInfo = solvePath(function, destination, next_jump);
@@ -263,7 +265,6 @@ void lifterClass::branchHelper(Value* condition, string instname,
   // "\n";
   if (pathInfo == PATH_solved) {
 
-    lastinst->eraseFromParent();
     string block_name = "jmp-" + to_string(destination) + "-";
     auto bb = BasicBlock::Create(context, block_name.c_str(),
                                  builder.GetInsertBlock()->getParent());
@@ -272,6 +273,26 @@ void lifterClass::branchHelper(Value* condition, string instname,
 
     blockInfo = (make_tuple(destination, bb, getRegisters()));
     run = 0;
+  }
+
+  if (pathInfo == PATH_unsolved) {
+
+    auto cinst = cast<ICmpInst>(condition);
+    auto bb_true = BasicBlock::Create(context, "bb_true",
+                                      builder.GetInsertBlock()->getParent());
+
+    auto bb_false = BasicBlock::Create(context, "bb_false",
+                                       builder.GetInsertBlock()->getParent());
+
+    auto BR = builder.CreateCondBr(condition, bb_true, bb_false);
+    GetSimplifyQuery::RegisterBranch(BR);
+    /*
+    blockAddresses->push_back(
+        make_tuple(true_jump_addr, bb_true, getRegisters()));
+
+    blockAddresses->push_back(
+        make_tuple(false_jump_addr, bb_false, getRegisters()));
+    */
   }
 }
 
@@ -3657,7 +3678,30 @@ void lifterClass::lift_lahf() {
 
   SetRegisterValue(ZYDIS_REGISTER_AH, Rvalue);
 }
+void lifterClass::lift_sahf() {
 
+  LLVMContext& context = builder.getContext();
+
+  auto ah = GetRegisterValue(ZYDIS_REGISTER_AH);
+  // RFLAGS(SF:ZF:0:AF:0:PF:1:CF) := AH;
+  //
+  auto cf = builder.CreateAnd(ah, (1 << FLAG_CF));
+  // + 2
+  auto pf = builder.CreateAnd(ah, (1 << FLAG_PF));
+  auto af = builder.CreateAnd(ah, (1 << FLAG_AF));
+  auto zf = builder.CreateAnd(ah, (1 << FLAG_ZF));
+  auto sf = builder.CreateAnd(ah, (1 << FLAG_SF));
+  setFlag(FLAG_CF, cf);
+  setFlag(FLAG_PF, pf);
+  setFlag(FLAG_AF, af);
+  setFlag(FLAG_ZF, zf);
+  setFlag(FLAG_SF, sf);
+}
+void lifterClass::lift_std() {
+  LLVMContext& context = builder.getContext();
+
+  setFlag(FLAG_DF, ConstantInt::get(Type::getInt1Ty(context), 1));
+}
 void lifterClass::lift_stc() {
   LLVMContext& context = builder.getContext();
 
@@ -4267,6 +4311,18 @@ void lifterClass::liftInstructionSemantics() {
     lift_lahf();
     break;
   }
+  case ZYDIS_MNEMONIC_SAHF: {
+    lift_sahf();
+    break;
+  }
+  case ZYDIS_MNEMONIC_STD: {
+    lift_std();
+    break;
+  }
+  case ZYDIS_MNEMONIC_CLD: {
+    lift_cld();
+    break;
+  }
   case ZYDIS_MNEMONIC_STC: {
     lift_stc();
     break;
@@ -4279,10 +4335,7 @@ void lifterClass::liftInstructionSemantics() {
     lift_clc();
     break;
   }
-  case ZYDIS_MNEMONIC_CLD: {
-    lift_cld();
-    break;
-  }
+
   case ZYDIS_MNEMONIC_CLI: {
     lift_cli();
     break;
