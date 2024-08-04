@@ -73,6 +73,7 @@ set(lifter_SOURCES
 	"lifter/PathSolver.h"
 	"lifter/Semantics.h"
 	"lifter/includes.h"
+	"lifter/lifterClass.h"
 	"lifter/utils.h"
 	cmake.toml
 )
