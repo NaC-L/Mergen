@@ -4,10 +4,9 @@
 #include "GEPTracker.h"
 #include "includes.h"
 
-#define DEFINE_FUNCTION(name)                                                  \
-  void lift_##name(ZydisDisassembledInstruction& instruction);
+#define DEFINE_FUNCTION(name) void lift_##name()
 
-#define DEFINE_FUNCTION2(name) void lift_##name();
+#define DEFINE_FUNCTION2(name) void lift_##name()
 
 class lifterClass {
 public:
@@ -15,6 +14,7 @@ public:
   IRBuilder<>& builder;
   bool run = 0;
   bool finished = 0; // finished, unfinished, unreachable
+  ZydisDisassembledInstruction* instruction = nullptr;
   lifterMemoryBuffer buffer;
   BBInfo blockInfo;
 
@@ -24,10 +24,9 @@ public:
   Value* memory;
   Value* TEB;
 
-  void liftInstruction(ZydisDisassembledInstruction& instruction);
-  void liftInstructionSemantics(ZydisDisassembledInstruction& instruction);
-  void branchHelper(ZydisDisassembledInstruction& instruction, Value* condition,
-                    string instname, int numbered);
+  void liftInstruction();
+  void liftInstructionSemantics();
+  void branchHelper(Value* condition, string instname, int numbered);
   void Init_Flags();
   Value* setFlag(Flag flag, Value* newValue = nullptr);
   Value* getFlag(Flag flag);
@@ -116,7 +115,7 @@ public:
   DEFINE_FUNCTION(shrd);
   DEFINE_FUNCTION(lea);
   DEFINE_FUNCTION(add_sub);
-  void lift_imul2(ZydisDisassembledInstruction& instruction, bool isSigned);
+  void lift_imul2(bool isSigned);
   DEFINE_FUNCTION(imul);
   DEFINE_FUNCTION(mul);
   DEFINE_FUNCTION(div2);

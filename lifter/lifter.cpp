@@ -55,14 +55,14 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address,
       ZydisDisassembledInstruction instruction;
       ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, runtime_address,
                             data + offset, 15, &instruction);
-
+      lifter->instruction = &instruction;
       auto counter = debugging::increaseInstCounter() - 1;
       debugging::doIfDebug([&]() {
         cout << hex << counter << ":" << instruction.text << "\n";
         cout << "runtime: " << instruction.runtime_address << endl;
       });
 
-      lifter->liftInstruction(instruction);
+      lifter->liftInstruction();
       if (lifter->finished) {
 
         lifter->run = 0;
