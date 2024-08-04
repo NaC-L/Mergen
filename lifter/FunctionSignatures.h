@@ -31,7 +31,6 @@ namespace funcsignatures {
     functioninfo(const std::string& Name, const std::vector<funcArgInfo> Args,
                  const std::vector<unsigned char> Bytes)
         : name(Name), args(Args), bytes(Bytes) {}
-    std::vector<unsigned char> bytes;
     std::string name;
     //
     funcArgInfos args = {funcArgInfo(ZYDIS_REGISTER_RAX, I64, 0),
@@ -52,6 +51,7 @@ namespace funcsignatures {
                          funcArgInfo(ZYDIS_REGISTER_R15, I64, 0),
                          funcArgInfo(ZYDIS_REGISTER_DS, I64, 1)};
 
+    std::vector<unsigned char> bytes;
     // DS represents memory
     // (yeah i hate it aswell)
     // so the default is

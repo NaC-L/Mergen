@@ -111,7 +111,7 @@ Value* lifterMemoryBuffer::retrieveCombinedValue(IRBuilder<>& builder,
     return nullptr;
   }
 
-  bool contiguous = true;
+  // bool contiguous = true;
 
   vector<ValueByteReferenceRange> values; // we can just create an array here
   for (uint64_t i = 0; i < byteCount; ++i) {
@@ -119,7 +119,7 @@ Value* lifterMemoryBuffer::retrieveCombinedValue(IRBuilder<>& builder,
     if (buffer[currentAddress] == nullptr ||
         buffer[currentAddress]->value != buffer[startAddress]->value ||
         buffer[currentAddress]->byteOffset != i) {
-      contiguous = false; // non-contiguous value
+      // contiguous = false; // non-contiguous value
     }
 
     // push if

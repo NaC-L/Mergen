@@ -25,13 +25,13 @@ public:
     val(uint64_t addr) : memoryAddress(addr) {}
 
   } valinfo;
-  bool isRef;
 
   // size info, we can make this smaller because they can only be 0-8 range
   // (maybe higher for avx)
   uint8_t start;
   uint8_t end;
 
+  bool isRef;
   ValueByteReferenceRange(ValueByteReference* vref, uint8_t startv,
                           uint8_t endv)
       : valinfo(vref), start(startv), end(endv), isRef(true) {}
