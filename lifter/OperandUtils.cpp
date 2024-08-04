@@ -1,6 +1,7 @@
 #include "OperandUtils.h"
 #include "GEPTracker.h"
 #include "includes.h"
+#include "lifterClass.h"
 #include <llvm/IR/Constants.h>
 
 #ifndef TESTFOLDER
@@ -821,10 +822,7 @@ Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
 %maskedreg14 = and i64 %newreg9, -256
 */
 
-RegisterMap Registers;
-unordered_map<Flag, Value*> FlagList;
-
-void Init_Flags(IRBuilder<>& builder) {
+void lifterClass::Init_Flags() {
   LLVMContext& context = builder.getContext();
   auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
@@ -843,7 +841,7 @@ void Init_Flags(IRBuilder<>& builder) {
 }
 
 // ???
-Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
+Value* lifterClass::setFlag(Flag flag, Value* newValue) {
   LLVMContext& context = builder.getContext();
   newValue = createTruncFolder(builder, newValue, Type::getInt1Ty(context));
   printvalue2((int32_t)flag) printvalue(newValue);
@@ -853,7 +851,7 @@ Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue = nullptr) {
 
   return FlagList[flag] = newValue;
 }
-Value* getFlag(IRBuilder<>& builder, Flag flag) {
+Value* lifterClass::getFlag(Flag flag) {
   if (FlagList[flag])
     return FlagList[flag];
 
@@ -862,8 +860,10 @@ Value* getFlag(IRBuilder<>& builder, Flag flag) {
 }
 
 // for love of god this is so ugly
-RegisterMap getRegisters() { return Registers; }
-void setRegisters(RegisterMap newRegisters) { Registers = newRegisters; }
+RegisterMap lifterClass::getRegisters() { return Registers; }
+void lifterClass::setRegisters(RegisterMap newRegisters) {
+  Registers = newRegisters;
+}
 
 Value* memoryAlloc;
 Value* TEB;
@@ -871,7 +871,7 @@ void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
 
 // todo?
-ReverseRegisterMap flipRegisterMap() {
+ReverseRegisterMap lifterClass::flipRegisterMap() {
   ReverseRegisterMap RevMap;
   for (const auto& pair : Registers) {
     RevMap[pair.second] = pair.first;
@@ -882,8 +882,7 @@ ReverseRegisterMap flipRegisterMap() {
   return RevMap;
 }
 
-RegisterMap InitRegisters(IRBuilder<>& builder, Function* function,
-                          ZyanU64 rip) {
+RegisterMap lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
 
   // rsp
   // rsp_unaligned = %rsp % 16
@@ -909,7 +908,7 @@ RegisterMap InitRegisters(IRBuilder<>& builder, Function* function,
     }
   }
 
-  Init_Flags(builder);
+  Init_Flags();
 
   LLVMContext& context = builder.getContext();
 
@@ -931,7 +930,7 @@ RegisterMap InitRegisters(IRBuilder<>& builder, Function* function,
   return Registers;
 }
 
-Value* GetValueFromHighByteRegister(IRBuilder<>& builder, int reg) {
+Value* lifterClass::GetValueFromHighByteRegister(int reg) {
 
   Value* fullRegisterValue = Registers[ZydisRegisterGetLargestEnclosing(
       ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg)];
@@ -945,7 +944,7 @@ Value* GetValueFromHighByteRegister(IRBuilder<>& builder, int reg) {
   return highByteValue;
 }
 
-void SetRFLAGSValue(IRBuilder<>& builder, Value* value) {
+void lifterClass::SetRFLAGSValue(Value* value) {
   LLVMContext& context = builder.getContext();
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
     int shiftAmount = flag;
@@ -955,16 +954,16 @@ void SetRFLAGSValue(IRBuilder<>& builder, Value* value) {
     auto flagValue = createTruncFolder(builder, shiftedFlagValue,
                                        Type::getInt1Ty(context), "flagtrunc");
 
-    setFlag(builder, (Flag)flag, flagValue);
+    setFlag((Flag)flag, flagValue);
   }
   return;
 }
 
-Value* GetRFLAGSValue(IRBuilder<>& builder) {
+Value* lifterClass::GetRFLAGSValue() {
   LLVMContext& context = builder.getContext();
   Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0);
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
-    Value* flagValue = getFlag(builder, (Flag)flag);
+    Value* flagValue = getFlag((Flag)flag);
     int shiftAmount = flag;
     Value* shiftedFlagValue = createShlFolder(
         builder,
@@ -977,11 +976,11 @@ Value* GetRFLAGSValue(IRBuilder<>& builder) {
   return rflags;
 }
 
-Value* GetRegisterValue(IRBuilder<>& builder, int key) {
+Value* lifterClass::GetRegisterValue(int key) {
 
   if (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
       key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH) {
-    return GetValueFromHighByteRegister(builder, key);
+    return GetValueFromHighByteRegister(key);
   }
 
   int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
@@ -990,7 +989,7 @@ Value* GetRegisterValue(IRBuilder<>& builder, int key) {
                    : key;
 
   if (key == ZYDIS_REGISTER_RFLAGS || key == ZYDIS_REGISTER_EFLAGS) {
-    return GetRFLAGSValue(builder);
+    return GetRFLAGSValue();
   }
 
   /*
@@ -1002,7 +1001,7 @@ Value* GetRegisterValue(IRBuilder<>& builder, int key) {
   return Registers[newKey];
 }
 
-Value* SetValueToHighByteRegister(IRBuilder<>& builder, int reg, Value* value) {
+Value* lifterClass::SetValueToHighByteRegister(int reg, Value* value) {
   LLVMContext& context = builder.getContext();
   int shiftValue = 8;
 
@@ -1030,7 +1029,7 @@ Value* SetValueToHighByteRegister(IRBuilder<>& builder, int reg, Value* value) {
   return newRegisterValue;
 }
 
-Value* SetValueToSubRegister_8b(IRBuilder<>& builder, int reg, Value* value) {
+Value* lifterClass::SetValueToSubRegister_8b(int reg, Value* value) {
   LLVMContext& context = builder.getContext();
   int fullRegKey = ZydisRegisterGetLargestEnclosing(
       ZYDIS_MACHINE_MODE_LONG_64, static_cast<ZydisRegister>(reg));
@@ -1069,7 +1068,7 @@ Value* SetValueToSubRegister_8b(IRBuilder<>& builder, int reg, Value* value) {
   return updatedReg;
 }
 
-Value* SetValueToSubRegister_16b(IRBuilder<>& builder, int reg, Value* value) {
+Value* lifterClass::SetValueToSubRegister_16b(int reg, Value* value) {
 
   int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,
                                                     (ZydisRegister)reg);
@@ -1086,36 +1085,26 @@ Value* SetValueToSubRegister_16b(IRBuilder<>& builder, int reg, Value* value) {
   return updatedReg;
 }
 
-void SetRegisterValue(int key, Value* value) {
-
-  int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
-                   ? ZydisRegisterGetLargestEnclosing(
-                         ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key)
-                   : key;
-  Registers[newKey] = value;
-  printvalue(Registers[newKey]);
-}
-
-void SetRegisterValue(IRBuilder<>& builder, int key, Value* value) {
+void lifterClass::SetRegisterValue(int key, Value* value) {
   if ((key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
        key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) {
 
-    value = SetValueToSubRegister_8b(builder, key, value);
+    value = SetValueToSubRegister_8b(key, value);
   }
 
   if (((key >= ZYDIS_REGISTER_R8B) && (key <= ZYDIS_REGISTER_R15B)) ||
       ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_BL)) ||
       ((key >= ZYDIS_REGISTER_SPL) && (key <= ZYDIS_REGISTER_DIL))) {
 
-    value = SetValueToSubRegister_8b(builder, key, value);
+    value = SetValueToSubRegister_8b(key, value);
   }
 
   if (((key >= ZYDIS_REGISTER_AX) && (key <= ZYDIS_REGISTER_R15W))) {
-    value = SetValueToSubRegister_16b(builder, key, value);
+    value = SetValueToSubRegister_16b(key, value);
   }
 
   if (key == ZYDIS_REGISTER_RFLAGS) {
-    SetRFLAGSValue(builder, value);
+    SetRFLAGSValue(value);
     return;
   }
 
@@ -1127,22 +1116,22 @@ void SetRegisterValue(IRBuilder<>& builder, int key, Value* value) {
   Registers[newKey] = value;
 }
 
-Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
-                           int possiblesize) {
+Value* lifterClass::GetEffectiveAddress(ZydisDecodedOperand& op,
+                                        int possiblesize) {
   LLVMContext& context = builder.getContext();
 
   Value* effectiveAddress = nullptr;
 
   Value* baseValue = nullptr;
   if (op.mem.base != ZYDIS_REGISTER_NONE) {
-    baseValue = GetRegisterValue(builder, op.mem.base);
+    baseValue = GetRegisterValue(op.mem.base);
     baseValue = createZExtFolder(builder, baseValue, Type::getInt64Ty(context));
     printvalue(baseValue);
   }
 
   Value* indexValue = nullptr;
   if (op.mem.index != ZYDIS_REGISTER_NONE) {
-    indexValue = GetRegisterValue(builder, op.mem.index);
+    indexValue = GetRegisterValue(op.mem.index);
 
     indexValue =
         createZExtFolder(builder, indexValue, Type::getInt64Ty(context));
@@ -1192,14 +1181,14 @@ Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress) {
   return pointer;
 }
 
-Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
-                       int possiblesize, string address) {
+Value* lifterClass::GetOperandValue(ZydisDecodedOperand& op, int possiblesize,
+                                    string address) {
   LLVMContext& context = builder.getContext();
   auto type = Type::getIntNTy(context, possiblesize);
 
   switch (op.type) {
   case ZYDIS_OPERAND_TYPE_REGISTER: {
-    Value* value = GetRegisterValue(builder, op.reg.value);
+    Value* value = GetRegisterValue(op.reg.value);
     auto vtype = value->getType();
     if (isa<IntegerType>(vtype)) {
       auto typeBitWidth = dyn_cast<IntegerType>(vtype)->getBitWidth();
@@ -1223,7 +1212,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
     Value* baseValue = nullptr;
     if (op.mem.base != ZYDIS_REGISTER_NONE) {
-      baseValue = GetRegisterValue(builder, op.mem.base);
+      baseValue = GetRegisterValue(op.mem.base);
       baseValue =
           createZExtFolder(builder, baseValue, Type::getInt64Ty(context));
       printvalue(baseValue);
@@ -1231,7 +1220,7 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
     Value* indexValue = nullptr;
     if (op.mem.index != ZYDIS_REGISTER_NONE) {
-      indexValue = GetRegisterValue(builder, op.mem.index);
+      indexValue = GetRegisterValue(op.mem.index);
       indexValue =
           createZExtFolder(builder, indexValue, Type::getInt64Ty(context));
       printvalue(indexValue);
@@ -1309,8 +1298,8 @@ Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
   }
 }
 
-Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
-                       Value* value, string address) {
+Value* lifterClass::SetOperandValue(ZydisDecodedOperand& op, Value* value,
+                                    string address) {
   LLVMContext& context = builder.getContext();
   value = simplifyValue(
       value,
@@ -1318,7 +1307,7 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
   switch (op.type) {
   case ZYDIS_OPERAND_TYPE_REGISTER: {
-    SetRegisterValue(builder, op.reg.value, value);
+    SetRegisterValue(op.reg.value, value);
     return value;
     break;
   }
@@ -1328,7 +1317,7 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
     Value* baseValue = nullptr;
     if (op.mem.base != ZYDIS_REGISTER_NONE) {
-      baseValue = GetRegisterValue(builder, op.mem.base);
+      baseValue = GetRegisterValue(op.mem.base);
       baseValue =
           createZExtFolder(builder, baseValue, Type::getInt64Ty(context));
       printvalue(baseValue);
@@ -1336,7 +1325,7 @@ Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
 
     Value* indexValue = nullptr;
     if (op.mem.index != ZYDIS_REGISTER_NONE) {
-      indexValue = GetRegisterValue(builder, op.mem.index);
+      indexValue = GetRegisterValue(op.mem.index);
       indexValue =
           createZExtFolder(builder, indexValue, Type::getInt64Ty(context));
       printvalue(indexValue);
@@ -1411,56 +1400,18 @@ Value* getMemoryFromValue(IRBuilder<>& builder, Value* value) {
   return pointer;
 }
 
-// delete
-Value* getFlag2(IRBuilder<>& builder, Flag flag) {
-  LLVMContext& context = builder.getContext();
-  Value* rflag_var = GetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS);
-  Value* position = ConstantInt::get(context, APInt(64, flag));
-
-  Value* one = ConstantInt::get(context, APInt(64, 1));
-  Value* bit_position = createShlFolder(builder, one, position, "getflag-shl");
-
-  Value* and_result =
-      createAndFolder(builder, rflag_var, bit_position, "getflag-and");
-  return builder.CreateICmpNE(
-      and_result, ConstantInt::get(context, APInt(64, 0)), "getflag-cmpne");
-}
-
-Value* setFlag2(IRBuilder<>& builder, Flag flag, Value* newValue) {
-  LLVMContext& context = builder.getContext();
-  Value* rflag_var = GetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS);
-  Value* position = ConstantInt::get(context, APInt(64, flag));
-
-  Value* one = ConstantInt::get(context, APInt(64, 1));
-  Value* bit_position = createShlFolder(builder, one, position);
-
-  Value* inverse_mask = builder.CreateNot(bit_position);
-
-  Value* cleared_rflag =
-      createAndFolder(builder, rflag_var, inverse_mask, "setflag2");
-
-  Value* shifted_newValue = createShlFolder(
-      builder,
-      createZExtOrTruncFolder(builder, newValue, Type::getInt64Ty(context)),
-      position, "flagsetweird");
-  shifted_newValue =
-      createOrFolder(builder, cleared_rflag, shifted_newValue, "setflag-or");
-  SetRegisterValue(builder, ZYDIS_REGISTER_RFLAGS, shifted_newValue);
-  return shifted_newValue;
-}
-
-vector<Value*> GetRFLAGS(IRBuilder<>& builder) {
+vector<Value*> lifterClass::GetRFLAGS() {
   vector<Value*> rflags;
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
-    rflags.push_back(getFlag(builder, (Flag)flag));
+    rflags.push_back(getFlag((Flag)flag));
   }
   return rflags;
 }
 
-void pushFlags(IRBuilder<>& builder, vector<Value*> value, string address) {
+void lifterClass::pushFlags(vector<Value*> value, string address) {
   LLVMContext& context = builder.getContext();
 
-  auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
+  auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
 
   for (size_t i = 0; i < value.size(); i += 8) {
     Value* byteVal = ConstantInt::get(Type::getInt8Ty(context), 0);
@@ -1489,9 +1440,9 @@ void pushFlags(IRBuilder<>& builder, vector<Value*> value, string address) {
 }
 
 // return [rsp], rsp+=8
-Value* popStack(IRBuilder<>& builder) {
+Value* lifterClass::popStack() {
   LLVMContext& context = builder.getContext();
-  auto rsp = GetRegisterValue(builder, ZYDIS_REGISTER_RSP);
+  auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
   // should we get a address calculator function, do we need that?
 
   std::vector<Value*> indices;

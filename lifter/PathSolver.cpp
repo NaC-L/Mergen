@@ -1,6 +1,7 @@
 #include "CustomPasses.hpp"
 #include "OperandUtils.h"
 #include "includes.h"
+#include "lifterClass.h"
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/Casting.h>
@@ -19,8 +20,8 @@ struct InstructionDependencyOrder {
   }
 };
 
-void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
-                                      ReverseRegisterMap rVMap) {
+void lifterClass::replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
+                                                   ReverseRegisterMap rVMap) {
 
   // if two values are same, we go in a infinite loop
   if (v == nv)
@@ -69,8 +70,8 @@ void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
 // not miss
 //
 // also refactor this
-void simplifyUsers(Value* newValue, DataLayout& DL,
-                   ReverseRegisterMap flippedRegisterMap) {
+void lifterClass::simplifyUsers(Value* newValue, DataLayout& DL,
+                                ReverseRegisterMap flippedRegisterMap) {
   unordered_set<Value*> visited;
   std::priority_queue<Instruction*, std::vector<Instruction*>,
                       InstructionDependencyOrder>
@@ -245,7 +246,8 @@ llvm::ValueToValueMapTy* flipVMap(const ValueToValueMapTy& VMap) {
   return RevMap;
 }
 
-PATH_info solvePath(Function* function, uint64_t& dest, Value* simplifyValue) {
+PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
+                                 Value* simplifyValue) {
 
   PATH_info result = PATH_unsolved;
   if (llvm::ConstantInt* constInt =

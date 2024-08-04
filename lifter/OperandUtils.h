@@ -59,42 +59,6 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uint64_t RHS,
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS,
                        const Twine& Name = "");
 
-Value* GetRegisterValue(IRBuilder<>& builder, int key);
-
-void SetRegisterValue(IRBuilder<>& builder, int key, Value* value);
-
-void SetRegisterValue(int key, Value* value);
-
-RegisterMap InitRegisters(IRBuilder<>& builder, Function* function,
-                          ZyanU64 rip);
-
-Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress);
-
-Value* GetEffectiveAddress(IRBuilder<>& builder, ZydisDecodedOperand& op,
-                           int possiblesize);
-
-IntegerType* getIntSize(int size, LLVMContext& context);
-
-Value* GetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
-                       int possiblesize, string address = "");
-
-Value* SetOperandValue(IRBuilder<>& builder, ZydisDecodedOperand& op,
-                       Value* value, string address = "");
-
-void pushFlags(IRBuilder<>& builder, vector<Value*> value, string address = "");
-
-RegisterMap getRegisters();
-
-void setRegisters(RegisterMap newRegisterList);
-
-Value* setFlag(IRBuilder<>& builder, Flag flag, Value* newValue);
-
-Value* getFlag(IRBuilder<>& builder, Flag flag);
-
-Value* getMemoryFromValue(IRBuilder<>& builder, Value* value);
-
-vector<Value*> GetRFLAGS(IRBuilder<>& builder);
-
 Value* getMemory();
 
 KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL);
@@ -103,6 +67,6 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL);
 
 ReverseRegisterMap flipRegisterMap();
 
-Value* popStack(IRBuilder<>& builder);
+Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress);
 
 bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT);
