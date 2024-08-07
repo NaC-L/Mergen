@@ -4,12 +4,10 @@
 #include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "PathSolver.h"
-#include "Semantics.h"
 #include "includes.h"
 #include "lifterClass.h"
 #include "nt/nt_headers.hpp"
 #include "utils.h"
-#include <cstdlib>
 #include <fstream>
 
 vector<lifterClass*> lifters;
@@ -39,7 +37,6 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address,
 
     // will use this for exploring multiple branches
     lifter->setRegisters(get<2>(lifter->blockInfo));
-    //
 
     BinaryOperations::initBases((void*)file_base, data);
 

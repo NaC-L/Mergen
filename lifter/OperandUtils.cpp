@@ -89,7 +89,7 @@ namespace GetSimplifyQuery {
       }
     }
 
-    SimplifyQuery SQ(DL, &TLI, DT, &AC, Inst, true, true, DC);
+    SimplifyQuery SQ(DL, &TLI, DT, nullptr, Inst, true, true, DC);
 
     return SQ;
   }
@@ -294,8 +294,16 @@ Value* simplifyValueLater(Value* v, const DataLayout& DL) {
 struct InstructionKey {
   unsigned opcode;
   Value* operand1;
-  Value* operand2;
-  Type* destType;
+  union {
+    Value* operand2;
+    Type* destType;
+  };
+
+  InstructionKey(unsigned opcode, Value* operand1, Value* operand2)
+      : opcode(opcode), operand1(operand1), operand2(operand2) {};
+
+  InstructionKey(unsigned opcode, Value* operand1, Type* destType)
+      : opcode(opcode), operand1(operand1), destType(destType) {};
 
   bool operator==(const InstructionKey& other) const {
     return opcode == other.opcode && operand1 == other.operand1 &&
@@ -304,11 +312,11 @@ struct InstructionKey {
 };
 
 struct InstructionKeyHash {
-  std::size_t operator()(const InstructionKey& key) const {
-    return std::hash<unsigned>()(key.opcode) ^
-           std::hash<Value*>()(key.operand1) ^
-           (key.operand2 ? std::hash<Value*>()(key.operand2) : 0) ^
-           (key.destType ? std::hash<Type*>()(key.destType) : 0);
+  uint64_t operator()(const InstructionKey& key) const {
+    uint64_t h1 = std::hash<unsigned>()(key.opcode);
+    uint64_t h2 = reinterpret_cast<uint64_t>(key.operand1);
+    uint64_t h3 = reinterpret_cast<uint64_t>(key.operand2);
+    return h1 ^ (h2 << 1) ^ (h3 << 2);
   }
 };
 
@@ -376,7 +384,9 @@ Value* createInstruction(IRBuilder<>& builder, unsigned opcode, Value* operand1,
                          Value* operand2, Type* destType, const Twine& Name) {
   static InstructionCache cache;
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  InstructionKey key = {opcode, operand1, operand2, destType};
+
+  InstructionKey key = {opcode, operand1,
+                        (Value*)((uint64_t)operand2 | (uint64_t)destType)};
 
   Value* newValue = cache.getOrCreate(builder, key, Name);
 
