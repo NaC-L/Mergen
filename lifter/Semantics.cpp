@@ -231,8 +231,8 @@ Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x < 0 = sf
 // this function is used for jumps that are related to user, ex: vms using
 // different handlers, jmptables, etc.
 
-void lifterClass::branchHelper(Value* condition, string instname,
-                               int numbered) {
+void lifterClass::branchHelper(Value* condition, string instname, int numbered,
+                               bool reverse) {
   LLVMContext& context = builder.getContext();
   // TODO:
   // save the current state of memory, registers etc.,
@@ -252,8 +252,12 @@ void lifterClass::branchHelper(Value* condition, string instname,
       instruction->runtime_address + instruction->info.length;
   Value* false_jump =
       ConstantInt::get(function->getReturnType(), false_jump_addr);
-  Value* next_jump =
-      createSelectFolder(builder, condition, true_jump, false_jump);
+  Value* next_jump = nullptr;
+
+  if (!reverse)
+    next_jump = createSelectFolder(builder, condition, true_jump, false_jump);
+  else
+    next_jump = createSelectFolder(builder, condition, false_jump, true_jump);
 
   uint64_t destination = 0;
   PATH_info pathInfo = solvePath(function, destination, next_jump);
@@ -277,14 +281,19 @@ void lifterClass::branchHelper(Value* condition, string instname,
 
   if (pathInfo == PATH_unsolved) {
 
-    auto cinst = cast<ICmpInst>(condition);
+    // auto cinst = cast<ICmpInst>(condition);
     auto bb_true = BasicBlock::Create(context, "bb_true",
                                       builder.GetInsertBlock()->getParent());
 
     auto bb_false = BasicBlock::Create(context, "bb_false",
                                        builder.GetInsertBlock()->getParent());
 
-    auto BR = builder.CreateCondBr(condition, bb_true, bb_false);
+    BranchInst* BR = nullptr;
+    if (!reverse)
+      BR = builder.CreateCondBr(condition, bb_true, bb_false);
+    else
+      BR = builder.CreateCondBr(condition, bb_false, bb_true);
+
     GetSimplifyQuery::RegisterBranch(BR);
 
     blockInfo = make_tuple(true_jump_addr, bb_true, getRegisters());
@@ -980,10 +989,7 @@ void lifterClass::lift_jnz() {
 
   printvalue(zf);
 
-  zf = createICMPFolder(builder, CmpInst::ICMP_EQ, zf,
-                        ConstantInt::get(Type::getInt1Ty(context), 0));
-
-  branchHelper(zf, "jnz", branchnumber);
+  branchHelper(zf, "jnz", branchnumber, 1);
 
   branchnumber++;
 }
@@ -1014,9 +1020,7 @@ void lifterClass::lift_jns() {
 
   // auto newRip = createAddFolder(builder, Value, ripval, "jns");
 
-  sf = builder.CreateNot(sf);
-
-  branchHelper(sf, "jns", branchnumber);
+  branchHelper(sf, "jns", branchnumber, 1);
 
   branchnumber++;
 }
@@ -1088,15 +1092,15 @@ void lifterClass::lift_jnl() {
   printvalue(sf);
   printvalue(of);
 
-  auto condition =
-      builder.CreateNot(createXorFolder(builder, sf, of), "jnl_Condition");
+  auto condition = createXorFolder(builder, sf, of, "jl_condition");
 
-  branchHelper(condition, "jnl", branchnumber);
+  branchHelper(condition, "jnl", branchnumber, 1);
 
   branchnumber++;
 }
 
 void lifterClass::lift_jnle() {
+  // If SF != OF or ZF = 1, then jump. Otherwise, do not jump.
 
   auto sf = getFlag(FLAG_SF);
   auto of = getFlag(FLAG_OF);
@@ -1105,18 +1109,13 @@ void lifterClass::lift_jnle() {
   // auto dest = instruction->operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-  // auto newRip = createAddFolder(builder, Value, ripval, "jnle");
-  //  Jump short if greater (ZF=0 and SF=OF).
-  printvalue(sf) printvalue(zf) printvalue(of)
+  // auto newRip = createAddFolder(builder, Value, ripval, "jle");
 
-      auto sf_eq_of = createXorFolder(builder, sf, of); // 0-0 or 1-1 => 0
-  auto sf_eq_of_not =
-      builder.CreateNot(sf_eq_of, "jnle_SF_EQ_OF_NOT"); // 0 => 1
-  auto zf_not = builder.CreateNot(zf, "jnle_ZF_NOT");   // zf == 0
-  auto condition =
-      createAndFolder(builder, sf_eq_of_not, zf_not, "jnle_Condition");
+  // Check if SF != OF or ZF is set
+  auto sf_neq_of = createXorFolder(builder, sf, of, "jle_SF_NEQ_OF");
+  auto condition = createOrFolder(builder, sf_neq_of, zf, "jle_Condition");
 
-  branchHelper(condition, "jnle", branchnumber);
+  branchHelper(condition, "jnle", branchnumber, 1);
 
   branchnumber++;
 }
@@ -1164,30 +1163,24 @@ void lifterClass::lift_jnb() {
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
   // auto newRip = createAddFolder(builder, Value, ripval, "jnb");
 
-  auto condition = builder.CreateNot(cf, "notCF");
-  branchHelper(condition, "jnb", branchnumber);
+  auto condition = cf;
+  branchHelper(condition, "jnb", branchnumber, 1);
 
   branchnumber++;
 }
-
 void lifterClass::lift_jnbe() {
 
   auto cf = getFlag(FLAG_CF);
   auto zf = getFlag(FLAG_ZF);
+  printvalue(cf) printvalue(zf) // auto dest = instruction->operands[0];
 
-  printvalue(cf);
-  printvalue(zf);
-  // auto dest = instruction->operands[0];
+      // auto Value = GetOperandValue( dest, 64);
+      // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
+      // auto newRip = createAddFolder(builder, Value, ripval, "jbe");
 
-  // auto Value = GetOperandValue( dest, 64);
-  // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-  // auto newRip = createAddFolder(builder, Value, ripval, "jnbe");
+      auto condition = createOrFolder(builder, cf, zf, "jbe_Condition");
 
-  auto condition =
-      createAndFolder(builder, builder.CreateNot(cf, "notCF"),
-                      builder.CreateNot(zf, "notZF"), "jnbe_ja_Condition");
-
-  branchHelper(condition, "jnbe_ja", branchnumber);
+  branchHelper(condition, "jnbe", branchnumber, 1);
 
   branchnumber++;
 }
@@ -1220,8 +1213,7 @@ void lifterClass::lift_jno() {
 
   // auto newRip = createAddFolder(builder, Value, ripval, "jno");
 
-  of = builder.CreateNot(of);
-  branchHelper(of, "jno", branchnumber);
+  branchHelper(of, "jno", branchnumber, 1);
 
   branchnumber++;
 }
@@ -1253,9 +1245,8 @@ void lifterClass::lift_jnp() {
 
   // auto newRip = createAddFolder(builder, Value, ripval, "jnp");
 
-  pf = builder.CreateNot(pf);
   printvalue(pf);
-  branchHelper(pf, "jnp", branchnumber);
+  branchHelper(pf, "jnp", branchnumber, 1);
 
   branchnumber++;
 }
