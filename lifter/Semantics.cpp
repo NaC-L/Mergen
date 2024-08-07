@@ -291,9 +291,8 @@ void lifterClass::branchHelper(Value* condition, string instname,
 
     lifterClass* newlifter = new lifterClass(builder);
 
-    auto RegisterList = newlifter->InitRegisters(function, false_jump_addr);
-
-    newlifter->blockInfo = make_tuple(false_jump_addr, bb_false, RegisterList);
+    newlifter->blockInfo =
+        make_tuple(false_jump_addr, bb_false, getRegisters());
 
     lifters.push_back(newlifter);
 
