@@ -11,8 +11,6 @@ namespace GetSimplifyQuery {
 
 Value* simplifyValue(Value* v, const DataLayout& DL);
 
-KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL);
-
 Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True,
                           Value* False, const Twine& Name = "");
 
@@ -69,7 +67,7 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, APInt RHS,
 
 Value* getMemory();
 
-KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL);
+KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI);
 
 Value* simplifyValueLater(Value* v, const DataLayout& DL);
 
