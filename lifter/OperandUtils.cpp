@@ -71,6 +71,7 @@ namespace GetSimplifyQuery {
 
   SimplifyQuery createSimplifyQuery(Function* fnc, Instruction* Inst) {
     AssumptionCache AC(*fnc);
+    GEPStoreTracker::updateDomTree(*fnc);
     auto DT = GEPStoreTracker::getDomTree();
     auto DL = fnc->getParent()->getDataLayout();
     static TargetLibraryInfoImpl TLIImpl(
@@ -84,8 +85,8 @@ namespace GetSimplifyQuery {
       DC->registerBranch(BI);
       SmallVector<Value*, 16> Affected;
       findAffectedValues(BI->getCondition(), Affected);
-      for (auto idk : Affected) {
-        printvalue(idk);
+      for (auto affectedvalues : Affected) {
+        printvalue(affectedvalues);
       }
     }
 
@@ -173,19 +174,158 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
   return nullptr;
 }
 
-KnownBits analyzeValueKnownBits(Value* value, const DataLayout& DL) {
+static void computeKnownBitsFromCmp(Value* V, CmpInst::Predicate Pred,
+                                    Value* LHS, Value* RHS, KnownBits& Known,
+                                    const SimplifyQuery& Q) {
+  // Handle comparison of pointer to null explicitly, as it will not be
+  // covered by the m_APInt() logic below.
+  printvalue(LHS);
+  printvalue(V);
+  printvalue(RHS);
+  if (LHS == V && match(RHS, m_Zero())) {
+    int iszero = Pred;
+    printvalue2(iszero);
+    switch (Pred) {
+    case ICmpInst::ICMP_EQ:
+      Known.setAllZero();
+      break;
+    case ICmpInst::ICMP_SGE:
+    case ICmpInst::ICMP_SGT:
+      Known.makeNonNegative();
+      break;
+    case ICmpInst::ICMP_SLT:
+      Known.makeNegative();
+      break;
+    default:
+      break;
+    }
+  }
+
+  unsigned BitWidth = Known.getBitWidth();
+  auto m_V =
+      m_CombineOr(m_Specific(V), m_PtrToIntSameSize(Q.DL, m_Specific(V)));
+
+  const APInt *Mask, *C;
+  uint64_t ShAmt;
+  switch (Pred) {
+  case ICmpInst::ICMP_EQ:
+    // assume(V = C)
+    if (match(LHS, m_V) && match(RHS, m_APInt(C))) {
+      Known = Known.unionWith(KnownBits::makeConstant(*C));
+      // assume(V & Mask = C)
+    } else if (match(LHS, m_And(m_V, m_APInt(Mask))) &&
+               match(RHS, m_APInt(C))) {
+      // For one bits in Mask, we can propagate bits from C to V.
+      Known.Zero |= ~*C & *Mask;
+      Known.One |= *C & *Mask;
+      // assume(V | Mask = C)
+    } else if (match(LHS, m_Or(m_V, m_APInt(Mask))) && match(RHS, m_APInt(C))) {
+      // For zero bits in Mask, we can propagate bits from C to V.
+      Known.Zero |= ~*C & ~*Mask;
+      Known.One |= *C & ~*Mask;
+      // assume(V ^ Mask = C)
+    } else if (match(LHS, m_Xor(m_V, m_APInt(Mask))) &&
+               match(RHS, m_APInt(C))) {
+      // Equivalent to assume(V == Mask ^ C)
+      Known = Known.unionWith(KnownBits::makeConstant(*C ^ *Mask));
+      // assume(V << ShAmt = C)
+    } else if (match(LHS, m_Shl(m_V, m_ConstantInt(ShAmt))) &&
+               match(RHS, m_APInt(C)) && ShAmt < BitWidth) {
+      // For those bits in C that are known, we can propagate them to known
+      // bits in V shifted to the right by ShAmt.
+      KnownBits RHSKnown = KnownBits::makeConstant(*C);
+      RHSKnown.Zero.lshrInPlace(ShAmt);
+      RHSKnown.One.lshrInPlace(ShAmt);
+      Known = Known.unionWith(RHSKnown);
+      // assume(V >> ShAmt = C)
+    } else if (match(LHS, m_Shr(m_V, m_ConstantInt(ShAmt))) &&
+               match(RHS, m_APInt(C)) && ShAmt < BitWidth) {
+      KnownBits RHSKnown = KnownBits::makeConstant(*C);
+      // For those bits in RHS that are known, we can propagate them to known
+      // bits in V shifted to the right by C.
+      Known.Zero |= RHSKnown.Zero << ShAmt;
+      Known.One |= RHSKnown.One << ShAmt;
+    }
+    break;
+  case ICmpInst::ICMP_NE: {
+    // assume (V & B != 0) where B is a power of 2
+    const APInt* BPow2;
+    if (match(LHS, m_And(m_V, m_Power2(BPow2))) && match(RHS, m_Zero()))
+      Known.One |= *BPow2;
+    break;
+  }
+  default:
+    const APInt* Offset = nullptr;
+    if (match(LHS, m_CombineOr(m_V, m_Add(m_V, m_APInt(Offset)))) &&
+        match(RHS, m_APInt(C))) {
+      ConstantRange LHSRange = ConstantRange::makeAllowedICmpRegion(Pred, *C);
+      if (Offset)
+        LHSRange = LHSRange.sub(*Offset);
+      Known = Known.unionWith(LHSRange.toKnownBits());
+    }
+    break;
+  }
+}
+
+void getKnownBitsFromContext(Value* V, KnownBits& Known, unsigned Depth,
+                             const SimplifyQuery& Q) {
+  if (!Q.CxtI)
+    return;
+  outs() << "1\n";
+  if (Q.DC && Q.DT) {
+    outs() << "2\n";
+
+    // Handle dominating conditions.
+    for (BranchInst* BI : Q.DC->conditionsFor(V)) {
+      auto* Cmp = dyn_cast<ICmpInst>(BI->getCondition());
+      printvalue(BI->getCondition());
+
+      if (!Cmp)
+        continue;
+
+      BasicBlockEdge Edge0(BI->getParent(), BI->getSuccessor(0));
+      if (Q.DT->dominates(Edge0, Q.CxtI->getParent()))
+        computeKnownBitsFromCmp(V, Cmp->getPredicate(), Cmp->getOperand(0),
+                                Cmp->getOperand(1), Known, Q);
+
+      BasicBlockEdge Edge1(BI->getParent(), BI->getSuccessor(1));
+      if (Q.DT->dominates(Edge1, Q.CxtI->getParent()))
+        computeKnownBitsFromCmp(V, Cmp->getInversePredicate(),
+                                Cmp->getOperand(0), Cmp->getOperand(1), Known,
+                                Q);
+    }
+    if (Known.hasConflict())
+      Known.resetAll();
+  }
+  outs() << "3\n";
+}
+
+KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI) {
+
   KnownBits knownBits(64);
   knownBits.resetAll();
+  printvalue(value);
   if (value->getType() == Type::getInt128Ty(value->getContext()))
     return knownBits;
 
-  auto KB = computeKnownBits(value, DL);
+  if (auto CIv = dyn_cast<ConstantInt>(value)) {
+    return KnownBits::makeConstant(APInt(64, CIv->getZExtValue(), false));
+  }
+
+  printvalue(value);
+  auto SQ = GetSimplifyQuery::createSimplifyQuery(
+      ctxI->getParent()->getParent(), ctxI);
+
+  getKnownBitsFromContext(value, knownBits, 0, SQ);
+  bool gotBits = true;
+  printvalue2(knownBits);
+  printvalue2(gotBits);
 
   // BLAME
-  if (KB.getBitWidth() < 64)
-    (&KB)->zext(64);
+  if (knownBits.getBitWidth() < 64)
+    (&knownBits)->zext(64);
 
-  return KB;
+  return knownBits;
 }
 
 Value* simplifyValue(Value* v, const DataLayout& DL) {
@@ -411,126 +551,6 @@ Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True,
   return simplifyValue(builder.CreateSelect(C, True, False, Name), DL);
 }
 
-static void computeKnownBitsFromCmp(const Value* V, CmpInst::Predicate Pred,
-                                    Value* LHS, Value* RHS, KnownBits& Known,
-                                    const SimplifyQuery& Q) {
-  if (RHS->getType()->isPointerTy()) {
-    // Handle comparison of pointer to null explicitly, as it will not be
-    // covered by the m_APInt() logic below.
-    if (LHS == V && match(RHS, m_Zero())) {
-      switch (Pred) {
-      case ICmpInst::ICMP_EQ:
-        Known.setAllZero();
-        break;
-      case ICmpInst::ICMP_SGE:
-      case ICmpInst::ICMP_SGT:
-        Known.makeNonNegative();
-        break;
-      case ICmpInst::ICMP_SLT:
-        Known.makeNegative();
-        break;
-      default:
-        break;
-      }
-    }
-    return;
-  }
-
-  unsigned BitWidth = Known.getBitWidth();
-  auto m_V =
-      m_CombineOr(m_Specific(V), m_PtrToIntSameSize(Q.DL, m_Specific(V)));
-
-  const APInt *Mask, *C;
-  uint64_t ShAmt;
-  switch (Pred) {
-  case ICmpInst::ICMP_EQ:
-    // assume(V = C)
-    if (match(LHS, m_V) && match(RHS, m_APInt(C))) {
-      Known = Known.unionWith(KnownBits::makeConstant(*C));
-      // assume(V & Mask = C)
-    } else if (match(LHS, m_And(m_V, m_APInt(Mask))) &&
-               match(RHS, m_APInt(C))) {
-      // For one bits in Mask, we can propagate bits from C to V.
-      Known.Zero |= ~*C & *Mask;
-      Known.One |= *C & *Mask;
-      // assume(V | Mask = C)
-    } else if (match(LHS, m_Or(m_V, m_APInt(Mask))) && match(RHS, m_APInt(C))) {
-      // For zero bits in Mask, we can propagate bits from C to V.
-      Known.Zero |= ~*C & ~*Mask;
-      Known.One |= *C & ~*Mask;
-      // assume(V ^ Mask = C)
-    } else if (match(LHS, m_Xor(m_V, m_APInt(Mask))) &&
-               match(RHS, m_APInt(C))) {
-      // Equivalent to assume(V == Mask ^ C)
-      Known = Known.unionWith(KnownBits::makeConstant(*C ^ *Mask));
-      // assume(V << ShAmt = C)
-    } else if (match(LHS, m_Shl(m_V, m_ConstantInt(ShAmt))) &&
-               match(RHS, m_APInt(C)) && ShAmt < BitWidth) {
-      // For those bits in C that are known, we can propagate them to known
-      // bits in V shifted to the right by ShAmt.
-      KnownBits RHSKnown = KnownBits::makeConstant(*C);
-      RHSKnown.Zero.lshrInPlace(ShAmt);
-      RHSKnown.One.lshrInPlace(ShAmt);
-      Known = Known.unionWith(RHSKnown);
-      // assume(V >> ShAmt = C)
-    } else if (match(LHS, m_Shr(m_V, m_ConstantInt(ShAmt))) &&
-               match(RHS, m_APInt(C)) && ShAmt < BitWidth) {
-      KnownBits RHSKnown = KnownBits::makeConstant(*C);
-      // For those bits in RHS that are known, we can propagate them to known
-      // bits in V shifted to the right by C.
-      Known.Zero |= RHSKnown.Zero << ShAmt;
-      Known.One |= RHSKnown.One << ShAmt;
-    }
-    break;
-  case ICmpInst::ICMP_NE: {
-    // assume (V & B != 0) where B is a power of 2
-    const APInt* BPow2;
-    if (match(LHS, m_And(m_V, m_Power2(BPow2))) && match(RHS, m_Zero()))
-      Known.One |= *BPow2;
-    break;
-  }
-  default:
-    const APInt* Offset = nullptr;
-    if (match(LHS, m_CombineOr(m_V, m_Add(m_V, m_APInt(Offset)))) &&
-        match(RHS, m_APInt(C))) {
-      ConstantRange LHSRange = ConstantRange::makeAllowedICmpRegion(Pred, *C);
-      if (Offset)
-        LHSRange = LHSRange.sub(*Offset);
-      Known = Known.unionWith(LHSRange.toKnownBits());
-    }
-    break;
-  }
-}
-
-void getKnownBitsFromContext(const Value* V, KnownBits& Known, unsigned Depth,
-                             const SimplifyQuery& Q) {
-  if (!Q.CxtI)
-    return;
-  if (Q.DC && Q.DT) {
-
-    // Handle dominating conditions.
-    for (BranchInst* BI : Q.DC->conditionsFor(V)) {
-      auto* Cmp = dyn_cast<ICmpInst>(BI->getCondition());
-      printvalue(BI->getCondition());
-      if (!Cmp)
-        continue;
-      BasicBlockEdge Edge0(BI->getParent(), BI->getSuccessor(0));
-      if (Q.DT->dominates(Edge0, Q.CxtI->getParent()))
-        computeKnownBitsFromCmp(V, Cmp->getPredicate(), Cmp->getOperand(0),
-                                Cmp->getOperand(1), Known, Q);
-
-      BasicBlockEdge Edge1(BI->getParent(), BI->getSuccessor(1));
-      if (Q.DT->dominates(Edge1, Q.CxtI->getParent()))
-        computeKnownBitsFromCmp(V, Cmp->getInversePredicate(),
-                                Cmp->getOperand(0), Cmp->getOperand(1), Known,
-                                Q);
-    }
-
-    if (Known.hasConflict())
-      Known.resetAll();
-  }
-}
-
 Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name) {
 #ifdef TESTFOLDER3
@@ -646,8 +666,6 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name) {
 
-#ifdef TESTFOLDERshl
-
   if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
     if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS))
       return ConstantInt::get(RHS->getType(), LHSConst->getZExtValue()
@@ -655,18 +673,19 @@ Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     if (RHSConst->isZero())
       return LHS;
   }
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
-  KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+  auto result =
+      createInstruction(builder, Instruction::Shl, LHS, RHS, nullptr, Name);
 
-  if (Value* knownBitsShl =
-          foldShlKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-    return knownBitsShl;
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
+    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
+
+    if (Value* knownBitsShl =
+            foldShlKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+      return knownBitsShl;
+    }
   }
-
-#endif
-
-  return createInstruction(builder, Instruction::Shl, LHS, RHS, nullptr, Name);
+  return result;
 }
 
 Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
@@ -682,19 +701,26 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
       return LHS;
   }
 
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
-  KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+  auto result =
+      createInstruction(builder, Instruction::LShr, LHS, RHS, nullptr, Name);
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
+    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
+    printvalue2(KnownLHS);
+    printvalue2(KnownRHS);
+    if (Value* knownBitsLshr =
+            foldLShrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+      // printvalue(knownBitsLshr)
+      return knownBitsLshr;
+    }
 
-  if (Value* knownBitsLshr =
-          foldLShrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-    // printvalue(knownBitsLshr)
-    return knownBitsLshr;
+    KnownBits KnownInst = analyzeValueKnownBits(result, ctxI);
+    printvalue2(KnownInst);
   }
 
 #endif
 
-  return createInstruction(builder, Instruction::LShr, LHS, RHS, nullptr, Name);
+  return result;
 }
 
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uint64_t RHS,
@@ -758,22 +784,23 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
       return LHS;
   }
 
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
-  KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
-  printvalue2(KnownLHS) printvalue2(KnownRHS);
-  if (Value* knownBitsAnd =
-          foldOrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-    return knownBitsAnd;
-  }
-  if (Value* knownBitsAnd =
-          foldOrKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
-    return knownBitsAnd;
+  auto result =
+      createInstruction(builder, Instruction::Or, LHS, RHS, nullptr, Name);
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
+    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
+    printvalue2(KnownLHS) printvalue2(KnownRHS);
+    if (Value* knownBitsAnd =
+            foldOrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+      return knownBitsAnd;
+    }
+    if (Value* knownBitsAnd =
+            foldOrKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
+      return knownBitsAnd;
+    }
   }
 #endif
 
-  auto result =
-      createInstruction(builder, Instruction::Or, LHS, RHS, nullptr, Name);
   return result;
 }
 
@@ -817,15 +844,19 @@ Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
   }
 
 #endif
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
-  KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
+  auto result =
+      createInstruction(builder, Instruction::Xor, LHS, RHS, nullptr, Name);
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
+    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
 
-  if (auto V = foldXorKnownBits(builder.getContext(), KnownLHS, KnownRHS))
-    return V;
+    if (auto V = foldXorKnownBits(builder.getContext(), KnownLHS, KnownRHS))
+      return V;
+  }
   if (auto simplifiedByPM = doPatternMatching(Instruction::Xor, LHS, RHS))
     return simplifiedByPM;
-  return createInstruction(builder, Instruction::Xor, LHS, RHS, nullptr, Name);
+
+  return result;
 }
 
 std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS,
@@ -913,25 +944,31 @@ Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
 
 Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
                         Value* RHS, const Twine& Name) {
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
-  KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
 
-  if (std::optional<bool> v = foldKnownBits(P, KnownLHS, KnownRHS)) {
-    return ConstantInt::get(Type::getInt1Ty(builder.getContext()), v.value());
+  auto result = builder.CreateICmp(P, LHS, RHS, Name);
+
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+
+    auto SQ = GetSimplifyQuery::createSimplifyQuery(
+        builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(result));
+
+    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
+    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
+
+    if (std::optional<bool> v = foldKnownBits(P, KnownLHS, KnownRHS)) {
+      return ConstantInt::get(Type::getInt1Ty(builder.getContext()), v.value());
+    }
+    printvalue2(KnownLHS) printvalue2(KnownRHS);
   }
-  printvalue2(KnownLHS) printvalue2(KnownRHS);
+
   printvalue(LHS) printvalue(RHS);
+
   if (auto patternCheck = ICMPPatternMatcher(builder, P, LHS, RHS, Name)) {
     printvalue(patternCheck);
     return patternCheck;
   }
-  auto resultcmp = simplifyValue(builder.CreateICmp(P, LHS, RHS, Name), DL);
-  auto SQ = GetSimplifyQuery::createSimplifyQuery(
-      builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(resultcmp));
-  if (auto x = simplifyICmpInst(P, LHS, RHS, SQ))
-    return x;
-  return resultcmp;
+
+  return result;
 }
 
 Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -974,20 +1011,23 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     if (RHSConst->isMinusOne())
       return LHS;
   }
+  auto result =
+      createInstruction(builder, Instruction::And, LHS, RHS, nullptr, Name);
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+    DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
+    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
 
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  KnownBits KnownLHS = analyzeValueKnownBits(LHS, DL);
-  KnownBits KnownRHS = analyzeValueKnownBits(RHS, DL);
-
-  if (Value* knownBitsAnd =
-          foldAndKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-    printvalue(knownBitsAnd);
-    return knownBitsAnd;
-  }
-  if (Value* knownBitsAnd =
-          foldAndKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
-    printvalue(knownBitsAnd);
-    return knownBitsAnd;
+    if (Value* knownBitsAnd =
+            foldAndKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
+      printvalue(knownBitsAnd);
+      return knownBitsAnd;
+    }
+    if (Value* knownBitsAnd =
+            foldAndKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
+      printvalue(knownBitsAnd);
+      return knownBitsAnd;
+    }
   }
 
 #endif
@@ -995,20 +1035,23 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     printvalue(sillyResult);
     return sillyResult;
   }
-  return createInstruction(builder, Instruction::And, LHS, RHS, nullptr, Name);
+  return result;
 }
 
 // - probably not needed anymore
 Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
                          const Twine& Name) {
-  Value* resulttrunc = builder.CreateTrunc(V, DestTy, Name);
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+  Value* result = builder.CreateTrunc(V, DestTy, Name);
 
-  KnownBits KnownTruncResult = analyzeValueKnownBits(resulttrunc, DL);
-  printvalue2(KnownTruncResult);
-  if (!KnownTruncResult.hasConflict() && KnownTruncResult.getBitWidth() > 1 &&
-      KnownTruncResult.isConstant())
-    return ConstantInt::get(DestTy, KnownTruncResult.getConstant());
+  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+
+    KnownBits KnownTruncResult = analyzeValueKnownBits(result, ctxI);
+    printvalue2(KnownTruncResult);
+    if (!KnownTruncResult.hasConflict() && KnownTruncResult.getBitWidth() > 1 &&
+        KnownTruncResult.isConstant())
+      return ConstantInt::get(DestTy, KnownTruncResult.getConstant());
+  }
   // TODO: CREATE A MAP FOR AVAILABLE TRUNCs/ZEXTs/SEXTs
   // WHY?
   // IF %y = trunc %x exists
@@ -1016,21 +1059,22 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
   // just use %y
   // so xor %y, %y2 => %y, %y => 0
 
-  return simplifyValue(resulttrunc, DL);
+  return simplifyValue(result, DL);
 }
 
 Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
                         const Twine& Name) {
-  auto resultzext = builder.CreateZExt(V, DestTy, Name);
+  auto result = builder.CreateZExt(V, DestTy, Name);
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER8
-
-  KnownBits KnownRHS = analyzeValueKnownBits(resultzext, DL);
-  if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 &&
-      KnownRHS.isConstant())
-    return ConstantInt::get(DestTy, KnownRHS.getConstant());
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+    KnownBits KnownRHS = analyzeValueKnownBits(result, ctxI);
+    if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 &&
+        KnownRHS.isConstant())
+      return ConstantInt::get(DestTy, KnownRHS.getConstant());
+  }
 #endif
-  return simplifyValue(resultzext, DL);
+  return simplifyValue(result, DL);
 }
 
 Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,

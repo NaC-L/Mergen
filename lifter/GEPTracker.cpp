@@ -317,13 +317,13 @@ namespace GEPStoreTracker {
 
   enum isPaged { MEMORY_PAGED, MEMORY_MIGHT_BE_PAGED, MEMORY_NOT_PAGED };
 
-  isPaged isValuePaged(Value* address, const DataLayout& DL) {
+  isPaged isValuePaged(Value* address, Instruction* ctxI) {
     if (isa<ConstantInt>(address)) {
       return isMemPaged(cast<ConstantInt>(address)->getZExtValue())
                  ? MEMORY_PAGED
                  : MEMORY_NOT_PAGED;
     }
-    auto KBofAddress = analyzeValueKnownBits(address, DL);
+    auto KBofAddress = analyzeValueKnownBits(address, ctxI);
 
     for (const auto& page : pageMap) {
       uint64_t start = page.first;
@@ -349,8 +349,8 @@ namespace GEPStoreTracker {
     return MEMORY_NOT_PAGED;
   }
 
-  void pagedCheck(Value* address, const DataLayout& DL) {
-    isPaged paged = isValuePaged(address, DL);
+  void pagedCheck(Value* address, Instruction* ctxI) {
+    isPaged paged = isValuePaged(address, ctxI);
     switch (paged) {
     case MEMORY_NOT_PAGED: {
       llvm_unreachable_internal(
@@ -382,8 +382,7 @@ namespace GEPStoreTracker {
 
     auto gepOffset = gepInst->getOperand(1);
 
-    pagedCheck(gepOffset,
-               inst->getParent()->getParent()->getParent()->getDataLayout());
+    pagedCheck(gepOffset, inst);
     return;
   }
 
@@ -402,8 +401,7 @@ namespace GEPStoreTracker {
 
     auto gepOffset = gepInst->getOperand(1);
 
-    pagedCheck(gepOffset,
-               inst->getParent()->getParent()->getParent()->getDataLayout());
+    pagedCheck(gepOffset, inst);
 
     if (!isa<ConstantInt>(gepOffset)) // we also want to do operations with the
                                       // memory when we can assume a range or
