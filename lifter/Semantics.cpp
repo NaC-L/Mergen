@@ -286,13 +286,18 @@ void lifterClass::branchHelper(Value* condition, string instname,
 
     auto BR = builder.CreateCondBr(condition, bb_true, bb_false);
     GetSimplifyQuery::RegisterBranch(BR);
-    /*
-    blockAddresses->push_back(
-        make_tuple(true_jump_addr, bb_true, getRegisters()));
 
-    blockAddresses->push_back(
-        make_tuple(false_jump_addr, bb_false, getRegisters()));
-    */
+    blockInfo = make_tuple(true_jump_addr, bb_true, getRegisters());
+
+    lifterClass* newlifter = new lifterClass(builder);
+
+    auto RegisterList = newlifter->InitRegisters(function, false_jump_addr);
+
+    newlifter->blockInfo = make_tuple(false_jump_addr, bb_false, RegisterList);
+
+    lifters.push_back(newlifter);
+
+    run = 0;
   }
 }
 
@@ -841,7 +846,6 @@ void lifterClass::lift_ret() {
 
     // function->print(outs());
 
-    final_optpass(originalFunc_finalnopt);
     debugging::doIfDebug([&]() {
       std::string Filename = "output_finalopt.ll";
       std::error_code EC;

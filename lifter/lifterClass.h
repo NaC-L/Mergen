@@ -10,8 +10,11 @@ class lifterClass {
 public:
   lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder) {};
   IRBuilder<>& builder;
-  bool run = 0;
+
+  bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
+  bool isUnreachable = 0;
+
   ZydisDisassembledInstruction* instruction = nullptr;
   lifterMemoryBuffer buffer;
   BBInfo blockInfo;
@@ -175,4 +178,5 @@ public:
   DEFINE_FUNCTION(cwde);
   DEFINE_FUNCTION(cdqe);
 };
+extern vector<lifterClass*> lifters;
 #endif // LIFTERCLASS_H
