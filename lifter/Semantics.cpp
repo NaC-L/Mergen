@@ -2442,35 +2442,6 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
             printvalue(splitResult) printvalue(of) printvalue(cf)
   }
 
-  void lift_div2(IRBuilder<>& builder,
-                 ZydisDisassembledInstruction& instruction) {
-    LLVMContext& context = builder.getContext();
-    auto src = instruction.operands[0];
-    auto dividend = GetRegisterValue(builder, ZYDIS_REGISTER_AX);
-
-    Value* divisor = GetOperandValue(builder, src, src.size);
-    divisor = createZExtFolder(builder, divisor,
-                               Type::getIntNTy(context, src.size * 2));
-    dividend = createZExtOrTruncFolder(builder, dividend, divisor->getType());
-    Value* remainder = builder.CreateURem(dividend, divisor);
-    Value* quotient = builder.CreateUDiv(dividend, divisor);
-
-    SetRegisterValue(
-        builder, ZYDIS_REGISTER_AL,
-        createZExtOrTruncFolder(builder, quotient,
-                                Type::getIntNTy(context, src.size)));
-
-    SetRegisterValue(
-        builder, ZYDIS_REGISTER_AH,
-        createZExtOrTruncFolder(builder, remainder,
-                                Type::getIntNTy(context, src.size)));
-
-    printvalue(remainder);
-    printvalue(quotient);
-    printvalue(divisor);
-    printvalue(dividend);
-  }
-
   void lift_idiv2(IRBuilder<>& builder,
                   ZydisDisassembledInstruction& instruction) {
     LLVMContext& context = builder.getContext();
@@ -2505,63 +2476,86 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
 
     LLVMContext& context = builder.getContext();
     auto src = instruction.operands[0];
+
+    Value *divisor, *dividend, *quotient, *remainder;
+
+    // When operand size is 8 bit
     if (src.size == 8) {
-      lift_div2(builder, instruction);
-      return;
-    }
-    auto dividendLowop = instruction.operands[1];  // eax
-    auto dividendHighop = instruction.operands[2]; // edx
+      dividend = GetRegisterValue(builder, ZYDIS_REGISTER_AX);
+      divisor = GetOperandValue(builder, src, src.size);
 
-    auto Rvalue = GetOperandValue(builder, src, src.size);
+      divisor = createZExtFolder(builder, divisor, Type::getIntNTy(context, src.size * 2));
+      dividend = createZExtOrTruncFolder(builder, dividend, divisor->getType());
 
-    Value *dividendLow, *dividendHigh, *dividend;
+      remainder = builder.CreateURem(dividend, divisor);
+      quotient = builder.CreateUDiv(dividend, divisor);
 
-    dividendLow = GetOperandValue(builder, dividendLowop, src.size);
-    dividendHigh = GetOperandValue(builder, dividendHighop, src.size);
+      SetRegisterValue(
+          builder, ZYDIS_REGISTER_AL,
+          createZExtOrTruncFolder(builder, quotient,
+                                  Type::getIntNTy(context, src.size)));
 
-    dividendLow = createZExtFolder(builder, dividendLow,
-                                   Type::getIntNTy(context, src.size * 2));
-    dividendHigh =
-        createZExtFolder(builder, dividendHigh, dividendLow->getType());
-    uint8_t bitWidth = src.size;
-
-    dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
-    printvalue2(bitWidth);
-    printvalue(dividendLow);
-    printvalue(dividendHigh);
-
-    dividend = builder.CreateOr(dividendHigh, dividendLow);
-    printvalue(dividend);
-    Value* divide = createZExtFolder(builder, Rvalue, dividend->getType());
-    Value *quotient, *remainder;
-    if (isa<ConstantInt>(divide) && isa<ConstantInt>(dividend)) {
-
-      APInt divideCI = cast<ConstantInt>(divide)->getValue();
-      APInt dividendCI = cast<ConstantInt>(dividend)->getValue();
-
-      APInt quotientCI = dividendCI.udiv(divideCI);
-      APInt remainderCI = dividendCI.urem(divideCI);
-
-      printvalue2(divideCI);
-      printvalue2(dividendCI);
-      printvalue2(quotientCI);
-      printvalue2(remainderCI);
-      quotient = ConstantInt::get(Rvalue->getType(), quotientCI);
-      remainder = ConstantInt::get(Rvalue->getType(), remainderCI);
+      SetRegisterValue(
+          builder, ZYDIS_REGISTER_AH,
+          createZExtOrTruncFolder(builder, remainder,
+                                  Type::getIntNTy(context, src.size)));
     } else {
-      quotient = builder.CreateUDiv(dividend, divide);
-      remainder = builder.CreateURem(dividend, divide);
-    }
-    SetOperandValue(
-        builder, dividendLowop,
-        createZExtOrTruncFolder(builder, quotient, Rvalue->getType()));
+        auto dividendLowop = instruction.operands[1];  // eax
+        auto dividendHighop = instruction.operands[2]; // edx
 
-    SetOperandValue(
-        builder, dividendHighop,
-        createZExtOrTruncFolder(builder, remainder, Rvalue->getType()));
+        divisor = GetOperandValue(builder, src, src.size);
 
-    printvalue(Rvalue) printvalue(dividend) printvalue(remainder)
-        printvalue(quotient)
+        Value* dividendLow = GetOperandValue(builder, dividendLowop, src.size);
+        Value* dividendHigh = GetOperandValue(builder, dividendHighop, src.size);
+
+        dividendLow = createZExtFolder(builder, dividendLow,
+                                       Type::getIntNTy(context, src.size * 2));
+        dividendHigh =
+            createZExtFolder(builder, dividendHigh, dividendLow->getType());
+        uint8_t bitWidth = src.size;
+
+        dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
+
+        printvalue2(bitWidth);
+        printvalue(dividendLow);
+        printvalue(dividendHigh);
+
+        dividend = builder.CreateOr(dividendHigh, dividendLow);
+        Value* ZExtdivisor = createZExtFolder(builder, divisor, dividend->getType());
+
+        if (isa<ConstantInt>(ZExtdivisor) && isa<ConstantInt>(dividend)) {
+
+          APInt divideCI = cast<ConstantInt>(ZExtdivisor)->getValue();
+          APInt dividendCI = cast<ConstantInt>(ZExtdivisor)->getValue();
+
+          APInt quotientCI = dividendCI.udiv(divideCI);
+          APInt remainderCI = dividendCI.urem(divideCI);
+
+          printvalue2(divideCI);
+          printvalue2(dividendCI);
+          printvalue2(quotientCI);
+          printvalue2(remainderCI);
+
+          quotient = ConstantInt::get(divisor->getType(), quotientCI);
+          remainder = ConstantInt::get(divisor->getType(), remainderCI);
+        } else {
+          quotient = builder.CreateUDiv(dividend, ZExtdivisor);
+          remainder = builder.CreateURem(dividend, ZExtdivisor);
+        }
+
+        SetOperandValue(
+            builder, dividendLowop,
+            createZExtOrTruncFolder(builder, quotient, divisor->getType()));
+
+        SetOperandValue(
+            builder, dividendHighop,
+            createZExtOrTruncFolder(builder, remainder, divisor->getType()));
+      }
+
+      printvalue(divisor)
+      printvalue(dividend)
+      printvalue(remainder)
+      printvalue(quotient)
   }
 
   void lift_idiv(IRBuilder<>& builder,
