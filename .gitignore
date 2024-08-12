@@ -21,3 +21,7 @@ CMakerLists.txt
 CMakeLists.txt.user
 /.cache
 /.vscode
+
+# output files
+output.ll
+output_finalnoopt.ll
