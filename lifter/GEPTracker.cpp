@@ -234,35 +234,26 @@ public:
   }
 
 private:
-  Value* extractBytes(IRBuilder<>& builder, Value* value, uint64_t startOffset,
-                      uint64_t endOffset) {
+  Value* extractBytes(IRBuilder<>& builder, Value* value, uint64_t startOffset,  uint64_t endOffset) {
     LLVMContext& context = builder.getContext();
+    uint64_t byteCount = endOffset - startOffset;
+    Type* resultType = Type::getIntNTy(context, byteCount * 8);
 
-    if (!value) {
-      return ConstantInt::get(
-          Type::getIntNTy(context, (endOffset - startOffset) * 8), 0);
+    printvalue(value);
+
+    // Shift right if needed
+    if (startOffset > 0) {
+      uint64_t shiftAmount = startOffset * 8;
+      value = createLShrFolder(builder, value, APInt(value->getType()->getIntegerBitWidth(), shiftAmount), "shiftedValue");
     }
 
-    uint64_t byteCount = endOffset - startOffset;
-
-    uint64_t shiftAmount = startOffset * 8;
-
-    printvalue2(endOffset);
-
-    printvalue2(startOffset);
-    printvalue2(byteCount);
-    printvalue2(shiftAmount);
-
-    Value* shiftedValue = createLShrFolder(
-        builder, value,
-        APInt(value->getType()->getIntegerBitWidth(), shiftAmount),
-        "extractbytes");
     printvalue(value);
-    printvalue(shiftedValue);
 
-    Value* truncatedValue = createTruncFolder(
-        builder, shiftedValue, Type::getIntNTy(context, byteCount * 8));
-    return truncatedValue;
+    // Extend or truncate to the required size
+    value = createZExtOrTruncFolder(builder, value, resultType);
+
+    printvalue(value);
+    return value;
   }
 };
 
