@@ -27,7 +27,8 @@ public:
 
   void liftInstruction();
   void liftInstructionSemantics();
-  void branchHelper(Value* condition, string instname, int numbered);
+  void branchHelper(Value* condition, string instname, int numbered,
+                    bool reverse = false);
   void Init_Flags();
   Value* setFlag(Flag flag, Value* newValue = nullptr);
   Value* getFlag(Flag flag);

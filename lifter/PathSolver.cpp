@@ -71,61 +71,12 @@ void lifterClass::replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
 // not miss
 //
 // also refactor this
-void lifterClass::simplifyUsers(Value* newValue, DataLayout& DL,
-                                ReverseRegisterMap flippedRegisterMap) {
-  unordered_set<Value*> visited;
-  std::priority_queue<Instruction*, std::vector<Instruction*>,
-                      InstructionDependencyOrder>
-      toSimplify;
-  for (User* user : newValue->users()) {
-    if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-      toSimplify.push(userInst);
-    }
-  }
 
-  while (!toSimplify.empty()) {
-    auto simplifyUser = toSimplify.top();
-    toSimplify.pop();
-    auto nsv = simplifyValueLater(simplifyUser, DL);
-
-    visited.insert(simplifyUser);
-    printvalue(simplifyUser) printvalue(nsv);
-
-    if (isa<GetElementPtrInst>(simplifyUser)) {
-      for (User* user : simplifyUser->users()) {
-        if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-          if (visited.find(userInst) == visited.end()) { // it can try to insert
-                                                         // max 3 times here
-            toSimplify.push(userInst);
-            visited.insert(userInst);
-          }
-        }
-      }
-    }
-
-    // if values are identical, we will get into a loop and cant simplify
-    if (simplifyUser == nsv) {
-      continue;
-    }
-    // if can simplify, continue?
-
-    for (User* user : simplifyUser->users()) {
-      if (Instruction* userInst = dyn_cast<Instruction>(user)) {
-        if (visited.find(userInst) == visited.end()) {
-          toSimplify.push(userInst);
-          visited.erase(userInst);
-        }
-      }
-    }
-
-    replaceAllUsesWithandReplaceRMap(simplifyUser, nsv, flippedRegisterMap);
-  }
-}
 PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
                            uint64_t& dest) {
   PATH_info result = PATH_unsolved;
   printvalue(constraint);
-  auto simplified_constraint = simplifyValueLater(
+  auto simplified_constraint = simplifyValue(
       constraint,
       function->getParent()->getDataLayout()); // this is such a hack
   printvalue(simplified_constraint);
@@ -138,53 +89,6 @@ PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
   }
 
   return result;
-}
-
-// https://github.com/llvm/llvm-project/blob/30f6eafaa978b4e0211368976fe60f15fa9f0067/llvm/unittests/Support/KnownBitsTest.h#L38
-/* ex:
-KnownBits Known1;
-vector<APInt> possiblevalues;
-ForeachNumInKnownBits(Known1, [&](APInt Value1) {
-possiblevalues.push_back(Value1); });
-*/
-template <typename FnTy>
-void ForeachNumInKnownBits(const KnownBits& Known, FnTy Fn) {
-  unsigned Bits = Known.getBitWidth();
-  unsigned Max = 1 << Bits;
-  for (unsigned N = 0; N <= Max; ++N) {
-    APInt Num(Bits, N);
-    if ((Num & Known.Zero) != 0 || (~Num & Known.One) != 0) {
-      continue;
-    }
-
-    Fn(Num);
-  }
-}
-
-std::vector<llvm::APInt> getPossibleValues(const llvm::KnownBits& known,
-                                           unsigned max_unknown) {
-  llvm::APInt base = known.One;
-  llvm::APInt unknowns = ~(known.Zero | known.One);
-  unsigned numBits = known.getBitWidth();
-
-  std::vector<llvm::APInt> values;
-
-  llvm::APInt combo(unknowns.getBitWidth(), 0);
-  for (uint64_t i = 0; i < (1ULL << max_unknown); ++i) {
-    llvm::APInt temp = base;
-    for (unsigned j = 0, currentBit = 0; j < numBits; ++j) {
-      if (unknowns[j]) {
-        temp.setBitVal(j, (i >> currentBit) & 1);
-        currentBit++;
-      }
-    }
-
-    if (std::find(values.begin(), values.end(), temp) == values.end()) {
-      values.push_back(temp);
-    }
-  }
-
-  return values;
 }
 
 void final_optpass(Function* clonedFuncx) {
@@ -225,6 +129,7 @@ void final_optpass(Function* clonedFuncx) {
     size_t afterSize = module->getInstructionCount();
 
     if (beforeSize != afterSize) {
+
       changed = true;
     }
 

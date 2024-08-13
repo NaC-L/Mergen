@@ -496,8 +496,7 @@ namespace GEPStoreTracker {
     }
   }
 
-  Value* solveLoad(LoadInst* load, bool buildTime) {
-    Function* F = load->getFunction();
+  Value* solveLoad(LoadInst* load) {
     printvalue(load);
 
     // replace this
@@ -513,40 +512,39 @@ namespace GEPStoreTracker {
     auto loadPointer = loadPtrGEP->getPointerOperand();
     auto loadOffset = loadPtrGEP->getOperand(1);
     printvalue(loadOffset);
-    if (buildTime) {
-      if (isa<ConstantInt>(loadOffset)) {
-        auto loadOffsetCI = cast<ConstantInt>(loadOffset);
 
-        auto loadOffsetCIval = loadOffsetCI->getZExtValue();
+    // if we know all the stores, we can use our buffer
+    // however, if we dont know all the stores
+    // we have to if check each store overlaps with our load
+    // specifically for indirect stores
 
-        IRBuilder<> builder(load);
-        auto valueExtractedFromVirtualStack =
-            VirtualStack.retrieveCombinedValue(builder, loadOffsetCIval,
-                                               cloadsize, load);
-        if (valueExtractedFromVirtualStack) {
-          return valueExtractedFromVirtualStack;
-        }
+    if (isa<ConstantInt>(loadOffset)) {
+      auto loadOffsetCI = cast<ConstantInt>(loadOffset);
+
+      auto loadOffsetCIval = loadOffsetCI->getZExtValue();
+
+      IRBuilder<> builder(load);
+      auto valueExtractedFromVirtualStack = VirtualStack.retrieveCombinedValue(
+          builder, loadOffsetCIval, cloadsize, load);
+      if (valueExtractedFromVirtualStack) {
+        return valueExtractedFromVirtualStack;
       }
-    } else
-      GEPStoreTracker::updateDomTree(*F);
+    } else {
+      // get possible values from loadOffset
+      printvalueforce(loadOffset);
+      auto add = cast<Instruction>(loadOffset);
+      auto idk = analyzeValueKnownBits(loadOffset, load);
+      auto firstOp = add->getOperand(0);
+      auto secondOp = add->getOperand(1);
+      printvalueforce2(analyzeValueKnownBits(firstOp, load));
+      printvalueforce2(analyzeValueKnownBits(secondOp, load));
+      printvalueforce2(idk);
+    }
 
     // create a new vector with only leave what we care about
     vector<Instruction*> clearedMemInfos;
 
     clearedMemInfos = memInfos;
-
-    //
-    // idea:
-    // for runtime, we can optimize by having a map, that way we will only
-    // have the last inst
-    //
-    // idea 2:
-    // create a set, only take a range from it
-    //
-
-    if (!buildTime)
-      removeFutureInsts(clearedMemInfos, load);
-
     removeDuplicateOffsets(clearedMemInfos);
 
     Value* retval = nullptr;
@@ -554,10 +552,6 @@ namespace GEPStoreTracker {
     for (auto inst : clearedMemInfos) {
 
       // we are only interested in previous instructions
-
-      if (!buildTime)
-        if (comesBefore(load, inst, *DT))
-          break;
 
       // replace it with something more efficent
       // auto MemLoc = MemoryLocation::get(inst);
@@ -675,7 +669,6 @@ namespace GEPStoreTracker {
     }
     return retval;
   }
-
 }; // namespace GEPStoreTracker
 
 // some stuff about memory

@@ -43,7 +43,7 @@ public:
 
 class lifterMemoryBuffer {
 public:
-  std::unordered_map<uint64_t, ValueByteReference*> buffer;
+  DenseMap<uint64_t, ValueByteReference*> buffer;
   void addValueReference(Instruction* inst, Value* value, uint64_t address);
   Value* retrieveCombinedValue(IRBuilder<>& builder, uint64_t startAddress,
                                uint64_t byteCount, Value* orgLoad);
@@ -88,7 +88,7 @@ namespace GEPStoreTracker {
 
   void loadMemoryOp(LoadInst* inst);
 
-  Value* solveLoad(LoadInst* inst, bool buildTime = 1);
+  Value* solveLoad(LoadInst* inst);
 
 }; // namespace GEPStoreTracker
 

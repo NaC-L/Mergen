@@ -69,8 +69,6 @@ Value* getMemory();
 
 KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI);
 
-Value* simplifyValueLater(Value* v, const DataLayout& DL);
-
 ReverseRegisterMap flipRegisterMap();
 
 Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress);

@@ -128,6 +128,12 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
 
   asm_to_zydis_to_lift((uint8_t*)file_base, runtime_address, file_base);
 
+  long long ms = timer::stopTimer();
+  timer::startTimer();
+
+  cout << "\nlifting complete, " << dec << ms << " milliseconds has past"
+       << endl;
+
   final_optpass(function);
   string Filename = "output.ll";
   error_code EC;

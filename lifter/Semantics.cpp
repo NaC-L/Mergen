@@ -976,8 +976,6 @@ int branchnumber = 0;
 // jnz and jne
 void lifterClass::lift_jnz() {
 
-  LLVMContext& context = builder.getContext();
-
   auto zf = getFlag(FLAG_ZF);
 
   // auto dest = instruction->operands[0];
@@ -3673,8 +3671,6 @@ void lifterClass::lift_lahf() {
   SetRegisterValue(ZYDIS_REGISTER_AH, Rvalue);
 }
 void lifterClass::lift_sahf() {
-
-  LLVMContext& context = builder.getContext();
 
   auto ah = GetRegisterValue(ZYDIS_REGISTER_AH);
   // RFLAGS(SF:ZF:0:AF:0:PF:1:CF) := AH;
