@@ -182,7 +182,10 @@ namespace timer {
     running = true;
   }
 
-  double getTimer() { return elapsedTime.count(); }
+  double getTimer() {
+    elapsedTime += clock::now() - startTime;
+    return elapsedTime.count();
+  }
 
   double stopTimer() {
     if (running) {

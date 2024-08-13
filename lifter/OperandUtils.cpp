@@ -6,6 +6,7 @@
 #include <llvm/Analysis/InstructionSimplify.h>
 #include <llvm/Analysis/SimplifyQuery.h>
 #include <llvm/Analysis/ValueLattice.h>
+#include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 
@@ -179,12 +180,9 @@ static void computeKnownBitsFromCmp(Value* V, CmpInst::Predicate Pred,
                                     const SimplifyQuery& Q) {
   // Handle comparison of pointer to null explicitly, as it will not be
   // covered by the m_APInt() logic below.
-  printvalue(LHS);
-  printvalue(V);
-  printvalue(RHS);
+
   if (LHS == V && match(RHS, m_Zero())) {
     int iszero = Pred;
-    printvalue2(iszero);
     switch (Pred) {
     case ICmpInst::ICMP_EQ:
       Known.setAllZero();
@@ -267,13 +265,11 @@ static void computeKnownBitsFromCmp(Value* V, CmpInst::Predicate Pred,
   }
 }
 
-void getKnownBitsFromContext(Value* V, KnownBits& Known, unsigned Depth,
+void getKnownBitsFromContext(Value* V, KnownBits& Known,
                              const SimplifyQuery& Q) {
   if (!Q.CxtI)
     return;
-  outs() << "1\n";
   if (Q.DC && Q.DT) {
-    outs() << "2\n";
 
     // Handle dominating conditions.
     for (BranchInst* BI : Q.DC->conditionsFor(V)) {
@@ -297,14 +293,16 @@ void getKnownBitsFromContext(Value* V, KnownBits& Known, unsigned Depth,
     if (Known.hasConflict())
       Known.resetAll();
   }
-  outs() << "3\n";
 }
+
+// how to get all possible values
+// 1- find the value with least amount of known bits (excluding constants)
+// 2- then calculate
 
 KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI) {
 
   KnownBits knownBits(64);
   knownBits.resetAll();
-  printvalue(value);
   if (value->getType() == Type::getInt128Ty(value->getContext()))
     return knownBits;
 
@@ -312,14 +310,10 @@ KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI) {
     return KnownBits::makeConstant(APInt(64, CIv->getZExtValue(), false));
   }
 
-  printvalue(value);
   auto SQ = GetSimplifyQuery::createSimplifyQuery(
       ctxI->getParent()->getParent(), ctxI);
 
-  getKnownBitsFromContext(value, knownBits, 0, SQ);
-  bool gotBits = true;
-  printvalue2(knownBits);
-  printvalue2(gotBits);
+  computeKnownBits(value, knownBits, 0, SQ);
 
   // BLAME
   if (knownBits.getBitWidth() < 64)
@@ -382,55 +376,12 @@ Value* simplifyLoadValue(Value* v) {
 
   printvalue(v) printvalue(pv) printvalue(idxv) printvalue2(byteCount);
 
-  auto retVal = GEPStoreTracker::solveLoad(cast<LoadInst>(v), 0);
+  auto retVal = GEPStoreTracker::solveLoad(cast<LoadInst>(v));
 
   printvalue(v);
   return retVal;
 }
 
-Value* simplifyValueLater(Value* v, const DataLayout& DL) {
-  printvalue(v);
-  if (!isa<Instruction>(v))
-    return v;
-  if (!isa<LoadInst>(v))
-    return simplifyValue(v, DL);
-
-  auto loadInst = cast<LoadInst>(v);
-  printvalue(loadInst);
-  auto GEP = loadInst->getOperand(loadInst->getNumOperands() - 1);
-  printvalue(GEP);
-  auto gepInst = cast<GetElementPtrInst>(GEP);
-  auto effectiveAddress = gepInst->getOperand(gepInst->getNumOperands() - 1);
-  printvalue(effectiveAddress);
-  if (!isa<ConstantInt>(effectiveAddress)) {
-    return v;
-  }
-
-  ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(effectiveAddress);
-  if (!effectiveAddressInt)
-    return nullptr;
-
-  uint64_t addr = effectiveAddressInt->getZExtValue();
-
-  // test here
-  if (addr > 0 && addr < STACKP_VALUE) {
-    auto SLV = simplifyLoadValue(v);
-    if (SLV)
-      return SLV;
-  }
-
-  unsigned byteSize = v->getType()->getIntegerBitWidth() / 8;
-
-  APInt value;
-  if (BinaryOperations::readMemory(addr, byteSize, value)) {
-    Constant* newVal = ConstantInt::get(v->getType(), value);
-
-    if (newVal)
-      return newVal;
-  }
-
-  return v;
-}
 struct InstructionKey {
   unsigned opcode;
   Value* operand1;
@@ -572,10 +523,10 @@ Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
       builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(addret));
 
   KnownBits LHSKB(64);
-  getKnownBitsFromContext(LHS, LHSKB, 0, SQ);
+  getKnownBitsFromContext(LHS, LHSKB, SQ);
 
   KnownBits RHSKB(64);
-  getKnownBitsFromContext(LHS, RHSKB, 0, SQ);
+  getKnownBitsFromContext(LHS, RHSKB, SQ);
 
   auto tryCompute = KnownBits::computeForAddSub(1, 0, LHSKB, RHSKB);
   if (tryCompute.isConstant() && !tryCompute.hasConflict())
@@ -600,10 +551,10 @@ Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
       builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(subret));
 
   KnownBits LHSKB(64);
-  getKnownBitsFromContext(LHS, LHSKB, 0, SQ);
+  getKnownBitsFromContext(LHS, LHSKB, SQ);
 
   KnownBits RHSKB(64);
-  getKnownBitsFromContext(LHS, RHSKB, 0, SQ);
+  getKnownBitsFromContext(LHS, RHSKB, SQ);
 
   auto tryCompute = KnownBits::computeForAddSub(0, 0, LHSKB, RHSKB);
   if (tryCompute.isConstant() && !tryCompute.hasConflict())
@@ -949,9 +900,6 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
 
   if (auto ctxI = dyn_cast<Instruction>(result)) {
 
-    auto SQ = GetSimplifyQuery::createSimplifyQuery(
-        builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(result));
-
     KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
     KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
 
@@ -960,8 +908,6 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
     }
     printvalue2(KnownLHS) printvalue2(KnownRHS);
   }
-
-  printvalue(LHS) printvalue(RHS);
 
   if (auto patternCheck = ICMPPatternMatcher(builder, P, LHS, RHS, Name)) {
     printvalue(patternCheck);
@@ -1576,15 +1522,9 @@ Value* lifterClass::GetOperandValue(ZydisDecodedOperand& op, int possiblesize,
 
     GEPStoreTracker::loadMemoryOp(retval);
 
-    if (isa<ConstantInt>(effectiveAddress)) {
-      ConstantInt* effectiveAddressInt =
-          dyn_cast<ConstantInt>(effectiveAddress);
-      if (!effectiveAddressInt)
-        return nullptr;
-      Value* solvedLoad = GEPStoreTracker::solveLoad(retval);
-      if (solvedLoad) {
-        return solvedLoad;
-      }
+    Value* solvedLoad = GEPStoreTracker::solveLoad(retval);
+    if (solvedLoad) {
+      return solvedLoad;
     }
 
     pointer = simplifyValue(
@@ -1761,15 +1701,9 @@ Value* lifterClass::popStack() {
   auto CI = ConstantInt::get(rsp->getType(), 8);
   SetRegisterValue(ZYDIS_REGISTER_RSP, createAddFolder(builder, rsp, CI));
 
-  if (isa<ConstantInt>(rsp)) {
-    ConstantInt* effectiveAddressInt = dyn_cast<ConstantInt>(rsp);
-    if (!effectiveAddressInt)
-      return nullptr;
-
-    Value* solvedLoad = GEPStoreTracker::solveLoad(returnValue);
-    if (solvedLoad) {
-      return solvedLoad;
-    }
+  Value* solvedLoad = GEPStoreTracker::solveLoad(returnValue);
+  if (solvedLoad) {
+    return solvedLoad;
   }
 
   return returnValue;
