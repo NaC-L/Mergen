@@ -24,7 +24,7 @@ RUN ln -s /usr/bin/clang-18 /usr/bin/clang \
 ENV CC=/usr/bin/clang
 ENV CXX=/usr/bin/clang++
 
-RUN mkdir /root/Mergen/build
+RUN mkdir -p /root/Mergen/build
 WORKDIR /root/Mergen/build
 RUN cmake .. && cmake --build . -j $(nproc)
 
