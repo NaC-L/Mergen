@@ -2442,35 +2442,6 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
             printvalue(splitResult) printvalue(of) printvalue(cf)
   }
 
-  void lift_idiv2(IRBuilder<>& builder,
-                  ZydisDisassembledInstruction& instruction) {
-    LLVMContext& context = builder.getContext();
-    auto src = instruction.operands[0];
-    auto dividend = GetRegisterValue(builder, ZYDIS_REGISTER_AX);
-
-    Value* divisor = GetOperandValue(builder, src, src.size);
-    divisor =
-        builder.CreateSExt(divisor, Type::getIntNTy(context, src.size * 2));
-    dividend = builder.CreateSExtOrTrunc(dividend, divisor->getType());
-    Value* remainder = builder.CreateSRem(dividend, divisor);
-    Value* quotient = builder.CreateSDiv(dividend, divisor);
-
-    SetRegisterValue(
-        builder, ZYDIS_REGISTER_AL,
-        createZExtOrTruncFolder(builder, quotient,
-                                Type::getIntNTy(context, src.size)));
-
-    SetRegisterValue(
-        builder, ZYDIS_REGISTER_AH,
-        createZExtOrTruncFolder(builder, remainder,
-                                Type::getIntNTy(context, src.size)));
-
-    printvalue(remainder);
-    printvalue(quotient);
-    printvalue(divisor);
-    printvalue(dividend);
-  }
-
   void lift_div(IRBuilder<>& builder,
                 ZydisDisassembledInstruction& instruction) {
 
@@ -2563,7 +2534,29 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     LLVMContext& context = builder.getContext();
     auto src = instruction.operands[0];
     if (src.size == 8) {
-      lift_idiv2(builder, instruction);
+      auto dividend = GetRegisterValue(builder, ZYDIS_REGISTER_AX);
+
+      Value* divisor = GetOperandValue(builder, src, src.size);
+      divisor =
+          builder.CreateSExt(divisor, Type::getIntNTy(context, src.size * 2));
+      dividend = builder.CreateSExtOrTrunc(dividend, divisor->getType());
+      Value* remainder = builder.CreateSRem(dividend, divisor);
+      Value* quotient = builder.CreateSDiv(dividend, divisor);
+
+      SetRegisterValue(
+          builder, ZYDIS_REGISTER_AL,
+          createZExtOrTruncFolder(builder, quotient,
+                                  Type::getIntNTy(context, src.size)));
+
+      SetRegisterValue(
+          builder, ZYDIS_REGISTER_AH,
+          createZExtOrTruncFolder(builder, remainder,
+                                  Type::getIntNTy(context, src.size)));
+
+      printvalue(remainder);
+      printvalue(quotient);
+      printvalue(divisor);
+      printvalue(dividend);
       return;
     }
     auto dividendLowop = instruction.operands[1];  // eax
