@@ -2865,7 +2865,7 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
         SetOperandValue(builder, dest, result);
   }
 
-  void lift_inc_dec(IRBuilder<>& builder,
+  void lift_inc(IRBuilder<>& builder,
                     ZydisDisassembledInstruction& instruction) {
     auto operand = instruction.operands[0];
 
@@ -2876,30 +2876,55 @@ void lift_rcr(IRBuilder<>& builder, ZydisDisassembledInstruction& instruction) {
     Value* of;
     // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
     // according to the result.
-    if (instruction.info.mnemonic == ZYDIS_MNEMONIC_INC) {
-      // treat it as add r, 1 for flags
-      result = createAddFolder(builder, Lvalue, one,
-                               "inc-" + to_string(instruction.runtime_address) +
-                                   "-");
-      of = computeOverflowFlagAdd(builder, Lvalue, one, result);
+    // treat it as add r, 1 for flags
+    result = createAddFolder(builder, Lvalue, one,
+                             "inc-" + to_string(instruction.runtime_address) +
+                                 "-");
+    of = computeOverflowFlagAdd(builder, Lvalue, one, result);
 
-    } else {
-      // treat it as sub r, 1 for flags
-      result = createSubFolder(builder, Lvalue, one,
-                               "dec-" + to_string(instruction.runtime_address) +
-                                   "-");
-      of = computeOverflowFlagSub(builder, Lvalue, one, result);
-    }
 
-    printvalue(Lvalue) printvalue(result)
+    printvalue(Lvalue) printvalue(result);
 
-        Value* sf = computeSignFlag(builder, result);
+    Value* sf = computeSignFlag(builder, result);
     Value* zf = computeZeroFlag(builder, result);
     Value* pf = computeParityFlag(builder, result);
 
-    printvalue(sf)
+    printvalue(sf);
 
-        setFlag(builder, FLAG_OF, of);
+    setFlag(builder, FLAG_OF, of);
+    setFlag(builder, FLAG_SF, sf);
+    setFlag(builder, FLAG_ZF, zf);
+    setFlag(builder, FLAG_PF, pf);
+    SetOperandValue(builder, operand, result);
+  }
+
+
+  void lift_dec(IRBuilder<>& builder,
+                    ZydisDisassembledInstruction& instruction) {
+    auto operand = instruction.operands[0];
+
+    Value* Lvalue = GetOperandValue(builder, operand, operand.size);
+
+    Value* one = ConstantInt::get(Lvalue->getType(), 1, true);
+    Value* result;
+    Value* of;
+    // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
+    // according to the result.
+    // treat it as sub r, 1 for flags
+    result = createSubFolder(builder, Lvalue, one,
+                             "dec-" + to_string(instruction.runtime_address) +
+                                 "-");
+    of = computeOverflowFlagSub(builder, Lvalue, one, result);
+
+    printvalue(Lvalue) printvalue(result);
+
+    Value* sf = computeSignFlag(builder, result);
+    Value* zf = computeZeroFlag(builder, result);
+    Value* pf = computeParityFlag(builder, result);
+
+    printvalue(sf);
+
+    setFlag(builder, FLAG_OF, of);
     setFlag(builder, FLAG_SF, sf);
     setFlag(builder, FLAG_ZF, zf);
     setFlag(builder, FLAG_PF, pf);
@@ -4252,9 +4277,13 @@ void liftInstructionSemantics(IRBuilder<>& builder,
     arithmeticsAndLogical::lift_lea(builder, instruction);
     break;
   }
-  case ZYDIS_MNEMONIC_INC:
+  case ZYDIS_MNEMONIC_INC: {
+    arithmeticsAndLogical::lift_inc(builder, instruction);
+    break;
+  }
+
   case ZYDIS_MNEMONIC_DEC: {
-    arithmeticsAndLogical::lift_inc_dec(builder, instruction);
+    arithmeticsAndLogical::lift_dec(builder, instruction);
     break;
   }
 
