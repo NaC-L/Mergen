@@ -4,22 +4,30 @@ This tool is designed for:
 - The deobfuscation or devirtualization of obfuscated binary code
 - The enhancement of the reverse engineering process, making it more efficient and effective, especially for complex software systems.
 
-## Building
+## Guide to build & run
 
-To build the project, take a look at [**docs/BUILDING.md**](https://github.com/NaC-L/Mergen/blob/main/docs/BUILDING.md).
+To build and run the project, take a look at [**docs/BUILDING.md**](https://github.com/NaC-L/Mergen/blob/main/docs/BUILDING.md).
 
 ## Core Objectives:
 
-### Deobfuscation
+- ### Deobfuscation
 
-### Devirtualization
+- ### Devirtualization
 
-### Optimization
+- ### Optimization
 
 ## Diagram
+
 ![image](images/graph.png)
 
 ## Examples
+
+This is the practical example to illustrate how Mergen solves against virtualized programs.
+
+1. [VMProtect](#example-1-vmprotect)
+2. [Branches/Jumptables](#example-2-branchesjumptables)
+3. [Themida 3.1.6.0 LION64 (Red)](#example-3-themida-3160-lion64-red)
+
 ### Example #1 (VMProtect)
 
 This is our target program
@@ -39,7 +47,7 @@ int maths(test a, int b, int c) {
 
 ![image](images/org_decomp.png)
 
-VMProtect settings, everything is turned off, we virtualize the function on ultra setting. (Tested versions 3.4.0-3.6.0 3.8.1) 
+VMProtect settings, everything is turned off, we virtualize the function on ultra setting. (Tested versions 3.4.0-3.6.0 3.8.1)
 
 ![image](images/vmp_settings1.png)
 
@@ -78,7 +86,7 @@ After compiling:
 
 Now you might notice the registers are a little bit off. This is because of we dont follow the calling conventions, if we were to follow the calling conventions, function signature would look like this:
 ```llvm
-define i64 @main(i64 %rcx, i64 %rdx, i64 %rdx, i64 %r8, i64 %r9 ...) 
+define i64 @main(i64 %rcx, i64 %rdx, i64 %rdx, i64 %r8, i64 %r9 ...)
 ```
 So, we just adjust the function signature to look normally. If you have more questions about this part, I suggest you research [calling conventions](https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#parameter-passing) and [ABI](https://learn.microsoft.com/en-us/cpp/build/x64-software-conventions?view=msvc-170&source=recommendations#register-volatility-and-preservation).
 
@@ -104,7 +112,7 @@ jump next_handler;
 ...
 
 ```
-This is how it will look when Mergen is running, it will execute a _very_ simple dependency analysis to find the "key" value and ask you to select a possible value. 
+This is how it will look when Mergen is running, it will execute a _very_ simple dependency analysis to find the "key" value and ask you to select a possible value.
 ![image](images/branches_0.png)
 
 Output will look like this:
@@ -153,7 +161,7 @@ attributes #0 = { mustprogress nofree norecurse nosync nounwind willreturn memor
 
 We managed to restore the original logic for branches. Next step would be tying these two paths into one. I do believe using SwitchInst would be more effective for this.
 
-### Example #3 (Themida 3.1.6.0 LION64 (Red) )
+### Example #3 (Themida 3.1.6.0 LION64 (Red))
 Our target program:
 
 ![image](images/themida_disas_b.png)
@@ -175,7 +183,7 @@ Running Mergen:
 ![image](images/running_on_themida.png)
 
 Output code: [click here](docs/themida_output.ll)
-So, why our result is not succesful as lifting a binary thats protected by vmp? 
+So, why our result is not succesful as lifting a binary thats protected by vmp?
 
 Themida actively writes on .themida section. Unlike stack, we cant disregard these writes, because these values might be read by other stuff later.
 
