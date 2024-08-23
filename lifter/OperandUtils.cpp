@@ -9,6 +9,7 @@
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/PatternMatch.h>
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -35,7 +36,7 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
 
       Value* Op;
       if (match(I, m_PtrToInt(m_Value(Op)))) {
-        if (isa<Instruction>(Op) || isa<Argument>(Op))
+        if (isa<Instruction>(Op) || isa<Argument>(Op) && Op->hasNUsesOrMore(1))
           Affected.push_back(Op);
       }
     }
@@ -61,7 +62,8 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
     }
   }
 }
-
+DomConditionCache* DC;
+unsigned long BIlistsize = 0;
 namespace GetSimplifyQuery {
 
   vector<BranchInst*> BIlist;
@@ -69,7 +71,8 @@ namespace GetSimplifyQuery {
     //
     BIlist.push_back(BI);
   }
-
+  unsigned int instct = 0;
+  SimplifyQuery* cachedquery;
   SimplifyQuery createSimplifyQuery(Function* fnc, Instruction* Inst) {
     AssumptionCache AC(*fnc);
     GEPStoreTracker::updateDomTree(*fnc);
@@ -78,16 +81,18 @@ namespace GetSimplifyQuery {
     static TargetLibraryInfoImpl TLIImpl(
         Triple(fnc->getParent()->getTargetTriple()));
     static TargetLibraryInfo TLI(TLIImpl);
+    if (BIlist.size() != BIlistsize) {
+      BIlistsize = BIlist.size();
+      DC = new DomConditionCache();
 
-    DomConditionCache* DC = new DomConditionCache();
+      for (auto BI : BIlist) {
 
-    for (auto BI : BIlist) {
-
-      DC->registerBranch(BI);
-      SmallVector<Value*, 16> Affected;
-      findAffectedValues(BI->getCondition(), Affected);
-      for (auto affectedvalues : Affected) {
-        printvalue(affectedvalues);
+        DC->registerBranch(BI);
+        SmallVector<Value*, 16> Affected;
+        findAffectedValues(BI->getCondition(), Affected);
+        for (auto affectedvalues : Affected) {
+          printvalue(affectedvalues);
+        }
       }
     }
 
@@ -603,23 +608,25 @@ Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
       return LHS;
   }
 #endif
-
+  if (auto simplifiedByPM = doPatternMatching(Instruction::Add, LHS, RHS))
+    return simplifiedByPM;
   auto addret =
       createInstruction(builder, Instruction::Add, LHS, RHS, nullptr, Name);
 
   auto SQ = GetSimplifyQuery::createSimplifyQuery(
       builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(addret));
 
-  KnownBits LHSKB(64);
-  getKnownBitsFromContext(LHS, LHSKB, SQ);
+  if (auto ctxI = dyn_cast<Instruction>(addret)) {
+    auto LHSKB = analyzeValueKnownBits(LHS, dyn_cast<Instruction>(addret));
 
-  KnownBits RHSKB(64);
-  getKnownBitsFromContext(LHS, RHSKB, SQ);
+    auto RHSKB = analyzeValueKnownBits(RHS, dyn_cast<Instruction>(addret));
+    // monke pattern matching for converting inc dec to -~x and ~-x
+    auto tryCompute = KnownBits::computeForAddSub(1, 0, LHSKB, RHSKB);
 
-  auto tryCompute = KnownBits::computeForAddSub(1, 0, LHSKB, RHSKB);
-  if (tryCompute.isConstant() && !tryCompute.hasConflict())
-    return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
-                           tryCompute.getConstant().getZExtValue());
+    if (tryCompute.isConstant() && !tryCompute.hasConflict())
+      return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
+                             tryCompute.getConstant().getZExtValue());
+  }
   return addret;
 }
 
@@ -632,22 +639,25 @@ Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
   }
 #endif
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  // sub x, y => add x, -y
-  auto subret = createInstruction(builder, Instruction::Add, LHS,
-                                  builder.CreateNeg(RHS), nullptr, Name);
-  auto SQ = GetSimplifyQuery::createSimplifyQuery(
-      builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(subret));
 
-  KnownBits LHSKB(64);
-  getKnownBitsFromContext(LHS, LHSKB, SQ);
+  if (auto simplifiedByPM = doPatternMatching(Instruction::Sub, LHS, RHS))
+    return simplifiedByPM;
 
-  KnownBits RHSKB(64);
-  getKnownBitsFromContext(LHS, RHSKB, SQ);
+  auto subret =
+      createInstruction(builder, Instruction::Sub, LHS, RHS, nullptr, Name);
+  if (auto ctxI = dyn_cast<Instruction>(subret)) {
+    auto SQ = GetSimplifyQuery::createSimplifyQuery(
+        builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(subret));
 
-  auto tryCompute = KnownBits::computeForAddSub(0, 0, LHSKB, RHSKB);
-  if (tryCompute.isConstant() && !tryCompute.hasConflict())
-    return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
-                           tryCompute.getConstant().getZExtValue());
+    auto LHSKB = analyzeValueKnownBits(LHS, dyn_cast<Instruction>(subret));
+
+    auto RHSKB = analyzeValueKnownBits(RHS, dyn_cast<Instruction>(subret));
+
+    auto tryCompute = KnownBits::computeForAddSub(0, 0, LHSKB, RHSKB);
+    if (tryCompute.isConstant() && !tryCompute.hasConflict())
+      return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
+                             tryCompute.getConstant().getZExtValue());
+  }
 
   return subret;
 }
@@ -822,7 +832,8 @@ Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     if (RHSConst->isZero())
       return LHS;
   }
-
+  if (auto simplifiedByPM = doPatternMatching(Instruction::Or, LHS, RHS))
+    return simplifiedByPM;
   auto result =
       createInstruction(builder, Instruction::Or, LHS, RHS, nullptr, Name);
   if (auto ctxI = dyn_cast<Instruction>(result)) {
@@ -881,7 +892,8 @@ Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
     if (RHSConst->isZero())
       return LHS;
   }
-
+  printvalue(LHS);
+  printvalue(RHS);
 #endif
   auto result =
       createInstruction(builder, Instruction::Xor, LHS, RHS, nullptr, Name);
@@ -931,6 +943,11 @@ std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS,
 
 Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
                           Value* LHS, Value* RHS, const Twine& Name) {
+  if (auto SI = dyn_cast<SelectInst>(LHS)) {
+    if (RHS == SI->getTrueValue())
+      return SI->getCondition();
+    // do stuff
+  }
   switch (P) {
   case CmpInst::ICMP_UGT: {
     // Check if LHS is the result of a call to @llvm.ctpop.i64
@@ -967,17 +984,7 @@ Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
   // cmp x, a, -b
 
   // lhs is a bin op
-  if (auto* AddInst = dyn_cast<BinaryOperator>(LHS)) {
-    auto binOpcode = AddInst->getOpcode();
-    if (binOpcode == Instruction::Add || binOpcode == Instruction::Sub) {
-      Value* A = AddInst->getOperand(0);
-      Value* B = AddInst->getOperand(1);
-      if (binOpcode == Instruction::Add)
-        B = builder.CreateNeg(B);
-      Value* NewB = builder.CreateAdd(RHS, B);
-      return builder.CreateICmp(P, A, NewB, Name);
-    }
-  }
+
   return nullptr;
 }
 
@@ -1075,7 +1082,8 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
 // - probably not needed anymore
 Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
                          const Twine& Name) {
-  Value* result = builder.CreateTrunc(V, DestTy, Name);
+  Value* result =
+      createInstruction(builder, Instruction::Trunc, V, nullptr, DestTy, Name);
 
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
   if (auto ctxI = dyn_cast<Instruction>(result)) {
@@ -1098,7 +1106,8 @@ Value* createTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
 
 Value* createZExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
                         const Twine& Name) {
-  auto result = builder.CreateZExt(V, DestTy, Name);
+  auto result =
+      createInstruction(builder, Instruction::ZExt, V, nullptr, DestTy, Name);
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER8
   if (auto ctxI = dyn_cast<Instruction>(result)) {
@@ -1123,32 +1132,18 @@ Value* createZExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
 
 Value* createSExtFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
                         const Twine& Name) {
-#ifdef TESTFOLDER9
-
-  if (V->getType() == DestTy) {
-    return V;
-  }
-
-  if (auto* TruncInsts = dyn_cast<TruncInst>(V)) {
-    Value* OriginalValue = TruncInsts->getOperand(0);
-    Type* OriginalType = OriginalValue->getType();
-
-    if (OriginalType == DestTy) {
-      return OriginalValue;
-    }
-  }
-
-  if (auto* ConstInt = dyn_cast<ConstantInt>(V)) {
-    return ConstantInt::get(
-        DestTy, ConstInt->getValue().sextOrTrunc(DestTy->getIntegerBitWidth()));
-  }
-
-  if (auto* SExtInsts = dyn_cast<SExtInst>(V)) {
-    return builder.CreateSExt(SExtInsts->getOperand(0), DestTy, Name);
+  auto result =
+      createInstruction(builder, Instruction::SExt, V, nullptr, DestTy, Name);
+  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
+#ifdef TESTFOLDER8
+  if (auto ctxI = dyn_cast<Instruction>(result)) {
+    KnownBits KnownRHS = analyzeValueKnownBits(result, ctxI);
+    if (!KnownRHS.hasConflict() && KnownRHS.getBitWidth() > 1 &&
+        KnownRHS.isConstant())
+      return ConstantInt::get(DestTy, KnownRHS.getConstant());
   }
 #endif
-
-  return builder.CreateSExt(V, DestTy, Name);
+  return simplifyValue(result, DL);
 }
 
 Value* createSExtOrTruncFolder(IRBuilder<>& builder, Value* V, Type* DestTy,
