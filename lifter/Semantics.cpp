@@ -873,7 +873,7 @@ void lifterClass::lift_jmp() {
   if (dest.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
     trunc = createAddFolder(builder, trunc, ripval);
   }
-
+  PATH_info pathInfo = solvePath(function, destination, trunc);
   SetRegisterValue(ZYDIS_REGISTER_RIP, newRip);
 }
 
