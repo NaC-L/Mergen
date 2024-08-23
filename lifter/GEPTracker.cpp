@@ -1,8 +1,15 @@
 #include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "includes.h"
+#include <llvm/Analysis/AliasAnalysis.h>
+#include <llvm/Analysis/AssumptionCache.h>
+#include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/ValueTracking.h>
+#include <llvm/IR/ConstantRange.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <optional>
 
 namespace BinaryOperations {
   void* file_base_g;
@@ -351,12 +358,15 @@ namespace GEPStoreTracker {
 
   void pagedCheck(Value* address, Instruction* ctxI) {
     isPaged paged = isValuePaged(address, ctxI);
+
     switch (paged) {
     case MEMORY_NOT_PAGED: {
+      printvalueforce(address);
       llvm_unreachable_internal(
           "\nmemory is not paged, so we(more likely) or the program "
           "probably do some incorrect stuff "
           "we abort to avoid incorrect output\n");
+      cout.flush();
       break;
     }
     case MEMORY_MIGHT_BE_PAGED: {
@@ -496,6 +506,401 @@ namespace GEPStoreTracker {
     }
   }
 
+  set<APInt, APIntComparator> getPossibleValues(const llvm::KnownBits& known,
+                                                unsigned max_unknown) {
+    llvm::APInt base = known.One;
+    llvm::APInt unknowns = ~(known.Zero | known.One);
+    unsigned numBits = known.getBitWidth();
+
+    set<APInt, APIntComparator> values;
+
+    llvm::APInt combo(unknowns.getBitWidth(), 0);
+    for (uint64_t i = 0; i < (1ULL << max_unknown); ++i) {
+      llvm::APInt temp = base;
+      for (unsigned j = 0, currentBit = 0; j < numBits; ++j) {
+        if (unknowns[j]) {
+          temp.setBitVal(j, (i >> currentBit) & 1);
+          currentBit++;
+        }
+      }
+
+      values.insert(temp);
+    }
+
+    return values;
+  }
+
+  std::set<APInt, APIntComparator>
+  calculatePossibleValues(std::set<APInt, APIntComparator> v1,
+                          std::set<APInt, APIntComparator> v2,
+                          Instruction* inst) {
+    std::set<APInt, APIntComparator> res;
+    for (const auto& vv1 : v1) {
+      printvalue2(vv1);
+      for (const auto& vv2 : v2) {
+        printvalue2(vv2);
+        switch (inst->getOpcode()) {
+        case Instruction::Add: {
+          res.insert(vv1 + vv2);
+          break;
+        }
+        case Instruction::Sub: {
+          res.insert(vv1 - vv2);
+          break;
+        }
+        case Instruction::Mul: {
+          res.insert(vv1 * vv2);
+          break;
+        }
+        case Instruction::LShr: {
+          res.insert(vv1.lshr(vv2));
+          break;
+        }
+        case Instruction::AShr: {
+          res.insert(vv1.ashr(vv2));
+          break;
+        }
+        case Instruction::Shl: {
+          res.insert(vv1.shl(vv2));
+          break;
+        }
+        case Instruction::UDiv: {
+          if (!vv2.isZero()) {
+            res.insert(vv1.udiv(vv2));
+          }
+          break;
+        }
+        case Instruction::URem: {
+          res.insert(vv1.urem(vv2));
+          break;
+        }
+        case Instruction::SDiv: {
+          if (!vv2.isZero()) {
+            res.insert(vv1.sdiv(vv2));
+          }
+          break;
+        }
+        case Instruction::SRem: {
+          res.insert(vv1.srem(vv2));
+          break;
+        }
+        case Instruction::And: {
+          res.insert(vv1 & vv2);
+          break;
+        }
+        case Instruction::Or: {
+          res.insert(vv1 | vv2);
+          break;
+        }
+        case Instruction::Xor: {
+          res.insert(vv1 ^ vv2);
+          break;
+        }
+        case Instruction::ICmp: {
+          switch (cast<ICmpInst>(inst)->getPredicate()) {
+          case llvm::CmpInst::ICMP_EQ: {
+            res.insert(APInt(64, vv1.eq(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_NE: {
+            res.insert(APInt(64, vv1.ne(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_SLE: {
+            res.insert(APInt(64, vv1.sle(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_SLT: {
+            res.insert(APInt(64, vv1.slt(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_ULE: {
+            res.insert(APInt(64, vv1.ule(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_ULT: {
+            res.insert(APInt(64, vv1.ult(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_SGE: {
+            res.insert(APInt(64, vv1.sge(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_SGT: {
+            res.insert(APInt(64, vv1.sgt(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_UGE: {
+            res.insert(APInt(64, vv1.uge(vv2)));
+            break;
+          }
+          case llvm::CmpInst::ICMP_UGT: {
+            res.insert(APInt(64, vv1.ugt(vv2)));
+            break;
+          }
+          default: {
+            outs() << "\n : " << cast<ICmpInst>(inst)->getPredicate();
+            outs().flush();
+            llvm_unreachable_internal(
+                "Unsupported operation in calculatePossibleValues ICMP.\n");
+            break;
+          }
+          }
+          break;
+        }
+        default:
+          outs() << "\n : " << inst->getOpcode();
+          outs().flush();
+          llvm_unreachable_internal(
+              "Unsupported operation in calculatePossibleValues.\n");
+          break;
+        }
+      }
+    }
+    return res;
+  }
+
+  optional<KnownBits> KnownBitsRetardedOrWhat(KnownBits vv1, KnownBits vv2,
+                                              Instruction* inst) {
+    switch (inst->getOpcode()) {
+    case Instruction::Add: {
+      return KnownBits::computeForAddSub(1, 0, vv1, vv2);
+      break;
+    }
+    case Instruction::Sub: {
+      return KnownBits::computeForAddSub(0, 0, vv1, vv2);
+      break;
+    }
+    case Instruction::Mul: {
+      return KnownBits::mul(vv1, vv2);
+      break;
+    }
+    case Instruction::LShr: {
+      return KnownBits::lshr(vv1, vv2);
+      break;
+    }
+    case Instruction::AShr: {
+      return KnownBits::ashr(vv1, vv2);
+      break;
+    }
+    case Instruction::Shl: {
+      return KnownBits::shl(vv1, vv2);
+      break;
+    }
+    case Instruction::UDiv: {
+      if (!vv2.isZero()) {
+        return (KnownBits::udiv(vv1, vv2));
+      }
+      break;
+    }
+    case Instruction::URem: {
+      return KnownBits::urem(vv1, vv2);
+      break;
+    }
+    case Instruction::SDiv: {
+      if (!vv2.isZero()) {
+        return KnownBits::sdiv(vv1, vv2);
+      }
+      break;
+    }
+    case Instruction::SRem: {
+      return KnownBits::srem(vv1, vv2);
+      break;
+    }
+    case Instruction::And: {
+      return (vv1 & vv2);
+      break;
+    }
+    case Instruction::Or: {
+      return (vv1 | vv2);
+      break;
+    }
+    case Instruction::Xor: {
+      return (vv1 ^ vv2);
+      break;
+    }
+    case Instruction::ICmp: {
+      KnownBits kb(64);
+      kb.setAllOnes();
+      kb.setAllZero();
+      kb.One ^= 1;
+      kb.Zero ^= 1;
+      switch (cast<ICmpInst>(inst)->getPredicate()) {
+      case llvm::CmpInst::ICMP_EQ: {
+        auto idk = KnownBits::eq(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_NE: {
+        auto idk = KnownBits::eq(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_SLE: {
+        auto idk = KnownBits::sle(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_SLT: {
+        auto idk = KnownBits::slt(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_ULE: {
+        auto idk = KnownBits::ule(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_ULT: {
+        auto idk = KnownBits::ult(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_SGE: {
+        auto idk = KnownBits::sge(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_SGT: {
+        auto idk = KnownBits::sgt(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_UGE: {
+        auto idk = KnownBits::uge(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      case llvm::CmpInst::ICMP_UGT: {
+        auto idk = KnownBits::uge(vv1, vv2);
+        if (idk.has_value()) {
+          return KnownBits::makeConstant(APInt(64, idk.value()));
+        }
+        return kb;
+        break;
+      }
+      default: {
+        outs() << "\n : " << cast<ICmpInst>(inst)->getPredicate();
+        outs().flush();
+        llvm_unreachable_internal(
+            "Unsupported operation in calculatePossibleValues ICMP.\n");
+        break;
+      }
+      }
+      break;
+    }
+    default:
+      outs() << "\n : " << inst->getOpcode();
+      outs().flush();
+      llvm_unreachable_internal(
+          "Unsupported operation in calculatePossibleValues.\n");
+      break;
+    }
+
+    return nullopt;
+  }
+
+  set<APInt, APIntComparator> computePossibleValues(Value* V) {
+    set<APInt, APIntComparator> res;
+    printvalue(V);
+    if (auto v_ci = dyn_cast<ConstantInt>(V)) {
+      res.insert(v_ci->getValue());
+      return res;
+    }
+    if (auto v_inst = dyn_cast<Instruction>(V)) {
+
+      if (v_inst->getNumOperands() == 1)
+        return computePossibleValues(v_inst->getOperand(0));
+
+      if (v_inst->getOpcode() == Instruction::Select) {
+        auto trueValue = v_inst->getOperand(1);
+        auto falseValue = v_inst->getOperand(2);
+
+        auto trueValues = computePossibleValues(trueValue);
+        auto falseValues = computePossibleValues(falseValue);
+
+        // Combine all possible values from both branches
+        res.insert(trueValues.begin(), trueValues.end());
+        res.insert(falseValues.begin(), falseValues.end());
+        return res;
+      }
+      auto op1 = v_inst->getOperand(0);
+      auto op2 = v_inst->getOperand(1);
+      auto op1_knownbits = analyzeValueKnownBits(op1, v_inst);
+      unsigned int op1_unknownbits_count = llvm::popcount(
+          ~(op1_knownbits.One | op1_knownbits.Zero).getZExtValue());
+
+      auto op2_knownbits = analyzeValueKnownBits(op2, v_inst);
+      unsigned int op2_unknownbits_count = llvm::popcount(
+          ~(op2_knownbits.One | op2_knownbits.Zero).getZExtValue());
+      printvalue2(analyzeValueKnownBits(V, v_inst));
+      auto v_knownbits = analyzeValueKnownBits(v_inst, v_inst);
+      unsigned int res_unknownbits_count =
+          llvm::popcount(~(v_knownbits.One | v_knownbits.Zero).getZExtValue());
+
+      auto total_unk = ~((op1_knownbits.One | op1_knownbits.Zero) &
+                         (op2_knownbits.One | op2_knownbits.Zero));
+
+      unsigned int total_unknownbits_count =
+          llvm::popcount(total_unk.getZExtValue());
+      printvalue2(v_knownbits);
+      printvalue2(op1_knownbits);
+      printvalue2(op2_knownbits);
+      printvalue2(res_unknownbits_count);
+      printvalue2(op1_unknownbits_count);
+      printvalue2(op2_unknownbits_count);
+      printvalue2(total_unknownbits_count);
+
+      if ((res_unknownbits_count >= total_unknownbits_count)) {
+        auto v1 = computePossibleValues(op1);
+        auto v2 = computePossibleValues(op2);
+
+        printvalue(v_inst);
+        printvalue2(v_knownbits);
+        printvalue(op1);
+        for (auto& vv1 : v1) {
+          printvalue2(op1_knownbits);
+          printvalue2(vv1);
+        }
+        printvalue(op2);
+        for (auto& vv2 : v2) {
+          printvalue2(op2_knownbits);
+          printvalue2(vv2);
+        }
+        return calculatePossibleValues(v1, v2, v_inst);
+      }
+      return getPossibleValues(v_knownbits, res_unknownbits_count);
+    }
+    return res;
+  }
+
   Value* solveLoad(LoadInst* load) {
     printvalue(load);
 
@@ -517,28 +922,50 @@ namespace GEPStoreTracker {
     // however, if we dont know all the stores
     // we have to if check each store overlaps with our load
     // specifically for indirect stores
-
+    IRBuilder<> builder(load);
     if (isa<ConstantInt>(loadOffset)) {
       auto loadOffsetCI = cast<ConstantInt>(loadOffset);
 
       auto loadOffsetCIval = loadOffsetCI->getZExtValue();
 
-      IRBuilder<> builder(load);
       auto valueExtractedFromVirtualStack = VirtualStack.retrieveCombinedValue(
           builder, loadOffsetCIval, cloadsize, load);
       if (valueExtractedFromVirtualStack) {
         return valueExtractedFromVirtualStack;
       }
     } else {
-      // get possible values from loadOffset
-      printvalueforce(loadOffset);
-      auto add = cast<Instruction>(loadOffset);
-      auto idk = analyzeValueKnownBits(loadOffset, load);
-      auto firstOp = add->getOperand(0);
-      auto secondOp = add->getOperand(1);
-      printvalueforce2(analyzeValueKnownBits(firstOp, load));
-      printvalueforce2(analyzeValueKnownBits(secondOp, load));
-      printvalueforce2(idk);
+      // Get possible values from loadOffset
+      auto x = computePossibleValues(loadOffset);
+      llvm::Value* selectedValue = nullptr;
+      for (auto delirdimgaliba : x) {
+        printvalue2(delirdimgaliba);
+      }
+
+      for (auto xx : x) {
+
+        auto isPaged = isMemPaged(xx.getZExtValue());
+        if (!isPaged)
+          continue;
+        printvalue2(xx);
+        auto possible_values_from_mem = VirtualStack.retrieveCombinedValue(
+            builder, xx.getZExtValue(), cloadsize, load);
+        printvalue2((uint64_t)cloadsize);
+        printvalue(possible_values_from_mem);
+
+        if (selectedValue == nullptr) {
+          selectedValue = possible_values_from_mem;
+        } else {
+
+          llvm::Value* comparison = createICMPFolder(
+              builder, CmpInst::ICMP_EQ, loadOffset,
+              llvm::ConstantInt::get(loadOffset->getType(), xx));
+          printvalue(comparison);
+          selectedValue =
+              createSelectFolder(builder, comparison, possible_values_from_mem,
+                                 selectedValue, "conditional-mem-load");
+        }
+      }
+      return selectedValue;
     }
 
     // create a new vector with only leave what we care about

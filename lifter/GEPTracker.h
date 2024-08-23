@@ -77,6 +77,12 @@ namespace GEPStoreTracker {
   DominatorTree* getDomTree();
 
   void updateDomTree(Function& F);
+  struct APIntComparator {
+    bool operator()(const APInt& lhs, const APInt& rhs) const {
+      return lhs.ult(rhs); // unsigned less-than comparison
+    }
+  };
+  set<APInt, APIntComparator> computePossibleValues(Value* V);
 
   void updateMemoryOp(StoreInst* inst);
 

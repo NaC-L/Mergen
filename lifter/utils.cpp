@@ -135,6 +135,8 @@ namespace debugging {
   template void printValue<KnownBits>(const KnownBits& v, const char* name);
   template void printValue<APInt>(const APInt& v, const char* name);
   template void printValue<ROP_info>(const ROP_info& v, const char* name);
+  template void printValue<ConstantRange>(const ConstantRange& v,
+                                          const char* name);
 
 } // namespace debugging
 
