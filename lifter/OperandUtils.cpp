@@ -116,7 +116,42 @@ using namespace llvm::PatternMatch;
 
 Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
   Value* X = nullptr;
+  Value* Y = nullptr;
+  Value* Z = nullptr;
+
   switch (I) {
+  case Instruction::Add:
+  case Instruction::Or: {
+    Value *Z = nullptr, *A = nullptr, *B = nullptr, *C = nullptr;
+
+    // Match (~A & B) | (A & C)
+    if ((match(op0, m_And(m_Not(m_Value(X)), m_Value(B))) &&
+         match(op1, m_And(m_Value(X), m_Value(C)))) ||
+        (match(op1, m_And(m_Not(m_Value(X)), m_Value(B))) &&
+         match(op0, m_And(m_Value(X), m_Value(C))))) {
+      // This matches (~A & B) | (A & C)
+      // Simplify to A ? C : B
+
+      // X is ( max(v) - v)
+      printvalue(X);
+      printvalue(B);
+      printvalue(C);
+      if (auto X_inst = dyn_cast<Instruction>(X)) {
+        auto pv = GEPStoreTracker::computePossibleValues(X_inst);
+        if (pv.size() == 2) {
+          // check if pv is 0, -1
+
+          IRBuilder<> builder(cast<Instruction>(op0));
+          return createSelectFolder(builder, X, C, B, "selectEZ");
+        }
+      }
+
+      // printvalue2(tryCompute.getMinValue()); if 0
+      // printvalue2(tryCompute.getMaxValue()); if -1
+      // do the simplfiication
+    }
+    break;
+  }
   case Instruction::And: {
     // X & ~X
     // how the hell we remove this zext and truncs it looks horrible
@@ -165,8 +200,81 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
       printvalue(possibleSimplify);
       return possibleSimplify;
     }
+    Value* A = nullptr;
+    Value* B = nullptr;
+    Value* C = nullptr;
+    Value* D = nullptr;
+    // not
+    if (match(op1, m_SpecificInt(-1)) &&
+        match(op0, m_Or(m_Value(A), m_Value(B)))) {
+      IRBuilder<> builder(cast<Instruction>(op0));
+      Constant* constant_v = nullptr;
+      if (match(A, m_Not(m_Value(C))) && match(B, m_Constant(constant_v))) {
+        // ~(~a | b)
+        // simplify to
+        // a & ~b
+        printvalue(C);
+        return createAndFolder(
+            builder, C,
+            createXorFolder(builder, constant_v,
+                            Constant::getAllOnesValue(constant_v->getType())),
+            "not-PConst-");
+      }
+
+      if (match(A, m_Value(C)) && match(B, m_Constant(constant_v))) {
+        // ~(a | b(ci))
+        // simplify to
+        // ~a & ~b
+        printvalue(C);
+        return createAndFolder(
+            builder,
+            createXorFolder(builder, C, Constant::getAllOnesValue(C->getType()),
+                            "not_v"),
+            createXorFolder(builder, constant_v,
+                            Constant::getAllOnesValue(constant_v->getType())),
+            "not-PConst2-");
+      }
+
+      if (match(A, m_Not(m_Value(C))) && match(B, m_Not(m_Value(D)))) {
+        // ~(~a | ~b)
+        // simplify to
+        // a & b
+        printvalue(C);
+        printvalue(D);
+        return createAndFolder(builder, C, D, "not-P1-");
+      }
+
+      if (match(A, m_Not(m_Value(C)))) {
+        // ~(~a | b)
+        // simplify to
+        // a & ~b
+        printvalue(C);
+        return createAndFolder(
+            builder,
+            createXorFolder(builder, B, Constant::getAllOnesValue(B->getType()),
+                            "not-p2A-"),
+            C, "not-P2-");
+      }
+
+      if (match(B, m_Not(m_Value(C)))) {
+        // ~(a | ~b)
+        // simplify to
+        // ~a & b
+        printvalue(C);
+        return createAndFolder(
+            builder,
+            createXorFolder(builder, C, Constant::getAllOnesValue(C->getType()),
+                            "not-p3A-"),
+            B, "not-p3-");
+      }
+
+      printvalue(A);
+      printvalue(B);
+    }
+
     break;
   }
+
   default: {
     return nullptr;
   }
@@ -174,130 +282,6 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
 
   return nullptr;
 }
-
-static void computeKnownBitsFromCmp(Value* V, CmpInst::Predicate Pred,
-                                    Value* LHS, Value* RHS, KnownBits& Known,
-                                    const SimplifyQuery& Q) {
-  // Handle comparison of pointer to null explicitly, as it will not be
-  // covered by the m_APInt() logic below.
-
-  if (LHS == V && match(RHS, m_Zero())) {
-    int iszero = Pred;
-    switch (Pred) {
-    case ICmpInst::ICMP_EQ:
-      Known.setAllZero();
-      break;
-    case ICmpInst::ICMP_SGE:
-    case ICmpInst::ICMP_SGT:
-      Known.makeNonNegative();
-      break;
-    case ICmpInst::ICMP_SLT:
-      Known.makeNegative();
-      break;
-    default:
-      break;
-    }
-  }
-
-  unsigned BitWidth = Known.getBitWidth();
-  auto m_V =
-      m_CombineOr(m_Specific(V), m_PtrToIntSameSize(Q.DL, m_Specific(V)));
-
-  const APInt *Mask, *C;
-  uint64_t ShAmt;
-  switch (Pred) {
-  case ICmpInst::ICMP_EQ:
-    // assume(V = C)
-    if (match(LHS, m_V) && match(RHS, m_APInt(C))) {
-      Known = Known.unionWith(KnownBits::makeConstant(*C));
-      // assume(V & Mask = C)
-    } else if (match(LHS, m_And(m_V, m_APInt(Mask))) &&
-               match(RHS, m_APInt(C))) {
-      // For one bits in Mask, we can propagate bits from C to V.
-      Known.Zero |= ~*C & *Mask;
-      Known.One |= *C & *Mask;
-      // assume(V | Mask = C)
-    } else if (match(LHS, m_Or(m_V, m_APInt(Mask))) && match(RHS, m_APInt(C))) {
-      // For zero bits in Mask, we can propagate bits from C to V.
-      Known.Zero |= ~*C & ~*Mask;
-      Known.One |= *C & ~*Mask;
-      // assume(V ^ Mask = C)
-    } else if (match(LHS, m_Xor(m_V, m_APInt(Mask))) &&
-               match(RHS, m_APInt(C))) {
-      // Equivalent to assume(V == Mask ^ C)
-      Known = Known.unionWith(KnownBits::makeConstant(*C ^ *Mask));
-      // assume(V << ShAmt = C)
-    } else if (match(LHS, m_Shl(m_V, m_ConstantInt(ShAmt))) &&
-               match(RHS, m_APInt(C)) && ShAmt < BitWidth) {
-      // For those bits in C that are known, we can propagate them to known
-      // bits in V shifted to the right by ShAmt.
-      KnownBits RHSKnown = KnownBits::makeConstant(*C);
-      RHSKnown.Zero.lshrInPlace(ShAmt);
-      RHSKnown.One.lshrInPlace(ShAmt);
-      Known = Known.unionWith(RHSKnown);
-      // assume(V >> ShAmt = C)
-    } else if (match(LHS, m_Shr(m_V, m_ConstantInt(ShAmt))) &&
-               match(RHS, m_APInt(C)) && ShAmt < BitWidth) {
-      KnownBits RHSKnown = KnownBits::makeConstant(*C);
-      // For those bits in RHS that are known, we can propagate them to known
-      // bits in V shifted to the right by C.
-      Known.Zero |= RHSKnown.Zero << ShAmt;
-      Known.One |= RHSKnown.One << ShAmt;
-    }
-    break;
-  case ICmpInst::ICMP_NE: {
-    // assume (V & B != 0) where B is a power of 2
-    const APInt* BPow2;
-    if (match(LHS, m_And(m_V, m_Power2(BPow2))) && match(RHS, m_Zero()))
-      Known.One |= *BPow2;
-    break;
-  }
-  default:
-    const APInt* Offset = nullptr;
-    if (match(LHS, m_CombineOr(m_V, m_Add(m_V, m_APInt(Offset)))) &&
-        match(RHS, m_APInt(C))) {
-      ConstantRange LHSRange = ConstantRange::makeAllowedICmpRegion(Pred, *C);
-      if (Offset)
-        LHSRange = LHSRange.sub(*Offset);
-      Known = Known.unionWith(LHSRange.toKnownBits());
-    }
-    break;
-  }
-}
-
-void getKnownBitsFromContext(Value* V, KnownBits& Known,
-                             const SimplifyQuery& Q) {
-  if (!Q.CxtI)
-    return;
-  if (Q.DC && Q.DT) {
-
-    // Handle dominating conditions.
-    for (BranchInst* BI : Q.DC->conditionsFor(V)) {
-      auto* Cmp = dyn_cast<ICmpInst>(BI->getCondition());
-      printvalue(BI->getCondition());
-
-      if (!Cmp)
-        continue;
-
-      BasicBlockEdge Edge0(BI->getParent(), BI->getSuccessor(0));
-      if (Q.DT->dominates(Edge0, Q.CxtI->getParent()))
-        computeKnownBitsFromCmp(V, Cmp->getPredicate(), Cmp->getOperand(0),
-                                Cmp->getOperand(1), Known, Q);
-
-      BasicBlockEdge Edge1(BI->getParent(), BI->getSuccessor(1));
-      if (Q.DT->dominates(Edge1, Q.CxtI->getParent()))
-        computeKnownBitsFromCmp(V, Cmp->getInversePredicate(),
-                                Cmp->getOperand(0), Cmp->getOperand(1), Known,
-                                Q);
-    }
-    if (Known.hasConflict())
-      Known.resetAll();
-  }
-}
-
-// how to get all possible values
-// 1- find the value with least amount of known bits (excluding constants)
-// 2- then calculate
 
 KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI) {
 
@@ -313,11 +297,7 @@ KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI) {
   auto SQ = GetSimplifyQuery::createSimplifyQuery(
       ctxI->getParent()->getParent(), ctxI);
 
-  computeKnownBits(value, knownBits, 0, SQ);
-
-  // BLAME
-  if (knownBits.getBitWidth() < 64)
-    (&knownBits)->zext(64);
+  computeKnownBits(value, knownBits, -3, SQ);
 
   return knownBits;
 }
@@ -352,6 +332,12 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 
     return vsimplified;
   }
+  if (inst->getOpcode() == Instruction::Add) {
+    auto testsimp = (simplifyBinOp(inst->getOpcode(), inst->getOperand(0),
+                                   inst->getOperand(1), SQ));
+    if (testsimp)
+      printvalue(testsimp);
+  }
 
   return v;
 }
@@ -384,6 +370,7 @@ Value* simplifyLoadValue(Value* v) {
 
 struct InstructionKey {
   unsigned opcode;
+  bool cast;
   Value* operand1;
   union {
     Value* operand2;
@@ -391,14 +378,21 @@ struct InstructionKey {
   };
 
   InstructionKey(unsigned opcode, Value* operand1, Value* operand2)
-      : opcode(opcode), operand1(operand1), operand2(operand2) {};
+      : opcode(opcode), cast(0), operand1(operand1), operand2(operand2){};
 
   InstructionKey(unsigned opcode, Value* operand1, Type* destType)
-      : opcode(opcode), operand1(operand1), destType(destType) {};
+      : opcode(opcode), cast(1), operand1(operand1), destType(destType){};
 
   bool operator==(const InstructionKey& other) const {
-    return opcode == other.opcode && operand1 == other.operand1 &&
-           operand2 == other.operand2 && destType == other.destType;
+    if (cast != other.cast)
+      return false;
+    if (cast) {
+      return opcode == other.opcode && operand1 == other.operand1 &&
+             destType == other.destType;
+    } else {
+      return opcode == other.opcode && operand1 == other.operand1 &&
+             operand2 == other.operand2;
+    }
   }
 };
 
@@ -421,45 +415,136 @@ public:
     }
 
     Value* newInstruction = nullptr;
-    if (key.operand2) {
+
+    if (key.cast == 0) {
+      printvalue2(key.opcode);
+      printvalue2(key.cast);
+      printvalue(key.operand1);
+      printvalue(key.operand2);
       // Binary instruction
+      if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
+        printvalue2(
+            analyzeValueKnownBits(select_inst->getCondition(), select_inst));
+        if (isa<ConstantInt>(key.operand2))
+          return createSelectFolder(
+              builder, select_inst->getCondition(),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode),
+                  select_inst->getTrueValue(), key.operand2),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode),
+                  select_inst->getFalseValue(), key.operand2),
+              "lola-");
+      }
+
+      if (auto select_inst = dyn_cast<SelectInst>(key.operand2)) {
+        printvalue2(
+            analyzeValueKnownBits(select_inst->getCondition(), select_inst));
+        if (isa<ConstantInt>(key.operand1))
+          return createSelectFolder(
+              builder, select_inst->getCondition(),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), key.operand1,
+                  select_inst->getTrueValue()),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), key.operand1,
+                  select_inst->getFalseValue()),
+              "lolb-");
+      }
+      Value *select_inst1, *cnd1, *lhs1, *rhs1;
+      if (match(key.operand1,
+                m_TruncOrSelf(
+                    m_Select(m_Value(cnd1), m_Value(lhs1), m_Value(rhs1))))) {
+        if (auto select_inst = dyn_cast<SelectInst>(key.operand2))
+          if (select_inst && cnd1 == select_inst->getCondition()) // also check
+                                                                  // if inversed
+            return createSelectFolder(
+                builder, select_inst->getCondition(),
+                builder.CreateBinOp(
+                    static_cast<Instruction::BinaryOps>(key.opcode),
+                    select_inst->getTrueValue(), lhs1),
+                builder.CreateBinOp(
+                    static_cast<Instruction::BinaryOps>(key.opcode),
+                    select_inst->getFalseValue(), rhs1),
+                "lol2-");
+      }
+
+      else if (match(key.operand1,
+                     m_ZExtOrSExtOrSelf(m_Select(m_Value(cnd1), m_Value(lhs1),
+                                                 m_Value(rhs1))))) {
+        if (auto select_inst = dyn_cast<SelectInst>(key.operand2))
+          if (select_inst && cnd1 == select_inst->getCondition()) // also check
+                                                                  // if inversed
+            return createSelectFolder(
+                builder, select_inst->getCondition(),
+                builder.CreateBinOp(
+                    static_cast<Instruction::BinaryOps>(key.opcode),
+                    select_inst->getTrueValue(), lhs1),
+                builder.CreateBinOp(
+                    static_cast<Instruction::BinaryOps>(key.opcode),
+                    select_inst->getFalseValue(), rhs1),
+                "lol2-");
+      }
+
+      Value *select_inst2, *cnd, *lhs, *rhs;
+      if (match(key.operand2, m_TruncOrSelf(m_Select(m_Value(cnd), m_Value(lhs),
+                                                     m_Value(rhs))))) {
+        if (auto select_inst = dyn_cast<SelectInst>(key.operand1))
+          if (select_inst && cnd == select_inst->getCondition()) // also check
+                                                                 // if inversed
+            return createSelectFolder(
+                builder, select_inst->getCondition(),
+                builder.CreateBinOp(
+                    static_cast<Instruction::BinaryOps>(key.opcode),
+                    select_inst->getTrueValue(), lhs),
+                builder.CreateBinOp(
+                    static_cast<Instruction::BinaryOps>(key.opcode),
+                    select_inst->getFalseValue(), rhs),
+                "lol2-");
+      } else if (match(key.operand2,
+                       m_ZExtOrSExtOrSelf(m_Select(m_Value(cnd), m_Value(lhs),
+                                                   m_Value(rhs))))) {
+        if (auto select_inst = dyn_cast<SelectInst>(key.operand1))
+          if (select_inst && cnd == select_inst->getCondition()) // also check
+                                                                 // if inversed
+            return createSelectFolder(
+                builder, select_inst->getCondition(),
+                builder.CreateBinOp(
+                    static_cast<Instruction::BinaryOps>(key.opcode),
+                    select_inst->getTrueValue(), lhs),
+                builder.CreateBinOp(
+                    static_cast<Instruction::BinaryOps>(key.opcode),
+                    select_inst->getFalseValue(), rhs),
+                "lol2-");
+      }
       newInstruction =
           builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
                               key.operand1, key.operand2, Name);
-    } else if (key.destType) {
+    } else if (key.cast) {
       // Cast instruction
       switch (key.opcode) {
+
       case Instruction::Trunc:
-        newInstruction = builder.CreateTrunc(key.operand1, key.destType, Name);
-        break;
       case Instruction::ZExt:
-        newInstruction = builder.CreateZExt(key.operand1, key.destType, Name);
-        break;
       case Instruction::SExt:
-        newInstruction = builder.CreateSExt(key.operand1, key.destType, Name);
+        printvalue(key.operand1);
+        if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
+          return createSelectFolder(
+              builder, select_inst->getCondition(),
+              builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+                                 select_inst->getTrueValue(), key.destType),
+              builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+                                 select_inst->getFalseValue(), key.destType),
+              "lol-");
+        }
+
+        newInstruction =
+            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+                               key.operand1, key.destType);
         break;
       // Add other cast operations as needed
       default:
         llvm_unreachable("Unsupported cast opcode");
-      }
-    } else {
-      // Unary instruction
-      switch (key.opcode) {
-      case Instruction::Trunc:
-        newInstruction =
-            builder.CreateTrunc(key.operand1, key.operand1->getType(), Name);
-        break;
-      case Instruction::ZExt:
-        newInstruction =
-            builder.CreateZExt(key.operand1, key.operand1->getType(), Name);
-        break;
-      case Instruction::SExt:
-        newInstruction =
-            builder.CreateSExt(key.operand1, key.operand1->getType(), Name);
-        break;
-      // Add other unary operations as needed
-      default:
-        llvm_unreachable("Unsupported unary opcode");
       }
     }
 
@@ -476,10 +561,13 @@ Value* createInstruction(IRBuilder<>& builder, unsigned opcode, Value* operand1,
   static InstructionCache cache;
   DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 
-  InstructionKey key = {opcode, operand1,
-                        (Value*)((uint64_t)operand2 | (uint64_t)destType)};
+  InstructionKey* key;
+  if (destType)
+    key = new InstructionKey(opcode, operand1, destType);
+  else
+    key = new InstructionKey(opcode, operand1, operand2);
 
-  Value* newValue = cache.getOrCreate(builder, key, Name);
+  Value* newValue = cache.getOrCreate(builder, *key, Name);
 
   return simplifyValue(newValue, DL);
 }
