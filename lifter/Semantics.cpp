@@ -267,46 +267,6 @@ void lifterClass::branchHelper(Value* condition, string instname, int numbered,
   block->setName("previousjmp_block-" + to_string(destination) + "-");
   // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
   // "\n";
-  if (pathInfo == PATH_solved) {
-
-    string block_name = "jmp-" + to_string(destination) + "-";
-    auto bb = BasicBlock::Create(context, block_name.c_str(),
-                                 builder.GetInsertBlock()->getParent());
-
-    builder.CreateBr(bb);
-
-    blockInfo = (make_tuple(destination, bb, getRegisters()));
-    run = 0;
-  }
-
-  if (pathInfo == PATH_unsolved) {
-
-    // auto cinst = cast<ICmpInst>(condition);
-    auto bb_true = BasicBlock::Create(context, "bb_true",
-                                      builder.GetInsertBlock()->getParent());
-
-    auto bb_false = BasicBlock::Create(context, "bb_false",
-                                       builder.GetInsertBlock()->getParent());
-
-    BranchInst* BR = nullptr;
-    if (!reverse)
-      BR = builder.CreateCondBr(condition, bb_true, bb_false);
-    else
-      BR = builder.CreateCondBr(condition, bb_false, bb_true);
-
-    GetSimplifyQuery::RegisterBranch(BR);
-
-    blockInfo = make_tuple(true_jump_addr, bb_true, getRegisters());
-
-    lifterClass* newlifter = new lifterClass(builder);
-
-    newlifter->blockInfo =
-        make_tuple(false_jump_addr, bb_false, getRegisters());
-
-    lifters.push_back(newlifter);
-
-    run = 0;
-  }
 }
 
 void lifterClass::lift_movsb() {
@@ -865,18 +825,12 @@ void lifterClass::lift_ret() {
     return;
   }
 
-  PATH_info pathInfo = solvePath(function, destination, realval);
-
   block->setName("previousret_block");
 
-  if (pathInfo == PATH_solved) {
+  {
 
     lastinst->eraseFromParent();
     block->setName("fake_ret");
-
-    string block_name = "jmp_ret-" + to_string(destination) + "-";
-    auto bb = BasicBlock::Create(context, block_name.c_str(),
-                                 builder.GetInsertBlock()->getParent());
 
     auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                       8); // assuming its x64
@@ -893,12 +847,9 @@ void lifterClass::lift_ret() {
     }
 
     SetRegisterValue(rsp, result); // then add rsp 8
-
-    builder.CreateBr(bb);
-
-    blockInfo = (make_tuple(destination, bb, getRegisters()));
-    run = 0;
   }
+
+  PATH_info pathInfo = solvePath(function, destination, realval);
 }
 
 int jmpcount = 0;
@@ -913,63 +864,17 @@ void lifterClass::lift_jmp() {
       "jump-xd-" + to_string(instruction->runtime_address) + "-");
 
   jmpcount++;
-  if (dest.type == ZYDIS_OPERAND_TYPE_REGISTER ||
-      dest.type == ZYDIS_OPERAND_TYPE_MEMORY) {
-    auto rspvalue = GetOperandValue(dest, 64);
-    auto trunc = createZExtOrTruncFolder(
-        builder, rspvalue, Type::getInt64Ty(context), "jmp-register");
-
-    auto block = builder.GetInsertBlock();
-    block->setName("jmp_check" + to_string(ret_count));
-    auto function = block->getParent();
-
-    auto lastinst = builder.CreateRet(trunc);
-    debugging::doIfDebug([&]() {
-      std::string Filename = "output_beforeJMP.ll";
-      std::error_code EC;
-      raw_fd_ostream OS(Filename, EC);
-      function->print(OS);
-    });
-
-    uint64_t destination = 0;
-    PATH_info pathInfo = solvePath(function, destination, trunc);
-
-    ValueToValueMapTy VMap_test;
-
-    block->setName("previousjmp_block-" + to_string(destination) + "-");
-    // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
-    // "\n";
-    if (pathInfo == PATH_solved) {
-
-      lastinst->eraseFromParent();
-      string block_name = "jmp-" + to_string(destination) + "-";
-      auto bb = BasicBlock::Create(context, block_name.c_str(),
-                                   builder.GetInsertBlock()->getParent());
-
-      builder.CreateBr(bb);
-
-      blockInfo = (make_tuple(destination, bb, getRegisters()));
-      run = 0;
-    }
-    run = 0;
-
-    // if ROP is not JOP_jmp, then its bugged
-    return;
+  auto targetv = GetOperandValue(dest, 64);
+  auto trunc = createZExtOrTruncFolder(
+      builder, targetv, Type::getInt64Ty(context), "jmp-register");
+  printvalue(trunc);
+  uint64_t destination = 0;
+  auto function = builder.GetInsertBlock()->getParent();
+  if (dest.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+    trunc = createAddFolder(builder, trunc, ripval);
   }
 
   SetRegisterValue(ZYDIS_REGISTER_RIP, newRip);
-
-  uint64_t test = dest.imm.value.s + instruction->runtime_address +
-                  instruction->info.length;
-
-  string block_name = "jmp-" + to_string(test) + "-";
-  auto bb = BasicBlock::Create(context, block_name.c_str(),
-                               builder.GetInsertBlock()->getParent());
-
-  builder.CreateBr(bb);
-
-  blockInfo = (make_tuple(test, bb, getRegisters()));
-  run = 0;
 }
 
 int branchnumber = 0;
