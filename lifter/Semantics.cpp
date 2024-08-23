@@ -1482,8 +1482,9 @@ void lifterClass::lift_not() {
   auto dest = instruction->operands[0];
 
   auto Rvalue = GetOperandValue(dest, dest.size);
-  Rvalue = builder.CreateNot(
-      Rvalue, "realnot-" + to_string(instruction->runtime_address) + "-");
+  Rvalue = createXorFolder(
+      builder, Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
+      "realnot-" + to_string(instruction->runtime_address) + "-");
   SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
 
   printvalue(Rvalue);
@@ -1498,7 +1499,9 @@ void lifterClass::lift_neg() {
 
   auto cf = createICMPFolder(builder, CmpInst::ICMP_NE, Rvalue,
                              ConstantInt::get(Rvalue->getType(), 0), "cf");
-  auto result = builder.CreateNeg(Rvalue, "neg");
+  auto result = createSubFolder(
+      builder, builder.getIntN(Rvalue->getType()->getIntegerBitWidth(), 0),
+      Rvalue, "neg");
   SetOperandValue(dest, result);
 
   auto sf = computeSignFlag(builder, result);
