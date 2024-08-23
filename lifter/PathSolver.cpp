@@ -1,8 +1,11 @@
 #include "CustomPasses.hpp"
+#include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "includes.h"
 #include "lifterClass.h"
+#include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Casting.h>
@@ -161,15 +164,71 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
           dyn_cast<llvm::ConstantInt>(simplifyValue)) {
     dest = constInt->getZExtValue();
     result = PATH_solved;
+    run = 0;
+    auto bb_solved = BasicBlock::Create(function->getContext(), "bb_constraint",
+                                        builder.GetInsertBlock()->getParent());
+
+    builder.CreateBr(bb_solved);
+    blockInfo = make_tuple(dest, bb_solved, getRegisters());
     return result;
   }
 
   if (PATH_info solved = getConstraintVal(function, simplifyValue, dest)) {
     if (solved == PATH_solved) {
+      run = 0;
       outs() << "Solved the constraint and moving to next path\n";
       outs().flush();
+      auto bb_solved =
+          BasicBlock::Create(function->getContext(), "bb_constraint",
+                             builder.GetInsertBlock()->getParent());
+
+      builder.CreateBr(bb_solved);
+      blockInfo = make_tuple(dest, bb_solved, getRegisters());
       return solved;
     }
+  }
+
+  // unsolved
+  printvalue(simplifyValue);
+  run = 0;
+  auto pvset = GEPStoreTracker::computePossibleValues(simplifyValue);
+  vector<APInt> pv(pvset.begin(), pvset.end());
+  for (auto vv : pv) {
+    printvalue2(vv);
+  }
+  if (pv.size() == 1) {
+    printvalue2(pv[0]);
+    auto bb_solved = BasicBlock::Create(function->getContext(), "bb_false",
+                                        builder.GetInsertBlock()->getParent());
+
+    builder.CreateBr(bb_solved);
+    blockInfo = make_tuple(pv[0].getZExtValue(), bb_solved, getRegisters());
+  }
+  if (pv.size() == 2) {
+    auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
+                                       builder.GetInsertBlock()->getParent());
+    auto bb_true = BasicBlock::Create(function->getContext(), "bb_false",
+                                      builder.GetInsertBlock()->getParent());
+    auto condition = createICMPFolder(
+        builder, CmpInst::ICMP_EQ, simplifyValue,
+        builder.getIntN(simplifyValue->getType()->getIntegerBitWidth(),
+                        pv[0].getZExtValue()));
+    printvalue(condition);
+    auto BR = builder.CreateCondBr(condition, bb_false, bb_true);
+
+    GetSimplifyQuery::RegisterBranch(BR);
+    blockInfo = make_tuple(pv[1].getZExtValue(), bb_true, getRegisters());
+
+    lifterClass* newlifter = new lifterClass(builder);
+
+    newlifter->blockInfo =
+        make_tuple(pv[0].getZExtValue(), bb_false, getRegisters());
+
+    lifters.push_back(newlifter);
+    outs() << "created a new path\n";
+  }
+  if (pv.size() > 2) {
+    llvm_unreachable_internal("cant reach more than 2 paths!");
   }
 
   return result;
