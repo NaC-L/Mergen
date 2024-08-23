@@ -8,7 +8,7 @@
 
 class lifterClass {
 public:
-  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder) {};
+  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder){};
   IRBuilder<>& builder;
 
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
@@ -129,7 +129,8 @@ public:
   DEFINE_FUNCTION(and);
   DEFINE_FUNCTION(rol);
   DEFINE_FUNCTION(ror);
-  DEFINE_FUNCTION(inc_dec);
+  DEFINE_FUNCTION(inc);
+  DEFINE_FUNCTION(dec);
   DEFINE_FUNCTION(push);
   DEFINE_FUNCTION(pushfq);
   DEFINE_FUNCTION(pop);
