@@ -2527,6 +2527,139 @@ void lifterClass::lift_and() {
                   "and" + to_string(instruction->runtime_address));
 }
 
+
+
+
+  void lifterClass::lift_div() {
+
+    LLVMContext& context = builder.getContext();
+    auto src = instruction.operands[0];
+
+    Value *divisor, *dividend, *quotient, *remainder;
+
+    // When operand size is 8 bit
+    if (src.size == 8) {
+      dividend = GetRegisterValue(builder, ZYDIS_REGISTER_AX);
+      divisor = GetOperandValue(builder, src, src.size);
+
+      divisor = createZExtFolder(builder, divisor, Type::getIntNTy(context, src.size * 2));
+      dividend = createZExtOrTruncFolder(builder, dividend, divisor->getType());
+
+      remainder = builder.CreateURem(dividend, divisor);
+      quotient = builder.CreateUDiv(dividend, divisor);
+
+      SetRegisterValue(
+          builder, ZYDIS_REGISTER_AL,
+          createZExtOrTruncFolder(builder, quotient,
+                                  Type::getIntNTy(context, src.size)));
+
+      SetRegisterValue(
+          builder, ZYDIS_REGISTER_AH,
+          createZExtOrTruncFolder(builder, remainder,
+                                  Type::getIntNTy(context, src.size)));
+    } else {
+        auto dividendLowop = instruction.operands[1];  // eax
+        auto dividendHighop = instruction.operands[2]; // edx
+
+        divisor = GetOperandValue(builder, src, src.size);
+
+        Value* dividendLow = GetOperandValue(builder, dividendLowop, src.size);
+        Value* dividendHigh = GetOperandValue(builder, dividendHighop, src.size);
+
+        dividendLow = createZExtFolder(builder, dividendLow,
+                                       Type::getIntNTy(context, src.size * 2));
+        dividendHigh =
+            createZExtFolder(builder, dividendHigh, dividendLow->getType());
+        uint8_t bitWidth = src.size;
+
+        dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
+
+        printvalue2(bitWidth);
+        printvalue(dividendLow);
+        printvalue(dividendHigh);
+
+        dividend = builder.CreateOr(dividendHigh, dividendLow);
+        Value* ZExtdivisor = createZExtFolder(builder, divisor, dividend->getType());
+
+        if (isa<ConstantInt>(ZExtdivisor) && isa<ConstantInt>(dividend)) {
+
+          APInt divideCI = cast<ConstantInt>(ZExtdivisor)->getValue();
+          APInt dividendCI = cast<ConstantInt>(ZExtdivisor)->getValue();
+
+          APInt quotientCI = dividendCI.udiv(divideCI);
+          APInt remainderCI = dividendCI.urem(divideCI);
+
+          printvalue2(divideCI);
+          printvalue2(dividendCI);
+          printvalue2(quotientCI);
+          printvalue2(remainderCI);
+
+          quotient = ConstantInt::get(divisor->getType(), quotientCI);
+          remainder = ConstantInt::get(divisor->getType(), remainderCI);
+        } else {
+          quotient = builder.CreateUDiv(dividend, ZExtdivisor);
+          remainder = builder.CreateURem(dividend, ZExtdivisor);
+        }
+
+        SetOperandValue(
+            builder, dividendLowop,
+            createZExtOrTruncFolder(builder, quotient, divisor->getType()));
+
+        SetOperandValue(
+            builder, dividendHighop,
+            createZExtOrTruncFolder(builder, remainder, divisor->getType()));
+      }
+
+      printvalue(divisor)
+      printvalue(dividend)
+      printvalue(remainder)
+      printvalue(quotient)
+  }
+
+  void lifterClass::lift_idiv() {
+    LLVMContext& context = builder.getContext();
+    auto src = instruction.operands[0];
+    if (src.size == 8) {
+      auto dividend = GetRegisterValue(builder, ZYDIS_REGISTER_AX);
+
+      Value* divisor = GetOperandValue(builder, src, src.size);
+      divisor =
+          builder.CreateSExt(divisor, Type::getIntNTy(context, src.size * 2));
+      dividend = builder.CreateSExtOrTrunc(dividend, divisor->getType());
+      Value* remainder = builder.CreateSRem(dividend, divisor);
+      Value* quotient = builder.CreateSDiv(dividend, divisor);
+
+      SetRegisterValue(
+          builder, ZYDIS_REGISTER_AL,
+          createZExtOrTruncFolder(builder, quotient,
+                                  Type::getIntNTy(context, src.size)));
+
+      SetRegisterValue(
+          builder, ZYDIS_REGISTER_AH,
+          createZExtOrTruncFolder(builder, remainder,
+                                  Type::getIntNTy(context, src.size)));
+
+      printvalue(remainder);
+      printvalue(quotient);
+      printvalue(divisor);
+      printvalue(dividend);
+      return;
+    }
+    auto dividendLowop = instruction.operands[1];  // eax
+    auto dividendHighop = instruction.operands[2]; // edx
+    auto splitResult = builder.CreateTruncOrBitCast(
+        result, Type::getIntNTy(context, initialSize), "splitResult");
+    // if not byte operation, result goes into ?dx:?ax
+
+    SetOperandValue(builder, dest1, splitResult);
+    SetOperandValue(builder, dest2, highPartTruncated);
+
+    printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
+        printvalue(highPart) printvalue(highPartTruncated)
+            printvalue(splitResult) printvalue(of) printvalue(cf)
+  }
+
+
 /*
 
 tempCOUNT := (COUNT & COUNTMASK) MOD SIZE
@@ -2780,9 +2913,9 @@ void lifterClass::lift_pop() {
       builder, RspValue, val,
       "popping_new_rsp-" + to_string(instruction->runtime_address) + "-");
 
-  printvalue(Rvalue) printvalue(RspValue) printvalue(result)
+  printvalue(Rvalue) printvalue(RspValue) printvalue(result);
 
-      SetOperandValue(rsp, result); // then add rsp 8
+  SetOperandValue(rsp, result); // then add rsp 8
 
   SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
   ; // mov val, rsp first
@@ -2813,6 +2946,129 @@ void lifterClass::lift_popfq() {
   ; // then add rsp 8
 }
 
+    void lifterClass::lift_ror() {
+    LLVMContext& context = builder.getContext();
+    auto dest = instruction.operands[0];
+    auto src = instruction.operands[1];
+    auto Lvalue = GetOperandValue(builder, dest, dest.size);
+    auto Rvalue = GetOperandValue(builder, src, dest.size);
+
+    auto size = ConstantInt::getSigned(Lvalue->getType(),
+                                       Lvalue->getType()->getIntegerBitWidth());
+    Rvalue = builder.CreateURem(Rvalue, size);
+
+    Value* result = createOrFolder(
+        builder, createLShrFolder(builder, Lvalue, Rvalue),
+        createShlFolder(builder, Lvalue,
+                        createSubFolder(builder, size, Rvalue)),
+        "ror-" + std::to_string(instruction.runtime_address) + "-");
+
+    Value* msb = createLShrFolder(
+        builder, result,
+        createSubFolder(
+            builder, size,
+            ConstantInt::get(
+                context, APInt(Rvalue->getType()->getIntegerBitWidth(), 1))));
+    Value* cf = createZExtOrTruncFolder(builder, msb, Type::getInt1Ty(context),
+                                        "ror-cf");
+
+    Value* secondMsb = createLShrFolder(
+        builder, result,
+        createSubFolder(
+            builder, size,
+            ConstantInt::get(
+                context, APInt(Rvalue->getType()->getIntegerBitWidth(), 2))),
+        "ror2ndmsb");
+    auto ofDefined = createZExtOrTruncFolder(
+        builder, createXorFolder(builder, msb, secondMsb), cf->getType());
+    auto isOneBitRotation = createICMPFolder(
+        builder, CmpInst::ICMP_EQ, Rvalue,
+        ConstantInt::get(context,
+                         APInt(Rvalue->getType()->getIntegerBitWidth(), 1)));
+    Value* ofCurrent = getFlag(builder, FLAG_OF);
+    Value* of = createSelectFolder(builder, isOneBitRotation, ofDefined,
+                                   ofCurrent, "ror-of");
+
+    setFlag(builder, FLAG_CF, cf);
+    setFlag(builder, FLAG_OF, of);
+
+    auto isZeroBitRotation = createICMPFolder(
+        builder, CmpInst::ICMP_EQ, Rvalue,
+        ConstantInt::get(context,
+                         APInt(Rvalue->getType()->getIntegerBitWidth(), 0)),
+        "iszerobit");
+    result = createSelectFolder(builder, isZeroBitRotation, Lvalue, result,
+                                "ror-result");
+
+    printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
+
+        SetOperandValue(builder, dest, result);
+  }
+
+  void lifterClass::lift_inc() {
+    auto operand = instruction.operands[0];
+
+    Value* Lvalue = GetOperandValue(builder, operand, operand.size);
+
+    Value* one = ConstantInt::get(Lvalue->getType(), 1, true);
+    Value* result;
+    Value* of;
+    // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
+    // according to the result.
+    // treat it as add r, 1 for flags
+    result = createAddFolder(builder, Lvalue, one,
+                             "inc-" + to_string(instruction.runtime_address) +
+                                 "-");
+    of = computeOverflowFlagAdd(builder, Lvalue, one, result);
+
+
+    printvalue(Lvalue) printvalue(result);
+
+    Value* sf = computeSignFlag(builder, result);
+    Value* zf = computeZeroFlag(builder, result);
+    Value* pf = computeParityFlag(builder, result);
+
+    printvalue(sf);
+
+    setFlag(builder, FLAG_OF, of);
+    setFlag(builder, FLAG_SF, sf);
+    setFlag(builder, FLAG_ZF, zf);
+    setFlag(builder, FLAG_PF, pf);
+    SetOperandValue(builder, operand, result);
+  }
+
+
+  void lifterClass::lift_dec() {
+    auto operand = instruction.operands[0];
+
+    Value* Lvalue = GetOperandValue(builder, operand, operand.size);
+
+    Value* one = ConstantInt::get(Lvalue->getType(), 1, true);
+    Value* result;
+    Value* of;
+    // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
+    // according to the result.
+    // treat it as sub r, 1 for flags
+    result = createSubFolder(builder, Lvalue, one,
+                             "dec-" + to_string(instruction.runtime_address) +
+                                 "-");
+    of = computeOverflowFlagSub(builder, Lvalue, one, result);
+
+    printvalue(Lvalue) printvalue(result);
+
+    Value* sf = computeSignFlag(builder, result);
+    Value* zf = computeZeroFlag(builder, result);
+    Value* pf = computeParityFlag(builder, result);
+
+    printvalue(sf);
+
+    setFlag(builder, FLAG_OF, of);
+    setFlag(builder, FLAG_SF, sf);
+    setFlag(builder, FLAG_ZF, zf);
+    setFlag(builder, FLAG_PF, pf);
+    SetOperandValue(builder, operand, result);
+  }
+    
 void lifterClass::lift_adc() {
   auto dest = instruction->operands[0];
   auto src = instruction->operands[1];
@@ -4024,9 +4280,13 @@ void lifterClass::liftInstructionSemantics() {
     lift_lea();
     break;
   }
-  case ZYDIS_MNEMONIC_INC:
+  case ZYDIS_MNEMONIC_INC: {
+    arithmeticsAndLogical::lift_inc(builder, instruction);
+    break;
+  }
+
   case ZYDIS_MNEMONIC_DEC: {
-    lift_inc_dec();
+    lift_dec();
     break;
   }
 

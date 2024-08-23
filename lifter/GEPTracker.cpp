@@ -197,7 +197,6 @@ Value* lifterMemoryBuffer::retrieveCombinedValue(IRBuilder<>& builder,
     }
     m += bytesize;
   }
-
   return result;
 }
 
