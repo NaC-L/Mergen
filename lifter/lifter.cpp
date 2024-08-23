@@ -23,7 +23,6 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address,
     runtime_address = get<0>(lifter->blockInfo);
     uint64_t offset = FileHelper::address_to_mapped_address((void*)file_base,
                                                             runtime_address);
-
     debugging::doIfDebug([&]() {
       cout << "runtime_addr: " << runtime_address << " offset:" << offset
            << " byte there: 0x" << (int)*(uint8_t*)(file_base + offset) << endl;
@@ -65,6 +64,8 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address,
 
         lifter->run = 0;
         lifters.pop_back();
+
+        outs() << "next lifter instance\n";
       }
 
       offset += instruction.info.length;

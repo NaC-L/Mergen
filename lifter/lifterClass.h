@@ -14,7 +14,7 @@ public:
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
-
+  DenseMap<Instruction*, APInt> assumptions;
   ZydisDisassembledInstruction* instruction = nullptr;
   lifterMemoryBuffer buffer;
   BBInfo blockInfo;
