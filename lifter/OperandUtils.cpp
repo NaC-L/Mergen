@@ -37,7 +37,6 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
 
       Value* Op;
       if (match(I, m_PtrToInt(m_Value(Op)))) {
-        if (isa<Instruction>(Op) || isa<Argument>(Op) && Op->hasNUsesOrMore(1))
           Affected.push_back(Op);
       }
     }
@@ -121,7 +120,6 @@ bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT) {
 
 using namespace llvm::PatternMatch;
 
-Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
   Value* X = nullptr;
   Value* Y = nullptr;
   Value* Z = nullptr;
@@ -129,13 +127,15 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
   switch (I) {
   case Instruction::Add:
   case Instruction::Or: {
-    Value *Z = nullptr, *A = nullptr, *B = nullptr, *C = nullptr;
+    Value *X = nullptr, *B = nullptr, *C = nullptr;
 
     // Match (~A & B) | (A & C)
-    if ((match(op0, m_And(m_Not(m_Value(X)), m_Value(B))) &&
-         match(op1, m_And(m_Value(X), m_Value(C)))) ||
-        (match(op1, m_And(m_Not(m_Value(X)), m_Value(B))) &&
-         match(op0, m_And(m_Value(X), m_Value(C))))) {
+    auto handleAndNotPattern = [&](Value* op0, Value* op1) -> bool {
+      return (match(op0, m_And(m_Not(m_Value(X)), m_Value(B))) &&
+              match(op1, m_And(m_Value(X), m_Value(C))));
+    };
+
+    if (handleAndNotPattern(op0, op1) || handleAndNotPattern(op1, op0)) {
       // This matches (~A & B) | (A & C)
       // Simplify to A ? C : B
 
@@ -161,20 +161,18 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
   }
   case Instruction::And: {
     // X & ~X
-    // how the hell we remove this zext and truncs it looks horrible
+    Value* X = nullptr;
+    static auto isXAndNotX = [](Value* op0, Value* op1, Value* X) {
+      return (match(op0, m_ZExtOrSelf(m_Not(m_Value(X)))) &&
+              match(op1, m_ZExtOrSelf(m_Specific(X)))) ||
+             (match(op0, m_Trunc(m_Not(m_Value(X)))) &&
+              match(op1, m_Trunc(m_Specific(X))));
+    };
 
-    if ((match(op0, m_Not(m_Value(X))) && X == op1) ||
-        (match(op1, m_Not(m_Value(X))) && X == op0) ||
-        (match(op0, m_ZExt(m_Not(m_Value(X)))) &&
-         match(op1, m_ZExt(m_Specific(X)))) ||
-        (match(op1, m_ZExt(m_Not(m_Value(X)))) &&
-         match(op0, m_ZExt(m_Specific(X)))) ||
-        (match(op0, m_Trunc(m_Not(m_Value(X)))) &&
-         match(op1, m_Trunc(m_Specific(X)))) ||
-        (match(op1, m_Trunc(m_Not(m_Value(X)))) &&
-         match(op0, m_Trunc(m_Specific(X))))) {
-      auto possibleSimplify = ConstantInt::get(op1->getType(), 0);
-      return possibleSimplify;
+    if (isXAndNotX(op0, op1, X) || isXAndNotX(op1, op0, X)) {
+      auto possibleSimplifyand = ConstantInt::get(op1->getType(), 0);
+      printvalue(possibleSimplifyand);
+      return possibleSimplifyand;
     }
     // ~X & ~X
 
@@ -185,99 +183,110 @@ Value* doPatternMatching(Instruction::BinaryOps I, Value* op0, Value* op1) {
   }
   case Instruction::Xor: {
     // X ^ ~X
-    if ((match(op0, m_Not(m_Value(X))) && X == op1) ||
-        (match(op1, m_Not(m_Value(X))) && X == op0) ||
-        (match(op0, m_ZExt(m_Not(m_Value(X)))) &&
-         match(op1, m_ZExt(m_Specific(X)))) ||
-        (match(op1, m_ZExt(m_Not(m_Value(X)))) &&
-         match(op0, m_ZExt(m_Specific(X)))) ||
-        (match(op0, m_Trunc(m_Not(m_Value(X)))) &&
-         match(op1, m_Trunc(m_Specific(X)))) ||
-        (match(op1, m_Trunc(m_Not(m_Value(X)))) &&
-         match(op0, m_Trunc(m_Specific(X))))) {
+    Value* X = nullptr;
+    static auto isXorNotX = [](Value* op0, Value* op1, Value* X) {
+      return (match(op0, m_ZExtOrSelf(m_Not(m_Value(X)))) &&
+              match(op1, m_ZExtOrSelf(m_Specific(X)))) ||
+             (match(op0, m_Trunc(m_Not(m_Value(X)))) &&
+              match(op1, m_Trunc(m_Specific(X))));
+    };
+
+    if (isXorNotX(op0, op1, X) || isXorNotX(op1, op0, X)) {
       auto possibleSimplify = ConstantInt::get(op1->getType(), -1);
       printvalue(possibleSimplify);
       return possibleSimplify;
     }
-    if (match(op0, m_Specific(op1)) ||
-        (match(op0, m_Trunc(m_Value(X))) &&
-         match(op1, m_Trunc(m_Specific(X)))) ||
-        (match(op0, m_ZExt(m_Value(X))) && match(op1, m_ZExt(m_Specific(X))))) {
+
+    if (match(op0, m_Specific(op1))) {
       auto possibleSimplify = ConstantInt::get(op1->getType(), 0);
       printvalue(possibleSimplify);
       return possibleSimplify;
     }
+
     Value* A = nullptr;
     Value* B = nullptr;
     Value* C = nullptr;
     Value* D = nullptr;
     // not
-    if (match(op1, m_SpecificInt(-1)) &&
-        match(op0, m_Or(m_Value(A), m_Value(B)))) {
-      IRBuilder<> builder(cast<Instruction>(op0));
-      Constant* constant_v = nullptr;
-      if (match(A, m_Not(m_Value(C))) && match(B, m_Constant(constant_v))) {
-        // ~(~a | b)
-        // simplify to
-        // a & ~b
-        printvalue(C);
-        return createAndFolder(
-            builder, C,
-            createXorFolder(builder, constant_v,
-                            Constant::getAllOnesValue(constant_v->getType())),
-            "not-PConst-");
+    auto handleNegXorOr = [&](Value* op0, Value* op1) -> Value* {
+      if (match(op1, m_SpecificInt(-1)) &&
+          match(op0, m_Or(m_Value(A), m_Value(B)))) {
+        IRBuilder<> builder(cast<Instruction>(op0));
+        Constant* constant_v = nullptr;
+
+        auto createAndNot = [&](Value* C, Constant* constant_v,
+                                const char* suffix) -> Value* {
+          return createAndFolder(
+              builder, C,
+              createXorFolder(builder, constant_v,
+                              Constant::getAllOnesValue(constant_v->getType())),
+              suffix);
+        };
+
+        auto handleNotAOrB = [&](Value* A, Value* B) -> Value* {
+          if (match(A, m_Not(m_Value(C))) && match(B, m_Constant(constant_v))) {
+            // ~(~a | b) -> a & ~b
+            printvalue(C);
+            return createAndNot(C, constant_v, "not-PConst-");
+          }
+          return nullptr;
+        };
+
+        auto handleAOrBci = [&](Value* A, Value* B) -> Value* {
+          if (match(A, m_Value(C)) && match(B, m_Constant(constant_v))) {
+            // ~(a | b(ci)) -> ~a & ~b
+            printvalue(C);
+            return createAndFolder(
+                builder,
+                createXorFolder(builder, C,
+                                Constant::getAllOnesValue(C->getType()),
+                                "not_v"),
+                createXorFolder(
+                    builder, constant_v,
+                    Constant::getAllOnesValue(constant_v->getType())),
+                "not-PConst2-");
+          }
+          return nullptr;
+        };
+
+        auto handleNotAOrNotB = [&](Value* A, Value* B) -> Value* {
+          if (match(A, m_Not(m_Value(C))) && match(B, m_Not(m_Value(D)))) {
+            // ~(~a | ~b) -> a & b
+            printvalue(C);
+            printvalue(D);
+            return createAndFolder(builder, C, D, "not-P1-");
+          }
+          return nullptr;
+        };
+
+        auto matchAndSimplify = [&](Value* A, Value* B) -> Value* {
+          if (Value* result = handleNotAOrB(A, B))
+            return result;
+          if (Value* result = handleAOrBci(A, B))
+            return result;
+          if (Value* result = handleAOrBci(B, A))
+            return result;
+          if (Value* result = handleNotAOrNotB(A, B))
+            return result;
+          if (Value* result = handleNotAOrB(A, B))
+            return result;
+          if (Value* result = handleNotAOrB(B, A))
+            return result;
+          return nullptr;
+        };
+
+        if (Value* result = matchAndSimplify(A, B)) {
+          return result;
+        } else if (Value* result = matchAndSimplify(B, A)) {
+          return result;
+        }
       }
 
-      if (match(A, m_Value(C)) && match(B, m_Constant(constant_v))) {
-        // ~(a | b(ci))
-        // simplify to
-        // ~a & ~b
-        printvalue(C);
-        return createAndFolder(
-            builder,
-            createXorFolder(builder, C, Constant::getAllOnesValue(C->getType()),
-                            "not_v"),
-            createXorFolder(builder, constant_v,
-                            Constant::getAllOnesValue(constant_v->getType())),
-            "not-PConst2-");
-      }
+      return nullptr;
+    };
 
-      if (match(A, m_Not(m_Value(C))) && match(B, m_Not(m_Value(D)))) {
-        // ~(~a | ~b)
-        // simplify to
-        // a & b
-        printvalue(C);
-        printvalue(D);
-        return createAndFolder(builder, C, D, "not-P1-");
-      }
-
-      if (match(A, m_Not(m_Value(C)))) {
-        // ~(~a | b)
-        // simplify to
-        // a & ~b
-        printvalue(C);
-        return createAndFolder(
-            builder,
-            createXorFolder(builder, B, Constant::getAllOnesValue(B->getType()),
-                            "not-p2A-"),
-            C, "not-P2-");
-      }
-
-      if (match(B, m_Not(m_Value(C)))) {
-        // ~(a | ~b)
-        // simplify to
-        // ~a & b
-        printvalue(C);
-        return createAndFolder(
-            builder,
-            createXorFolder(builder, C, Constant::getAllOnesValue(C->getType()),
-                            "not-p3A-"),
-            B, "not-p3-");
-      }
-
-      printvalue(A);
-      printvalue(B);
-    }
+    if (auto result = handleNegXorOr(op0, op1))
+      return result;
 
     break;
   }
@@ -457,7 +466,7 @@ public:
                   select_inst->getFalseValue()),
               "lolb-");
       }
-      Value *select_inst1, *cnd1, *lhs1, *rhs1;
+      Value *cnd1, *lhs1, *rhs1;
       if (match(key.operand1,
                 m_TruncOrSelf(
                     m_Select(m_Value(cnd1), m_Value(lhs1), m_Value(rhs1))))) {
@@ -492,7 +501,7 @@ public:
                 "lol2-");
       }
 
-      Value *select_inst2, *cnd, *lhs, *rhs;
+      Value *cnd, *lhs, *rhs;
       if (match(key.operand2, m_TruncOrSelf(m_Select(m_Value(cnd), m_Value(lhs),
                                                      m_Value(rhs))))) {
         if (auto select_inst = dyn_cast<SelectInst>(key.operand1))
@@ -861,6 +870,9 @@ Value* folderBinOps(IRBuilder<>& builder, Value* LHS, Value* RHS,
       if (RHSConst->isMinusOne())
         return LHS;
     }
+    break;
+  }
+  default: {
     break;
   }
   }
