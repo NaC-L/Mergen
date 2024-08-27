@@ -10,6 +10,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PatternMatch.h>
+#include <llvm/Support/KnownBits.h>
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -73,8 +74,9 @@ namespace GetSimplifyQuery {
   }
   unsigned int instct = 0;
   SimplifyQuery* cachedquery;
-  SimplifyQuery createSimplifyQuery(Function* fnc, Instruction* Inst) {
-    AssumptionCache AC(*fnc);
+
+  SimplifyQuery createSimplifyQuery(Function* fncv, Instruction* Inst) {
+    static Function* fnc = fncv;
     GEPStoreTracker::updateDomTree(*fnc);
     auto DT = GEPStoreTracker::getDomTree();
     auto DL = fnc->getParent()->getDataLayout();
@@ -572,6 +574,7 @@ Value* createInstruction(IRBuilder<>& builder, unsigned opcode, Value* operand1,
   else
     key = new InstructionKey(opcode, operand1, operand2);
 
+  // cache trolls us for different branch
   Value* newValue = cache.getOrCreate(builder, *key, Name);
 
   return simplifyValue(newValue, DL);
@@ -595,71 +598,326 @@ Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True,
   return simplifyValue(builder.CreateSelect(C, True, False, Name), DL);
 }
 
+KnownBits computeKnownBitsFromOperation(KnownBits vv1, KnownBits vv2,
+                                        Instruction::BinaryOps opcode) {
+
+  if (opcode >= Instruction::Shl && opcode <= Instruction::AShr) {
+    auto ugt_result = KnownBits::ugt(
+        vv2,
+        KnownBits::makeConstant(APInt(vv1.getBitWidth(), vv1.getBitWidth())));
+    if (ugt_result.has_value() &&
+        ugt_result.value()) { // has value and value == 1
+      printvalue2(ugt_result.value());
+      return KnownBits::makeConstant(APInt(vv1.getBitWidth(), 0));
+    }
+  }
+
+  switch (opcode) {
+  case Instruction::Add: {
+    return KnownBits::computeForAddSub(1, 0, vv1, vv2);
+    break;
+  }
+  case Instruction::Sub: {
+    return KnownBits::computeForAddSub(0, 0, vv1, vv2);
+    break;
+  }
+  case Instruction::Mul: {
+    return KnownBits::mul(vv1, vv2);
+    break;
+  }
+  case Instruction::LShr: {
+    return KnownBits::lshr(vv1, vv2);
+    break;
+  }
+  case Instruction::AShr: {
+    return KnownBits::ashr(vv1, vv2);
+    break;
+  }
+  case Instruction::Shl: {
+    return KnownBits::shl(vv1, vv2);
+    break;
+  }
+  case Instruction::UDiv: {
+    if (!vv2.isZero()) {
+      return (KnownBits::udiv(vv1, vv2));
+    }
+    break;
+  }
+  case Instruction::URem: {
+    return KnownBits::urem(vv1, vv2);
+    break;
+  }
+  case Instruction::SDiv: {
+    if (!vv2.isZero()) {
+      return KnownBits::sdiv(vv1, vv2);
+    }
+    break;
+  }
+  case Instruction::SRem: {
+    return KnownBits::srem(vv1, vv2);
+    break;
+  }
+  case Instruction::And: {
+    return (vv1 & vv2);
+    break;
+  }
+  case Instruction::Or: {
+    return (vv1 | vv2);
+    break;
+  }
+  case Instruction::Xor: {
+    return (vv1 ^ vv2);
+    break;
+  }
+
+  default:
+    outs() << "\n : " << opcode;
+    outs().flush();
+    llvm_unreachable_internal(
+        "Unsupported operation in calculatePossibleValues.\n");
+    break;
+  }
+  /*
+  case Instruction::ICmp: {
+     KnownBits kb(64);
+     kb.setAllOnes();
+     kb.setAllZero();
+     kb.One ^= 1;
+     kb.Zero ^= 1;
+     switch (cast<ICmpInst>(inst)->getPredicate()) {
+     case llvm::CmpInst::ICMP_EQ: {
+       auto idk = KnownBits::eq(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_NE: {
+       auto idk = KnownBits::eq(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_SLE: {
+       auto idk = KnownBits::sle(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_SLT: {
+       auto idk = KnownBits::slt(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_ULE: {
+       auto idk = KnownBits::ule(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_ULT: {
+       auto idk = KnownBits::ult(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_SGE: {
+       auto idk = KnownBits::sge(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_SGT: {
+       auto idk = KnownBits::sgt(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_UGE: {
+       auto idk = KnownBits::uge(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     case llvm::CmpInst::ICMP_UGT: {
+       auto idk = KnownBits::uge(vv1, vv2);
+       if (idk.has_value()) {
+         return KnownBits::makeConstant(APInt(64, idk.value()));
+       }
+       return kb;
+       break;
+     }
+     default: {
+       outs() << "\n : " << cast<ICmpInst>(inst)->getPredicate();
+       outs().flush();
+       llvm_unreachable_internal(
+           "Unsupported operation in calculatePossibleValues ICMP.\n");
+       break;
+     }
+     }
+     break;
+   }
+  */
+  return KnownBits(0); // never reach
+}
+
+Value* folderBinOps(IRBuilder<>& builder, Value* LHS, Value* RHS,
+                    const Twine& Name, Instruction::BinaryOps opcode) {
+  // ideally we go cheaper to more expensive
+
+  // this part will eliminate unneccesary operations
+  switch (opcode) {
+    // shifts also should return 0 if shift is bigger than x's bitwidth
+  case Instruction::Shl:    // x >> 0 = x , 0 >> x = 0
+  case Instruction::LShr:   // x << 0 = x , 0 << x = 0
+  case Instruction::AShr: { // x << 0 = x , 0 << x = 0
+
+    if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+      if (LHSConst->isZero())
+        return LHS;
+    }
+
+    if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+      if (RHSConst->isZero())
+        return LHS;
+
+      if (RHSConst->getZExtValue() > LHS->getType()->getIntegerBitWidth()) {
+        return builder.getIntN(LHS->getType()->getIntegerBitWidth(), 0);
+      }
+    }
+
+    break;
+  }
+  case Instruction::Xor:   // x ^ 0 = x , 0 ^ x = 0
+  case Instruction::Add: { // x + 0 = x , 0 + x = 0
+
+    if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+      if (LHSConst->isZero())
+        return RHS;
+    }
+
+    if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+      if (RHSConst->isZero())
+        return LHS;
+
+      if (opcode >= Instruction::Shl && opcode <= Instruction::AShr &&
+          RHSConst->getZExtValue() > LHS->getType()->getIntegerBitWidth()) {
+        return builder.getIntN(LHS->getType()->getIntegerBitWidth(), 0);
+      }
+    }
+
+    break;
+  }
+  case Instruction::Sub: {
+
+    if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+      if (RHSConst->isZero())
+        return LHS;
+    }
+    break;
+  }
+  case Instruction::Or: {
+    if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+      if (LHSConst->isZero())
+        return RHS;
+      if (LHSConst->isMinusOne())
+        return LHS;
+    }
+    if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+      if (RHSConst->isZero())
+        return LHS;
+      if (RHSConst->isMinusOne())
+        return RHS;
+    }
+    break;
+  }
+  case Instruction::And: {
+    if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+      if (LHSConst->isZero())
+        return builder.getIntN(LHSConst->getBitWidth(), 0);
+      if (LHSConst->isMinusOne())
+        return RHS;
+    }
+    if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+      if (RHSConst->isZero())
+        return builder.getIntN(RHSConst->getBitWidth(), 0);
+      if (RHSConst->isMinusOne())
+        return LHS;
+    }
+    break;
+  }
+  }
+  // this part analyses if we can simplify the instruction
+  if (auto simplifiedByPM = doPatternMatching(opcode, LHS, RHS))
+    return simplifiedByPM;
+
+  auto inst = createInstruction(builder, opcode, LHS, RHS, nullptr, Name);
+
+  // knownbits is recursive, and goes back 5 instructions, ideally it would be
+  // not recursive and store the info for all values
+  // until then, we just calculate it ourselves
+
+  // we can just swap analyzeValueKnownBits with something else later down the
+  // road
+  auto LHSKB = analyzeValueKnownBits(LHS, dyn_cast<Instruction>(inst));
+  auto RHSKB = analyzeValueKnownBits(RHS, dyn_cast<Instruction>(inst));
+  printvalue2(LHSKB);
+  printvalue2(RHSKB);
+
+  auto computedBits = computeKnownBitsFromOperation(LHSKB, RHSKB, opcode);
+  if (computedBits.isConstant() && !computedBits.hasConflict())
+    return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
+                           computedBits.getConstant().getZExtValue());
+
+  return inst;
+}
+
 Value* createAddFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name) {
-#ifdef TESTFOLDER3
 
-  if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-    if (LHSConst->isZero())
-      return RHS;
-  }
-  if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-    if (RHSConst->isZero())
-      return LHS;
-  }
-#endif
-  if (auto simplifiedByPM = doPatternMatching(Instruction::Add, LHS, RHS))
-    return simplifiedByPM;
-  auto addret =
-      createInstruction(builder, Instruction::Add, LHS, RHS, nullptr, Name);
-
-  auto SQ = GetSimplifyQuery::createSimplifyQuery(
-      builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(addret));
-
-  if (auto ctxI = dyn_cast<Instruction>(addret)) {
-    auto LHSKB = analyzeValueKnownBits(LHS, dyn_cast<Instruction>(addret));
-
-    auto RHSKB = analyzeValueKnownBits(RHS, dyn_cast<Instruction>(addret));
-    // monke pattern matching for converting inc dec to -~x and ~-x
-    auto tryCompute = KnownBits::computeForAddSub(1, 0, LHSKB, RHSKB);
-
-    if (tryCompute.isConstant() && !tryCompute.hasConflict())
-      return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
-                             tryCompute.getConstant().getZExtValue());
-  }
-  return addret;
+  return folderBinOps(builder, LHS, RHS, Name, Instruction::Add);
 }
 
 Value* createSubFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name) {
-#ifdef TESTFOLDER4
-  if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-    if (RHSConst->isZero())
-      return LHS;
-  }
-#endif
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 
-  if (auto simplifiedByPM = doPatternMatching(Instruction::Sub, LHS, RHS))
-    return simplifiedByPM;
+  return folderBinOps(builder, LHS, RHS, Name, Instruction::Sub);
+}
 
-  auto subret =
-      createInstruction(builder, Instruction::Sub, LHS, RHS, nullptr, Name);
-  if (auto ctxI = dyn_cast<Instruction>(subret)) {
-    auto SQ = GetSimplifyQuery::createSimplifyQuery(
-        builder.GetInsertBlock()->getParent(), dyn_cast<Instruction>(subret));
+Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
+                      const Twine& Name) {
 
-    auto LHSKB = analyzeValueKnownBits(LHS, dyn_cast<Instruction>(subret));
+  return folderBinOps(builder, LHS, RHS, Name, Instruction::Or);
+}
 
-    auto RHSKB = analyzeValueKnownBits(RHS, dyn_cast<Instruction>(subret));
+Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
+                       const Twine& Name) {
 
-    auto tryCompute = KnownBits::computeForAddSub(0, 0, LHSKB, RHSKB);
-    if (tryCompute.isConstant() && !tryCompute.hasConflict())
-      return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
-                             tryCompute.getConstant().getZExtValue());
-  }
+  return folderBinOps(builder, LHS, RHS, Name, Instruction::Xor);
+}
 
-  return subret;
+Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
+                       const Twine& Name) {
+
+  return folderBinOps(builder, LHS, RHS, Name, Instruction::And);
 }
 
 Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
@@ -699,10 +957,7 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
   if (shiftSize >= LHS.getBitWidth())
     return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), 0);
 
-  KnownBits result(LHS.getBitWidth());
-  result.One = LHS.One.shl(shiftSize);
-  result.Zero = LHS.Zero.shl(shiftSize) |
-                APInt::getLowBitsSet(LHS.getBitWidth(), shiftSize);
+  KnownBits result = KnownBits::shl(LHS, RHS);
 
   if (result.hasConflict() || !result.isConstant()) {
     return nullptr;
@@ -714,62 +969,12 @@ Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name) {
-
-  if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-    if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS))
-      return ConstantInt::get(RHS->getType(), LHSConst->getZExtValue()
-                                                  << RHSConst->getZExtValue());
-    if (RHSConst->isZero())
-      return LHS;
-  }
-  auto result =
-      createInstruction(builder, Instruction::Shl, LHS, RHS, nullptr, Name);
-
-  if (auto ctxI = dyn_cast<Instruction>(result)) {
-    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
-    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
-
-    if (Value* knownBitsShl =
-            foldShlKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-      return knownBitsShl;
-    }
-  }
-  return result;
+  return folderBinOps(builder, LHS, RHS, Name, Instruction::Shl);
 }
 
 Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                         const Twine& Name) {
-
-#ifdef TESTFOLDERshr
-
-  if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-    if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS))
-      return ConstantInt::get(RHS->getType(), LHSConst->getZExtValue() >>
-                                                  RHSConst->getZExtValue());
-    if (RHSConst->isZero())
-      return LHS;
-  }
-
-  auto result =
-      createInstruction(builder, Instruction::LShr, LHS, RHS, nullptr, Name);
-  if (auto ctxI = dyn_cast<Instruction>(result)) {
-    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
-    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
-    printvalue2(KnownLHS);
-    printvalue2(KnownRHS);
-    if (Value* knownBitsLshr =
-            foldLShrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-      // printvalue(knownBitsLshr)
-      return knownBitsLshr;
-    }
-
-    KnownBits KnownInst = analyzeValueKnownBits(result, ctxI);
-    printvalue2(KnownInst);
-  }
-
-#endif
-
-  return result;
+  return folderBinOps(builder, LHS, RHS, Name, Instruction::LShr);
 }
 
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, uint64_t RHS,
@@ -794,122 +999,6 @@ Value* createLShrFolder(IRBuilder<>& builder, Value* LHS, APInt RHS,
   return createLShrFolder(builder, LHS, ConstantInt::get(LHS->getType(), RHS),
                           Name);
 }
-
-Value* foldOrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-
-  if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() ||
-      RHS.isUnknown() || LHS.getBitWidth() != RHS.getBitWidth() ||
-      !RHS.isConstant() || LHS.getBitWidth() <= 1 || RHS.getBitWidth() < 1 ||
-      RHS.getBitWidth() > 64 || LHS.getBitWidth() > 64) {
-    return nullptr;
-  }
-
-  KnownBits combined;
-  combined.One = LHS.One | RHS.One;
-  combined.Zero = LHS.Zero & RHS.Zero;
-
-  if (!combined.isConstant() || combined.hasConflict()) {
-    return nullptr;
-  }
-
-  APInt resultValue = combined.One;
-  return ConstantInt::get(Type::getIntNTy(context, combined.getBitWidth()),
-                          resultValue);
-}
-
-Value* createOrFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
-                      const Twine& Name) {
-#ifdef TESTFOLDER5
-
-  if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-    if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS))
-      return ConstantInt::get(RHS->getType(), RHSConst->getZExtValue() |
-                                                  LHSConst->getZExtValue());
-    if (LHSConst->isZero())
-      return RHS;
-  }
-  if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-    if (RHSConst->isZero())
-      return LHS;
-  }
-  if (auto simplifiedByPM = doPatternMatching(Instruction::Or, LHS, RHS))
-    return simplifiedByPM;
-  auto result =
-      createInstruction(builder, Instruction::Or, LHS, RHS, nullptr, Name);
-  if (auto ctxI = dyn_cast<Instruction>(result)) {
-    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
-    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
-    printvalue2(KnownLHS) printvalue2(KnownRHS);
-    if (Value* knownBitsAnd =
-            foldOrKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-      return knownBitsAnd;
-    }
-    if (Value* knownBitsAnd =
-            foldOrKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
-      return knownBitsAnd;
-    }
-  }
-#endif
-
-  return result;
-}
-
-Value* foldXorKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-
-  if (RHS.hasConflict() || LHS.hasConflict() || LHS.isUnknown() ||
-      RHS.isUnknown() || !RHS.isConstant() ||
-      LHS.getBitWidth() != RHS.getBitWidth() || RHS.getBitWidth() <= 1 ||
-      LHS.getBitWidth() <= 1 || RHS.getBitWidth() > 64 ||
-      LHS.getBitWidth() > 64) {
-    return nullptr;
-  }
-
-  if (!((LHS.Zero | LHS.One) & RHS.One).eq(RHS.One)) {
-    return nullptr;
-  }
-  APInt resultValue = LHS.One ^ RHS.One;
-
-  return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()),
-                          resultValue);
-}
-
-Value* createXorFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
-                       const Twine& Name) {
-#ifdef TESTFOLDER6
-
-  if (LHS == RHS) {
-    return ConstantInt::get(LHS->getType(), 0);
-  }
-
-  if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-    if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS))
-      return ConstantInt::get(RHS->getType(), RHSConst->getZExtValue() ^
-                                                  LHSConst->getZExtValue());
-    if (LHSConst->isZero())
-      return RHS;
-  }
-  if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-    if (RHSConst->isZero())
-      return LHS;
-  }
-  printvalue(LHS);
-  printvalue(RHS);
-#endif
-  auto result =
-      createInstruction(builder, Instruction::Xor, LHS, RHS, nullptr, Name);
-  if (auto ctxI = dyn_cast<Instruction>(result)) {
-    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
-    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
-
-    if (auto V = foldXorKnownBits(builder.getContext(), KnownLHS, KnownRHS))
-      return V;
-  }
-  if (auto simplifiedByPM = doPatternMatching(Instruction::Xor, LHS, RHS))
-    return simplifiedByPM;
-
-  return result;
-}
-
 std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS,
                                   KnownBits RHS) {
 
@@ -1028,55 +1117,6 @@ Value* foldAndKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
 
   return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()),
                           resultValue);
-}
-
-Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
-                       const Twine& Name) {
-#ifdef TESTFOLDER
-  if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-    if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS))
-      return ConstantInt::get(RHS->getType(), RHSConst->getZExtValue() &
-                                                  LHSConst->getZExtValue());
-    if (LHSConst->isZero())
-      return ConstantInt::get(RHS->getType(), 0);
-  }
-  if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-    if (RHSConst->isZero())
-      return ConstantInt::get(LHS->getType(), 0);
-  }
-  if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-    if (LHSConst->isMinusOne())
-      return RHS;
-  }
-  if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
-    if (RHSConst->isMinusOne())
-      return LHS;
-  }
-  auto result =
-      createInstruction(builder, Instruction::And, LHS, RHS, nullptr, Name);
-  if (auto ctxI = dyn_cast<Instruction>(result)) {
-    DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-    KnownBits KnownLHS = analyzeValueKnownBits(LHS, ctxI);
-    KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
-
-    if (Value* knownBitsAnd =
-            foldAndKnownBits(builder.getContext(), KnownLHS, KnownRHS)) {
-      printvalue(knownBitsAnd);
-      return knownBitsAnd;
-    }
-    if (Value* knownBitsAnd =
-            foldAndKnownBits(builder.getContext(), KnownRHS, KnownLHS)) {
-      printvalue(knownBitsAnd);
-      return knownBitsAnd;
-    }
-  }
-
-#endif
-  if (auto sillyResult = doPatternMatching(Instruction::And, LHS, RHS)) {
-    printvalue(sillyResult);
-    return sillyResult;
-  }
-  return result;
 }
 
 // - probably not needed anymore
