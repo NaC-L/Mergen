@@ -300,11 +300,10 @@ KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI) {
   if (auto CIv = dyn_cast<ConstantInt>(value)) {
     return KnownBits::makeConstant(APInt(64, CIv->getZExtValue(), false));
   }
-
   auto SQ = GetSimplifyQuery::createSimplifyQuery(
       ctxI->getParent()->getParent(), ctxI);
 
-  computeKnownBits(value, knownBits, -3, SQ);
+  computeKnownBits(value, knownBits, 0, SQ);
 
   return knownBits;
 }
