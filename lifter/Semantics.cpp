@@ -233,7 +233,6 @@ Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x < 0 = sf
 
 void lifterClass::branchHelper(Value* condition, string instname, int numbered,
                                bool reverse) {
-  LLVMContext& context = builder.getContext();
   // TODO:
   // save the current state of memory, registers etc.,
   // after execution is finished, return to latest state and continue
@@ -260,7 +259,7 @@ void lifterClass::branchHelper(Value* condition, string instname, int numbered,
     next_jump = createSelectFolder(builder, condition, false_jump, true_jump);
 
   uint64_t destination = 0;
-  PATH_info pathInfo = solvePath(function, destination, next_jump);
+  solvePath(function, destination, next_jump);
 
   ValueToValueMapTy VMap_test;
 
@@ -849,7 +848,7 @@ void lifterClass::lift_ret() {
     SetRegisterValue(rsp, result); // then add rsp 8
   }
 
-  PATH_info pathInfo = solvePath(function, destination, realval);
+  solvePath(function, destination, realval);
 }
 
 int jmpcount = 0;
@@ -873,7 +872,7 @@ void lifterClass::lift_jmp() {
   if (dest.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
     trunc = createAddFolder(builder, trunc, ripval);
   }
-  PATH_info pathInfo = solvePath(function, destination, trunc);
+  solvePath(function, destination, trunc);
   SetRegisterValue(ZYDIS_REGISTER_RIP, newRip);
 }
 

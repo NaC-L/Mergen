@@ -37,6 +37,8 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
 
       Value* Op;
       if (match(I, m_PtrToInt(m_Value(Op)))) {
+        if ((isa<Instruction>(Op) || isa<Argument>(Op)) &&
+            Op->hasNUsesOrMore(1))
           Affected.push_back(Op);
       }
     }
@@ -120,9 +122,8 @@ bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT) {
 
 using namespace llvm::PatternMatch;
 
-  Value* X = nullptr;
-  Value* Y = nullptr;
-  Value* Z = nullptr;
+Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
+                         Value* const op1) {
 
   switch (I) {
   case Instruction::Add:
