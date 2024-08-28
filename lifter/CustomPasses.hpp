@@ -89,8 +89,8 @@ public:
             if (auto* ConstInt =
                     llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
               uint64_t constintvalue = (uint64_t)ConstInt->getZExtValue();
-              if (uint64_t offset = FileHelper::address_to_mapped_address(
-                      file_base, constintvalue)) {
+              if (uint64_t offset =
+                      FileHelper::address_to_mapped_address(constintvalue)) {
                 for (auto* User : GEP->users()) {
                   if (auto* LoadInst = llvm::dyn_cast<llvm::LoadInst>(User)) {
                     llvm::Type* loadType = LoadInst->getType();
