@@ -319,8 +319,8 @@ void lifterClass::lift_movsb() {
         // Value* SRCptrvalue = GetOperandValue(
         // instruction->operands[0],
         // instruction->operands[0].size);
-        Value* DSTptrvalue = GetOperandValue(instruction->operands[1],
-                                             instruction->operands[1].size);
+        DSTptrvalue = GetOperandValue(instruction->operands[1],
+                                      instruction->operands[1].size);
 
         SetOperandValue(instruction->operands[0], DSTptrvalue);
 
@@ -740,7 +740,7 @@ void lifterClass::lift_call() {
 
   printvalue2(jump_address);
 
-  blockInfo = (make_tuple(jump_address, bb, getRegisters()));
+  blockInfo = BBInfo(jump_address, bb, getRegisters());
   run = 0;
 }
 
@@ -773,7 +773,8 @@ void lifterClass::lift_ret() {
   auto function = block->getParent();
   auto lastinst = builder.CreateRet(realval);
 
-  printvalue(rspvalue) debugging::doIfDebug([&]() {
+  printvalue(rspvalue);
+  debugging::doIfDebug([&]() {
     std::string Filename = "output_rets.ll";
     std::error_code EC;
     raw_fd_ostream OS(Filename, EC);
@@ -782,16 +783,16 @@ void lifterClass::lift_ret() {
 
   uint64_t destination = 0;
 
-  ROP_info result = ROP_return;
+  ROP_info rop_result = ROP_return;
 
   if (llvm::ConstantInt* constInt =
           llvm::dyn_cast<llvm::ConstantInt>(rspvalue)) {
     int64_t rspval = constInt->getSExtValue();
     printvalue2(rspval);
-    result = rspval == STACKP_VALUE ? REAL_return : ROP_return;
+    rop_result = rspval == STACKP_VALUE ? REAL_return : ROP_return;
   }
-  printvalue2(result);
-  if (result == REAL_return) {
+  printvalue2(rop_result);
+  if (rop_result == REAL_return) {
     lastinst->eraseFromParent();
     block->setName("real_ret");
     auto rax = GetRegisterValue(ZYDIS_REGISTER_RAX);
@@ -799,12 +800,12 @@ void lifterClass::lift_ret() {
         createZExtFolder(rax, Type::getInt64Ty(rax->getContext())));
     Function* originalFunc_finalnopt = builder.GetInsertBlock()->getParent();
 
-    std::string Filename_finalnopt = "output_finalnoopt.ll";
-    std::error_code EC_finalnopt;
-    raw_fd_ostream OS_finalnopt(Filename_finalnopt, EC_finalnopt);
-
-    originalFunc_finalnopt->print(OS_finalnopt);
-
+    debugging::doIfDebug([&]() {
+      std::string Filename_finalnopt = "output_finalnoopt.ll";
+      std::error_code EC_finalnopt;
+      raw_fd_ostream OS_finalnopt(Filename_finalnopt, EC_finalnopt);
+      originalFunc_finalnopt->print(OS_finalnopt);
+    });
     // function->print(outs());
 
     debugging::doIfDebug([&]() {
@@ -820,26 +821,23 @@ void lifterClass::lift_ret() {
 
   block->setName("previousret_block");
 
-  {
+  lastinst->eraseFromParent();
+  block->setName("fake_ret");
 
-    lastinst->eraseFromParent();
-    block->setName("fake_ret");
+  auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
+                                    8); // assuming its x64
+  auto rsp_result = createAddFolder(
+      rspvalue, val,
+      "ret-new-rsp-" + to_string(instruction->runtime_address) + "-");
 
-    auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                      8); // assuming its x64
-    auto result = createAddFolder(
-        rspvalue, val,
-        "ret-new-rsp-" + to_string(instruction->runtime_address) + "-");
-
-    if (instruction->operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
-      rspaddr = instruction->operands[3];
-      result = createAddFolder(
-          result, ConstantInt::get(result->getType(),
-                                   instruction->operands[0].imm.value.u));
-    }
-
-    SetRegisterValue(rsp, result); // then add rsp 8
+  if (instruction->operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+    rspaddr = instruction->operands[3];
+    rsp_result = createAddFolder(
+        rsp_result, ConstantInt::get(rsp_result->getType(),
+                                     instruction->operands[0].imm.value.u));
   }
+
+  SetRegisterValue(rsp, rsp_result); // then add rsp 8
 
   solvePath(function, destination, realval);
 }
@@ -4206,7 +4204,7 @@ void lifterClass::liftInstruction() {
                                  builder.GetInsertBlock()->getParent());
     builder.CreateBr(bb);
 
-    blockInfo = (make_tuple(jump_address, bb, getRegisters()));
+    blockInfo = BBInfo(jump_address, bb, getRegisters());
     run = 0;
     return;
   }
@@ -4238,7 +4236,7 @@ void lifterClass::liftInstruction() {
 
     builder.CreateBr(bb);
 
-    blockInfo = (make_tuple(jump_address, bb, getRegisters()));
+    blockInfo = BBInfo(jump_address, bb, getRegisters());
     run = 0;
     return;
   }

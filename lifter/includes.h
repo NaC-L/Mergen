@@ -280,10 +280,10 @@ inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
 #define STACKP_VALUE 0x14FF28
 
 using ReverseRegisterMap = DenseMap<Value*, int>;
-using RegisterMap = DenseMap<int, Value*>;
+using RegisterMap =
+    DenseMap<int, Value*>; // we dont actually need this to be a map
 // BB start address, BB pointer, Final registers in that RegisterMap so we can
 // use it later
-using BBInfo = tuple<uint64_t, BasicBlock*, RegisterMap>;
 
 enum FlagOperation { SET_VALUE, SET_ONE, SET_ZERO, TOGGLE };
 

@@ -33,20 +33,48 @@ struct InstructionKey {
              operand2 == other.operand2;
     }
   }
+  struct InstructionKeyInfo {
+    // Custom hash function
+    static inline unsigned getHashValue(const InstructionKey& key) {
+      auto h1 = llvm::hash_value(key.opcode);
+      auto h2 = llvm::hash_value(key.operand1);
+      auto h3 = key.cast ? llvm::hash_value(key.destType)
+                         : llvm::hash_value(key.operand2);
+      return llvm::hash_combine(h1, h2, h3);
+    }
+
+    // Equality function
+    static inline bool isEqual(const InstructionKey& lhs,
+                               const InstructionKey& rhs) {
+      return lhs == rhs;
+    }
+
+    // Define empty and tombstone keys
+    static inline InstructionKey getEmptyKey() {
+      return InstructionKey(0, nullptr, static_cast<Value*>(nullptr));
+    }
+
+    static inline InstructionKey getTombstoneKey() {
+      return InstructionKey(~0U, nullptr, static_cast<Value*>(nullptr));
+    }
+  };
 };
 
-struct InstructionKeyHash {
-  uint64_t operator()(const InstructionKey& key) const {
-    uint64_t h1 = std::hash<unsigned>()(key.opcode);
-    uint64_t h2 = reinterpret_cast<uint64_t>(key.operand1);
-    uint64_t h3 = reinterpret_cast<uint64_t>(key.operand2);
-    return h1 ^ (h2 << 1) ^ (h3 << 2);
-  }
+struct BBInfo {
+  uint64_t runtime_address;
+  llvm::BasicBlock* block;
+  RegisterMap registers;
+
+  BBInfo(){};
+  BBInfo(uint64_t runtime_address, llvm::BasicBlock* block,
+         RegisterMap registers)
+      : runtime_address(runtime_address), block(block), registers(registers) {}
 };
 
 class lifterClass {
 public:
   IRBuilder<>& builder;
+  BBInfo blockInfo;
 
   lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder){};
 
@@ -59,10 +87,9 @@ public:
   DenseMap<Instruction*, APInt> assumptions;
   ZydisDisassembledInstruction* instruction = nullptr;
   DenseMap<uint64_t, ValueByteReference*> buffer;
-  BBInfo blockInfo;
 
-  unordered_map<Flag, Value*> FlagList;
-  RegisterMap Registers;
+  unordered_map<Flag, Value*> FlagList; // doesnt need to be a map
+  RegisterMap Registers;                // doesnt need to be a map
 
   Value* memory;
   Value* TEB;
@@ -151,13 +178,16 @@ public:
   DominatorTree* getDomTree() { return DT; }
 
   void updateDomTree(Function& F) {
-    // doesnt make a much difference, but good to have
+    // should only recalculate if we
     auto getLastBB = &(F.back());
+
     if (getLastBB != lastBB)
       DT->recalculate(F);
+
     lastBB = getLastBB;
   }
 
+  //
   map<uint64_t, uint64_t> pageMap;
 
   void markMemPaged(uint64_t start, uint64_t end) {
@@ -166,7 +196,6 @@ public:
   }
 
   bool isMemPaged(uint64_t address) {
-    // ideally we want to be able to do this with KnownBits aswell
     auto it = pageMap.upper_bound(address);
     if (it == pageMap.begin())
       return false;
@@ -244,7 +273,7 @@ public:
   Value* getOrCreate(const InstructionKey& key, const Twine& Name);
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
                            Value* const op1);
-  std::unordered_map<InstructionKey, Value*, InstructionKeyHash> cache;
+  DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo> cache;
 
   // end folders
 

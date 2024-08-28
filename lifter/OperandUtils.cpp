@@ -65,7 +65,7 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
 }
 SimplifyQuery lifterClass::createSimplifyQuery(Instruction* Inst) {
   updateDomTree(*fnc);
-  auto DT = getDomTree();
+  // auto DT = getDomTree();
   auto DL = fnc->getParent()->getDataLayout();
   static TargetLibraryInfoImpl TLIImpl(
       Triple(fnc->getParent()->getTargetTriple()));
@@ -133,7 +133,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         if (pv.size() == 2) {
           // check if pv is 0, -1
 
-          IRBuilder<> builder(cast<Instruction>(op0));
           return createSelectFolder(X, C, B, "selectEZ");
         }
       }
@@ -196,7 +195,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
     auto handleNegXorOr = [&](Value* op0, Value* op1) -> Value* {
       if (match(op1, m_SpecificInt(-1)) &&
           match(op0, m_Or(m_Value(A), m_Value(B)))) {
-        IRBuilder<> builder(cast<Instruction>(op0));
         Constant* constant_v = nullptr;
 
         auto createAndNot = [&](Value* C, Constant* constant_v,
@@ -260,8 +258,8 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 
         if (Value* result = matchAndSimplify(A, B)) {
           return result;
-        } else if (Value* result = matchAndSimplify(B, A)) {
-          return result;
+        } else if (Value* result_swap = matchAndSimplify(B, A)) {
+          return result_swap;
         }
       }
 
@@ -1493,7 +1491,6 @@ Value* lifterClass::GetOperandValue(ZydisDecodedOperand& op, int possiblesize,
   }
   default: {
     throw std::runtime_error("operand type not implemented");
-    exit(-1);
   }
   }
 }
@@ -1580,8 +1577,7 @@ Value* lifterClass::SetOperandValue(ZydisDecodedOperand& op, Value* value,
 
   default: {
     throw std::runtime_error("operand type not implemented");
-    exit(-1);
-    return nullptr;
+    // return nullptr;
   }
   }
 }
