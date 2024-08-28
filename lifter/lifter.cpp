@@ -15,17 +15,16 @@ uint64_t original_address = 0;
 
 // consider having this function in a class, later we can use multi-threading to
 // explore different paths
-void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address,
-                          ZyanU64 file_base) {
+void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address) {
 
   while (lifters.size() > 0) {
     lifterClass* lifter = lifters.back();
     runtime_address = get<0>(lifter->blockInfo);
-    uint64_t offset = FileHelper::address_to_mapped_address((void*)file_base,
-                                                            runtime_address);
+    uint64_t offset =
+        FileHelper::address_to_mapped_address(data, runtime_address);
     debugging::doIfDebug([&]() {
       cout << "runtime_addr: " << runtime_address << " offset:" << offset
-           << " byte there: 0x" << (int)*(uint8_t*)(file_base + offset) << endl;
+           << " byte there: 0x" << (int)*(data + offset) << endl;
       cout << "offset: " << offset << " file_base?: " << original_address
            << " runtime: " << runtime_address << endl;
     });
@@ -37,7 +36,7 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address,
     // will use this for exploring multiple branches
     lifter->setRegisters(get<2>(lifter->blockInfo));
 
-    BinaryOperations::initBases((void*)file_base, data);
+    BinaryOperations::initBases(data, data);
 
     lifter->run = 1;
 
@@ -75,7 +74,7 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address,
 }
 
 void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
-                                       uint64_t file_base) {
+                                       unsigned char* fileBase) {
   ZydisDecoder decoder;
   ZydisFormatter formatter;
 
@@ -113,21 +112,39 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
   auto function =
       llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
                              function_name.c_str(), lifting_module);
-  GetSimplifyQuery::fnc = function;
   string block_name = "entry";
   auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
   llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
   // auto RegisterList = InitRegisters(builder, function, runtime_address);
 
-  GEPStoreTracker::initDomTree(*function);
   lifterClass* main = new lifterClass(builder);
   auto RegisterList = main->InitRegisters(function, runtime_address);
   main->blockInfo = make_tuple(runtime_address, bb, RegisterList);
+
+  main->fnc = function;
+  main->initDomTree(*function);
+  auto dosHeader = (win::dos_header_t*)fileBase;
+  auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
+  auto ADDRESS = ntHeaders->optional_header.image_base;
+  auto imageSize = ntHeaders->optional_header.size_image;
+  auto stackSize = ntHeaders->optional_header.size_stack_reserve;
+  uint64_t RVA = static_cast<uint64_t>(runtime_address - ADDRESS);
+  uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
+  uint8_t* dataAtAddress = fileBase + fileOffset;
+  cout << hex << "0x" << (int)*dataAtAddress << endl;
+  original_address = ADDRESS;
+  cout << "address: " << ADDRESS << " imageSize: " << imageSize
+       << " filebase: " << (uint64_t)fileBase << " fOffset: " << fileOffset
+       << " RVA: " << RVA << endl;
+
+  main->markMemPaged(STACKP_VALUE - stackSize, STACKP_VALUE + stackSize);
+  main->markMemPaged(ADDRESS, ADDRESS + imageSize);
+
   // blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
   lifters.push_back(main);
 
-  asm_to_zydis_to_lift((uint8_t*)file_base, runtime_address, file_base);
+  asm_to_zydis_to_lift(fileBase, runtime_address);
 
   long long ms = timer::stopTimer();
   timer::startTimer();
@@ -185,34 +202,15 @@ int main(int argc, char* argv[]) {
 
   FileHelper::setFileBase(fileBase);
 
-  auto dosHeader = (win::dos_header_t*)fileBase;
-  auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
-  auto ADDRESS = ntHeaders->optional_header.image_base;
-  auto imageSize = ntHeaders->optional_header.size_image;
-  auto stackSize = ntHeaders->optional_header.size_stack_reserve;
-  GEPStoreTracker::markMemPaged(STACKP_VALUE - stackSize,
-                                STACKP_VALUE + stackSize);
-  GEPStoreTracker::markMemPaged(ADDRESS, ADDRESS + imageSize);
-
-  uint64_t RVA = static_cast<uint64_t>(startAddr - ADDRESS);
-  uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
-  uint8_t* dataAtAddress = fileBase + fileOffset;
-  cout << hex << "0x" << (int)*dataAtAddress << endl;
-  original_address = ADDRESS;
-  cout << "address: " << ADDRESS << " imageSize: " << imageSize
-       << " filebase: " << (uint64_t)fileBase << " fOffset: " << fileOffset
-       << " RVA: " << RVA << endl;
-
   funcsignatures::search_signatures(fileData);
   funcsignatures::createOffsetMap();
   for (const auto& [key, value] : funcsignatures::siglookup) {
     value.display();
   }
-
   long long ms = timer::getTimer();
   cout << "\n" << dec << ms << " milliseconds has past" << endl;
 
-  InitFunction_and_LiftInstructions(startAddr, (uint64_t)fileBase);
+  InitFunction_and_LiftInstructions(startAddr, fileBase);
   long long milliseconds = timer::stopTimer();
   cout << "\n" << dec << milliseconds << " milliseconds has past" << endl;
   cout << "Executed " << debugging::increaseInstCounter() - 1 << " total insts";

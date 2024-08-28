@@ -1,5 +1,4 @@
 #include "CustomPasses.hpp"
-#include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "includes.h"
 #include "lifterClass.h"
@@ -9,20 +8,6 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Casting.h>
-
-void* file_base_g;
-ZyanU8* data_g;
-
-struct InstructionDependencyOrder {
-  bool operator()(Instruction* const& a, Instruction* const& b) const {
-
-    Function* F = a->getFunction();
-    GEPStoreTracker::updateDomTree(*F);
-    DominatorTree* DT = GEPStoreTracker::getDomTree();
-
-    return (comesBefore(b, a, *DT));
-  }
-};
 
 void lifterClass::replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
                                                    ReverseRegisterMap rVMap) {
@@ -59,7 +44,7 @@ void lifterClass::replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
     if (auto GEPuser = dyn_cast<GetElementPtrInst>(user)) {
       for (auto StoreUser : GEPuser->users()) {
         if (auto SI = dyn_cast<StoreInst>(StoreUser)) {
-          GEPStoreTracker::updateMemoryOp(SI);
+          updateMemoryOp(SI);
         }
       }
     }
@@ -191,7 +176,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
   // unsolved
   printvalue(simplifyValue);
   run = 0;
-  auto pvset = GEPStoreTracker::computePossibleValues(simplifyValue);
+  auto pvset = computePossibleValues(simplifyValue);
   vector<APInt> pv(pvset.begin(), pvset.end());
   for (auto vv : pv) {
     printvalue2(vv);
@@ -212,8 +197,8 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     auto firstcase = pv[0];
     auto secondcase = pv[1];
 
-    static auto try_simplify = [&](APInt c1, Value* simplifyv) -> optional<Value*> {
-        
+    static auto try_simplify = [&](APInt c1,
+                                   Value* simplifyv) -> optional<Value*> {
       if (auto si = dyn_cast<SelectInst>(simplifyv)) {
         auto firstcase_v = builder.getIntN(
             simplifyv->getType()->getIntegerBitWidth(), c1.getZExtValue());
@@ -231,16 +216,17 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
       condition = can_simplify2.value();
     } else
       condition = createICMPFolder(
-          builder, CmpInst::ICMP_EQ, simplifyValue,
+          CmpInst::ICMP_EQ, simplifyValue,
           builder.getIntN(simplifyValue->getType()->getIntegerBitWidth(),
                           firstcase.getZExtValue()));
     printvalue(condition);
     auto BR = builder.CreateCondBr(condition, bb_false, bb_true);
 
-    GetSimplifyQuery::RegisterBranch(BR);
-    blockInfo = make_tuple(secondcase.getZExtValue(), bb_true, getRegisters());
+    RegisterBranch(BR);
 
-    lifterClass* newlifter = new lifterClass(builder);
+    lifterClass* newlifter = new lifterClass(*this);
+
+    blockInfo = make_tuple(secondcase.getZExtValue(), bb_true, getRegisters());
 
     newlifter->blockInfo =
         make_tuple(firstcase.getZExtValue(), bb_false, getRegisters());
