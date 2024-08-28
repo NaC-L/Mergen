@@ -9,48 +9,6 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Casting.h>
 
-void lifterClass::replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
-                                                   ReverseRegisterMap rVMap) {
-
-  // if two values are same, we go in a infinite loop
-  if (v == nv)
-    return;
-
-  auto registerV = rVMap[v];
-
-  if (registerV) {
-    if (isa<Instruction>(v)) {
-      // auto registerI = cast<Instruction>(v);
-      SetRegisterValue(registerV, v);
-    }
-  }
-
-  v->replaceAllUsesWith(nv);
-
-  // redundant?
-  v = nv;
-
-  // dont ask me this i dont know
-
-  // users start from latest user
-  std::vector<User*> users;
-  for (auto& use : v->uses()) {
-    users.push_back(use.getUser());
-  }
-
-  // iterate over the users in reverse order
-  for (auto it = users.rbegin(); it != users.rend(); ++it) {
-    User* user = *it;
-    if (auto GEPuser = dyn_cast<GetElementPtrInst>(user)) {
-      for (auto StoreUser : GEPuser->users()) {
-        if (auto SI = dyn_cast<StoreInst>(StoreUser)) {
-          updateMemoryOp(SI);
-        }
-      }
-    }
-  }
-}
-
 // simplify Users with BFS
 // because =>
 // x = add a, b
@@ -132,15 +90,6 @@ void final_optpass(Function* clonedFuncx) {
   modulePassManager.run(*module, moduleAnalysisManager);
 }
 
-llvm::ValueToValueMapTy* flipVMap(const ValueToValueMapTy& VMap) {
-
-  ValueToValueMapTy* RevMap = new llvm::ValueToValueMapTy;
-  for (const auto& pair : VMap) {
-    (*RevMap)[pair.second] = const_cast<Value*>(pair.first);
-  }
-  return RevMap;
-}
-
 PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
                                  Value* simplifyValue) {
 
@@ -154,7 +103,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
                                         builder.GetInsertBlock()->getParent());
 
     builder.CreateBr(bb_solved);
-    blockInfo = make_tuple(dest, bb_solved, getRegisters());
+    blockInfo = BBInfo(dest, bb_solved, getRegisters());
     return result;
   }
 
@@ -168,7 +117,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
                              builder.GetInsertBlock()->getParent());
 
       builder.CreateBr(bb_solved);
-      blockInfo = make_tuple(dest, bb_solved, getRegisters());
+      blockInfo = BBInfo(dest, bb_solved, getRegisters());
       return solved;
     }
   }
@@ -187,7 +136,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
                                         builder.GetInsertBlock()->getParent());
 
     builder.CreateBr(bb_solved);
-    blockInfo = make_tuple(pv[0].getZExtValue(), bb_solved, getRegisters());
+    blockInfo = BBInfo(pv[0].getZExtValue(), bb_solved, getRegisters());
   }
   if (pv.size() == 2) {
     auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
@@ -226,10 +175,10 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
 
     lifterClass* newlifter = new lifterClass(*this);
 
-    blockInfo = make_tuple(secondcase.getZExtValue(), bb_true, getRegisters());
+    blockInfo = BBInfo(secondcase.getZExtValue(), bb_true, getRegisters());
 
     newlifter->blockInfo =
-        make_tuple(firstcase.getZExtValue(), bb_false, getRegisters());
+        BBInfo(firstcase.getZExtValue(), bb_false, getRegisters());
 
     lifters.push_back(newlifter);
     outs() << "created a new path\n";

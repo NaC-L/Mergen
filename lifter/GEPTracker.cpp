@@ -12,6 +12,8 @@
 #include <llvm/Support/ErrorHandling.h>
 
 namespace BinaryOperations {
+
+  // wtf man
   void* file_base_g;
   ZyanU8* data_g;
 
@@ -50,8 +52,7 @@ namespace BinaryOperations {
   // sections
   bool readMemory(uint64_t addr, unsigned byteSize, APInt& value) {
 
-    uint64_t mappedAddr =
-        FileHelper::address_to_mapped_address(file_base_g, addr);
+    uint64_t mappedAddr = FileHelper::address_to_mapped_address(addr);
     uint64_t tempValue;
 
     if (mappedAddr > 0) {
@@ -84,27 +85,6 @@ void lifterClass::addValueReference(Instruction* inst, Value* value,
     printvalue2(address + i);
     buffer[address + i] = new ValueByteReference(inst, value, i);
     printvalue(value);
-    printvalue2((uint64_t)address + i);
-  }
-}
-
-void lifterClass::updateValueReference(Instruction* inst, Value* value,
-                                       uint64_t address) {
-  unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
-  for (unsigned i = 0; i < valueSizeInBytes; i++) {
-    auto existingValue = buffer[address + i];
-    auto DT = getDomTree();
-
-    if (comesBefore(inst, existingValue->storeInst, *DT)) {
-      continue;
-    }
-
-    printvalue2(address + i);
-
-    buffer[address + i] = new ValueByteReference(inst, value, i);
-
-    printvalue(value);
-
     printvalue2((uint64_t)address + i);
   }
 }
@@ -246,27 +226,6 @@ namespace SCCPSimplifier {
 // do some cleanup
 // rename it to MemoryTracker ?
 
-void lifterClass::updateMemoryOp(StoreInst* inst) {
-
-  auto ptr = inst->getPointerOperand();
-  if (!isa<GetElementPtrInst>(ptr))
-    return;
-
-  auto gepInst = cast<GetElementPtrInst>(ptr);
-  auto gepPtr = gepInst->getPointerOperand();
-  if (gepPtr != getMemory())
-    return;
-
-  auto gepOffset = gepInst->getOperand(1);
-  if (!isa<ConstantInt>(gepOffset))
-    return;
-
-  auto gepOffsetCI = cast<ConstantInt>(gepOffset);
-
-  updateValueReference(inst, inst->getValueOperand(),
-                       gepOffsetCI->getZExtValue());
-}
-
 isPaged lifterClass::isValuePaged(Value* address, Instruction* ctxI) {
   if (isa<ConstantInt>(address)) {
     return isMemPaged(cast<ConstantInt>(address)->getZExtValue())
@@ -305,11 +264,11 @@ void lifterClass::pagedCheck(Value* address, Instruction* ctxI) {
   switch (paged) {
   case MEMORY_NOT_PAGED: {
     printvalueforce(address);
+    cout.flush();
     llvm_unreachable_internal(
         "\nmemory is not paged, so we(more likely) or the program "
         "probably do some incorrect stuff "
         "we abort to avoid incorrect output\n");
-    cout.flush();
     break;
   }
   case MEMORY_MIGHT_BE_PAGED: {
@@ -685,7 +644,6 @@ Value* lifterClass::solveLoad(LoadInst* load) {
   // however, if we dont know all the stores
   // we have to if check each store overlaps with our load
   // specifically for indirect stores
-  IRBuilder<> builder(load);
   if (isa<ConstantInt>(loadOffset)) {
     auto loadOffsetCI = cast<ConstantInt>(loadOffset);
 
@@ -787,7 +745,6 @@ Value* lifterClass::solveLoad(LoadInst* load) {
 
       printvalue(mask);
 
-      IRBuilder<> builder(load);
       // we dont have to calculate knownbits if its a constant
       auto maskedinst =
           createAndFolder(storedInst, mask, inst->getName() + ".maskedinst");

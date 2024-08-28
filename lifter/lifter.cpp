@@ -19,9 +19,8 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address) {
 
   while (lifters.size() > 0) {
     lifterClass* lifter = lifters.back();
-    runtime_address = get<0>(lifter->blockInfo);
-    uint64_t offset =
-        FileHelper::address_to_mapped_address(data, runtime_address);
+    runtime_address = lifter->blockInfo.runtime_address;
+    uint64_t offset = FileHelper::address_to_mapped_address(runtime_address);
     debugging::doIfDebug([&]() {
       cout << "runtime_addr: " << runtime_address << " offset:" << offset
            << " byte there: 0x" << (int)*(data + offset) << endl;
@@ -29,12 +28,12 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address) {
            << " runtime: " << runtime_address << endl;
     });
 
-    auto nextBasicBlock = get<1>(lifter->blockInfo);
+    auto nextBasicBlock = lifter->blockInfo.block;
 
     lifter->builder.SetInsertPoint(nextBasicBlock);
 
-    // will use this for exploring multiple branches
-    lifter->setRegisters(get<2>(lifter->blockInfo));
+    // this looks stupid
+    lifter->setRegisters(lifter->blockInfo.registers);
 
     BinaryOperations::initBases(data, data);
 
@@ -120,7 +119,7 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
 
   lifterClass* main = new lifterClass(builder);
   auto RegisterList = main->InitRegisters(function, runtime_address);
-  main->blockInfo = make_tuple(runtime_address, bb, RegisterList);
+  main->blockInfo = BBInfo(runtime_address, bb, RegisterList);
 
   main->fnc = function;
   main->initDomTree(*function);
@@ -146,8 +145,7 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
 
   asm_to_zydis_to_lift(fileBase, runtime_address);
 
-  long long ms = timer::stopTimer();
-  timer::startTimer();
+  long long ms = timer::getTimer();
 
   cout << "\nlifting complete, " << dec << ms << " milliseconds has past"
        << endl;
@@ -213,5 +211,6 @@ int main(int argc, char* argv[]) {
   InitFunction_and_LiftInstructions(startAddr, fileBase);
   long long milliseconds = timer::stopTimer();
   cout << "\n" << dec << milliseconds << " milliseconds has past" << endl;
-  cout << "Executed " << debugging::increaseInstCounter() - 1 << " total insts";
+  cout << "Lifted and optimized " << debugging::increaseInstCounter() - 1
+       << " total insts";
 }
