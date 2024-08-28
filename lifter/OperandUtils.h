@@ -2,7 +2,8 @@
 #include "includes.h"
 
 namespace GetSimplifyQuery {
-
+    
+  extern Function* fnc;
   void RegisterBranch(BranchInst* BI);
 
   SimplifyQuery createSimplifyQuery(Function* fnc);

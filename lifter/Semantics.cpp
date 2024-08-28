@@ -1513,6 +1513,7 @@ void lifterClass::lift_sar() {
   Value* clampedCount = createAndFolder(
       builder, countValue, ConstantInt::get(countValue->getType(), maskC),
       "sarclamp");
+  // ashrfolder
   Value* result = builder.CreateAShr(
       Lvalue, clampedCount,
       "sar-lshr-" + to_string(instruction->runtime_address) + "-");
@@ -4374,6 +4375,12 @@ void lifterClass::liftInstruction() {
   }
   if (!isReadable && !isImport) {
     // done something wrong;
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_external.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+    });
     llvm_unreachable_internal("Trying to execute invalid external function");
   }
 

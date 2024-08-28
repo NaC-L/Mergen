@@ -113,7 +113,7 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
   auto function =
       llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
                              function_name.c_str(), lifting_module);
-
+  GetSimplifyQuery::fnc = function;
   string block_name = "entry";
   auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
   llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);

@@ -76,8 +76,8 @@ namespace GetSimplifyQuery {
   unsigned int instct = 0;
   SimplifyQuery* cachedquery;
 
-  SimplifyQuery createSimplifyQuery(Function* fncv, Instruction* Inst) {
-    static Function* fnc = fncv;
+  Function* fnc = nullptr;
+  SimplifyQuery createSimplifyQuery(Instruction* Inst) {
     GEPStoreTracker::updateDomTree(*fnc);
     auto DT = GEPStoreTracker::getDomTree();
     auto DL = fnc->getParent()->getDataLayout();
@@ -310,8 +310,7 @@ KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI) {
   if (auto CIv = dyn_cast<ConstantInt>(value)) {
     return KnownBits::makeConstant(APInt(64, CIv->getZExtValue(), false));
   }
-  auto SQ = GetSimplifyQuery::createSimplifyQuery(
-      ctxI->getParent()->getParent(), ctxI);
+  auto SQ = GetSimplifyQuery::createSimplifyQuery(ctxI);
 
   computeKnownBits(value, knownBits, 0, SQ);
 
@@ -591,20 +590,24 @@ Value* createInstruction(IRBuilder<>& builder, unsigned opcode, Value* operand1,
 
 Value* createSelectFolder(IRBuilder<>& builder, Value* C, Value* True,
                           Value* False, const Twine& Name) {
-#ifdef TESTFOLDER
   if (auto* CConst = dyn_cast<Constant>(C)) {
 
-    if (auto* CBool = dyn_cast<ConstantInt>(CConst)) {
-      if (CBool->isOne()) {
-        return True;
-      } else if (CBool->isZero()) {
-        return False;
-      }
+    if (CConst->isOneValue()) {
+      return True;
+    } else if (CConst->isZeroValue()) {
+      return False;
     }
   }
-#endif
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
-  return simplifyValue(builder.CreateSelect(C, True, False, Name), DL);
+
+  if (True == False)
+    return True;
+
+  auto inst = builder.CreateSelect(C, True, False, Name);
+
+  auto RHSKBSELECT_C = analyzeValueKnownBits(C, dyn_cast<Instruction>(inst));
+
+  printvalue2(RHSKBSELECT_C);
+  return inst;
 }
 
 KnownBits computeKnownBitsFromOperation(KnownBits vv1, KnownBits vv2,
@@ -932,53 +935,6 @@ Value* createAndFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
   return folderBinOps(builder, LHS, RHS, Name, Instruction::And);
 }
 
-Value* foldLShrKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-
-  if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() ||
-      RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
-    return nullptr;
-
-  APInt shiftAmount = RHS.getConstant();
-  unsigned shiftSize = shiftAmount.getZExtValue();
-
-  if (shiftSize >= LHS.getBitWidth())
-    return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), 0);
-  ;
-
-  KnownBits result(LHS.getBitWidth());
-  result.One = LHS.One.lshr(shiftSize);
-  result.Zero = LHS.Zero.lshr(shiftSize) |
-                APInt::getHighBitsSet(LHS.getBitWidth(), shiftSize);
-
-  if (!(result.Zero | result.One).isAllOnes()) {
-    return nullptr;
-  }
-
-  return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()),
-                          result.getConstant());
-}
-
-Value* foldShlKnownBits(LLVMContext& context, KnownBits LHS, KnownBits RHS) {
-  if (RHS.hasConflict() || LHS.hasConflict() || !RHS.isConstant() ||
-      RHS.getBitWidth() > 64 || LHS.isUnknown() || LHS.getBitWidth() <= 1)
-    return nullptr;
-
-  APInt shiftAmount = RHS.getConstant();
-  unsigned shiftSize = shiftAmount.getZExtValue();
-
-  if (shiftSize >= LHS.getBitWidth())
-    return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()), 0);
-
-  KnownBits result = KnownBits::shl(LHS, RHS);
-
-  if (result.hasConflict() || !result.isConstant()) {
-    return nullptr;
-  }
-
-  return ConstantInt::get(Type::getIntNTy(context, LHS.getBitWidth()),
-                          result.getConstant());
-}
-
 Value* createShlFolder(IRBuilder<>& builder, Value* LHS, Value* RHS,
                        const Twine& Name) {
   return folderBinOps(builder, LHS, RHS, Name, Instruction::Shl);
@@ -1044,11 +1000,12 @@ std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS,
 
 Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
                           Value* LHS, Value* RHS, const Twine& Name) {
+
   if (auto SI = dyn_cast<SelectInst>(LHS)) {
-    if (RHS == SI->getTrueValue())
+    if (P == CmpInst::ICMP_EQ && RHS == SI->getTrueValue())
       return SI->getCondition();
-    // do stuff
   }
+
   switch (P) {
   case CmpInst::ICMP_UGT: {
     // Check if LHS is the result of a call to @llvm.ctpop.i64
@@ -1092,6 +1049,11 @@ Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
 Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
                         Value* RHS, const Twine& Name) {
 
+  if (auto patternCheck = ICMPPatternMatcher(builder, P, LHS, RHS, Name)) {
+    printvalue(patternCheck);
+    return patternCheck;
+  }
+
   auto result = builder.CreateICmp(P, LHS, RHS, Name);
 
   if (auto ctxI = dyn_cast<Instruction>(result)) {
@@ -1103,11 +1065,6 @@ Value* createICMPFolder(IRBuilder<>& builder, CmpInst::Predicate P, Value* LHS,
       return ConstantInt::get(Type::getInt1Ty(builder.getContext()), v.value());
     }
     printvalue2(KnownLHS) printvalue2(KnownRHS);
-  }
-
-  if (auto patternCheck = ICMPPatternMatcher(builder, P, LHS, RHS, Name)) {
-    printvalue(patternCheck);
-    return patternCheck;
   }
 
   return result;
