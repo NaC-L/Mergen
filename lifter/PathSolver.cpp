@@ -207,22 +207,43 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
   if (pv.size() == 2) {
     auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
                                        builder.GetInsertBlock()->getParent());
-    auto bb_true = BasicBlock::Create(function->getContext(), "bb_false",
+    auto bb_true = BasicBlock::Create(function->getContext(), "bb_true",
                                       builder.GetInsertBlock()->getParent());
-    auto condition = createICMPFolder(
-        builder, CmpInst::ICMP_EQ, simplifyValue,
-        builder.getIntN(simplifyValue->getType()->getIntegerBitWidth(),
-                        pv[0].getZExtValue()));
+    auto firstcase = pv[0];
+    auto secondcase = pv[1];
+
+    static auto try_simplify = [&](APInt c1, Value* simplifyv) -> optional<Value*> {
+        
+      if (auto si = dyn_cast<SelectInst>(simplifyv)) {
+        auto firstcase_v = builder.getIntN(
+            simplifyv->getType()->getIntegerBitWidth(), c1.getZExtValue());
+        if (si->getTrueValue() == firstcase_v)
+          return si->getCondition();
+      }
+      return nullopt;
+    };
+
+    Value* condition = nullptr;
+    if (auto can_simplify = try_simplify(firstcase, simplifyValue))
+      condition = can_simplify.value();
+    else if (auto can_simplify2 = try_simplify(secondcase, simplifyValue)) {
+      swap(firstcase, secondcase);
+      condition = can_simplify2.value();
+    } else
+      condition = createICMPFolder(
+          builder, CmpInst::ICMP_EQ, simplifyValue,
+          builder.getIntN(simplifyValue->getType()->getIntegerBitWidth(),
+                          firstcase.getZExtValue()));
     printvalue(condition);
     auto BR = builder.CreateCondBr(condition, bb_false, bb_true);
 
     GetSimplifyQuery::RegisterBranch(BR);
-    blockInfo = make_tuple(pv[1].getZExtValue(), bb_true, getRegisters());
+    blockInfo = make_tuple(secondcase.getZExtValue(), bb_true, getRegisters());
 
     lifterClass* newlifter = new lifterClass(builder);
 
     newlifter->blockInfo =
-        make_tuple(pv[0].getZExtValue(), bb_false, getRegisters());
+        make_tuple(firstcase.getZExtValue(), bb_false, getRegisters());
 
     lifters.push_back(newlifter);
     outs() << "created a new path\n";
