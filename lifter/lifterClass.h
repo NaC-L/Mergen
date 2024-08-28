@@ -3,20 +3,62 @@
 #include "FunctionSignatures.h"
 #include "GEPTracker.h"
 #include "includes.h"
+#include <llvm/Analysis/DomConditionCache.h>
 
 #define DEFINE_FUNCTION(name) void lift_##name()
 
+struct InstructionKey {
+  unsigned opcode;
+  bool cast;
+  Value* operand1;
+  union {
+    Value* operand2;
+    Type* destType;
+  };
+
+  InstructionKey(unsigned opcode, Value* operand1, Value* operand2)
+      : opcode(opcode), cast(0), operand1(operand1), operand2(operand2){};
+
+  InstructionKey(unsigned opcode, Value* operand1, Type* destType)
+      : opcode(opcode), cast(1), operand1(operand1), destType(destType){};
+
+  bool operator==(const InstructionKey& other) const {
+    if (cast != other.cast)
+      return false;
+    if (cast) {
+      return opcode == other.opcode && operand1 == other.operand1 &&
+             destType == other.destType;
+    } else {
+      return opcode == other.opcode && operand1 == other.operand1 &&
+             operand2 == other.operand2;
+    }
+  }
+};
+
+struct InstructionKeyHash {
+  uint64_t operator()(const InstructionKey& key) const {
+    uint64_t h1 = std::hash<unsigned>()(key.opcode);
+    uint64_t h2 = reinterpret_cast<uint64_t>(key.operand1);
+    uint64_t h3 = reinterpret_cast<uint64_t>(key.operand2);
+    return h1 ^ (h2 << 1) ^ (h3 << 2);
+  }
+};
+
 class lifterClass {
 public:
-  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder){};
   IRBuilder<>& builder;
+
+  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder){};
+
+  lifterClass(const lifterClass& other) = default;
 
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
+
   DenseMap<Instruction*, APInt> assumptions;
   ZydisDisassembledInstruction* instruction = nullptr;
-  lifterMemoryBuffer buffer;
+  DenseMap<uint64_t, ValueByteReference*> buffer;
   BBInfo blockInfo;
 
   unordered_map<Flag, Value*> FlagList;
@@ -24,12 +66,19 @@ public:
 
   Value* memory;
   Value* TEB;
+  Function* fnc;
 
   void liftInstruction();
   void liftInstructionSemantics();
   void branchHelper(Value* condition, string instname, int numbered,
                     bool reverse = false);
+
+  // init
   void Init_Flags();
+  void initDomTree(Function& F) { DT = new DominatorTree(F); }
+  // end init
+
+  // getters-setters
   Value* setFlag(Flag flag, Value* newValue = nullptr);
   Value* getFlag(Flag flag);
   RegisterMap getRegisters();
@@ -55,13 +104,151 @@ public:
                          string address = "");
   Value* SetOperandValue(ZydisDecodedOperand& op, Value* value,
                          string address = "");
+  Value* GetRFLAGSValue();
+  // end getters-setters
+  // misc
   void callFunctionIR(string functionName,
                       funcsignatures::functioninfo* funcInfo);
   Value* GetEffectiveAddress(ZydisDecodedOperand& op, int possiblesize);
   vector<Value*> parseArgs(funcsignatures::functioninfo* funcInfo);
   FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
                               LLVMContext& context);
-  Value* GetRFLAGSValue();
+
+  Value* computeSignFlag(Value* value);
+  Value* computeZeroFlag(Value* value);
+  Value* computeParityFlag(Value* value);
+  Value* computeAuxFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf);
+  Value* computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf,
+                                Value* sub);
+
+  Value* computeOverflowFlagSub(Value* Lvalue, Value* Rvalue, Value* sub);
+  Value* computeOverflowFlagAdd(Value* Lvalue, Value* Rvalue, Value* add);
+  Value* computeOverflowFlagAdc(Value* Lvalue, Value* Rvalue, Value* cf,
+                                Value* add);
+  // end misc
+  // analysis
+  KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI);
+
+  Value* solveLoad(LoadInst* load);
+
+  SimplifyQuery createSimplifyQuery(Instruction* Inst);
+
+  DomConditionCache* DC = new DomConditionCache();
+
+  unsigned long BIlistsize = 0;
+
+  vector<BranchInst*> BIlist;
+  void RegisterBranch(BranchInst* BI) {
+    //
+    BIlist.push_back(BI);
+  }
+  unsigned int instct = 0;
+  SimplifyQuery* cachedquery;
+
+  DominatorTree* DT;
+  BasicBlock* lastBB = nullptr;
+
+  DominatorTree* getDomTree() { return DT; }
+
+  void updateDomTree(Function& F) {
+    // doesnt make a much difference, but good to have
+    auto getLastBB = &(F.back());
+    if (getLastBB != lastBB)
+      DT->recalculate(F);
+    lastBB = getLastBB;
+  }
+
+  map<uint64_t, uint64_t> pageMap;
+
+  void markMemPaged(uint64_t start, uint64_t end) {
+    //
+    pageMap[start] = end;
+  }
+
+  bool isMemPaged(uint64_t address) {
+    // ideally we want to be able to do this with KnownBits aswell
+    auto it = pageMap.upper_bound(address);
+    if (it == pageMap.begin())
+      return false;
+    --it;
+    return address >= it->first && address < it->second;
+  }
+
+  vector<Instruction*> memInfos;
+  void updateMemoryOp(StoreInst* inst);
+
+  void updateValueReference(Instruction* inst, Value* value, uint64_t address);
+
+  Value* retrieveCombinedValue(uint64_t startAddress, uint64_t byteCount,
+                               Value* orgLoad);
+
+  void addValueReference(Instruction* inst, Value* value, uint64_t address);
+
+  isPaged isValuePaged(Value* address, Instruction* ctxI);
+
+  void pagedCheck(Value* address, Instruction* ctxI);
+
+  void loadMemoryOp(LoadInst* inst);
+
+  void insertMemoryOp(StoreInst* inst);
+  set<APInt, APIntComparator> computePossibleValues(Value* V);
+
+  Value* extractBytes(Value* value, uint64_t startOffset, uint64_t endOffset);
+  // end analysis
+
+  // folders
+  Value* createSelectFolder(Value* C, Value* True, Value* False,
+                            const Twine& Name = "");
+
+  Value* createAddFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+
+  Value* createSubFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+
+  Value* createOrFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+
+  Value* createXorFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+
+  Value* createICMPFolder(CmpInst::Predicate P, Value* LHS, Value* RHS,
+                          const Twine& Name = "");
+
+  Value* createAndFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+
+  Value* createTruncFolder(Value* V, Type* DestTy, const Twine& Name = "");
+
+  Value* createZExtFolder(Value* V, Type* DestTy, const Twine& Name = "");
+
+  Value* createZExtOrTruncFolder(Value* V, Type* DestTy,
+                                 const Twine& Name = "");
+
+  Value* createSExtFolder(Value* V, Type* DestTy, const Twine& Name = "");
+
+  Value* createSExtOrTruncFolder(Value* V, Type* DestTy,
+                                 const Twine& Name = "");
+
+  Value* createLShrFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+
+  Value* createLShrFolder(Value* LHS, uint64_t RHS, const Twine& Name = "");
+
+  Value* createLShrFolder(Value* LHS, APInt RHS, const Twine& Name = "");
+
+  Value* createShlFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+
+  Value* createShlFolder(Value* LHS, uint64_t RHS, const Twine& Name = "");
+
+  Value* createShlFolder(Value* LHS, APInt RHS, const Twine& Name = "");
+  Value* folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
+                      Instruction::BinaryOps opcode);
+  Value* createInstruction(unsigned opcode, Value* operand1, Value* operand2,
+                           Type* destType, const Twine& Name);
+
+  Value* getOrCreate(const InstructionKey& key, const Twine& Name);
+  Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
+                           Value* const op1);
+  std::unordered_map<InstructionKey, Value*, InstructionKeyHash> cache;
+
+  // end folders
+
+  // semantics definition
   DEFINE_FUNCTION(movsb);
   DEFINE_FUNCTION(movaps);
   DEFINE_FUNCTION(mov);
@@ -179,6 +366,7 @@ public:
   DEFINE_FUNCTION(cbw);
   DEFINE_FUNCTION(cwde);
   DEFINE_FUNCTION(cdqe);
+  // end semantics definition
 };
 extern vector<lifterClass*> lifters;
 #endif // LIFTERCLASS_H

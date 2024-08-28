@@ -50,38 +50,38 @@ vector<Value*> lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
 
   auto RspRegister = GetRegisterValue(ZYDIS_REGISTER_RSP);
   if (!funcInfo)
-    return {createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_RAX),
+    return {createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_RAX),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_RCX),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_RCX),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_RDX),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_RDX),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_RBX),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_RBX),
                              Type::getInt64Ty(context)),
             RspRegister,
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_RBP),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_RBP),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_RSI),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_RSI),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_RDI),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_RDI),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_RDI),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_RDI),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_R8),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_R8),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_R9),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_R9),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_R10),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_R10),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_R11),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_R11),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_R12),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_R12),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_R13),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_R13),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_R14),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_R14),
                              Type::getInt64Ty(context)),
-            createZExtFolder(builder, GetRegisterValue(ZYDIS_REGISTER_R15),
+            createZExtFolder(GetRegisterValue(ZYDIS_REGISTER_R15),
                              Type::getInt64Ty(context)),
             getMemory()};
 
@@ -89,8 +89,7 @@ vector<Value*> lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
   for (const auto& arg : funcInfo->args) {
     Value* argValue = GetRegisterValue(arg.reg);
     argValue = createZExtOrTruncFolder(
-        builder, argValue,
-        Type::getIntNTy(context, 8 << (arg.argtype.size - 1)));
+        argValue, Type::getIntNTy(context, 8 << (arg.argtype.size - 1)));
     if (arg.argtype.isPtr)
       argValue = ConvertIntToPTR(builder, argValue);
     //  now convert to pointer if its a pointer
@@ -131,56 +130,55 @@ void lifterClass::callFunctionIR(string functionName,
   // check if the function is exit or something similar to that
 }
 
-Value* computeOverflowFlagAdc(IRBuilder<>& builder, Value* Lvalue,
-                              Value* Rvalue, Value* cf, Value* add) {
-  auto cfc = createZExtOrTruncFolder(builder, cf, add->getType(), "ofadc1");
-  auto ofAdd = createAddFolder(builder, add, cfc, "ofadc2");
-  auto xor0 = createXorFolder(builder, Lvalue, ofAdd, "ofadc3");
-  auto xor1 = createXorFolder(builder, Rvalue, ofAdd, "ofadc4");
-  auto ofAnd = createAndFolder(builder, xor0, xor1, "ofadc5");
-  return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd,
+Value* lifterClass::computeOverflowFlagAdc(Value* Lvalue, Value* Rvalue,
+                                           Value* cf, Value* add) {
+  auto cfc = createZExtOrTruncFolder(cf, add->getType(), "ofadc1");
+  auto ofAdd = createAddFolder(add, cfc, "ofadc2");
+  auto xor0 = createXorFolder(Lvalue, ofAdd, "ofadc3");
+  auto xor1 = createXorFolder(Rvalue, ofAdd, "ofadc4");
+  auto ofAnd = createAndFolder(xor0, xor1, "ofadc5");
+  return createICMPFolder(CmpInst::ICMP_SLT, ofAnd,
                           ConstantInt::get(ofAnd->getType(), 0), "ofadc6");
 }
 
-Value* computeOverflowFlagAdd(IRBuilder<>& builder, Value* Lvalue,
-                              Value* Rvalue, Value* add) {
-  auto xor0 = createXorFolder(builder, Lvalue, add, "ofadd");
-  auto xor1 = createXorFolder(builder, Rvalue, add, "ofadd1");
-  auto ofAnd = createAndFolder(builder, xor0, xor1, "ofadd2");
-  return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd,
+Value* lifterClass::computeOverflowFlagAdd(Value* Lvalue, Value* Rvalue,
+                                           Value* add) {
+  auto xor0 = createXorFolder(Lvalue, add, "ofadd");
+  auto xor1 = createXorFolder(Rvalue, add, "ofadd1");
+  auto ofAnd = createAndFolder(xor0, xor1, "ofadd2");
+  return createICMPFolder(CmpInst::ICMP_SLT, ofAnd,
                           ConstantInt::get(ofAnd->getType(), 0), "ofadd3");
 }
 
-Value* computeOverflowFlagSub(IRBuilder<>& builder, Value* Lvalue,
-                              Value* Rvalue, Value* sub) {
-  auto xor0 = createXorFolder(builder, Lvalue, Rvalue, "ofsub");
-  auto xor1 = createXorFolder(builder, Lvalue, sub, "ofsub1");
-  auto ofAnd = createAndFolder(builder, xor0, xor1, "ofsub2");
-  return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd,
+Value* lifterClass::computeOverflowFlagSub(Value* Lvalue, Value* Rvalue,
+                                           Value* sub) {
+  auto xor0 = createXorFolder(Lvalue, Rvalue, "ofsub");
+  auto xor1 = createXorFolder(Lvalue, sub, "ofsub1");
+  auto ofAnd = createAndFolder(xor0, xor1, "ofsub2");
+  return createICMPFolder(CmpInst::ICMP_SLT, ofAnd,
                           ConstantInt::get(ofAnd->getType(), 0), "ofsub3");
 }
 
-Value* computeOverflowFlagSbb(IRBuilder<>& builder, Value* Lvalue,
-                              Value* Rvalue, Value* cf, Value* sub) {
-  auto cfc = createZExtOrTruncFolder(builder, cf, sub->getType(), "ofsbb");
-  auto ofSub = createSubFolder(builder, sub, cfc, "ofsbb1");
-  auto xor0 = createXorFolder(builder, Lvalue, Rvalue, "ofsbb2");
-  auto xor1 = createXorFolder(builder, Lvalue, ofSub, "ofsbb3");
-  auto ofAnd = createAndFolder(builder, xor0, xor1, "ofsbb4");
-  return createICMPFolder(builder, CmpInst::ICMP_SLT, ofAnd,
+Value* lifterClass::computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue,
+                                           Value* cf, Value* sub) {
+  auto cfc = createZExtOrTruncFolder(cf, sub->getType(), "ofsbb");
+  auto ofSub = createSubFolder(sub, cfc, "ofsbb1");
+  auto xor0 = createXorFolder(Lvalue, Rvalue, "ofsbb2");
+  auto xor1 = createXorFolder(Lvalue, ofSub, "ofsbb3");
+  auto ofAnd = createAndFolder(xor0, xor1, "ofsbb4");
+  return createICMPFolder(CmpInst::ICMP_SLT, ofAnd,
                           ConstantInt::get(ofAnd->getType(), 0), "ofsbb5");
 }
 
-Value* computeAuxFlagSbb(IRBuilder<>& builder, Value* Lvalue, Value* Rvalue,
-                         Value* cf) {
+Value* lifterClass::computeAuxFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf) {
   auto ci15 = ConstantInt::get(Lvalue->getType(), 15);
-  auto and0 = createAndFolder(builder, Lvalue, ci15, "auxsbb1");
-  auto and1 = createAndFolder(builder, Rvalue, ci15, "auxsbb2");
-  auto sub = createSubFolder(builder, and0, and1, "auxsbb3");
+  auto and0 = createAndFolder(Lvalue, ci15, "auxsbb1");
+  auto and1 = createAndFolder(Rvalue, ci15, "auxsbb2");
+  auto sub = createSubFolder(and0, and1, "auxsbb3");
 
-  auto cfc = createZExtOrTruncFolder(builder, cf, sub->getType(), "auxsbb4");
-  auto add = createAddFolder(builder, sub, cfc, "auxsbb5");
-  return createICMPFolder(builder, CmpInst::ICMP_UGT, add, ci15, "auxsbb6");
+  auto cfc = createZExtOrTruncFolder(cf, sub->getType(), "auxsbb4");
+  auto add = createAddFolder(sub, cfc, "auxsbb5");
+  return createICMPFolder(CmpInst::ICMP_UGT, add, ci15, "auxsbb6");
 }
 
 /*
@@ -192,20 +190,19 @@ bool parity =
   (((b * 0x0101010101010101ULL) & 0x8040201008040201ULL) % 0x1FF) & 1;
 The method above takes around 4 operations, but only works on bytes.
 */
-Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
+Value* lifterClass::computeParityFlag(Value* value) {
   LLVMContext& context = value->getContext();
 
   Value* lsb = builder.CreateZExt(
-      createAndFolder(builder, value, ConstantInt::get(value->getType(), 0xFF),
-                      "lsb"),
+      createAndFolder(value, ConstantInt::get(value->getType(), 0xFF), "lsb"),
       Type::getInt64Ty(context));
 
   // s or u rem?
   Value* parity = createAndFolder(
-      builder,
+
       builder.CreateURem(
           createAndFolder(
-              builder,
+
               builder.CreateMul(
                   lsb, ConstantInt::get(lsb->getType(), 0x0101010101010101),
                   "pf1"),
@@ -218,13 +215,13 @@ Value* computeParityFlag(IRBuilder<>& builder, Value* value) {
   return parity; // Returns 1 if even parity, 0 if odd
 }
 
-Value* computeZeroFlag(IRBuilder<>& builder, Value* value) { // x == 0 = zf
-  return createICMPFolder(builder, CmpInst::ICMP_EQ, value,
+Value* lifterClass::computeZeroFlag(Value* value) { // x == 0 = zf
+  return createICMPFolder(CmpInst::ICMP_EQ, value,
                           ConstantInt::get(value->getType(), 0), "zeroflag");
 }
 
-Value* computeSignFlag(IRBuilder<>& builder, Value* value) { // x < 0 = sf
-  return createICMPFolder(builder, CmpInst::ICMP_SLT, value,
+Value* lifterClass::computeSignFlag(Value* value) { // x < 0 = sf
+  return createICMPFolder(CmpInst::ICMP_SLT, value,
                           ConstantInt::get(value->getType(), 0), "signflag");
 }
 
@@ -254,9 +251,9 @@ void lifterClass::branchHelper(Value* condition, string instname, int numbered,
   Value* next_jump = nullptr;
 
   if (!reverse)
-    next_jump = createSelectFolder(builder, condition, true_jump, false_jump);
+    next_jump = createSelectFolder(condition, true_jump, false_jump);
   else
-    next_jump = createSelectFolder(builder, condition, false_jump, true_jump);
+    next_jump = createSelectFolder(condition, false_jump, true_jump);
 
   uint64_t destination = 0;
   solvePath(function, destination, next_jump);
@@ -372,19 +369,19 @@ void lifterClass::lift_mov() {
   switch (instruction->info.mnemonic) {
   case ZYDIS_MNEMONIC_MOVSX: {
     Rvalue = createSExtFolder(
-        builder, Rvalue, Type::getIntNTy(context, dest.size),
+        Rvalue, Type::getIntNTy(context, dest.size),
         "movsx-" + to_string(instruction->runtime_address) + "-");
     break;
   }
   case ZYDIS_MNEMONIC_MOVZX: {
     Rvalue = createZExtFolder(
-        builder, Rvalue, Type::getIntNTy(context, dest.size),
+        Rvalue, Type::getIntNTy(context, dest.size),
         "movzx-" + to_string(instruction->runtime_address) + "-");
     break;
   }
   case ZYDIS_MNEMONIC_MOVSXD: {
     Rvalue = createSExtFolder(
-        builder, Rvalue, Type::getIntNTy(context, dest.size),
+        Rvalue, Type::getIntNTy(context, dest.size),
         "movsxd-" + to_string(instruction->runtime_address) + "-");
     break;
   }
@@ -410,12 +407,12 @@ void lifterClass::lift_cmovbz() {
   Value* zf = getFlag(FLAG_ZF);
   Value* cf = getFlag(FLAG_CF);
 
-  Value* condition = createOrFolder(builder, zf, cf, "cmovbz-or");
+  Value* condition = createOrFolder(zf, cf, "cmovbz-or");
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, condition, Rvalue, Lvalue);
+  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -430,11 +427,11 @@ void lifterClass::lift_cmovnbz() {
   Value* cf = getFlag(FLAG_CF);
   Value* zf = getFlag(FLAG_ZF);
 
-  Value* nbeCondition = createAndFolder(builder, builder.CreateNot(cf),
+  Value* nbeCondition = createAndFolder(builder.CreateNot(cf),
                                         builder.CreateNot(zf), "nbeCondition");
 
   Value* resultValue =
-      createSelectFolder(builder, nbeCondition, Rvalue, Lvalue, "cmovnbe");
+      createSelectFolder(nbeCondition, Rvalue, Lvalue, "cmovnbe");
 
   SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
 }
@@ -448,7 +445,7 @@ void lifterClass::lift_cmovz() {
 
   Value* zf = getFlag(FLAG_ZF);
 
-  Value* resultValue = createSelectFolder(builder, zf, Rvalue, Lvalue, "cmovz");
+  Value* resultValue = createSelectFolder(zf, Rvalue, Lvalue, "cmovz");
 
   SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
 }
@@ -459,13 +456,13 @@ void lifterClass::lift_cmovnz() {
   auto src = instruction->operands[1];
 
   Value* zf = getFlag(FLAG_ZF);
-  zf = createICMPFolder(builder, CmpInst::ICMP_EQ, zf,
+  zf = createICMPFolder(CmpInst::ICMP_EQ, zf,
                         ConstantInt::get(Type::getInt1Ty(context), 0));
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, zf, Rvalue, Lvalue);
+  Value* result = createSelectFolder(zf, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -477,12 +474,12 @@ void lifterClass::lift_cmovl() {
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
 
-  Value* condition = createICMPFolder(builder, CmpInst::ICMP_NE, sf, of);
+  Value* condition = createICMPFolder(CmpInst::ICMP_NE, sf, of);
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, condition, Rvalue, Lvalue);
+  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -494,14 +491,13 @@ void lifterClass::lift_cmovb() {
 
   Value* cf = getFlag(FLAG_CF);
 
-  Value* condition =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, cf,
-                       ConstantInt::get(Type::getInt1Ty(context), 1));
+  Value* condition = createICMPFolder(
+      CmpInst::ICMP_EQ, cf, ConstantInt::get(Type::getInt1Ty(context), 1));
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, condition, Rvalue, Lvalue);
+  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -515,8 +511,8 @@ void lifterClass::lift_cmovnb() {
 
   Value* cf = getFlag(FLAG_CF);
 
-  Value* resultValue = createSelectFolder(builder, builder.CreateNot(cf),
-                                          Rvalue, Lvalue, "cmovnb");
+  Value* resultValue =
+      createSelectFolder(builder.CreateNot(cf), Rvalue, Lvalue, "cmovnb");
 
   SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
 }
@@ -528,14 +524,13 @@ void lifterClass::lift_cmovns() {
 
   Value* sf = getFlag(FLAG_SF);
 
-  Value* condition =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, sf,
-                       ConstantInt::get(Type::getInt1Ty(context), 0));
+  Value* condition = createICMPFolder(
+      CmpInst::ICMP_EQ, sf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, condition, Rvalue, Lvalue);
+  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -546,7 +541,7 @@ void lifterClass::lift_cmovnl() {
 
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
-  Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ, sf, of);
+  Value* condition = createICMPFolder(CmpInst::ICMP_EQ, sf, of);
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
@@ -556,7 +551,7 @@ void lifterClass::lift_cmovnl() {
   printvalue(Lvalue);
   printvalue(Rvalue);
 
-  Value* result = createSelectFolder(builder, condition, Rvalue, Lvalue);
+  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -569,7 +564,7 @@ void lifterClass::lift_cmovs() {
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, sf, Rvalue, Lvalue);
+  Value* result = createSelectFolder(sf, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -584,14 +579,13 @@ void lifterClass::lift_cmovnle() {
   Value* of = getFlag(FLAG_OF);
 
   Value* condition = createAndFolder(
-      builder, builder.CreateNot(zf, "notZF"),
-      createICMPFolder(builder, CmpInst::ICMP_EQ, sf, of, "sf_eq_of"),
-      "cmovnle_cond");
+      builder.CreateNot(zf, "notZF"),
+      createICMPFolder(CmpInst::ICMP_EQ, sf, of, "sf_eq_of"), "cmovnle_cond");
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, condition, Rvalue, Lvalue);
+  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -604,13 +598,13 @@ void lifterClass::lift_cmovle() {
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
 
-  Value* sf_neq_of = createICMPFolder(builder, CmpInst::ICMP_NE, sf, of);
-  Value* condition = createOrFolder(builder, zf, sf_neq_of, "cmovle-or");
+  Value* sf_neq_of = createICMPFolder(CmpInst::ICMP_NE, sf, of);
+  Value* condition = createOrFolder(zf, sf_neq_of, "cmovle-or");
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, condition, Rvalue, Lvalue);
+  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -624,7 +618,7 @@ void lifterClass::lift_cmovo() {
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, of, Rvalue, Lvalue);
+  Value* result = createSelectFolder(of, Rvalue, Lvalue);
   printvalue(Lvalue);
   printvalue(Rvalue);
   printvalue(of);
@@ -642,7 +636,7 @@ void lifterClass::lift_cmovno() {
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, of, Rvalue, Lvalue);
+  Value* result = createSelectFolder(of, Rvalue, Lvalue);
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
       SetOperandValue(dest, result);
@@ -658,7 +652,7 @@ void lifterClass::lift_cmovp() {
   Value* Lvalue = GetOperandValue(dest, dest.size);
   printvalue(pf) printvalue(Lvalue) printvalue(Rvalue)
 
-      Value* result = createSelectFolder(builder, pf, Rvalue, Lvalue);
+      Value* result = createSelectFolder(pf, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -674,7 +668,7 @@ void lifterClass::lift_cmovnp() {
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(builder, pf, Rvalue, Lvalue);
+  Value* result = createSelectFolder(pf, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
 }
@@ -694,7 +688,7 @@ void lifterClass::lift_call() {
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     8); // assuming its x64
-  auto result = createSubFolder(builder, RspValue, val, "pushing_newrsp");
+  auto result = createSubFolder(RspValue, val, "pushing_newrsp");
 
   SetOperandValue(rsp, result, to_string(instruction->runtime_address));
   ; // sub rsp 8 first,
@@ -802,7 +796,7 @@ void lifterClass::lift_ret() {
     block->setName("real_ret");
     auto rax = GetRegisterValue(ZYDIS_REGISTER_RAX);
     builder.CreateRet(
-        createZExtFolder(builder, rax, Type::getInt64Ty(rax->getContext())));
+        createZExtFolder(rax, Type::getInt64Ty(rax->getContext())));
     Function* originalFunc_finalnopt = builder.GetInsertBlock()->getParent();
 
     std::string Filename_finalnopt = "output_finalnoopt.ll";
@@ -834,15 +828,14 @@ void lifterClass::lift_ret() {
     auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                       8); // assuming its x64
     auto result = createAddFolder(
-        builder, rspvalue, val,
+        rspvalue, val,
         "ret-new-rsp-" + to_string(instruction->runtime_address) + "-");
 
     if (instruction->operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
       rspaddr = instruction->operands[3];
       result = createAddFolder(
-          builder, result,
-          ConstantInt::get(result->getType(),
-                           instruction->operands[0].imm.value.u));
+          result, ConstantInt::get(result->getType(),
+                                   instruction->operands[0].imm.value.u));
     }
 
     SetRegisterValue(rsp, result); // then add rsp 8
@@ -859,18 +852,18 @@ void lifterClass::lift_jmp() {
   auto Value = GetOperandValue(dest, 64);
   auto ripval = GetRegisterValue(ZYDIS_REGISTER_RIP);
   auto newRip = createAddFolder(
-      builder, Value, ripval,
+      Value, ripval,
       "jump-xd-" + to_string(instruction->runtime_address) + "-");
 
   jmpcount++;
   auto targetv = GetOperandValue(dest, 64);
-  auto trunc = createZExtOrTruncFolder(
-      builder, targetv, Type::getInt64Ty(context), "jmp-register");
+  auto trunc = createZExtOrTruncFolder(targetv, Type::getInt64Ty(context),
+                                       "jmp-register");
   printvalue(trunc);
   uint64_t destination = 0;
   auto function = builder.GetInsertBlock()->getParent();
   if (dest.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
-    trunc = createAddFolder(builder, trunc, ripval);
+    trunc = createAddFolder(trunc, ripval);
   }
   solvePath(function, destination, trunc);
   SetRegisterValue(ZYDIS_REGISTER_RIP, newRip);
@@ -887,7 +880,7 @@ void lifterClass::lift_jnz() {
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
 
-  // auto newRip = createAddFolder(builder, Value, ripval, "jnz");
+  // auto newRip = createAddFolder( Value, ripval, "jnz");
 
   printvalue(zf);
 
@@ -905,7 +898,7 @@ void lifterClass::lift_js() {
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
 
-  // auto newRip = createAddFolder(builder, Value, ripval, "js");
+  // auto newRip = createAddFolder( Value, ripval, "js");
 
   branchHelper(sf, "js", branchnumber);
 
@@ -920,7 +913,7 @@ void lifterClass::lift_jns() {
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
 
-  // auto newRip = createAddFolder(builder, Value, ripval, "jns");
+  // auto newRip = createAddFolder( Value, ripval, "jns");
 
   branchHelper(sf, "jns", branchnumber, 1);
 
@@ -938,7 +931,7 @@ void lifterClass::lift_jz() {
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
 
-  // auto newRip = createAddFolder(builder, Value, ripval, "jnz");
+  // auto newRip = createAddFolder( Value, ripval, "jnz");
 
   branchHelper(zf, "jz", branchnumber);
 
@@ -955,11 +948,11 @@ void lifterClass::lift_jle() {
   // auto dest = instruction->operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-  // auto newRip = createAddFolder(builder, Value, ripval, "jle");
+  // auto newRip = createAddFolder( Value, ripval, "jle");
 
   // Check if SF != OF or ZF is set
-  auto sf_neq_of = createXorFolder(builder, sf, of, "jle_SF_NEQ_OF");
-  auto condition = createOrFolder(builder, sf_neq_of, zf, "jle_Condition");
+  auto sf_neq_of = createXorFolder(sf, of, "jle_SF_NEQ_OF");
+  auto condition = createOrFolder(sf_neq_of, zf, "jle_Condition");
 
   branchHelper(condition, "jle", branchnumber);
 
@@ -973,10 +966,10 @@ void lifterClass::lift_jl() {
   // auto dest = instruction->operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-  // auto newRip = createAddFolder(builder, Value, ripval, "jl");
+  // auto newRip = createAddFolder( Value, ripval, "jl");
   printvalue(sf);
   printvalue(of);
-  auto condition = createXorFolder(builder, sf, of, "jl_Condition");
+  auto condition = createXorFolder(sf, of, "jl_Condition");
 
   branchHelper(condition, "jl", branchnumber);
 
@@ -989,12 +982,12 @@ void lifterClass::lift_jnl() {
   // auto dest = instruction->operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-  // auto newRip = createAddFolder(builder, Value, ripval, "jnl");
+  // auto newRip = createAddFolder( Value, ripval, "jnl");
 
   printvalue(sf);
   printvalue(of);
 
-  auto condition = createXorFolder(builder, sf, of, "jl_condition");
+  auto condition = createXorFolder(sf, of, "jl_condition");
 
   branchHelper(condition, "jnl", branchnumber, 1);
 
@@ -1011,11 +1004,11 @@ void lifterClass::lift_jnle() {
   // auto dest = instruction->operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-  // auto newRip = createAddFolder(builder, Value, ripval, "jle");
+  // auto newRip = createAddFolder( Value, ripval, "jle");
 
   // Check if SF != OF or ZF is set
-  auto sf_neq_of = createXorFolder(builder, sf, of, "jle_SF_NEQ_OF");
-  auto condition = createOrFolder(builder, sf_neq_of, zf, "jle_Condition");
+  auto sf_neq_of = createXorFolder(sf, of, "jle_SF_NEQ_OF");
+  auto condition = createOrFolder(sf_neq_of, zf, "jle_Condition");
 
   branchHelper(condition, "jnle", branchnumber, 1);
 
@@ -1030,9 +1023,9 @@ void lifterClass::lift_jbe() {
 
       // auto Value = GetOperandValue( dest, 64);
       // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-      // auto newRip = createAddFolder(builder, Value, ripval, "jbe");
+      // auto newRip = createAddFolder( Value, ripval, "jbe");
 
-      auto condition = createOrFolder(builder, cf, zf, "jbe_Condition");
+      auto condition = createOrFolder(cf, zf, "jbe_Condition");
 
   branchHelper(condition, "jbe", branchnumber);
 
@@ -1047,7 +1040,7 @@ void lifterClass::lift_jb() {
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-  // auto newRip = createAddFolder(builder, Value, ripval, "jb");
+  // auto newRip = createAddFolder( Value, ripval, "jb");
 
   auto condition = cf;
   branchHelper(condition, "jb", branchnumber);
@@ -1063,7 +1056,7 @@ void lifterClass::lift_jnb() {
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-  // auto newRip = createAddFolder(builder, Value, ripval, "jnb");
+  // auto newRip = createAddFolder( Value, ripval, "jnb");
 
   auto condition = cf;
   branchHelper(condition, "jnb", branchnumber, 1);
@@ -1078,9 +1071,9 @@ void lifterClass::lift_jnbe() {
 
       // auto Value = GetOperandValue( dest, 64);
       // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
-      // auto newRip = createAddFolder(builder, Value, ripval, "jbe");
+      // auto newRip = createAddFolder( Value, ripval, "jbe");
 
-      auto condition = createOrFolder(builder, cf, zf, "jbe_Condition");
+      auto condition = createOrFolder(cf, zf, "jbe_Condition");
 
   branchHelper(condition, "jnbe", branchnumber, 1);
 
@@ -1096,7 +1089,7 @@ void lifterClass::lift_jo() {
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
 
-  // auto newRip = createAddFolder(builder, Value, ripval, "jo");
+  // auto newRip = createAddFolder( Value, ripval, "jo");
 
   printvalue(of);
   branchHelper(of, "jo", branchnumber);
@@ -1113,7 +1106,7 @@ void lifterClass::lift_jno() {
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
 
-  // auto newRip = createAddFolder(builder, Value, ripval, "jno");
+  // auto newRip = createAddFolder( Value, ripval, "jno");
 
   branchHelper(of, "jno", branchnumber, 1);
 
@@ -1129,7 +1122,7 @@ void lifterClass::lift_jp() {
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
 
-  // auto newRip = createAddFolder(builder, Value, ripval, "jp");
+  // auto newRip = createAddFolder( Value, ripval, "jp");
 
   branchHelper(pf, "jp", branchnumber);
 
@@ -1145,7 +1138,7 @@ void lifterClass::lift_jnp() {
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
 
-  // auto newRip = createAddFolder(builder, Value, ripval, "jnp");
+  // auto newRip = createAddFolder( Value, ripval, "jnp");
 
   printvalue(pf);
   branchHelper(pf, "jnp", branchnumber, 1);
@@ -1162,22 +1155,20 @@ void lifterClass::lift_sbb() {
 
   Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* cf =
-      createZExtOrTruncFolder(builder, getFlag(FLAG_CF), Rvalue->getType());
+  Value* cf = createZExtOrTruncFolder(getFlag(FLAG_CF), Rvalue->getType());
 
-  Value* srcPlusCF = createAddFolder(builder, Rvalue, cf, "srcPlusCF");
-  Value* tmpResult =
-      createSubFolder(builder, Lvalue, srcPlusCF, "sbbTempResult");
+  Value* srcPlusCF = createAddFolder(Rvalue, cf, "srcPlusCF");
+  Value* tmpResult = createSubFolder(Lvalue, srcPlusCF, "sbbTempResult");
   SetOperandValue(dest, tmpResult);
 
   Value* newCF =
-      createICMPFolder(builder, CmpInst::ICMP_ULT, Lvalue, srcPlusCF, "newCF");
-  Value* sf = computeSignFlag(builder, tmpResult);
-  Value* zf = computeZeroFlag(builder, tmpResult);
-  Value* pf = computeParityFlag(builder, tmpResult);
-  Value* af = computeAuxFlagSbb(builder, Lvalue, Rvalue, cf);
+      createICMPFolder(CmpInst::ICMP_ULT, Lvalue, srcPlusCF, "newCF");
+  Value* sf = computeSignFlag(tmpResult);
+  Value* zf = computeZeroFlag(tmpResult);
+  Value* pf = computeParityFlag(tmpResult);
+  Value* af = computeAuxFlagSbb(Lvalue, Rvalue, cf);
 
-  auto of = computeOverflowFlagSbb(builder, Lvalue, Rvalue, cf, tmpResult);
+  auto of = computeOverflowFlagSbb(Lvalue, Rvalue, cf, tmpResult);
 
   setFlag(FLAG_CF, newCF);
   setFlag(FLAG_SF, sf);
@@ -1234,50 +1225,46 @@ void lifterClass::lift_rcl() {
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
   auto actualCount = createAndFolder(
-      builder, countValue, ConstantInt::get(countValue->getType(), maskC),
+      countValue, ConstantInt::get(countValue->getType(), maskC),
       "actualCount");
 
   auto wideType = Type::getIntNTy(context, dest.size * 2);
-  auto wideLvalue = createZExtFolder(builder, Lvalue, wideType);
-  auto cf_extended = createZExtFolder(builder, carryFlag, wideType);
-  auto shiftedInCF =
-      createShlFolder(builder, cf_extended, dest.size, "shiftedincf");
-  wideLvalue = createOrFolder(
-      builder, wideLvalue,
-      createZExtFolder(builder, shiftedInCF, wideType, "shiftedInCFExtended"));
+  auto wideLvalue = createZExtFolder(Lvalue, wideType);
+  auto cf_extended = createZExtFolder(carryFlag, wideType);
+  auto shiftedInCF = createShlFolder(cf_extended, dest.size, "shiftedincf");
+  wideLvalue =
+      createOrFolder(wideLvalue, createZExtFolder(shiftedInCF, wideType,
+                                                  "shiftedInCFExtended"));
 
   auto leftShifted = createShlFolder(
-      builder, wideLvalue,
-      createZExtFolder(builder, actualCount, wideType, "actualCountExtended"),
+      wideLvalue,
+      createZExtFolder(actualCount, wideType, "actualCountExtended"),
       "leftshifted");
-  auto rightShiftAmount = createSubFolder(
-      builder, ConstantInt::get(actualCount->getType(), dest.size), actualCount,
-      "rightshiftamount");
+  auto rightShiftAmount =
+      createSubFolder(ConstantInt::get(actualCount->getType(), dest.size),
+                      actualCount, "rightshiftamount");
   auto rightShifted = createLShrFolder(
-      builder, wideLvalue,
-      createZExtFolder(builder, rightShiftAmount, wideType), "rightshifted");
+      wideLvalue, createZExtFolder(rightShiftAmount, wideType), "rightshifted");
   auto rotated =
-      createOrFolder(builder, leftShifted,
-                     createZExtFolder(builder, rightShifted, wideType,
-                                      "rightShiftedExtended"));
+      createOrFolder(leftShifted, createZExtFolder(rightShifted, wideType,
+                                                   "rightShiftedExtended"));
 
-  auto result = createZExtOrTruncFolder(builder, rotated, Lvalue->getType());
+  auto result = createZExtOrTruncFolder(rotated, Lvalue->getType());
 
   auto newCFBitPosition = ConstantInt::get(rotated->getType(), dest.size - 1);
-  auto newCF = createZExtOrTruncFolder(
-      builder, createLShrFolder(builder, rotated, newCFBitPosition),
-      Type::getInt1Ty(context), "rclnewcf");
+  auto newCF =
+      createZExtOrTruncFolder(createLShrFolder(rotated, newCFBitPosition),
+                              Type::getInt1Ty(context), "rclnewcf");
 
-  auto msbAfterRotate = createZExtOrTruncFolder(
-      builder, createLShrFolder(builder, result, dest.size - 1),
-      Type::getInt1Ty(context), "rclmsbafterrotate");
+  auto msbAfterRotate =
+      createZExtOrTruncFolder(createLShrFolder(result, dest.size - 1),
+                              Type::getInt1Ty(context), "rclmsbafterrotate");
   auto isCountOne =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, actualCount,
+      createICMPFolder(CmpInst::ICMP_EQ, actualCount,
                        ConstantInt::get(actualCount->getType(), 1));
-  auto newOF = createZExtOrTruncFolder(
-      builder, createXorFolder(builder, newCF, msbAfterRotate),
-      Type::getInt1Ty(context));
-  newOF = createSelectFolder(builder, isCountOne, newOF, getFlag(FLAG_OF));
+  auto newOF = createZExtOrTruncFolder(createXorFolder(newCF, msbAfterRotate),
+                                       Type::getInt1Ty(context));
+  newOF = createSelectFolder(isCountOne, newOF, getFlag(FLAG_OF));
 
   printvalue(Lvalue) printvalue(countValue) printvalue(carryFlag)
       printvalue(cf_extended) printvalue(shiftedInCF) printvalue(actualCount)
@@ -1330,51 +1317,48 @@ void lifterClass::lift_rcr() {
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
   auto actualCount = createAndFolder(
-      builder, countValue, ConstantInt::get(countValue->getType(), maskC),
+      countValue, ConstantInt::get(countValue->getType(), maskC),
       "actualCount");
   auto wideType = Type::getIntNTy(context, dest.size * 2);
-  auto wideLvalue = createZExtFolder(builder, Lvalue, wideType);
-  auto shiftedInCF = createShlFolder(
-      builder, createZExtFolder(builder, carryFlag, wideType), dest.size);
-  wideLvalue = createOrFolder(
-      builder, wideLvalue,
-      createZExtFolder(builder, shiftedInCF, wideType, "shiftedInCFExtended"));
+  auto wideLvalue = createZExtFolder(Lvalue, wideType);
+  auto shiftedInCF =
+      createShlFolder(createZExtFolder(carryFlag, wideType), dest.size);
+  wideLvalue =
+      createOrFolder(wideLvalue, createZExtFolder(shiftedInCF, wideType,
+                                                  "shiftedInCFExtended"));
 
   auto rightShifted = createLShrFolder(
-      builder, wideLvalue,
-      createZExtFolder(builder, actualCount, wideType, "actualCountExtended"),
+      wideLvalue,
+      createZExtFolder(actualCount, wideType, "actualCountExtended"),
       "rightshifted");
   auto leftShiftAmount = createSubFolder(
-      builder, ConstantInt::get(actualCount->getType(), dest.size),
-      actualCount);
+      ConstantInt::get(actualCount->getType(), dest.size), actualCount);
   auto leftShifted =
-      createShlFolder(builder, wideLvalue,
-                      createZExtFolder(builder, leftShiftAmount, wideType,
-                                       "leftShiftAmountExtended"));
-  auto rotated = createOrFolder(builder, rightShifted, leftShifted);
+      createShlFolder(wideLvalue, createZExtFolder(leftShiftAmount, wideType,
+                                                   "leftShiftAmountExtended"));
+  auto rotated = createOrFolder(rightShifted, leftShifted);
 
-  auto result = createZExtOrTruncFolder(builder, rotated, Lvalue->getType());
+  auto result = createZExtOrTruncFolder(rotated, Lvalue->getType());
 
   auto newCFBitPosition = ConstantInt::get(rotated->getType(), dest.size - 1);
-  auto newCF = createZExtOrTruncFolder(
-      builder, createLShrFolder(builder, rotated, newCFBitPosition),
-      Type::getInt1Ty(context), "rcrcf");
+  auto newCF =
+      createZExtOrTruncFolder(createLShrFolder(rotated, newCFBitPosition),
+                              Type::getInt1Ty(context), "rcrcf");
 
-  auto msbAfterRotate = createZExtOrTruncFolder(
-      builder, createLShrFolder(builder, result, dest.size - 1),
-      Type::getInt1Ty(context), "rcrmsb");
+  auto msbAfterRotate =
+      createZExtOrTruncFolder(createLShrFolder(result, dest.size - 1),
+                              Type::getInt1Ty(context), "rcrmsb");
   auto newOF = createSelectFolder(
-      builder,
-      createICMPFolder(builder, CmpInst::ICMP_EQ, actualCount,
+      createICMPFolder(CmpInst::ICMP_EQ, actualCount,
                        ConstantInt::get(actualCount->getType(), 1)),
-      createXorFolder(builder, newCF, msbAfterRotate), getFlag(FLAG_OF));
+      createXorFolder(newCF, msbAfterRotate), getFlag(FLAG_OF));
 
   Value* isCountOne =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, actualCount,
+      createICMPFolder(CmpInst::ICMP_EQ, actualCount,
                        ConstantInt::get(actualCount->getType(), 1));
 
-  newCF = createSelectFolder(builder, isCountOne, newOF, getFlag(FLAG_OF));
-  result = createSelectFolder(builder, isCountOne, result, Lvalue);
+  newCF = createSelectFolder(isCountOne, newOF, getFlag(FLAG_OF));
+  result = createSelectFolder(isCountOne, result, Lvalue);
 
   SetOperandValue(dest, result);
   setFlag(FLAG_CF, newCF);
@@ -1386,9 +1370,9 @@ void lifterClass::lift_not() {
   auto dest = instruction->operands[0];
 
   auto Rvalue = GetOperandValue(dest, dest.size);
-  Rvalue = createXorFolder(
-      builder, Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
-      "realnot-" + to_string(instruction->runtime_address) + "-");
+  Rvalue = createXorFolder(Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
+                           "realnot-" +
+                               to_string(instruction->runtime_address) + "-");
   SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
 
   printvalue(Rvalue);
@@ -1401,23 +1385,21 @@ void lifterClass::lift_neg() {
   auto dest = instruction->operands[0];
   auto Rvalue = GetOperandValue(dest, dest.size);
 
-  auto cf = createICMPFolder(builder, CmpInst::ICMP_NE, Rvalue,
+  auto cf = createICMPFolder(CmpInst::ICMP_NE, Rvalue,
                              ConstantInt::get(Rvalue->getType(), 0), "cf");
   auto result = createSubFolder(
-      builder, builder.getIntN(Rvalue->getType()->getIntegerBitWidth(), 0),
-      Rvalue, "neg");
+      builder.getIntN(Rvalue->getType()->getIntegerBitWidth(), 0), Rvalue,
+      "neg");
   SetOperandValue(dest, result);
 
-  auto sf = computeSignFlag(builder, result);
-  auto zf = computeZeroFlag(builder, result);
-  auto pf = computeParityFlag(builder, result);
+  auto sf = computeSignFlag(result);
+  auto zf = computeZeroFlag(result);
+  auto pf = computeParityFlag(result);
   Value* fifteen = ConstantInt::get(Rvalue->getType(), 0xf);
-  auto af = createICMPFolder(builder, CmpInst::ICMP_NE,
-                             createAndFolder(builder, Rvalue, fifteen),
+  auto af = createICMPFolder(CmpInst::ICMP_NE, createAndFolder(Rvalue, fifteen),
                              ConstantInt::get(Rvalue->getType(), 0), "af");
-  auto isZero =
-      createICMPFolder(builder, CmpInst::ICMP_NE, Rvalue,
-                       ConstantInt::get(Rvalue->getType(), 0), "zero");
+  auto isZero = createICMPFolder(
+      CmpInst::ICMP_NE, Rvalue, ConstantInt::get(Rvalue->getType(), 0), "zero");
 
   printvalue(Rvalue) printvalue(result) printvalue(sf);
   // OF is not cleared?
@@ -1426,9 +1408,8 @@ void lifterClass::lift_neg() {
   if (dest.size > 32)
     of = ConstantInt::getSigned(Rvalue->getType(), 0);
   else {
-    of = createICMPFolder(builder, CmpInst::ICMP_EQ, result, Rvalue);
-    of = createSelectFolder(builder, isZero, of,
-                            ConstantInt::get(of->getType(), 0));
+    of = createICMPFolder(CmpInst::ICMP_EQ, result, Rvalue);
+    of = createSelectFolder(isZero, of, ConstantInt::get(of->getType(), 0));
   }
 
   printvalue(of);
@@ -1511,43 +1492,40 @@ void lifterClass::lift_sar() {
   uint8_t maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
   Value* clampedCount = createAndFolder(
-      builder, countValue, ConstantInt::get(countValue->getType(), maskC),
-      "sarclamp");
+      countValue, ConstantInt::get(countValue->getType(), maskC), "sarclamp");
   // ashrfolder
   Value* result = builder.CreateAShr(
       Lvalue, clampedCount,
       "sar-lshr-" + to_string(instruction->runtime_address) + "-");
 
   Value* isZeroed =
-      createICMPFolder(builder, CmpInst::ICMP_UGT, clampedCount,
+      createICMPFolder(CmpInst::ICMP_UGT, clampedCount,
                        ConstantInt::get(clampedCount->getType(), bitWidth - 1));
-  result = createSelectFolder(builder, isZeroed, zero, result);
+  result = createSelectFolder(isZeroed, zero, result);
 
-  auto cfRvalue = createSubFolder(builder, clampedCount,
+  auto cfRvalue = createSubFolder(clampedCount,
                                   ConstantInt::get(clampedCount->getType(), 1));
-  auto cfShl = createShlFolder(
-      builder, ConstantInt::get(cfRvalue->getType(), 1), cfRvalue);
-  auto cfAnd = createAndFolder(builder, cfShl, Lvalue);
-  auto cfValue = createICMPFolder(builder, CmpInst::ICMP_NE, cfAnd,
+  auto cfShl =
+      createShlFolder(ConstantInt::get(cfRvalue->getType(), 1), cfRvalue);
+  auto cfAnd = createAndFolder(cfShl, Lvalue);
+  auto cfValue = createICMPFolder(CmpInst::ICMP_NE, cfAnd,
                                   ConstantInt::get(cfAnd->getType(), 0));
 
   Value* isCountOne =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, clampedCount,
+      createICMPFolder(CmpInst::ICMP_EQ, clampedCount,
                        ConstantInt::get(clampedCount->getType(), 1));
-  Value* of = createSelectFolder(builder, isCountOne, builder.getInt1(0),
-                                 getFlag(FLAG_OF));
+  Value* of =
+      createSelectFolder(isCountOne, builder.getInt1(0), getFlag(FLAG_OF));
 
-  Value* isNotZero =
-      createICMPFolder(builder, CmpInst::ICMP_NE, clampedCount, zero);
+  Value* isNotZero = createICMPFolder(CmpInst::ICMP_NE, clampedCount, zero);
   Value* oldcf = getFlag(FLAG_CF);
-  cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf);
+  cfValue = createSelectFolder(isNotZero, cfValue, oldcf);
   cfValue = createSelectFolder(
-      builder, isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)),
-      cfValue);
+      isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)), cfValue);
 
-  Value* sf = computeSignFlag(builder, result);
-  Value* zf = computeZeroFlag(builder, result);
-  Value* pf = computeParityFlag(builder, result);
+  Value* sf = computeSignFlag(result);
+  Value* zf = computeZeroFlag(result);
+  Value* pf = computeParityFlag(result);
   printvalue(Lvalue) printvalue2(bitWidth) printvalue(countValue);
   printvalue(clampedCount) printvalue(result) printvalue(isNotZero);
   printvalue(cfValue) printvalue(oldcf);
@@ -1573,43 +1551,41 @@ void lifterClass::lift_shr() {
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
   Value* clampedCount = createAndFolder(
-      builder, countValue, ConstantInt::get(countValue->getType(), maskC),
-      "shrclamp");
+      countValue, ConstantInt::get(countValue->getType(), maskC), "shrclamp");
 
   Value* result = createLShrFolder(
-      builder, Lvalue, clampedCount,
+      Lvalue, clampedCount,
       "shr-lshr-" + to_string(instruction->runtime_address) + "-");
   Value* zero = ConstantInt::get(countValue->getType(), 0);
   Value* isZeroed =
-      createICMPFolder(builder, CmpInst::ICMP_UGT, clampedCount,
+      createICMPFolder(CmpInst::ICMP_UGT, clampedCount,
                        ConstantInt::get(clampedCount->getType(), bitWidth - 1));
-  result = createSelectFolder(builder, isZeroed, zero, result, "shiftValue");
+  result = createSelectFolder(isZeroed, zero, result, "shiftValue");
 
   Value* cfValue = builder.CreateTrunc(
       createLShrFolder(
-          builder, Lvalue,
-          createSubFolder(builder, clampedCount,
+          Lvalue,
+          createSubFolder(clampedCount,
                           ConstantInt::get(clampedCount->getType(), 1)),
           "shrcf"),
       builder.getInt1Ty());
 
   Value* isCountOne =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, clampedCount,
+      createICMPFolder(CmpInst::ICMP_EQ, clampedCount,
                        ConstantInt::get(clampedCount->getType(), 1));
-  Value* of = createICMPFolder(builder, CmpInst::ICMP_SLT, Lvalue,
+  Value* of = createICMPFolder(CmpInst::ICMP_SLT, Lvalue,
                                ConstantInt::get(Lvalue->getType(), 0));
-  of = createSelectFolder(builder, isCountOne, of, getFlag(FLAG_OF), "of");
+  of = createSelectFolder(isCountOne, of, getFlag(FLAG_OF), "of");
 
-  Value* isNotZero =
-      createICMPFolder(builder, CmpInst::ICMP_NE, clampedCount, zero);
+  Value* isNotZero = createICMPFolder(CmpInst::ICMP_NE, clampedCount, zero);
   Value* oldcf = getFlag(FLAG_CF);
-  cfValue = createSelectFolder(builder, isNotZero, cfValue, oldcf, "cfValue1");
+  cfValue = createSelectFolder(isNotZero, cfValue, oldcf, "cfValue1");
   cfValue = createSelectFolder(
-      builder, isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)),
-      cfValue, "cfValue2");
-  Value* sf = computeSignFlag(builder, result);
-  Value* zf = computeZeroFlag(builder, result);
-  Value* pf = computeParityFlag(builder, result);
+      isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)), cfValue,
+      "cfValue2");
+  Value* sf = computeSignFlag(result);
+  Value* zf = computeZeroFlag(result);
+  Value* pf = computeParityFlag(result);
   printvalue(sf);
   printvalue(result);
   setFlag(FLAG_CF, cfValue);
@@ -1637,80 +1613,69 @@ void lifterClass::lift_shl() {
   auto bitWidthValue = ConstantInt::get(countValue->getType(), bitWidth);
 
   Value* clampedCountValue = createAndFolder(
-      builder, countValue, ConstantInt::get(countValue->getType(), maskC),
-      "shlclamp");
+      countValue, ConstantInt::get(countValue->getType(), maskC), "shlclamp");
 
-  Value* result =
-      createShlFolder(builder, Lvalue, clampedCountValue, "shl-shift");
+  Value* result = createShlFolder(Lvalue, clampedCountValue, "shl-shift");
   Value* zero = ConstantInt::get(countValue->getType(), 0);
   Value* isZeroed = createICMPFolder(
-      builder, CmpInst::ICMP_UGT, clampedCountValue,
+      CmpInst::ICMP_UGT, clampedCountValue,
       ConstantInt::get(clampedCountValue->getType(), bitWidth - 1));
-  result = createSelectFolder(builder, isZeroed, zero, result);
+  result = createSelectFolder(isZeroed, zero, result);
 
   Value* cfValue = createLShrFolder(
-      builder, Lvalue,
-      createSubFolder(builder, bitWidthValue, clampedCountValue), "shlcf");
+      Lvalue, createSubFolder(bitWidthValue, clampedCountValue), "shlcf");
   Value* one = ConstantInt::get(cfValue->getType(), 1);
-  cfValue = createAndFolder(builder, cfValue, one, "shlcf");
-  cfValue = createZExtOrTruncFolder(builder, cfValue, Type::getInt1Ty(context));
+  cfValue = createAndFolder(cfValue, one, "shlcf");
+  cfValue = createZExtOrTruncFolder(cfValue, Type::getInt1Ty(context));
 
   auto countIsNotZero =
-      createICMPFolder(builder, CmpInst::ICMP_NE, clampedCountValue,
+      createICMPFolder(CmpInst::ICMP_NE, clampedCountValue,
                        ConstantInt::get(clampedCountValue->getType(), 0));
 
-  auto cfRvalue =
-      createSubFolder(builder, clampedCountValue,
-                      ConstantInt::get(clampedCountValue->getType(), 1));
-  auto cfShl = createShlFolder(builder, Lvalue, cfRvalue);
+  auto cfRvalue = createSubFolder(
+      clampedCountValue, ConstantInt::get(clampedCountValue->getType(), 1));
+  auto cfShl = createShlFolder(Lvalue, cfRvalue);
   auto cfIntT = cast<IntegerType>(cfShl->getType());
   auto cfRightCount = ConstantInt::get(cfIntT, cfIntT->getBitWidth() - 1);
-  auto cfLow = createLShrFolder(builder, cfShl, cfRightCount, "lowcfshr");
+  auto cfLow = createLShrFolder(cfShl, cfRightCount, "lowcfshr");
   cfValue = createSelectFolder(
-      builder, countIsNotZero,
-      createZExtOrTruncFolder(builder, cfLow, Type::getInt1Ty(context)),
+      countIsNotZero, createZExtOrTruncFolder(cfLow, Type::getInt1Ty(context)),
       getFlag(FLAG_CF));
   cfValue = createSelectFolder(
-      builder, isZeroed,
-      createZExtOrTruncFolder(builder, zero, Type::getInt1Ty(context)),
+      isZeroed, createZExtOrTruncFolder(zero, Type::getInt1Ty(context)),
       cfValue);
 
   Value* isCountOne =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, clampedCountValue,
+      createICMPFolder(CmpInst::ICMP_EQ, clampedCountValue,
                        ConstantInt::get(clampedCountValue->getType(), 1));
 
   Value* originalMSB = createLShrFolder(
-      builder, Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),
-      "shlmsb");
+      Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlmsb");
   originalMSB = createAndFolder(
-      builder, originalMSB, ConstantInt::get(Lvalue->getType(), 1), "shlmsb");
-  originalMSB =
-      createZExtOrTruncFolder(builder, originalMSB, Type::getInt1Ty(context));
+      originalMSB, ConstantInt::get(Lvalue->getType(), 1), "shlmsb");
+  originalMSB = createZExtOrTruncFolder(originalMSB, Type::getInt1Ty(context));
 
   Value* cfAsMSB = createZExtOrTruncFolder(
-      builder,
-      createLShrFolder(builder, Lvalue,
+      createLShrFolder(Lvalue,
                        ConstantInt::get(Lvalue->getType(), bitWidth - 1),
                        "shlcfasmsb"),
       Type::getInt1Ty(context));
 
   Value* resultMSB = createZExtOrTruncFolder(
-      builder,
-      createLShrFolder(builder, result,
+      createLShrFolder(result,
                        ConstantInt::get(result->getType(), bitWidth - 1),
                        "shlresultmsb"),
       Type::getInt1Ty(context));
 
   Value* ofValue = createSelectFolder(
-      builder, isCountOne, createXorFolder(builder, resultMSB, cfAsMSB),
-      getFlag(FLAG_OF));
+      isCountOne, createXorFolder(resultMSB, cfAsMSB), getFlag(FLAG_OF));
 
   setFlag(FLAG_CF, cfValue);
   setFlag(FLAG_OF, ofValue);
 
-  Value* sf = computeSignFlag(builder, result);
-  Value* zf = computeZeroFlag(builder, result);
-  Value* pf = computeParityFlag(builder, result);
+  Value* sf = computeSignFlag(result);
+  Value* zf = computeZeroFlag(result);
+  Value* pf = computeParityFlag(result);
   printvalue(Lvalue);
   printvalue(countValue);
   printvalue(clampedCountValue);
@@ -1748,12 +1713,12 @@ void lifterClass::lift_bswap() {
     // b = 0x56
     // nb |= b << 16
     // nb = 0x78560000
-    auto byte = createLShrFolder(
-        builder, createAndFolder(builder, Lvalue, mask), i * 8, "shlresultmsb");
+    auto byte =
+        createLShrFolder(createAndFolder(Lvalue, mask), i * 8, "shlresultmsb");
     auto shiftby = Lvalue->getType()->getIntegerBitWidth() - (i + 1) * 8;
-    auto newposbyte = createShlFolder(builder, byte, shiftby);
-    newswappedvalue = createOrFolder(builder, newswappedvalue, newposbyte);
-    mask = createShlFolder(builder, mask, 8);
+    auto newposbyte = createShlFolder(byte, shiftby);
+    newswappedvalue = createOrFolder(newswappedvalue, newposbyte);
+    mask = createShlFolder(mask, 8);
   }
 
   SetOperandValue(dest, newswappedvalue);
@@ -1771,20 +1736,19 @@ void lifterClass::lift_cmpxchg() {
 
   auto sub = builder.CreateSub(accum, Lvalue);
 
-  auto of = computeOverflowFlagSub(builder, Lvalue, Rvalue, sub);
+  auto of = computeOverflowFlagSub(Lvalue, Rvalue, sub);
 
   auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
   auto RvalueLowerNibble =
-      createAndFolder(builder, Lvalue, lowerNibbleMask, "lvalLowerNibble");
+      createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
   auto op2LowerNibble =
-      createAndFolder(builder, Rvalue, lowerNibbleMask, "rvalLowerNibble");
+      createAndFolder(Rvalue, lowerNibbleMask, "rvalLowerNibble");
 
-  auto cf =
-      createICMPFolder(builder, CmpInst::ICMP_UGT, Rvalue, Lvalue, "add_cf");
-  auto af = createICMPFolder(builder, CmpInst::ICMP_ULT, RvalueLowerNibble,
+  auto cf = createICMPFolder(CmpInst::ICMP_UGT, Rvalue, Lvalue, "add_cf");
+  auto af = createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble,
                              op2LowerNibble, "add_af");
 
-  auto sf = computeSignFlag(builder, sub);
+  auto sf = computeSignFlag(sub);
 
   /*
   TEMP := DEST
@@ -1798,9 +1762,9 @@ void lifterClass::lift_cmpxchg() {
                   DEST := TEMP;
   FI;
   */
-  auto zf = createICMPFolder(builder, CmpInst::ICMP_EQ, accum, Lvalue);
+  auto zf = createICMPFolder(CmpInst::ICMP_EQ, accum, Lvalue);
   // if zf dest = src
-  auto result = createSelectFolder(builder, zf, Rvalue, Lvalue);
+  auto result = createSelectFolder(zf, Rvalue, Lvalue);
 
   SetOperandValue(dest, result);
   setFlag(FLAG_OF, of);
@@ -1841,47 +1805,40 @@ void lifterClass::lift_shld() {
       "effectiveShiftCount");
 
   auto shiftedDest =
-      createShlFolder(builder, Lvalue, effectiveCountValue, "shiftedDest");
-  auto complementCount = createSubFolder(
-      builder, ConstantInt::get(countValue->getType(), bitWidth),
-      effectiveCountValue, "complementCount");
+      createShlFolder(Lvalue, effectiveCountValue, "shiftedDest");
+  auto complementCount =
+      createSubFolder(ConstantInt::get(countValue->getType(), bitWidth),
+                      effectiveCountValue, "complementCount");
   auto shiftedSource =
-      createLShrFolder(builder, sourceValue, complementCount, "shiftedSource");
-  auto resultValue =
-      createOrFolder(builder, shiftedDest, shiftedSource, "shldResult");
+      createLShrFolder(sourceValue, complementCount, "shiftedSource");
+  auto resultValue = createOrFolder(shiftedDest, shiftedSource, "shldResult");
 
   auto countIsNotZero =
-      createICMPFolder(builder, CmpInst::ICMP_NE, effectiveCountValue,
+      createICMPFolder(CmpInst::ICMP_NE, effectiveCountValue,
                        ConstantInt::get(effectiveCountValue->getType(), 0));
-  auto lastShiftedBitPosition =
-      createSubFolder(builder, effectiveCountValue,
-                      ConstantInt::get(effectiveCountValue->getType(), 1));
-  auto lastShiftedBit = createAndFolder(
-      builder, createLShrFolder(builder, Lvalue, lastShiftedBitPosition),
-      ConstantInt::get(Lvalue->getType(), 1), "shldresultmsb");
-  auto cf =
-      createSelectFolder(builder, countIsNotZero,
-                         createZExtOrTruncFolder(builder, lastShiftedBit,
-                                                 Type::getInt1Ty(context)),
-                         getFlag(FLAG_CF));
-  resultValue =
-      createSelectFolder(builder, countIsNotZero, resultValue, Lvalue);
+  auto lastShiftedBitPosition = createSubFolder(
+      effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
+  auto lastShiftedBit =
+      createAndFolder(createLShrFolder(Lvalue, lastShiftedBitPosition),
+                      ConstantInt::get(Lvalue->getType(), 1), "shldresultmsb");
+  auto cf = createSelectFolder(
+      countIsNotZero,
+      createZExtOrTruncFolder(lastShiftedBit, Type::getInt1Ty(context)),
+      getFlag(FLAG_CF));
+  resultValue = createSelectFolder(countIsNotZero, resultValue, Lvalue);
 
   auto isOne =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, effectiveCountValue,
+      createICMPFolder(CmpInst::ICMP_EQ, effectiveCountValue,
                        ConstantInt::get(effectiveCountValue->getType(), 1));
   auto newOF = createXorFolder(
-      builder,
-      createLShrFolder(builder, Lvalue,
-                       ConstantInt::get(Lvalue->getType(), bitWidth - 1),
-                       "subof"),
-      createLShrFolder(builder, resultValue,
+      createLShrFolder(
+          Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "subof"),
+      createLShrFolder(resultValue,
                        ConstantInt::get(resultValue->getType(), bitWidth - 1),
                        "subof2"),
       "subxorof");
   auto of = createSelectFolder(
-      builder, isOne,
-      createZExtOrTruncFolder(builder, newOF, Type::getInt1Ty(context)),
+      isOne, createZExtOrTruncFolder(newOF, Type::getInt1Ty(context)),
       getFlag(FLAG_OF));
 
   //  CF := BIT[DEST, SIZE – COUNT]; if shifted,
@@ -1907,46 +1864,41 @@ void lifterClass::lift_shrd() {
       "effectiveShiftCount");
 
   auto shiftedDest =
-      createLShrFolder(builder, Lvalue, effectiveCountValue, "shiftedDest");
-  auto complementCount = createSubFolder(
-      builder, ConstantInt::get(countValue->getType(), bitWidth),
-      effectiveCountValue, "complementCount");
+      createLShrFolder(Lvalue, effectiveCountValue, "shiftedDest");
+  auto complementCount =
+      createSubFolder(ConstantInt::get(countValue->getType(), bitWidth),
+                      effectiveCountValue, "complementCount");
   auto shiftedSource =
-      createShlFolder(builder, sourceValue, complementCount, "shiftedSource");
-  auto resultValue =
-      createOrFolder(builder, shiftedDest, shiftedSource, "shrdResult");
+      createShlFolder(sourceValue, complementCount, "shiftedSource");
+  auto resultValue = createOrFolder(shiftedDest, shiftedSource, "shrdResult");
 
   // Calculate CF
-  auto cfBitPosition =
-      createSubFolder(builder, effectiveCountValue,
-                      ConstantInt::get(effectiveCountValue->getType(), 1));
-  Value* cf = createLShrFolder(builder, Lvalue, cfBitPosition);
-  cf = createAndFolder(builder, cf, ConstantInt::get(cf->getType(), 1),
-                       "shrdcf");
-  cf = createZExtOrTruncFolder(builder, cf, Type::getInt1Ty(context));
+  auto cfBitPosition = createSubFolder(
+      effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
+  Value* cf = createLShrFolder(Lvalue, cfBitPosition);
+  cf = createAndFolder(cf, ConstantInt::get(cf->getType(), 1), "shrdcf");
+  cf = createZExtOrTruncFolder(cf, Type::getInt1Ty(context));
 
   // Calculate OF, only when count is 1
   Value* isCountOne =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, effectiveCountValue,
+      createICMPFolder(CmpInst::ICMP_EQ, effectiveCountValue,
                        ConstantInt::get(effectiveCountValue->getType(), 1));
   Value* mostSignificantBitOfDest = createLShrFolder(
-      builder, Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),
-      "shlmsbdest");
+      Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlmsbdest");
   mostSignificantBitOfDest = createAndFolder(
-      builder, mostSignificantBitOfDest,
+      mostSignificantBitOfDest,
       ConstantInt::get(mostSignificantBitOfDest->getType(), 1), "shrdmsb");
   Value* mostSignificantBitOfResult = createLShrFolder(
-      builder, resultValue,
-      ConstantInt::get(resultValue->getType(), bitWidth - 1), "shlmsbresult");
+      resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1),
+      "shlmsbresult");
   mostSignificantBitOfResult = createAndFolder(
-      builder, mostSignificantBitOfResult,
+      mostSignificantBitOfResult,
       ConstantInt::get(mostSignificantBitOfResult->getType(), 1), "shrdmsb2");
-  Value* of = createXorFolder(builder, mostSignificantBitOfDest,
-                              mostSignificantBitOfResult);
-  of = createZExtOrTruncFolder(builder, of, Type::getInt1Ty(context));
-  of = createSelectFolder(builder, isCountOne, of,
-                          ConstantInt::getFalse(context));
-  of = createZExtFolder(builder, of, Type::getInt1Ty(context));
+  Value* of =
+      createXorFolder(mostSignificantBitOfDest, mostSignificantBitOfResult);
+  of = createZExtOrTruncFolder(of, Type::getInt1Ty(context));
+  of = createSelectFolder(isCountOne, of, ConstantInt::getFalse(context));
+  of = createZExtFolder(of, Type::getInt1Ty(context));
 
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
@@ -1982,37 +1934,36 @@ void lifterClass::lift_add_sub() {
 
   auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
   auto RvalueLowerNibble =
-      createAndFolder(builder, Lvalue, lowerNibbleMask, "lvalLowerNibble");
+      createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
   auto op2LowerNibble =
-      createAndFolder(builder, Rvalue, lowerNibbleMask, "rvalLowerNibble");
+      createAndFolder(Rvalue, lowerNibbleMask, "rvalLowerNibble");
 
   switch (instruction->info.mnemonic) {
   case ZYDIS_MNEMONIC_ADD: {
-    result = createAddFolder(builder, Lvalue, Rvalue,
+    result = createAddFolder(Lvalue, Rvalue,
                              "realadd-" +
                                  to_string(instruction->runtime_address) + "-");
     cf = createOrFolder(
-        builder,
-        createICMPFolder(builder, CmpInst::ICMP_ULT, result, Lvalue, "add_cf1"),
-        createICMPFolder(builder, CmpInst::ICMP_ULT, result, Rvalue, "add_cf2"),
+        createICMPFolder(CmpInst::ICMP_ULT, result, Lvalue, "add_cf1"),
+        createICMPFolder(CmpInst::ICMP_ULT, result, Rvalue, "add_cf2"),
         "add_cf");
-    auto sumLowerNibble = createAddFolder(builder, RvalueLowerNibble,
-                                          op2LowerNibble, "add_sumLowerNibble");
-    af = createICMPFolder(builder, CmpInst::ICMP_UGT, sumLowerNibble,
-                          lowerNibbleMask, "add_af");
-    of = computeOverflowFlagAdd(builder, Lvalue, Rvalue, result);
+    auto sumLowerNibble = createAddFolder(RvalueLowerNibble, op2LowerNibble,
+                                          "add_sumLowerNibble");
+    af = createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask,
+                          "add_af");
+    of = computeOverflowFlagAdd(Lvalue, Rvalue, result);
     break;
   }
   case ZYDIS_MNEMONIC_SUB: {
-    result = createSubFolder(builder, Lvalue, Rvalue,
+    result = createSubFolder(Lvalue, Rvalue,
                              "realsub-" +
                                  to_string(instruction->runtime_address) + "-");
 
-    of = computeOverflowFlagSub(builder, Lvalue, Rvalue, result);
+    of = computeOverflowFlagSub(Lvalue, Rvalue, result);
 
-    cf = createICMPFolder(builder, CmpInst::ICMP_UGT, Rvalue, Lvalue, "add_cf");
-    af = createICMPFolder(builder, CmpInst::ICMP_ULT, RvalueLowerNibble,
-                          op2LowerNibble, "add_af");
+    cf = createICMPFolder(CmpInst::ICMP_UGT, Rvalue, Lvalue, "add_cf");
+    af = createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble, op2LowerNibble,
+                          "add_af");
     break;
   }
   default:
@@ -2024,9 +1975,9 @@ void lifterClass::lift_add_sub() {
   The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
   */
 
-  auto sf = computeSignFlag(builder, result);
-  auto zf = computeZeroFlag(builder, result);
-  auto pf = computeParityFlag(builder, result);
+  auto sf = computeSignFlag(result);
+  auto zf = computeZeroFlag(result);
+  auto pf = computeParityFlag(result);
 
   setFlag(FLAG_OF, of);
   setFlag(FLAG_SF, sf);
@@ -2061,16 +2012,14 @@ void lifterClass::lift_imul2(bool isSigned) {
                                             // ensure we have the correct size
     Rvalue = builder.CreateSExtOrTrunc(Rvalue, Lvalue->getType());
   } else {
-    Lvalue = createZExtFolder(builder, Lvalue,
-                              Type::getIntNTy(context, src.size * 2));
+    Lvalue = createZExtFolder(Lvalue, Type::getIntNTy(context, src.size * 2));
 
     Rvalue = createZExtOrTruncFolder(
-        builder, Rvalue,
-        Type::getIntNTy(context,
-                        src.size)); // make sure the size is correct, 1
-                                    // byte, GetRegisterValue doesnt
-                                    // ensure we have the correct size
-    Rvalue = createZExtOrTruncFolder(builder, Rvalue, Lvalue->getType());
+        Rvalue, Type::getIntNTy(context,
+                                src.size)); // make sure the size is correct, 1
+                                            // byte, GetRegisterValue doesnt
+                                            // ensure we have the correct size
+    Rvalue = createZExtOrTruncFolder(Rvalue, Lvalue->getType());
   }
   Value* result = builder.CreateMul(Rvalue, Lvalue);
   Value* lowerresult = builder.CreateTrunc(
@@ -2230,10 +2179,8 @@ void lifterClass::lift_mul() {
 
   uint8_t initialSize = Rvalue->getType()->getIntegerBitWidth();
   printvalue2(initialSize);
-  Rvalue = createZExtFolder(builder, Rvalue,
-                            Type::getIntNTy(context, initialSize * 2));
-  Lvalue = createZExtFolder(builder, Lvalue,
-                            Type::getIntNTy(context, initialSize * 2));
+  Rvalue = createZExtFolder(Rvalue, Type::getIntNTy(context, initialSize * 2));
+  Lvalue = createZExtFolder(Lvalue, Type::getIntNTy(context, initialSize * 2));
 
   Value* result = builder.CreateMul(Lvalue, Rvalue, "intmul");
 
@@ -2278,22 +2225,19 @@ void lifterClass::lift_div() {
     dividend = GetRegisterValue(ZYDIS_REGISTER_AX);
     divisor = GetOperandValue(src, src.size);
 
-    divisor = createZExtFolder(builder, divisor,
-                               Type::getIntNTy(context, src.size * 2));
-    dividend = createZExtOrTruncFolder(builder, dividend, divisor->getType());
+    divisor = createZExtFolder(divisor, Type::getIntNTy(context, src.size * 2));
+    dividend = createZExtOrTruncFolder(dividend, divisor->getType());
 
     remainder = builder.CreateURem(dividend, divisor);
     quotient = builder.CreateUDiv(dividend, divisor);
 
     SetRegisterValue(
         ZYDIS_REGISTER_AL,
-        createZExtOrTruncFolder(builder, quotient,
-                                Type::getIntNTy(context, src.size)));
+        createZExtOrTruncFolder(quotient, Type::getIntNTy(context, src.size)));
 
     SetRegisterValue(
         ZYDIS_REGISTER_AH,
-        createZExtOrTruncFolder(builder, remainder,
-                                Type::getIntNTy(context, src.size)));
+        createZExtOrTruncFolder(remainder, Type::getIntNTy(context, src.size)));
   } else {
     auto dividendLowop = instruction->operands[1];  // eax
     auto dividendHighop = instruction->operands[2]; // edx
@@ -2303,10 +2247,9 @@ void lifterClass::lift_div() {
     Value* dividendLow = GetOperandValue(dividendLowop, src.size);
     Value* dividendHigh = GetOperandValue(dividendHighop, src.size);
 
-    dividendLow = createZExtFolder(builder, dividendLow,
-                                   Type::getIntNTy(context, src.size * 2));
-    dividendHigh =
-        createZExtFolder(builder, dividendHigh, dividendLow->getType());
+    dividendLow =
+        createZExtFolder(dividendLow, Type::getIntNTy(context, src.size * 2));
+    dividendHigh = createZExtFolder(dividendHigh, dividendLow->getType());
     uint8_t bitWidth = src.size;
 
     dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
@@ -2316,8 +2259,7 @@ void lifterClass::lift_div() {
     printvalue(dividendHigh);
 
     dividend = builder.CreateOr(dividendHigh, dividendLow);
-    Value* ZExtdivisor =
-        createZExtFolder(builder, divisor, dividend->getType());
+    Value* ZExtdivisor = createZExtFolder(divisor, dividend->getType());
 
     if (isa<ConstantInt>(ZExtdivisor) && isa<ConstantInt>(dividend)) {
 
@@ -2339,12 +2281,11 @@ void lifterClass::lift_div() {
       remainder = builder.CreateURem(dividend, ZExtdivisor);
     }
 
-    SetOperandValue(dividendLowop, createZExtOrTruncFolder(builder, quotient,
-                                                           divisor->getType()));
+    SetOperandValue(dividendLowop,
+                    createZExtOrTruncFolder(quotient, divisor->getType()));
 
-    SetOperandValue(
-        dividendHighop,
-        createZExtOrTruncFolder(builder, remainder, divisor->getType()));
+    SetOperandValue(dividendHighop,
+                    createZExtOrTruncFolder(remainder, divisor->getType()));
   }
 
   printvalue(divisor) printvalue(dividend) printvalue(remainder)
@@ -2366,13 +2307,11 @@ void lifterClass::lift_idiv() {
 
     SetRegisterValue(
         ZYDIS_REGISTER_AL,
-        createZExtOrTruncFolder(builder, quotient,
-                                Type::getIntNTy(context, src.size)));
+        createZExtOrTruncFolder(quotient, Type::getIntNTy(context, src.size)));
 
     SetRegisterValue(
         ZYDIS_REGISTER_AH,
-        createZExtOrTruncFolder(builder, remainder,
-                                Type::getIntNTy(context, src.size)));
+        createZExtOrTruncFolder(remainder, Type::getIntNTy(context, src.size)));
 
     printvalue(remainder);
     printvalue(quotient);
@@ -2390,10 +2329,9 @@ void lifterClass::lift_idiv() {
   dividendLow = GetOperandValue(dividendLowop, src.size);
   dividendHigh = GetOperandValue(dividendHighop, src.size);
 
-  dividendLow = createZExtFolder(builder, dividendLow,
-                                 Type::getIntNTy(context, src.size * 2));
-  dividendHigh =
-      createZExtFolder(builder, dividendHigh, dividendLow->getType());
+  dividendLow =
+      createZExtFolder(dividendLow, Type::getIntNTy(context, src.size * 2));
+  dividendHigh = createZExtFolder(dividendHigh, dividendLow->getType());
   uint8_t bitWidth = src.size;
 
   dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
@@ -2423,11 +2361,11 @@ void lifterClass::lift_idiv() {
     quotient = builder.CreateSDiv(dividend, divide);
     remainder = builder.CreateSRem(dividend, divide);
   }
-  SetOperandValue(dividendLowop, createZExtOrTruncFolder(builder, quotient,
-                                                         Rvalue->getType()));
+  SetOperandValue(dividendLowop,
+                  createZExtOrTruncFolder(quotient, Rvalue->getType()));
 
-  SetOperandValue(dividendHighop, createZExtOrTruncFolder(builder, remainder,
-                                                          Rvalue->getType()));
+  SetOperandValue(dividendHighop,
+                  createZExtOrTruncFolder(remainder, Rvalue->getType()));
 
   printvalue(Rvalue) printvalue(dividend) printvalue(remainder)
       printvalue(quotient)
@@ -2440,14 +2378,14 @@ void lifterClass::lift_xor() {
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto result = createXorFolder(
-      builder, Lvalue, Rvalue,
+      Lvalue, Rvalue,
       "realxor-" + to_string(instruction->runtime_address) + "-");
 
-  printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
+  printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-      auto sf = computeSignFlag(builder, result);
-  auto zf = computeZeroFlag(builder, result);
-  auto pf = computeParityFlag(builder, result);
+  auto sf = computeSignFlag(result);
+  auto zf = computeZeroFlag(result);
+  auto pf = computeParityFlag(result);
   //  The OF and CF flags are cleared; the SF, ZF, and PF flags are set
   //  according to the result. The state of the AF flag is undefined.
 
@@ -2468,16 +2406,16 @@ void lifterClass::lift_or() {
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto result =
-      createOrFolder(builder, Lvalue, Rvalue,
+      createOrFolder(Lvalue, Rvalue,
                      "realor-" + to_string(instruction->runtime_address) + "-");
 
   printvalue(Lvalue);
   printvalue(Rvalue);
   printvalue(result);
 
-  auto sf = computeSignFlag(builder, result);
-  auto zf = computeZeroFlag(builder, result);
-  auto pf = computeParityFlag(builder, result);
+  auto sf = computeSignFlag(result);
+  auto zf = computeZeroFlag(result);
+  auto pf = computeParityFlag(result);
   printvalue(sf);
   // The OF and CF flags are cleared; the SF, ZF, and PF flags are set
   // according to the result. The state of the AF flag is undefined.
@@ -2500,12 +2438,12 @@ void lifterClass::lift_and() {
   auto Lvalue = GetOperandValue(dest, dest.size);
 
   auto result = createAndFolder(
-      builder, Lvalue, Rvalue,
+      Lvalue, Rvalue,
       "realand-" + to_string(instruction->runtime_address) + "-");
 
-  auto sf = computeSignFlag(builder, result);
-  auto zf = computeZeroFlag(builder, result);
-  auto pf = computeParityFlag(builder, result);
+  auto sf = computeSignFlag(result);
+  auto zf = computeZeroFlag(result);
+  auto pf = computeParityFlag(result);
 
   // The OF and CF flags are cleared; the SF, ZF, and PF flags are set
   // according to the result. The state of the AF flag is undefined.
@@ -2548,44 +2486,38 @@ void lifterClass::lift_rol() {
   auto Rvalue = GetOperandValue(src, dest.size);
 
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  Rvalue = createAndFolder(builder, Rvalue,
-                           ConstantInt::get(Rvalue->getType(), bitWidth - 1),
-                           "maskRvalue");
+  Rvalue = createAndFolder(
+      Rvalue, ConstantInt::get(Rvalue->getType(), bitWidth - 1), "maskRvalue");
 
-  Value* shiftedLeft = createShlFolder(builder, Lvalue, Rvalue);
+  Value* shiftedLeft = createShlFolder(Lvalue, Rvalue);
   Value* shiftedRight = createLShrFolder(
-      builder, Lvalue,
-      createSubFolder(builder, ConstantInt::get(Rvalue->getType(), bitWidth),
-                      Rvalue),
+      Lvalue,
+      createSubFolder(ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue),
       "rol");
-  Value* result = createOrFolder(builder, shiftedLeft, shiftedRight);
+  Value* result = createOrFolder(shiftedLeft, shiftedRight);
 
-  Value* lastBit =
-      createAndFolder(builder, shiftedRight,
-                      ConstantInt::get(Lvalue->getType(), 1), "rollastbit");
-  Value* cf =
-      createZExtOrTruncFolder(builder, lastBit, Type::getInt1Ty(context));
+  Value* lastBit = createAndFolder(
+      shiftedRight, ConstantInt::get(Lvalue->getType(), 1), "rollastbit");
+  Value* cf = createZExtOrTruncFolder(lastBit, Type::getInt1Ty(context));
 
   Value* zero = ConstantInt::get(Rvalue->getType(), 0);
-  Value* isNotZero = createICMPFolder(builder, CmpInst::ICMP_NE, Rvalue, zero);
+  Value* isNotZero = createICMPFolder(CmpInst::ICMP_NE, Rvalue, zero);
   Value* oldcf = getFlag(FLAG_CF);
-  cf = createSelectFolder(builder, isNotZero, cf, oldcf);
-  result = createSelectFolder(builder, isNotZero, result, Lvalue);
+  cf = createSelectFolder(isNotZero, cf, oldcf);
+  result = createSelectFolder(isNotZero, result, Lvalue);
 
   // of = cf ^ MSB
-  Value* newMSB = createLShrFolder(builder, result, bitWidth - 1, "rolmsb");
+  Value* newMSB = createLShrFolder(result, bitWidth - 1, "rolmsb");
   Value* of = createXorFolder(
-      builder, cf,
-      createZExtOrTruncFolder(builder, newMSB, Type::getInt1Ty(context)));
+      cf, createZExtOrTruncFolder(newMSB, Type::getInt1Ty(context)));
 
   // Use Select to conditionally update OF based on whether the shift
   // amount is 1
-  Value* isOneBitRotation =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, Rvalue,
-                       ConstantInt::get(Rvalue->getType(), 1));
+  Value* isOneBitRotation = createICMPFolder(
+      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), 1));
   Value* ofCurrent = getFlag(FLAG_OF);
 
-  of = createSelectFolder(builder, isOneBitRotation, of, ofCurrent);
+  of = createSelectFolder(isOneBitRotation, of, ofCurrent);
 
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
@@ -2625,46 +2557,44 @@ void lifterClass::lift_ror() {
   Rvalue = builder.CreateURem(Rvalue, size);
 
   Value* result = createOrFolder(
-      builder, createLShrFolder(builder, Lvalue, Rvalue),
-      createShlFolder(builder, Lvalue, createSubFolder(builder, size, Rvalue)),
+      createLShrFolder(Lvalue, Rvalue),
+      createShlFolder(Lvalue, createSubFolder(size, Rvalue)),
       "ror-" + std::to_string(instruction->runtime_address) + "-");
 
   Value* msb = createLShrFolder(
-      builder, result,
+      result,
       createSubFolder(
-          builder, size,
+          size,
           ConstantInt::get(context,
                            APInt(Rvalue->getType()->getIntegerBitWidth(), 1))));
-  Value* cf =
-      createZExtOrTruncFolder(builder, msb, Type::getInt1Ty(context), "ror-cf");
+  Value* cf = createZExtOrTruncFolder(msb, Type::getInt1Ty(context), "ror-cf");
 
   Value* secondMsb = createLShrFolder(
-      builder, result,
+      result,
       createSubFolder(
-          builder, size,
+          size,
           ConstantInt::get(context,
                            APInt(Rvalue->getType()->getIntegerBitWidth(), 2))),
       "ror2ndmsb");
-  auto ofDefined = createZExtOrTruncFolder(
-      builder, createXorFolder(builder, msb, secondMsb), cf->getType());
+  auto ofDefined =
+      createZExtOrTruncFolder(createXorFolder(msb, secondMsb), cf->getType());
   auto isOneBitRotation = createICMPFolder(
-      builder, CmpInst::ICMP_EQ, Rvalue,
+      CmpInst::ICMP_EQ, Rvalue,
       ConstantInt::get(context,
                        APInt(Rvalue->getType()->getIntegerBitWidth(), 1)));
   Value* ofCurrent = getFlag(FLAG_OF);
-  Value* of = createSelectFolder(builder, isOneBitRotation, ofDefined,
-                                 ofCurrent, "ror-of");
+  Value* of =
+      createSelectFolder(isOneBitRotation, ofDefined, ofCurrent, "ror-of");
 
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
   auto isZeroBitRotation = createICMPFolder(
-      builder, CmpInst::ICMP_EQ, Rvalue,
+      CmpInst::ICMP_EQ, Rvalue,
       ConstantInt::get(context,
                        APInt(Rvalue->getType()->getIntegerBitWidth(), 0)),
       "iszerobit");
-  result = createSelectFolder(builder, isZeroBitRotation, Lvalue, result,
-                              "ror-result");
+  result = createSelectFolder(isZeroBitRotation, Lvalue, result, "ror-result");
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
 
@@ -2682,16 +2612,15 @@ void lifterClass::lift_inc() {
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
   // treat it as add r, 1 for flags
-  result =
-      createAddFolder(builder, Lvalue, one,
-                      "inc-" + to_string(instruction->runtime_address) + "-");
-  of = computeOverflowFlagAdd(builder, Lvalue, one, result);
+  result = createAddFolder(
+      Lvalue, one, "inc-" + to_string(instruction->runtime_address) + "-");
+  of = computeOverflowFlagAdd(Lvalue, one, result);
 
   printvalue(Lvalue) printvalue(result);
 
-  Value* sf = computeSignFlag(builder, result);
-  Value* zf = computeZeroFlag(builder, result);
-  Value* pf = computeParityFlag(builder, result);
+  Value* sf = computeSignFlag(result);
+  Value* zf = computeZeroFlag(result);
+  Value* pf = computeParityFlag(result);
 
   printvalue(sf);
 
@@ -2713,16 +2642,15 @@ void lifterClass::lift_dec() {
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
   // treat it as sub r, 1 for flags
-  result =
-      createSubFolder(builder, Lvalue, one,
-                      "dec-" + to_string(instruction->runtime_address) + "-");
-  of = computeOverflowFlagSub(builder, Lvalue, one, result);
+  result = createSubFolder(
+      Lvalue, one, "dec-" + to_string(instruction->runtime_address) + "-");
+  of = computeOverflowFlagSub(Lvalue, one, result);
 
   printvalue(Lvalue) printvalue(result);
 
-  Value* sf = computeSignFlag(builder, result);
-  Value* zf = computeZeroFlag(builder, result);
-  Value* pf = computeParityFlag(builder, result);
+  Value* sf = computeSignFlag(result);
+  Value* zf = computeZeroFlag(result);
+  Value* pf = computeParityFlag(result);
 
   printvalue(sf);
 
@@ -2745,7 +2673,7 @@ void lifterClass::lift_push() {
       Type::getInt64Ty(context),
       dest.size / 8); // jokes on me apparently this is not a fixed value
   auto result = createSubFolder(
-      builder, RspValue, val,
+      RspValue, val,
       "pushing_newrsp-" + to_string(instruction->runtime_address) + "-");
 
   printvalue(RspValue) printvalue(result)
@@ -2767,7 +2695,7 @@ void lifterClass::lift_pushfq() {
   auto RspValue = GetOperandValue(rsp, rsp.size);
 
   auto val = ConstantInt::get(Type::getInt64Ty(context), 8);
-  auto result = createSubFolder(builder, RspValue, val);
+  auto result = createSubFolder(RspValue, val);
 
   SetOperandValue(rsp, result, to_string(instruction->runtime_address));
   ; // sub rsp 8 first,
@@ -2794,7 +2722,7 @@ void lifterClass::lift_pop() {
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     dest.size / 8); // assuming its x64
   auto result = createAddFolder(
-      builder, RspValue, val,
+      RspValue, val,
       "popping_new_rsp-" + to_string(instruction->runtime_address) + "-");
 
   printvalue(Rvalue) printvalue(RspValue) printvalue(result)
@@ -2820,9 +2748,8 @@ void lifterClass::lift_popfq() {
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     8); // assuming its x64
-  auto result =
-      createAddFolder(builder, RspValue, val,
-                      "popfq-" + to_string(instruction->runtime_address) + "-");
+  auto result = createAddFolder(
+      RspValue, val, "popfq-" + to_string(instruction->runtime_address) + "-");
 
   SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
   ; // mov val, rsp first
@@ -2838,13 +2765,13 @@ void lifterClass::lift_adc() {
   Value* Rvalue = GetOperandValue(src, dest.size);
 
   Value* cf = getFlag(FLAG_CF);
-  cf = createZExtFolder(builder, cf, Lvalue->getType());
+  cf = createZExtFolder(cf, Lvalue->getType());
 
   Value* tempResult = createAddFolder(
-      builder, Lvalue, Rvalue,
+      Lvalue, Rvalue,
       "adc-temp-" + to_string(instruction->runtime_address) + "-");
   Value* result = createAddFolder(
-      builder, tempResult, cf,
+      tempResult, cf,
       "adc-result-" + to_string(instruction->runtime_address) + "-");
   // The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
 
@@ -2852,28 +2779,23 @@ void lifterClass::lift_adc() {
       printvalue(result)
 
           auto cfAfterFirstAdd = createOrFolder(
-              builder,
-              createICMPFolder(builder, CmpInst::ICMP_ULT, tempResult, Lvalue),
-              createICMPFolder(builder, CmpInst::ICMP_ULT, tempResult, Rvalue));
-  auto cfFinal =
-      createOrFolder(builder, cfAfterFirstAdd,
-                     createICMPFolder(builder, CmpInst::ICMP_ULT, result, cf));
+              createICMPFolder(CmpInst::ICMP_ULT, tempResult, Lvalue),
+              createICMPFolder(CmpInst::ICMP_ULT, tempResult, Rvalue));
+  auto cfFinal = createOrFolder(
+      cfAfterFirstAdd, createICMPFolder(CmpInst::ICMP_ULT, result, cf));
 
   auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-  auto destLowerNibble =
-      createAndFolder(builder, Lvalue, lowerNibbleMask, "adcdst");
-  auto srcLowerNibble =
-      createAndFolder(builder, Rvalue, lowerNibbleMask, "adcsrc");
-  auto sumLowerNibble =
-      createAddFolder(builder, destLowerNibble, srcLowerNibble);
-  auto af = createICMPFolder(builder, CmpInst::ICMP_UGT, sumLowerNibble,
-                             lowerNibbleMask);
+  auto destLowerNibble = createAndFolder(Lvalue, lowerNibbleMask, "adcdst");
+  auto srcLowerNibble = createAndFolder(Rvalue, lowerNibbleMask, "adcsrc");
+  auto sumLowerNibble = createAddFolder(destLowerNibble, srcLowerNibble);
+  auto af =
+      createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask);
 
-  auto of = computeOverflowFlagAdc(builder, Lvalue, Rvalue, cf, result);
+  auto of = computeOverflowFlagAdc(Lvalue, Rvalue, cf, result);
 
-  Value* sf = computeSignFlag(builder, result);
-  Value* zf = computeZeroFlag(builder, result);
-  Value* pf = computeParityFlag(builder, result);
+  Value* sf = computeSignFlag(result);
+  Value* zf = computeZeroFlag(result);
+  Value* pf = computeParityFlag(result);
 
   setFlag(FLAG_OF, of);
   setFlag(FLAG_AF, af);
@@ -2893,7 +2815,7 @@ void lifterClass::lift_xadd() {
   auto Rvalue = GetOperandValue(src, src.size);
 
   Value* sumValue = createAddFolder(
-      builder, Lvalue, Rvalue,
+      Lvalue, Rvalue,
       "xadd_sum-" + to_string(instruction->runtime_address) + "-");
 
   SetOperandValue(dest, sumValue, to_string(instruction->runtime_address));
@@ -2908,37 +2830,31 @@ void lifterClass::lift_xadd() {
   */
   printvalue(Lvalue) printvalue(Rvalue) printvalue(sumValue)
 
-      auto cf = createOrFolder(
-          builder,
-          createICMPFolder(builder, CmpInst::ICMP_ULT, sumValue, Lvalue),
-          createICMPFolder(builder, CmpInst::ICMP_ULT, sumValue, Rvalue));
+      auto cf =
+          createOrFolder(createICMPFolder(CmpInst::ICMP_ULT, sumValue, Lvalue),
+                         createICMPFolder(CmpInst::ICMP_ULT, sumValue, Rvalue));
 
   auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-  auto destLowerNibble =
-      createAndFolder(builder, Lvalue, lowerNibbleMask, "xadddst");
-  auto srcLowerNibble =
-      createAndFolder(builder, Rvalue, lowerNibbleMask, "xaddsrc");
-  auto sumLowerNibble =
-      createAddFolder(builder, destLowerNibble, srcLowerNibble);
-  auto af = createICMPFolder(builder, CmpInst::ICMP_UGT, sumLowerNibble,
-                             lowerNibbleMask);
+  auto destLowerNibble = createAndFolder(Lvalue, lowerNibbleMask, "xadddst");
+  auto srcLowerNibble = createAndFolder(Rvalue, lowerNibbleMask, "xaddsrc");
+  auto sumLowerNibble = createAddFolder(destLowerNibble, srcLowerNibble);
+  auto af =
+      createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask);
 
-  auto resultSign = createICMPFolder(builder, CmpInst::ICMP_SLT, sumValue,
+  auto resultSign = createICMPFolder(CmpInst::ICMP_SLT, sumValue,
                                      ConstantInt::get(Lvalue->getType(), 0));
-  auto destSign = createICMPFolder(builder, CmpInst::ICMP_SLT, Lvalue,
+  auto destSign = createICMPFolder(CmpInst::ICMP_SLT, Lvalue,
                                    ConstantInt::get(Lvalue->getType(), 0));
-  auto srcSign = createICMPFolder(builder, CmpInst::ICMP_SLT, Rvalue,
+  auto srcSign = createICMPFolder(CmpInst::ICMP_SLT, Rvalue,
                                   ConstantInt::get(Rvalue->getType(), 0));
-  auto inputSameSign =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, destSign, srcSign);
+  auto inputSameSign = createICMPFolder(CmpInst::ICMP_EQ, destSign, srcSign);
   auto of = createAndFolder(
-      builder, inputSameSign,
-      createICMPFolder(builder, CmpInst::ICMP_NE, destSign, resultSign),
+      inputSameSign, createICMPFolder(CmpInst::ICMP_NE, destSign, resultSign),
       "xaddof");
 
-  Value* sf = computeSignFlag(builder, sumValue);
-  Value* zf = computeZeroFlag(builder, sumValue);
-  Value* pf = computeParityFlag(builder, sumValue);
+  Value* sf = computeSignFlag(sumValue);
+  Value* zf = computeZeroFlag(sumValue);
+  Value* pf = computeParityFlag(sumValue);
 
   setFlag(FLAG_OF, of);
   setFlag(FLAG_AF, af);
@@ -2958,18 +2874,18 @@ void lifterClass::lift_test() {
   Value* Rvalue =
       GetOperandValue(instruction->operands[1], instruction->operands[0].size);
 
-  Value* testResult = createAndFolder(builder, Lvalue, Rvalue, "testAnd");
+  Value* testResult = createAndFolder(Lvalue, Rvalue, "testAnd");
 
   Value* of = ConstantInt::get(Type::getInt64Ty(context), 0, "of");
   Value* cf = ConstantInt::get(Type::getInt64Ty(context), 0, "cf");
 
   Value* sf =
-      createICMPFolder(builder, CmpInst::ICMP_SLT, testResult,
+      createICMPFolder(CmpInst::ICMP_SLT, testResult,
                        ConstantInt::get(testResult->getType(), 0), "sf");
   Value* zf =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, testResult,
+      createICMPFolder(CmpInst::ICMP_EQ, testResult,
                        ConstantInt::get(testResult->getType(), 0), "zf");
-  Value* pf = computeParityFlag(builder, testResult);
+  Value* pf = computeParityFlag(testResult);
 
   setFlag(FLAG_OF, of);
   setFlag(FLAG_CF, cf);
@@ -2985,32 +2901,29 @@ void lifterClass::lift_cmp() {
   Value* Rvalue =
       GetOperandValue(instruction->operands[1], instruction->operands[0].size);
 
-  Value* cmpResult = createSubFolder(builder, Lvalue, Rvalue);
+  Value* cmpResult = createSubFolder(Lvalue, Rvalue);
 
-  Value* signL = createICMPFolder(builder, CmpInst::ICMP_SLT, Lvalue,
+  Value* signL = createICMPFolder(CmpInst::ICMP_SLT, Lvalue,
                                   ConstantInt::get(Lvalue->getType(), 0));
-  Value* signR = createICMPFolder(builder, CmpInst::ICMP_SLT, Rvalue,
+  Value* signR = createICMPFolder(CmpInst::ICMP_SLT, Rvalue,
                                   ConstantInt::get(Rvalue->getType(), 0));
-  Value* signResult =
-      createICMPFolder(builder, CmpInst::ICMP_SLT, cmpResult,
-                       ConstantInt::get(cmpResult->getType(), 0));
+  Value* signResult = createICMPFolder(
+      CmpInst::ICMP_SLT, cmpResult, ConstantInt::get(cmpResult->getType(), 0));
 
   Value* of = createOrFolder(
-      builder,
-      createAndFolder(builder, signL,
-                      createAndFolder(builder, builder.CreateNot(signR),
-                                      builder.CreateNot(signResult),
-                                      "cmp-and1-")),
-      createAndFolder(builder, builder.CreateNot(signL),
-                      createAndFolder(builder, signR, signResult), "cmp-and2-"),
+      createAndFolder(signL, createAndFolder(builder.CreateNot(signR),
+                                             builder.CreateNot(signResult),
+                                             "cmp-and1-")),
+      createAndFolder(builder.CreateNot(signL),
+                      createAndFolder(signR, signResult), "cmp-and2-"),
       "cmp-OF-or");
 
-  Value* cf = createICMPFolder(builder, CmpInst::ICMP_ULT, Lvalue, Rvalue);
-  Value* zf = createICMPFolder(builder, CmpInst::ICMP_EQ, cmpResult,
+  Value* cf = createICMPFolder(CmpInst::ICMP_ULT, Lvalue, Rvalue);
+  Value* zf = createICMPFolder(CmpInst::ICMP_EQ, cmpResult,
                                ConstantInt::get(cmpResult->getType(), 0));
-  Value* sf = createICMPFolder(builder, CmpInst::ICMP_SLT, cmpResult,
+  Value* sf = createICMPFolder(CmpInst::ICMP_SLT, cmpResult,
                                ConstantInt::get(cmpResult->getType(), 0));
-  Value* pf = computeParityFlag(builder, cmpResult);
+  Value* pf = computeParityFlag(cmpResult);
 
   setFlag(FLAG_OF, of);
   setFlag(FLAG_CF, cf);
@@ -3023,9 +2936,9 @@ void lifterClass::lift_rdtsc() {
   // cout << instruction->runtime_address << "\n";
   LLVMContext& context = builder.getContext();
   auto rdtscCall = builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
-  auto edxPart = createLShrFolder(builder, rdtscCall, 32, "to_edx");
-  auto eaxPart = createZExtOrTruncFolder(builder, rdtscCall,
-                                         Type::getInt32Ty(context), "to_eax");
+  auto edxPart = createLShrFolder(rdtscCall, 32, "to_edx");
+  auto eaxPart =
+      createZExtOrTruncFolder(rdtscCall, Type::getInt32Ty(context), "to_eax");
   SetRegisterValue(ZYDIS_REGISTER_EDX, edxPart);
   SetRegisterValue(ZYDIS_REGISTER_EAX, eaxPart);
 }
@@ -3121,8 +3034,8 @@ void lifterClass::lift_setnz() {
 
   Value* zf = getFlag(FLAG_ZF);
 
-  Value* result = createZExtFolder(builder, builder.CreateNot(zf),
-                                   Type::getInt8Ty(context));
+  Value* result =
+      createZExtFolder(builder.CreateNot(zf), Type::getInt8Ty(context));
 
   SetOperandValue(dest, result);
 }
@@ -3133,7 +3046,7 @@ void lifterClass::lift_seto() {
 
   Value* of = getFlag(FLAG_OF);
 
-  Value* result = createZExtFolder(builder, of, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(of, Type::getInt8Ty(context));
 
   SetOperandValue(dest, result);
 }
@@ -3146,7 +3059,7 @@ void lifterClass::lift_setno() {
 
   Value* notOf = builder.CreateNot(of, "notOF");
 
-  Value* result = createZExtFolder(builder, notOf, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(notOf, Type::getInt8Ty(context));
 
   SetOperandValue(dest, result);
 }
@@ -3158,12 +3071,10 @@ void lifterClass::lift_setnb() {
 
   Value* cf = getFlag(FLAG_CF);
 
-  Value* result =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, cf,
-                       ConstantInt::get(Type::getInt1Ty(context), 0));
+  Value* result = createICMPFolder(
+      CmpInst::ICMP_EQ, cf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
-  Value* byteResult =
-      createZExtFolder(builder, result, Type::getInt8Ty(context));
+  Value* byteResult = createZExtFolder(result, Type::getInt8Ty(context));
 
   SetOperandValue(dest, byteResult);
 }
@@ -3174,10 +3085,9 @@ void lifterClass::lift_setbe() {
   Value* cf = getFlag(FLAG_CF);
   Value* zf = getFlag(FLAG_ZF);
 
-  Value* condition = createOrFolder(builder, cf, zf, "setbe-or");
+  Value* condition = createOrFolder(cf, zf, "setbe-or");
 
-  Value* result =
-      createZExtFolder(builder, condition, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = instruction->operands[0];
   SetOperandValue(dest, result);
@@ -3189,11 +3099,10 @@ void lifterClass::lift_setnbe() {
   Value* cf = getFlag(FLAG_CF);
   Value* zf = getFlag(FLAG_ZF);
 
-  Value* condition = createAndFolder(builder, builder.CreateNot(cf),
+  Value* condition = createAndFolder(builder.CreateNot(cf),
                                      builder.CreateNot(zf), "setnbe-and");
 
-  Value* result =
-      createZExtFolder(builder, condition, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = instruction->operands[0];
   SetOperandValue(dest, result);
@@ -3206,12 +3115,10 @@ void lifterClass::lift_setns() {
 
   Value* sf = getFlag(FLAG_SF);
 
-  Value* result =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, sf,
-                       ConstantInt::get(Type::getInt1Ty(context), 0));
+  Value* result = createICMPFolder(
+      CmpInst::ICMP_EQ, sf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
-  Value* byteResult =
-      createZExtFolder(builder, result, Type::getInt8Ty(context));
+  Value* byteResult = createZExtFolder(result, Type::getInt8Ty(context));
 
   SetOperandValue(dest, byteResult);
 }
@@ -3221,7 +3128,7 @@ void lifterClass::lift_setp() {
 
   Value* pf = getFlag(FLAG_PF);
 
-  Value* result = createZExtFolder(builder, pf, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(pf, Type::getInt8Ty(context));
 
   auto dest = instruction->operands[0];
 
@@ -3234,8 +3141,8 @@ void lifterClass::lift_setnp() {
 
   Value* pf = getFlag(FLAG_PF);
 
-  Value* resultValue = createZExtFolder(builder, builder.CreateNot(pf),
-                                        Type::getInt8Ty(context));
+  Value* resultValue =
+      createZExtFolder(builder.CreateNot(pf), Type::getInt8Ty(context));
 
   SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
 }
@@ -3247,7 +3154,7 @@ void lifterClass::lift_setb() {
 
   Value* cf = getFlag(FLAG_CF);
 
-  Value* result = createZExtFolder(builder, cf, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(cf, Type::getInt8Ty(context));
 
   SetOperandValue(dest, result);
 }
@@ -3256,7 +3163,7 @@ void lifterClass::lift_sets() {
   LLVMContext& context = builder.getContext();
   Value* sf = getFlag(FLAG_SF);
 
-  Value* result = createZExtFolder(builder, sf, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(sf, Type::getInt8Ty(context));
 
   auto dest = instruction->operands[0];
   SetOperandValue(dest, result);
@@ -3276,9 +3183,8 @@ void lifterClass::lift_stosx() {
       builder.CreateSub(builder.CreateMul(DF, builder.CreateAdd(DF, one)), one);
 
   Value* result = createAddFolder(
-      builder, destValue,
-      builder.CreateMul(Direction,
-                        ConstantInt::get(DF->getType(), destbitwidth)));
+      destValue, builder.CreateMul(
+                     Direction, ConstantInt::get(DF->getType(), destbitwidth)));
   SetOperandValue(dest, result);
 }
 
@@ -3289,7 +3195,7 @@ void lifterClass::lift_setz() {
   Value* zf = getFlag(FLAG_ZF);
 
   Value* extendedZF =
-      createZExtFolder(builder, zf, Type::getInt8Ty(context), "setz_extend");
+      createZExtFolder(zf, Type::getInt8Ty(context), "setz_extend");
 
   SetOperandValue(dest, extendedZF);
 }
@@ -3302,19 +3208,18 @@ void lifterClass::lift_setnle() {
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
 
-  Value* zfNotSet =
-      createICMPFolder(builder, CmpInst::ICMP_EQ, zf,
-                       ConstantInt::get(Type::getInt1Ty(context), 0));
+  Value* zfNotSet = createICMPFolder(
+      CmpInst::ICMP_EQ, zf, ConstantInt::get(Type::getInt1Ty(context), 0));
 
-  Value* sfEqualsOf = createICMPFolder(builder, CmpInst::ICMP_EQ, sf, of);
+  Value* sfEqualsOf = createICMPFolder(CmpInst::ICMP_EQ, sf, of);
 
   printvalue(zf) printvalue(sf) printvalue(of)
 
       Value* combinedCondition =
-          createAndFolder(builder, zfNotSet, sfEqualsOf, "setnle-and");
+          createAndFolder(zfNotSet, sfEqualsOf, "setnle-and");
 
   Value* byteResult =
-      createZExtFolder(builder, combinedCondition, Type::getInt8Ty(context));
+      createZExtFolder(combinedCondition, Type::getInt8Ty(context));
 
   SetOperandValue(dest, byteResult);
 }
@@ -3325,11 +3230,10 @@ void lifterClass::lift_setle() {
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
 
-  Value* sf_ne_of = createICMPFolder(builder, CmpInst::ICMP_NE, sf, of);
-  Value* condition = createOrFolder(builder, zf, sf_ne_of, "setle-or");
+  Value* sf_ne_of = createICMPFolder(CmpInst::ICMP_NE, sf, of);
+  Value* condition = createOrFolder(zf, sf_ne_of, "setle-or");
 
-  Value* result =
-      createZExtFolder(builder, condition, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = instruction->operands[0];
   SetOperandValue(dest, result);
@@ -3340,10 +3244,9 @@ void lifterClass::lift_setnl() {
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
 
-  Value* condition = createICMPFolder(builder, CmpInst::ICMP_EQ, sf, of);
+  Value* condition = createICMPFolder(CmpInst::ICMP_EQ, sf, of);
 
-  Value* result =
-      createZExtFolder(builder, condition, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = instruction->operands[0];
   SetOperandValue(dest, result);
@@ -3354,10 +3257,9 @@ void lifterClass::lift_setl() {
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
 
-  Value* condition = createICMPFolder(builder, CmpInst::ICMP_NE, sf, of);
+  Value* condition = createICMPFolder(CmpInst::ICMP_NE, sf, of);
 
-  Value* result =
-      createZExtFolder(builder, condition, Type::getInt8Ty(context));
+  Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = instruction->operands[0];
   SetOperandValue(dest, result);
@@ -3383,16 +3285,16 @@ void lifterClass::lift_bt() {
 
   unsigned LvalueBitW = cast<IntegerType>(Lvalue->getType())->getBitWidth();
 
-  auto Rvalue = createAndFolder(
-      builder, bitIndexValue,
-      ConstantInt::get(bitIndexValue->getType(), LvalueBitW - 1));
+  auto Rvalue =
+      createAndFolder(bitIndexValue, ConstantInt::get(bitIndexValue->getType(),
+                                                      LvalueBitW - 1));
 
-  auto shl = createShlFolder(
-      builder, ConstantInt::get(bitIndexValue->getType(), 1), Rvalue);
+  auto shl =
+      createShlFolder(ConstantInt::get(bitIndexValue->getType(), 1), Rvalue);
 
-  auto andd = createAndFolder(builder, shl, Lvalue);
+  auto andd = createAndFolder(shl, Lvalue);
 
-  auto cf = createICMPFolder(builder, CmpInst::ICMP_NE, andd,
+  auto cf = createICMPFolder(CmpInst::ICMP_NE, andd,
                              ConstantInt::get(andd->getType(), 0));
 
   setFlag(FLAG_CF, cf);
@@ -3411,29 +3313,27 @@ void lifterClass::lift_btr() {
 
   Value* bitOffset = GetOperandValue(offset, base.size);
 
-  Value* bitOffsetMasked =
-      createAndFolder(builder, bitOffset,
-                      ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
-                      "bitOffsetMasked");
+  Value* bitOffsetMasked = createAndFolder(
+      bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
+      "bitOffsetMasked");
 
   Value* baseVal = GetOperandValue(base, base.size);
 
   Value* bit = createLShrFolder(
-      builder, baseVal, bitOffsetMasked,
+      baseVal, bitOffsetMasked,
       "btr-lshr-" + to_string(instruction->runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
-  bit = createAndFolder(builder, bit, one, "btr-and");
+  bit = createAndFolder(bit, one, "btr-and");
 
   setFlag(FLAG_CF, bit);
 
-  Value* mask =
-      createShlFolder(builder, ConstantInt::get(baseVal->getType(), 1),
-                      bitOffsetMasked, "btr-shl");
+  Value* mask = createShlFolder(ConstantInt::get(baseVal->getType(), 1),
+                                bitOffsetMasked, "btr-shl");
 
   mask = builder.CreateNot(mask); // invert mask
-  baseVal = createAndFolder(builder, baseVal, mask,
+  baseVal = createAndFolder(baseVal, mask,
                             "btr-and-" +
                                 to_string(instruction->runtime_address) + "-");
 
@@ -3448,7 +3348,7 @@ void lifterClass::lift_bsr() {
   auto src = instruction->operands[1];
 
   Value* Rvalue = GetOperandValue(src, src.size);
-  Value* isZero = createICMPFolder(builder, CmpInst::ICMP_EQ, Rvalue,
+  Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
                                    ConstantInt::get(Rvalue->getType(), 0));
   setFlag(FLAG_ZF, isZero);
 
@@ -3462,22 +3362,18 @@ void lifterClass::lift_bsr() {
 
   for (unsigned i = 0; i < bitWidth; ++i) {
 
-    Value* mask = createShlFolder(builder, oneVal, index);
+    Value* mask = createShlFolder(oneVal, index);
 
-    Value* test = createAndFolder(builder, Rvalue, mask, "bsrtest");
-    Value* isBitSet =
-        createICMPFolder(builder, CmpInst::ICMP_NE, test, zeroVal);
+    Value* test = createAndFolder(Rvalue, mask, "bsrtest");
+    Value* isBitSet = createICMPFolder(CmpInst::ICMP_NE, test, zeroVal);
 
-    Value* tmpPosition =
-        createSelectFolder(builder, isBitSet, index, bitPosition);
+    Value* tmpPosition = createSelectFolder(isBitSet, index, bitPosition);
 
-    Value* isPositionUnset =
-        createICMPFolder(builder, CmpInst::ICMP_EQ, bitPosition,
-                         ConstantInt::get(Rvalue->getType(), -1));
-    bitPosition =
-        createSelectFolder(builder, isPositionUnset, tmpPosition, bitPosition);
+    Value* isPositionUnset = createICMPFolder(
+        CmpInst::ICMP_EQ, bitPosition, ConstantInt::get(Rvalue->getType(), -1));
+    bitPosition = createSelectFolder(isPositionUnset, tmpPosition, bitPosition);
 
-    index = createSubFolder(builder, index, oneVal);
+    index = createSubFolder(index, oneVal);
   }
 
   SetOperandValue(dest, bitPosition);
@@ -3490,7 +3386,7 @@ void lifterClass::lift_bsf() {
 
   Value* Rvalue = GetOperandValue(src, src.size);
 
-  Value* isZero = createICMPFolder(builder, CmpInst::ICMP_EQ, Rvalue,
+  Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
                                    ConstantInt::get(Rvalue->getType(), 0));
   setFlag(FLAG_ZF, isZero);
 
@@ -3502,19 +3398,18 @@ void lifterClass::lift_bsf() {
 
   Value* continuecounting = ConstantInt::get(Type::getInt1Ty(context), 1);
   for (uint64_t i = 0; i < intWidth; ++i) {
-    Value* bitMask =
-        createShlFolder(builder, one, ConstantInt::get(intType, i));
-    Value* bitSet = createAndFolder(builder, Rvalue, bitMask, "bsfbitset");
-    Value* isBitZero = createICMPFolder(builder, CmpInst::ICMP_EQ, bitSet,
+    Value* bitMask = createShlFolder(one, ConstantInt::get(intType, i));
+    Value* bitSet = createAndFolder(Rvalue, bitMask, "bsfbitset");
+    Value* isBitZero = createICMPFolder(CmpInst::ICMP_EQ, bitSet,
                                         ConstantInt::get(intType, 0));
     // continue until isBitZero is 1
     // 0010
     // if continuecounting, select
     Value* possibleResult = ConstantInt::get(intType, i);
     Value* condition =
-        createAndFolder(builder, continuecounting, isBitZero, "bsfcondition");
+        createAndFolder(continuecounting, isBitZero, "bsfcondition");
     continuecounting = builder.CreateNot(isBitZero);
-    result = createSelectFolder(builder, condition, result, possibleResult,
+    result = createSelectFolder(condition, result, possibleResult,
                                 "updateResultOnFirstNonZeroBit");
   }
 
@@ -3529,28 +3424,26 @@ void lifterClass::lift_btc() {
 
   Value* bitOffset = GetOperandValue(offset, base.size);
 
-  Value* bitOffsetMasked =
-      createAndFolder(builder, bitOffset,
-                      ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
-                      "bitOffsetMasked");
+  Value* bitOffsetMasked = createAndFolder(
+      bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
+      "bitOffsetMasked");
 
   Value* baseVal = GetOperandValue(base, base.size);
 
   Value* bit = createLShrFolder(
-      builder, baseVal, bitOffsetMasked,
+      baseVal, bitOffsetMasked,
       "btc-lshr-" + to_string(instruction->runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
-  bit = createAndFolder(builder, bit, one, "btc-and");
+  bit = createAndFolder(bit, one, "btc-and");
 
   setFlag(FLAG_CF, bit);
 
-  Value* mask =
-      createShlFolder(builder, ConstantInt::get(baseVal->getType(), 1),
-                      bitOffsetMasked, "btc-shl");
+  Value* mask = createShlFolder(ConstantInt::get(baseVal->getType(), 1),
+                                bitOffsetMasked, "btc-shl");
 
-  baseVal = createXorFolder(builder, baseVal, mask,
+  baseVal = createXorFolder(baseVal, mask,
                             "btc-and-" +
                                 to_string(instruction->runtime_address) + "-");
 
@@ -3572,24 +3465,13 @@ void lifterClass::lift_lahf() {
 
   printvalue(sf) printvalue(zf) printvalue(af) printvalue(pf) printvalue(cf);
 
-  cf = createZExtFolder(builder, cf, Type::getInt8Ty(context));
-  pf = createShlFolder(builder,
-                       createZExtFolder(builder, pf, Type::getInt8Ty(context)),
-                       FLAG_PF);
-  af = createShlFolder(builder,
-                       createZExtFolder(builder, af, Type::getInt8Ty(context)),
-                       FLAG_AF);
-  zf = createShlFolder(builder,
-                       createZExtFolder(builder, zf, Type::getInt8Ty(context)),
-                       FLAG_ZF);
-  sf = createShlFolder(builder,
-                       createZExtFolder(builder, sf, Type::getInt8Ty(context)),
-                       FLAG_SF);
-  Value* Rvalue =
-      createOrFolder(builder,
-                     createOrFolder(builder, createOrFolder(builder, cf, pf),
-                                    createOrFolder(builder, af, sf)),
-                     sf);
+  cf = createZExtFolder(cf, Type::getInt8Ty(context));
+  pf = createShlFolder(createZExtFolder(pf, Type::getInt8Ty(context)), FLAG_PF);
+  af = createShlFolder(createZExtFolder(af, Type::getInt8Ty(context)), FLAG_AF);
+  zf = createShlFolder(createZExtFolder(zf, Type::getInt8Ty(context)), FLAG_ZF);
+  sf = createShlFolder(createZExtFolder(sf, Type::getInt8Ty(context)), FLAG_SF);
+  Value* Rvalue = createOrFolder(
+      createOrFolder(createOrFolder(cf, pf), createOrFolder(af, sf)), sf);
 
   printvalue(sf) printvalue(zf) printvalue(af) printvalue(pf) printvalue(cf);
 
@@ -3629,7 +3511,7 @@ void lifterClass::lift_cmc() {
 
   Value* one = ConstantInt::get(cf->getType(), 1);
 
-  setFlag(FLAG_CF, createXorFolder(builder, cf, one));
+  setFlag(FLAG_CF, createXorFolder(cf, one));
 }
 
 void lifterClass::lift_clc() {
@@ -3667,30 +3549,27 @@ void lifterClass::lift_bts() {
 
   Value* bitOffset = GetOperandValue(offset, base.size);
 
-  Value* bitOffsetMasked =
-      createAndFolder(builder, bitOffset,
-                      ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
-                      "bitOffsetMasked");
+  Value* bitOffsetMasked = createAndFolder(
+      bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
+      "bitOffsetMasked");
 
   Value* baseVal = GetOperandValue(base, base.size);
 
   Value* bit = createLShrFolder(
-      builder, baseVal, bitOffsetMasked,
+      baseVal, bitOffsetMasked,
       "bts-lshr-" + to_string(instruction->runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
-  bit = createAndFolder(builder, bit, one, "bts-and");
+  bit = createAndFolder(bit, one, "bts-and");
 
   setFlag(FLAG_CF, bit);
 
-  Value* mask =
-      createShlFolder(builder, ConstantInt::get(baseVal->getType(), 1),
-                      bitOffsetMasked, "bts-shl");
+  Value* mask = createShlFolder(ConstantInt::get(baseVal->getType(), 1),
+                                bitOffsetMasked, "bts-shl");
 
-  baseVal =
-      createOrFolder(builder, baseVal, mask,
-                     "bts-or-" + to_string(instruction->runtime_address) + "-");
+  baseVal = createOrFolder(
+      baseVal, mask, "bts-or-" + to_string(instruction->runtime_address) + "-");
 
   SetOperandValue(base, baseVal);
   printvalue(bitOffset);
@@ -3702,15 +3581,13 @@ void lifterClass::lift_cwd() {
   LLVMContext& context = builder.getContext();
 
   Value* ax = createZExtOrTruncFolder(
-      builder,
       GetOperandValue(instruction->operands[1], instruction->operands[1].size),
       Type::getInt16Ty(context));
 
-  Value* signBit = computeSignFlag(builder, ax);
+  Value* signBit = computeSignFlag(ax);
 
   Value* dx = createSelectFolder(
-      builder,
-      createICMPFolder(builder, CmpInst::ICMP_EQ, signBit,
+      createICMPFolder(CmpInst::ICMP_EQ, signBit,
                        ConstantInt::get(signBit->getType(), 0)),
       ConstantInt::get(Type::getInt16Ty(context), 0),
       ConstantInt::get(Type::getInt16Ty(context), 0xFFFF), "setDX");
@@ -3722,15 +3599,13 @@ void lifterClass::lift_cdq() {
   LLVMContext& context = builder.getContext();
   // if eax is -, then edx is filled with ones FFFF_FFFF
   Value* eax = createZExtOrTruncFolder(
-      builder,
       GetOperandValue(instruction->operands[1], instruction->operands[1].size),
       Type::getInt32Ty(context));
 
-  Value* signBit = computeSignFlag(builder, eax);
+  Value* signBit = computeSignFlag(eax);
 
   Value* edx = createSelectFolder(
-      builder,
-      createICMPFolder(builder, CmpInst::ICMP_EQ, signBit,
+      createICMPFolder(CmpInst::ICMP_EQ, signBit,
                        ConstantInt::get(signBit->getType(), 0)),
       ConstantInt::get(Type::getInt32Ty(context), 0),
       ConstantInt::get(Type::getInt32Ty(context), 0xFFFFFFFF), "setEDX");
@@ -3743,15 +3618,13 @@ void lifterClass::lift_cqo() {
   LLVMContext& context = builder.getContext();
   // if rax is -, then rdx is filled with ones FFFF_FFFF_FFFF_FFFF
   Value* rax = createZExtOrTruncFolder(
-      builder,
       GetOperandValue(instruction->operands[1], instruction->operands[1].size),
       Type::getInt64Ty(context));
 
-  Value* signBit = computeSignFlag(builder, rax);
+  Value* signBit = computeSignFlag(rax);
 
   Value* rdx = createSelectFolder(
-      builder,
-      createICMPFolder(builder, CmpInst::ICMP_EQ, signBit,
+      createICMPFolder(CmpInst::ICMP_EQ, signBit,
                        ConstantInt::get(signBit->getType(), 0)),
       ConstantInt::get(Type::getInt64Ty(context), 0),
       ConstantInt::get(Type::getInt64Ty(context), 0xFFFFFFFFFFFFFFFF),
@@ -3763,11 +3636,10 @@ void lifterClass::lift_cqo() {
 void lifterClass::lift_cbw() {
   LLVMContext& context = builder.getContext();
   Value* al = createZExtOrTruncFolder(
-      builder,
       GetOperandValue(instruction->operands[1], instruction->operands[1].size),
       Type::getInt8Ty(context));
 
-  Value* ax = createSExtFolder(builder, al, Type::getInt16Ty(context), "cbw");
+  Value* ax = createSExtFolder(al, Type::getInt16Ty(context), "cbw");
 
   SetOperandValue(instruction->operands[0], ax);
 }
@@ -3775,11 +3647,10 @@ void lifterClass::lift_cbw() {
 void lifterClass::lift_cwde() {
   LLVMContext& context = builder.getContext();
   Value* ax = createZExtOrTruncFolder(
-      builder,
       GetOperandValue(instruction->operands[1], instruction->operands[1].size),
       Type::getInt16Ty(context));
   printvalue(ax);
-  Value* eax = createSExtFolder(builder, ax, Type::getInt32Ty(context), "cwde");
+  Value* eax = createSExtFolder(ax, Type::getInt32Ty(context), "cwde");
   printvalue(eax);
   SetOperandValue(instruction->operands[0], eax);
 }
@@ -3788,12 +3659,10 @@ void lifterClass::lift_cdqe() {
   LLVMContext& context = builder.getContext();
 
   Value* eax = createZExtOrTruncFolder(
-      builder,
       GetOperandValue(instruction->operands[1], instruction->operands[1].size),
       Type::getInt32Ty(context), "cdqe-trunc");
 
-  Value* rax =
-      createSExtFolder(builder, eax, Type::getInt64Ty(context), "cdqe");
+  Value* rax = createSExtFolder(eax, Type::getInt64Ty(context), "cdqe");
 
   SetOperandValue(instruction->operands[0], rax);
 }

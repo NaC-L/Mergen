@@ -5,6 +5,14 @@
 
 enum Assumption { Real, Assumed }; // add None
 
+enum isPaged { MEMORY_PAGED, MEMORY_MIGHT_BE_PAGED, MEMORY_NOT_PAGED };
+
+struct APIntComparator {
+  bool operator()(const APInt& lhs, const APInt& rhs) const {
+    return lhs.ult(rhs); // unsigned less-than comparison
+  }
+};
+
 class ValueByteReference {
 public:
   Instruction* storeInst;
@@ -41,19 +49,6 @@ public:
       : valinfo(addr), start(startv), end(endv), isRef(false) {}
 };
 
-class lifterMemoryBuffer {
-public:
-  DenseMap<uint64_t, ValueByteReference*> buffer;
-  void addValueReference(Instruction* inst, Value* value, uint64_t address);
-  Value* retrieveCombinedValue(IRBuilder<>& builder, uint64_t startAddress,
-                               uint64_t byteCount, Value* orgLoad);
-  void updateValueReference(Instruction* inst, Value* value, uint64_t address);
-
-private:
-  Value* extractBytes(IRBuilder<>& builder, Value* value, uint64_t startOffset,
-                      uint64_t endOffset);
-};
-
 namespace BinaryOperations {
 
   const char* getName(uint64_t offset);
@@ -69,34 +64,6 @@ namespace BinaryOperations {
   bool isWrittenTo(uint64_t addr);
 
 }; // namespace BinaryOperations
-
-namespace GEPStoreTracker {
-
-  void initDomTree(Function& F);
-
-  DominatorTree* getDomTree();
-
-  void updateDomTree(Function& F);
-  struct APIntComparator {
-    bool operator()(const APInt& lhs, const APInt& rhs) const {
-      return lhs.ult(rhs); // unsigned less-than comparison
-    }
-  };
-  set<APInt, APIntComparator> computePossibleValues(Value* V);
-
-  void updateMemoryOp(StoreInst* inst);
-
-  void markMemPaged(uint64_t start, uint64_t end);
-
-  bool isMemPaged(uint64_t address);
-
-  void insertMemoryOp(StoreInst* inst);
-
-  void loadMemoryOp(LoadInst* inst);
-
-  Value* solveLoad(LoadInst* inst);
-
-}; // namespace GEPStoreTracker
 
 /*
 namespace SCCPSimplifier {
