@@ -129,9 +129,9 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
       printvalue(B);
       printvalue(C);
       if (auto X_inst = dyn_cast<Instruction>(X)) {
-        auto pv = computePossibleValues(X_inst);
-        if (pv.size() == 2) {
-          // check if pv is 0, -1
+        auto possible_condition = analyzeValueKnownBits(X_inst, X_inst);
+        if (possible_condition.getMaxValue().isAllOnes() &&
+            possible_condition.getMinValue().isZero()) {
 
           return createSelectFolder(X, C, B, "selectEZ");
         }
