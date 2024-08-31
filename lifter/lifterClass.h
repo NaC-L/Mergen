@@ -3,6 +3,7 @@
 #include "FunctionSignatures.h"
 #include "GEPTracker.h"
 #include "includes.h"
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/DomConditionCache.h>
 
 #define DEFINE_FUNCTION(name) void lift_##name()
@@ -59,15 +60,77 @@ struct InstructionKey {
     }
   };
 };
+class RegisterManager {
+public:
+  enum RegisterIndex {
+    RAX_ = 0,
+    RCX_,
+    RDX_,
+    RBX_,
+    RSP_,
+    RBP_,
+    RSI_,
+    RDI_,
+    R8_,
+    R9_,
+    R10_,
+    R11_,
+    R12_,
+    R13_,
+    R14_,
+    R15_,
+    RIP_,
+    RFLAGS_,
+    REGISTER_COUNT // Total number of registers
+  };
+  llvm::SmallVector<Value*, REGISTER_COUNT>* vec = nullptr;
 
+  RegisterManager() { vec = new llvm::SmallVector<Value*, REGISTER_COUNT>; }
+
+  // Copy Constructor
+  RegisterManager(const RegisterManager& other) {
+    vec =
+        new llvm::SmallVector<Value*, REGISTER_COUNT>(*other.vec); // Deep copy
+  }
+
+  // Overload the [] operator for getting register values
+
+  int getRegisterIndex(ZydisRegister key) const {
+
+    if (key == ZYDIS_REGISTER_RIP) {
+      return RIP_;
+    }
+
+    if (key == ZYDIS_REGISTER_RFLAGS) {
+      return RFLAGS_;
+    }
+
+    // For ordered registers RAX to R15, map directly by offset from RAX
+    return key - ZYDIS_REGISTER_RAX;
+  }
+
+  llvm::Value*& operator[](ZydisRegister key) {
+    int index = getRegisterIndex(key);
+    return (*vec)[index];
+  }
+  RegisterManager& operator=(const RegisterManager& other) {
+    if (this != &other) {
+      delete vec; // Clean up existing resource
+      vec = new llvm::SmallVector<Value*, REGISTER_COUNT>(
+          *other.vec); // Deep copy
+    }
+    return *this;
+  }
+};
 struct BBInfo {
   uint64_t runtime_address;
   llvm::BasicBlock* block;
-  RegisterMap registers;
+  RegisterManager registers;
 
   BBInfo(){};
+
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block,
-         RegisterMap registers)
+         RegisterManager& registers)
       : runtime_address(runtime_address), block(block), registers(registers) {}
 };
 
@@ -76,7 +139,9 @@ public:
   IRBuilder<>& builder;
   BBInfo blockInfo;
 
-  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder){};
+  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder) {
+    assumptions = new DenseMap<Instruction*, APInt>;
+  };
 
   lifterClass(const lifterClass& other) = default;
 
@@ -84,12 +149,12 @@ public:
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
 
-  DenseMap<Instruction*, APInt> assumptions;
   ZydisDisassembledInstruction* instruction = nullptr;
+  DenseMap<Instruction*, APInt>* assumptions;
   DenseMap<uint64_t, ValueByteReference*> buffer;
 
   unordered_map<Flag, Value*> FlagList; // doesnt need to be a map
-  RegisterMap Registers;                // doesnt need to be a map
+  RegisterManager Registers;
 
   Value* memory;
   Value* TEB;
@@ -108,10 +173,9 @@ public:
   // getters-setters
   Value* setFlag(Flag flag, Value* newValue = nullptr);
   Value* getFlag(Flag flag);
-  RegisterMap getRegisters();
-  void setRegisters(RegisterMap newRegisters);
-  ReverseRegisterMap flipRegisterMap();
-  RegisterMap InitRegisters(Function* function, ZyanU64 rip);
+  RegisterManager& getRegisters();
+  void setRegisters(RegisterManager newRegisters);
+  void InitRegisters(Function* function, ZyanU64 rip);
   Value* GetValueFromHighByteRegister(int reg);
   Value* GetRegisterValue(int key);
   Value* SetValueToHighByteRegister(int reg, Value* value);
@@ -179,6 +243,7 @@ public:
 
   void updateDomTree(Function& F) {
     // should only recalculate if we
+
     auto getLastBB = &(F.back());
 
     if (getLastBB != lastBB)
