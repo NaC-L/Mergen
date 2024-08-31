@@ -12,13 +12,14 @@
 
 vector<lifterClass*> lifters;
 uint64_t original_address = 0;
-
+unsigned int pathNo = 0;
 // consider having this function in a class, later we can use multi-threading to
 // explore different paths
 void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address) {
 
   while (lifters.size() > 0) {
     lifterClass* lifter = lifters.back();
+
     runtime_address = lifter->blockInfo.runtime_address;
     uint64_t offset = FileHelper::address_to_mapped_address(runtime_address);
     debugging::doIfDebug([&]() {
@@ -28,18 +29,13 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address) {
            << " runtime: " << runtime_address << endl;
     });
 
-    auto nextBasicBlock = lifter->blockInfo.block;
-
-    lifter->builder.SetInsertPoint(nextBasicBlock);
-
-    // this looks stupid
-    lifter->setRegisters(lifter->blockInfo.registers);
+    lifter->builder.SetInsertPoint(lifter->blockInfo.block);
 
     BinaryOperations::initBases(data, data);
 
     lifter->run = 1;
 
-    for (; lifter->run && runtime_address > 0;) {
+    for (; lifter->run && !lifter->finished && runtime_address > 0;) {
       if (BinaryOperations::isWrittenTo(runtime_address)) {
         printvalueforce2(runtime_address);
         outs() << "SelfModifyingCode!\n";
@@ -63,7 +59,13 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address) {
         lifter->run = 0;
         lifters.pop_back();
 
+        std::string Filename = "output_path_" + to_string(++pathNo) + ".ll";
+        std::error_code EC;
+        raw_fd_ostream OS(Filename, EC);
+        lifter->fnc->getParent()->print(OS, nullptr);
+
         outs() << "next lifter instance\n";
+        continue;
       }
 
       offset += instruction.info.length;
@@ -118,8 +120,8 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
   // auto RegisterList = InitRegisters(builder, function, runtime_address);
 
   lifterClass* main = new lifterClass(builder);
-  auto RegisterList = main->InitRegisters(function, runtime_address);
-  main->blockInfo = BBInfo(runtime_address, bb, RegisterList);
+  main->InitRegisters(function, runtime_address);
+  main->blockInfo = BBInfo(runtime_address, bb, main->Registers);
 
   main->fnc = function;
   main->initDomTree(*function);

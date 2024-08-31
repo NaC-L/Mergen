@@ -90,6 +90,25 @@ void final_optpass(Function* clonedFuncx) {
   modulePassManager.run(*module, moduleAnalysisManager);
 }
 
+llvm::DenseMap<uint64_t, ValueByteReference*> deepCopyDenseMap(
+    const llvm::DenseMap<uint64_t, ValueByteReference*>& original) {
+  llvm::DenseMap<uint64_t, ValueByteReference*> copy;
+
+  // Iterate over the original map and copy each key-value pair deeply
+  for (const auto& entry : original) {
+    uint64_t key = entry.first;
+    ValueByteReference* originalValue = entry.second;
+
+    // Create a deep copy of the ValueByteReference object using clone()
+    if (originalValue) {
+      copy[key] = originalValue->clone();
+    } else {
+      copy[key] = nullptr; // Handle null pointers if any
+    }
+  }
+  return copy;
+}
+
 PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
                                  Value* simplifyValue) {
 
@@ -156,7 +175,6 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
       }
       return nullopt;
     };
-
     Value* condition = nullptr;
     if (auto can_simplify = try_simplify(firstcase, simplifyValue))
       condition = can_simplify.value();
@@ -173,14 +191,36 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
 
     RegisterBranch(BR);
 
+    printvalue2(Registers.vec->size());
+    blockInfo = BBInfo(secondcase.getZExtValue(), bb_true, Registers);
+    // for [this], we can assume condition is true
+    // we can simplify any value tied to is dependent on condition,
+    // and try to simplify any value calculates condition
+
     lifterClass* newlifter = new lifterClass(*this);
 
-    blockInfo = BBInfo(secondcase.getZExtValue(), bb_true, getRegisters());
+    newlifter->Registers = Registers;
 
+    newlifter->Registers.vec =
+        new llvm::SmallVector<Value*, 18>(*(Registers.vec));
+
+    newlifter->assumptions = new DenseMap<Instruction*, APInt>(*assumptions);
+    newlifter->buffer = deepCopyDenseMap(buffer);
+
+    // for [newlifter], we can assume condition is false
     newlifter->blockInfo =
-        BBInfo(firstcase.getZExtValue(), bb_false, getRegisters());
+        BBInfo(firstcase.getZExtValue(), bb_false, Registers);
+    (*(newlifter->assumptions))[cast<Instruction>(condition)] = 1;
+
+    (*(assumptions))[cast<Instruction>(condition)] = 0;
 
     lifters.push_back(newlifter);
+
+    std::string Filename = "output_newpath.ll";
+    std::error_code EC;
+    raw_fd_ostream OS(Filename, EC);
+    function->getParent()->print(OS, nullptr);
+
     outs() << "created a new path\n";
   }
   if (pv.size() > 2) {
