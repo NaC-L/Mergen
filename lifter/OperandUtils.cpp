@@ -66,7 +66,7 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
   }
 }
 SimplifyQuery lifterClass::createSimplifyQuery(Instruction* Inst) {
-  updateDomTree(*fnc);
+  // updateDomTree(*fnc);
   // auto DT = getDomTree();
   auto DL = fnc->getParent()->getDataLayout();
   static TargetLibraryInfoImpl TLIImpl(
@@ -546,7 +546,6 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
 Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
                                       Value* operand2, Type* destType,
                                       const Twine& Name) {
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 
   InstructionKey* key;
   if (destType)
@@ -554,10 +553,11 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
   else
     key = new InstructionKey(opcode, operand1, operand2);
 
-  // cache trolls us for different branch
   Value* newValue = getOrCreate(*key, Name);
 
-  return simplifyValue(newValue, DL);
+  return simplifyValue(
+      newValue,
+      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout()); //
 }
 
 Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
@@ -1042,7 +1042,6 @@ Value* lifterClass::createTruncFolder(Value* V, Type* DestTy,
   Value* result =
       createInstruction(Instruction::Trunc, V, nullptr, DestTy, Name);
 
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
   if (auto ctxI = dyn_cast<Instruction>(result)) {
 
     KnownBits KnownTruncResult = analyzeValueKnownBits(result, ctxI);
@@ -1058,13 +1057,14 @@ Value* lifterClass::createTruncFolder(Value* V, Type* DestTy,
   // just use %y
   // so xor %y, %y2 => %y, %y => 0
 
-  return simplifyValue(result, DL);
+  return simplifyValue(
+      result,
+      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
 
 Value* lifterClass::createZExtFolder(Value* V, Type* DestTy,
                                      const Twine& Name) {
   auto result = createInstruction(Instruction::ZExt, V, nullptr, DestTy, Name);
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER8
   if (auto ctxI = dyn_cast<Instruction>(result)) {
     KnownBits KnownRHS = analyzeValueKnownBits(result, ctxI);
@@ -1073,7 +1073,9 @@ Value* lifterClass::createZExtFolder(Value* V, Type* DestTy,
       return ConstantInt::get(DestTy, KnownRHS.getConstant());
   }
 #endif
-  return simplifyValue(result, DL);
+  return simplifyValue(
+      result,
+      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
 
 Value* lifterClass::createZExtOrTruncFolder(Value* V, Type* DestTy,
@@ -1089,7 +1091,6 @@ Value* lifterClass::createZExtOrTruncFolder(Value* V, Type* DestTy,
 Value* lifterClass::createSExtFolder(Value* V, Type* DestTy,
                                      const Twine& Name) {
   auto result = createInstruction(Instruction::SExt, V, nullptr, DestTy, Name);
-  DataLayout DL(builder.GetInsertBlock()->getParent()->getParent());
 #ifdef TESTFOLDER8
   if (auto ctxI = dyn_cast<Instruction>(result)) {
     KnownBits KnownRHS = analyzeValueKnownBits(result, ctxI);
@@ -1098,7 +1099,9 @@ Value* lifterClass::createSExtFolder(Value* V, Type* DestTy,
       return ConstantInt::get(DestTy, KnownRHS.getConstant());
   }
 #endif
-  return simplifyValue(result, DL);
+  return simplifyValue(
+      result,
+      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
 
 Value* lifterClass::createSExtOrTruncFolder(Value* V, Type* DestTy,

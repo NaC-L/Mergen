@@ -59,11 +59,12 @@ void asm_to_zydis_to_lift(ZyanU8* data, ZyanU64 runtime_address) {
         lifter->run = 0;
         lifters.pop_back();
 
-        std::string Filename = "output_path_" + to_string(++pathNo) + ".ll";
-        std::error_code EC;
-        raw_fd_ostream OS(Filename, EC);
-        lifter->fnc->getParent()->print(OS, nullptr);
-
+        debugging::doIfDebug([&]() {
+          std::string Filename = "output_path_" + to_string(++pathNo) + ".ll";
+          std::error_code EC;
+          raw_fd_ostream OS(Filename, EC);
+          lifter->fnc->getParent()->print(OS, nullptr);
+        });
         outs() << "next lifter instance\n";
         continue;
       }

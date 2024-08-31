@@ -207,6 +207,10 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     newlifter->assumptions = new DenseMap<Instruction*, APInt>(*assumptions);
     newlifter->buffer = deepCopyDenseMap(buffer);
 
+    newlifter->cache =
+        DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>(
+            cache);
+
     // for [newlifter], we can assume condition is false
     newlifter->blockInfo =
         BBInfo(firstcase.getZExtValue(), bb_false, Registers);
@@ -216,11 +220,12 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
 
     lifters.push_back(newlifter);
 
-    std::string Filename = "output_newpath.ll";
-    std::error_code EC;
-    raw_fd_ostream OS(Filename, EC);
-    function->getParent()->print(OS, nullptr);
-
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_newpath.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      function->getParent()->print(OS, nullptr);
+    });
     outs() << "created a new path\n";
   }
   if (pv.size() > 2) {
