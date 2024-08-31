@@ -277,7 +277,7 @@ inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
 #endif
 
 #define RIP 0x007FFFFFFF400000
-#define STACKP_VALUE 0x14FF28
+#define STACKP_VALUE 0x14FEA8
 
 using ReverseRegisterMap = DenseMap<Value*, int>;
 using RegisterMap =
