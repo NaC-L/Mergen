@@ -7,6 +7,7 @@
 #include <llvm/Analysis/ValueLattice.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PatternMatch.h>
 #include <llvm/Support/KnownBits.h>
@@ -45,6 +46,7 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
 
   ICmpInst::Predicate Pred;
   Value* A;
+
   if (match(Cond, m_ICmp(Pred, m_Value(A), m_Constant()))) {
     AddAffected(A);
 
@@ -110,36 +112,94 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
                                       Value* const op0, Value* const op1) {
 
   switch (I) {
-  case Instruction::Add:
+  case Instruction::Add: {
+    auto and_by_power = [&](Value* op, ConstantInt*& power) {
+      Value* LHS;
+      return match(op, m_And(m_Value(LHS), m_ConstantInt(power))) &&
+             power->getValue().isPowerOf2();
+    };
+
+    auto shifted_by_power = [&](Value* op, ConstantInt*& ShiftAmount,
+                                Value*& LHS) {
+      return match(op, m_LShr(m_Value(LHS), m_ConstantInt(ShiftAmount)));
+    };
+
+    auto negative_constant_singlebit = [](Value* op, ConstantInt*& ci) {
+      return match(op, m_ConstantInt(ci)) && ci->getValue().isNegative() &&
+             ci->getValue().abs().isPowerOf2();
+    };
+
+    auto matchPattern = [&](Value* op0, Value* op1) -> Value* {
+      ConstantInt *power = nullptr, *ShiftAmount = nullptr, *ci = nullptr;
+      Value* LHS = nullptr;
+
+      if (negative_constant_singlebit(op0, ci)) {
+        if (shifted_by_power(op1, ShiftAmount, LHS)) {
+          if (and_by_power(LHS, power)) {
+            auto diff = power->getValue().logBase2() - ShiftAmount->getValue();
+            printvalue2(power->getValue());
+            printvalue2(ShiftAmount->getValue());
+            printvalue2(ci->getValue());
+            auto math_is_hard =
+                diff.getBoolValue() ? APInt(64, 2) << diff : APInt(64, 1);
+            printvalue2(math_is_hard);
+            printvalue2(ci->getValue() == -(math_is_hard));
+            if (ci->getValue() == -(math_is_hard)) {
+              auto zero =
+                  builder.getIntN(op1->getType()->getIntegerBitWidth(), 0);
+              auto cond = createICMPFolder(llvm::CmpInst::ICMP_EQ, op1, zero);
+              return createSelectFolder(cond, ci, zero);
+            }
+          }
+        }
+      }
+      return nullptr;
+    };
+
+    /*
+    %not-PConst2-9425 = and i64 %realnot-5369619277-, 64 ( 2 ** 6 = 64)
+        %shr-lshr-5368775124- = lshr i64 %not-PConst2-9425, 6
+        %realadd-5369433110- = add i64 -1, %shr-lshr-5368775124- ( - (2 ** 6-6)
+        ;  ( (a & (2**power) ) >> (power-lula) ) - (2**(lula))
+        ;  result = select trunc( (a & (2**power) ) >> (power-lula) ),  0 or
+        -(2**(lula))
+    */
+
+    // Check if the pattern matches with op0 and op1 in both configurations
+    if (auto aaaaa = matchPattern(op0, op1)) {
+      return aaaaa;
+    }
+
+    break;
+  }
   case Instruction::Or: {
-    Value *X = nullptr, *B = nullptr, *C = nullptr;
+    Value *A = nullptr, *B = nullptr, *C = nullptr;
 
     // Match (~A & B) | (A & C)
     auto handleAndNotPattern = [&](Value* op0, Value* op1) -> bool {
-      return (match(op0, m_And(m_Not(m_Value(X)), m_Value(B))) &&
-              match(op1, m_And(m_Value(X), m_Value(C))));
+      return (match(op0, m_And(m_Not(m_Value(A)), m_Value(B))) &&
+              match(op1, m_And(m_Value(A), m_Value(C))));
     };
 
     if (handleAndNotPattern(op0, op1) || handleAndNotPattern(op1, op0)) {
       // This matches (~A & B) | (A & C)
       // Simplify to A ? C : B
 
-      // X is ( max(v) - v)
-      printvalue(X);
+      // if a is 0, select B
+      // if a is -1, select C
+      // then... ?
+      printvalue(A);
       printvalue(B);
       printvalue(C);
-      if (auto X_inst = dyn_cast<Instruction>(X)) {
+      if (auto X_inst = dyn_cast<Instruction>(A)) {
+
         auto possible_condition = analyzeValueKnownBits(X_inst, X_inst);
         if (possible_condition.getMaxValue().isAllOnes() &&
             possible_condition.getMinValue().isZero()) {
 
-          return createSelectFolder(X, C, B, "selectEZ");
+          return createSelectFolder(A, C, B, "selectEZ");
         }
       }
-
-      // printvalue2(tryCompute.getMinValue()); if 0
-      // printvalue2(tryCompute.getMaxValue()); if -1
-      // do the simplfiication
     }
     break;
   }
@@ -281,7 +341,14 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 }
 
 KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
-
+  if (auto v_inst = dyn_cast<Instruction>(value)) {
+    // Use find() to check if v_inst exists in the map
+    auto it = assumptions->find(v_inst);
+    if (it != assumptions->end()) {
+      auto a = it->second; // Retrieve the value associated with the instruction
+      return KnownBits::makeConstant(a);
+    }
+  }
   KnownBits knownBits(64);
   knownBits.resetAll();
   if (value->getType() == Type::getInt128Ty(value->getContext()))
@@ -510,8 +577,15 @@ Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
   auto inst = builder.CreateSelect(C, True, False, Name);
 
   auto RHSKBSELECT_C = analyzeValueKnownBits(C, dyn_cast<Instruction>(inst));
-
   printvalue2(RHSKBSELECT_C);
+  if (!(RHSKBSELECT_C.isUnknown())) {
+    auto constant_cond = RHSKBSELECT_C.getConstant();
+    if (constant_cond.isOne())
+      return True;
+    if (constant_cond.isZero())
+      return False;
+  }
+
   return inst;
 }
 
@@ -1046,6 +1120,7 @@ void lifterClass::Init_Flags() {
   LLVMContext& context = builder.getContext();
   auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
+  auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
 
   FlagList[FLAG_CF] = zero;
   FlagList[FLAG_PF] = zero;
@@ -1058,6 +1133,8 @@ void lifterClass::Init_Flags() {
   FlagList[FLAG_OF] = zero;
 
   FlagList[FLAG_RESERVED1] = one;
+
+  Registers.vec->push_back(two);
 }
 
 // ???
@@ -1080,8 +1157,8 @@ Value* lifterClass::getFlag(Flag flag) {
 }
 
 // for love of god this is so ugly
-RegisterMap lifterClass::getRegisters() { return Registers; }
-void lifterClass::setRegisters(RegisterMap newRegisters) {
+RegisterManager& lifterClass::getRegisters() { return Registers; }
+void lifterClass::setRegisters(RegisterManager newRegisters) {
   Registers = newRegisters;
 }
 
@@ -1090,19 +1167,7 @@ Value* TEB;
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
 
-// todo?
-ReverseRegisterMap lifterClass::flipRegisterMap() {
-  ReverseRegisterMap RevMap;
-  for (const auto& pair : Registers) {
-    RevMap[pair.second] = pair.first;
-  }
-  /*for (const auto& pair : FlagList) {
-          RevMap[pair.second] = pair.first;
-  }*/
-  return RevMap;
-}
-
-RegisterMap lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
+void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
 
   // rsp
   // rsp_unaligned = %rsp % 16
@@ -1123,11 +1188,10 @@ RegisterMap lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
       TEB = arg;
     } else {
       arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
-      Registers[(ZydisRegister)zydisRegister] = arg;
+      Registers.vec->push_back(arg);
       zydisRegister++;
     }
   }
-
   Init_Flags();
 
   LLVMContext& context = builder.getContext();
@@ -1139,7 +1203,7 @@ RegisterMap lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
 
   auto new_rip = createAddFolder(zero, value);
 
-  Registers[ZYDIS_REGISTER_RIP] = new_rip;
+  Registers.vec->push_back(new_rip);
 
   auto stackvalue = cast<Value>(
       ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));
@@ -1147,7 +1211,7 @@ RegisterMap lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
 
   Registers[ZYDIS_REGISTER_RSP] = new_stack_pointer;
 
-  return Registers;
+  return;
 }
 
 Value* lifterClass::GetValueFromHighByteRegister(int reg) {
@@ -1200,10 +1264,11 @@ Value* lifterClass::GetRegisterValue(int key) {
     return GetValueFromHighByteRegister(key);
   }
 
-  int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
-                   ? ZydisRegisterGetLargestEnclosing(
-                         ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key)
-                   : key;
+  ZydisRegister newKey =
+      (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
+          ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,
+                                             (ZydisRegister)key)
+          : (ZydisRegister)key;
 
   if (key == ZYDIS_REGISTER_RFLAGS || key == ZYDIS_REGISTER_EFLAGS) {
     return GetRFLAGSValue();
@@ -1222,8 +1287,8 @@ Value* lifterClass::SetValueToHighByteRegister(int reg, Value* value) {
   LLVMContext& context = builder.getContext();
   int shiftValue = 8;
 
-  int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,
-                                                    (ZydisRegister)reg);
+  ZydisRegister fullRegKey = ZydisRegisterGetLargestEnclosing(
+      ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
   Value* fullRegisterValue = Registers[fullRegKey];
 
   Value* eightBitValue = createAndFolder(
@@ -1246,7 +1311,7 @@ Value* lifterClass::SetValueToHighByteRegister(int reg, Value* value) {
 
 Value* lifterClass::SetValueToSubRegister_8b(int reg, Value* value) {
   LLVMContext& context = builder.getContext();
-  int fullRegKey = ZydisRegisterGetLargestEnclosing(
+  ZydisRegister fullRegKey = ZydisRegisterGetLargestEnclosing(
       ZYDIS_MACHINE_MODE_LONG_64, static_cast<ZydisRegister>(reg));
   Value* fullRegisterValue = Registers[fullRegKey];
   fullRegisterValue =
@@ -1284,8 +1349,8 @@ Value* lifterClass::SetValueToSubRegister_8b(int reg, Value* value) {
 
 Value* lifterClass::SetValueToSubRegister_16b(int reg, Value* value) {
 
-  int fullRegKey = ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,
-                                                    (ZydisRegister)reg);
+  ZydisRegister fullRegKey = ZydisRegisterGetLargestEnclosing(
+      ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
   Value* fullRegisterValue = Registers[fullRegKey];
 
   Value* last4cleared =
@@ -1322,11 +1387,11 @@ void lifterClass::SetRegisterValue(int key, Value* value) {
     return;
   }
 
-  int newKey = (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
-                   ? ZydisRegisterGetLargestEnclosing(
-                         ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)key)
-                   : key;
-
+  ZydisRegister newKey =
+      (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
+          ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,
+                                             (ZydisRegister)key)
+          : (ZydisRegister)key;
   Registers[newKey] = value;
 }
 
