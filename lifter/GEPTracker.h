@@ -21,6 +21,12 @@ public:
 
   ValueByteReference(Instruction* inst, Value* val, short offset)
       : storeInst(inst), value(val), byteOffset(offset) {}
+
+  // Clone method to create a deep copy of ValueByteReference
+  ValueByteReference* clone() const {
+    return new ValueByteReference(
+        storeInst, value, byteOffset); // Create a new instance with copied data
+  }
 };
 
 class ValueByteReferenceRange {
