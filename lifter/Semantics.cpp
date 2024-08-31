@@ -816,6 +816,7 @@ void lifterClass::lift_ret() {
     });
     run = 0;
     finished = 1;
+    printvalue2(finished);
     return;
   }
 
@@ -2692,7 +2693,7 @@ void lifterClass::lift_pushfq() {
   // auto Rvalue = GetRFLAGS(builder);
   auto RspValue = GetOperandValue(rsp, rsp.size);
 
-  auto val = ConstantInt::get(Type::getInt64Ty(context), 8);
+  auto val = ConstantInt::get(Type::getInt64Ty(context), src.size / 8);
   auto result = createSubFolder(RspValue, val);
 
   SetOperandValue(rsp, result, to_string(instruction->runtime_address));
@@ -2745,7 +2746,7 @@ void lifterClass::lift_popfq() {
   ;
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    8); // assuming its x64
+                                    dest.size / 8); // assuming its x64
   auto result = createAddFolder(
       RspValue, val, "popfq-" + to_string(instruction->runtime_address) + "-");
 
