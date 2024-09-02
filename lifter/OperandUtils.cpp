@@ -413,101 +413,61 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
   Value* newInstruction = nullptr;
 
   if (key.cast == 0) {
-    printvalue2(key.opcode);
-    printvalue2(key.cast);
-    printvalue(key.operand1);
-    printvalue(key.operand2);
-    // Binary instruction
-    if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
-      printvalue2(
-          analyzeValueKnownBits(select_inst->getCondition(), select_inst));
-      if (isa<ConstantInt>(key.operand2))
+
+    auto autoFoldSelect = [&](Value* op1, Value* op2) -> Value* {
+      Value *cnd1, *lhs1, *rhs1, *cnd2, *lhs2, *rhs2;
+
+      // both values select and same condition
+      if (match(op1, m_Select(m_Value(cnd1), m_Value(lhs1), m_Value(rhs1)))) {
+        if (match(op2, m_Select(m_Value(cnd2), m_Value(lhs2), m_Value(rhs2))) &&
+            cnd1 == cnd2) {
+          return createSelectFolder(
+              cnd1,
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1, lhs2),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1, rhs2),
+              "fold-select-1-");
+        }
+      }
+      // respecting lhs and rhs positions
+      if (match(op2, m_Select(m_Value(cnd1), m_Value(lhs1), m_Value(rhs1)))) {
+        if (match(op1, m_Select(m_Value(cnd2), m_Value(lhs2), m_Value(rhs2))) &&
+            cnd1 == cnd2) {
+          return createSelectFolder(
+              cnd1,
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1, lhs2),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1, rhs2),
+              "fold-select-2-");
+        }
+      }
+      // only one value is select
+      if (match(op1, m_Select(m_Value(cnd1), m_Value(lhs1), m_Value(rhs1)))) {
         return createSelectFolder(
-            select_inst->getCondition(),
+            cnd1,
             builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
-                                select_inst->getTrueValue(), key.operand2),
+                                lhs1, op2),
             builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
-                                select_inst->getFalseValue(), key.operand2),
-            "lola-");
-    }
+                                rhs1, op2),
+            "fold-select-2-");
+      }
 
-    if (auto select_inst = dyn_cast<SelectInst>(key.operand2)) {
-      printvalue2(
-          analyzeValueKnownBits(select_inst->getCondition(), select_inst));
-      if (isa<ConstantInt>(key.operand1))
+      if (match(op2, m_Select(m_Value(cnd1), m_Value(lhs1), m_Value(rhs1)))) {
         return createSelectFolder(
-            select_inst->getCondition(),
+            cnd1,
             builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
-                                key.operand1, select_inst->getTrueValue()),
+                                op1, lhs1),
             builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
-                                key.operand1, select_inst->getFalseValue()),
-            "lolb-");
-    }
-    Value *cnd1, *lhs1, *rhs1;
-    if (match(key.operand1, m_TruncOrSelf(m_Select(m_Value(cnd1), m_Value(lhs1),
-                                                   m_Value(rhs1))))) {
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand2))
-        if (select_inst && cnd1 == select_inst->getCondition()) // also check
-                                                                // if inversed
-          return createSelectFolder(
-              select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs1),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs1),
-              "lol2-");
-    }
+                                op1, lhs1),
+            "fold-select-2-");
+      }
 
-    else if (match(key.operand1,
-                   m_ZExtOrSExtOrSelf(m_Select(m_Value(cnd1), m_Value(lhs1),
-                                               m_Value(rhs1))))) {
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand2))
-        if (select_inst && cnd1 == select_inst->getCondition()) // also check
-                                                                // if inversed
-          return createSelectFolder(
-              select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs1),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs1),
-              "lol2-");
-    }
-
-    Value *cnd, *lhs, *rhs;
-    if (match(key.operand2, m_TruncOrSelf(m_Select(m_Value(cnd), m_Value(lhs),
-                                                   m_Value(rhs))))) {
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand1))
-        if (select_inst && cnd == select_inst->getCondition()) // also check
-                                                               // if inversed
-          return createSelectFolder(
-              select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs),
-              "lol2-");
-    } else if (match(key.operand2,
-                     m_ZExtOrSExtOrSelf(
-                         m_Select(m_Value(cnd), m_Value(lhs), m_Value(rhs))))) {
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand1))
-        if (select_inst && cnd == select_inst->getCondition()) // also check
-                                                               // if inversed
-          return createSelectFolder(
-              select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs),
-              "lol2-");
-    }
+      return nullptr;
+    };
+    if (auto result = autoFoldSelect(key.operand1, key.operand2))
+      return result;
     newInstruction =
         builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
                             key.operand1, key.operand2, Name);
