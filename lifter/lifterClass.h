@@ -5,7 +5,6 @@
 #include "includes.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/DomConditionCache.h>
-#include <memory>
 
 #define DEFINE_FUNCTION(name) void lift_##name()
 
@@ -61,54 +60,6 @@ struct InstructionKey {
     }
   };
 };
-
-class FlagManager {
-public:
-  std::unique_ptr<llvm::SmallVector<Value*, FLAGS_END>> vec;
-
-  // Default Constructor
-  FlagManager()
-      : vec(std::make_unique<llvm::SmallVector<Value*, FLAGS_END>>()) {}
-
-  // Copy Constructor
-  FlagManager(const FlagManager& other)
-      : vec(other.vec ? std::make_unique<llvm::SmallVector<Value*, FLAGS_END>>(
-                            *other.vec)
-                      : nullptr) {}
-
-  // Copy Assignment
-  FlagManager& operator=(const FlagManager& other) {
-    if (this != &other) {
-      vec = other.vec ? std::make_unique<llvm::SmallVector<Value*, FLAGS_END>>(
-                            *other.vec)
-                      : nullptr;
-    }
-    return *this;
-  }
-
-  // Move Constructor
-  FlagManager(FlagManager&& other) noexcept = default;
-
-  // Move Assignment
-  FlagManager& operator=(FlagManager&& other) noexcept = default;
-
-  // Destructor (automatically handled by unique_ptr)
-  ~FlagManager() = default;
-
-  // Overload the [] operator for getting register values
-
-  int getFlagIndex(Flag key) const {
-
-    // For ordered registers RAX to R15, map directly by offset from RAX
-    return key;
-  }
-
-  llvm::Value*& operator[](Flag key) {
-    int index = getFlagIndex(key);
-    return (*vec)[index];
-  }
-};
-
 class RegisterManager {
 public:
   enum RegisterIndex {
@@ -132,38 +83,15 @@ public:
     RFLAGS_,
     REGISTER_COUNT // Total number of registers
   };
-  std::unique_ptr<llvm::SmallVector<Value*, REGISTER_COUNT>> vec;
+  llvm::SmallVector<Value*, REGISTER_COUNT>* vec = nullptr;
 
-  // Default Constructor
-  RegisterManager()
-      : vec(std::make_unique<llvm::SmallVector<Value*, REGISTER_COUNT>>()) {}
+  RegisterManager() { vec = new llvm::SmallVector<Value*, REGISTER_COUNT>; }
 
   // Copy Constructor
-  RegisterManager(const RegisterManager& other)
-      : vec(other.vec
-                ? std::make_unique<llvm::SmallVector<Value*, REGISTER_COUNT>>(
-                      *other.vec)
-                : nullptr) {}
-
-  // Copy Assignment
-  RegisterManager& operator=(const RegisterManager& other) {
-    if (this != &other) {
-      vec = other.vec
-                ? std::make_unique<llvm::SmallVector<Value*, REGISTER_COUNT>>(
-                      *other.vec)
-                : nullptr;
-    }
-    return *this;
+  RegisterManager(const RegisterManager& other) {
+    vec =
+        new llvm::SmallVector<Value*, REGISTER_COUNT>(*other.vec); // Deep copy
   }
-
-  // Move Constructor
-  RegisterManager(RegisterManager&& other) noexcept = default;
-
-  // Move Assignment
-  RegisterManager& operator=(RegisterManager&& other) noexcept = default;
-
-  // Destructor (automatically handled by unique_ptr)
-  ~RegisterManager() = default;
 
   // Overload the [] operator for getting register values
 
@@ -185,8 +113,15 @@ public:
     int index = getRegisterIndex(key);
     return (*vec)[index];
   }
+  RegisterManager& operator=(const RegisterManager& other) {
+    if (this != &other) {
+      delete vec; // Clean up existing resource
+      vec = new llvm::SmallVector<Value*, REGISTER_COUNT>(
+          *other.vec); // Deep copy
+    }
+    return *this;
+  }
 };
-
 struct BBInfo {
   uint64_t runtime_address;
   llvm::BasicBlock* block;
@@ -201,108 +136,29 @@ struct BBInfo {
 
 class lifterClass {
 public:
-  // unique
   IRBuilder<>& builder;
   BBInfo blockInfo;
 
-  RegisterManager Registers;
-  FlagManager FlagList;
-  std::unique_ptr<DenseMap<Instruction*, APInt>> assumptions;
-  std::unique_ptr<DenseMap<uint64_t, ValueByteReference*>> buffer;
-  std::unique_ptr<
-      DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>>
-      cache;
+  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder) {
+    assumptions = new DenseMap<Instruction*, APInt>;
+  };
 
-  unsigned int instct = 0;
-  SimplifyQuery* cachedquery;
-
-  DominatorTree* DT;
-  BasicBlock* lastBB = nullptr;
-  map<uint64_t, uint64_t> pageMap;
-  vector<Instruction*> memInfos;
-
-  ZydisDisassembledInstruction* instruction = nullptr;
-
-  // Constructor
-  lifterClass(IRBuilder<>& irbuilder)
-      : builder(irbuilder),
-        assumptions(std::make_unique<DenseMap<Instruction*, APInt>>()),
-        buffer(std::make_unique<DenseMap<uint64_t, ValueByteReference*>>()),
-        cache(
-            std::make_unique<DenseMap<InstructionKey, Value*,
-                                      InstructionKey::InstructionKeyInfo>>()) {}
-
-  // Copy Constructor
-  lifterClass(const lifterClass& other)
-      : builder(other.builder),
-        assumptions(other.assumptions
-                        ? std::make_unique<DenseMap<Instruction*, APInt>>(
-                              *other.assumptions)
-                        : nullptr),
-        buffer(std::make_unique<DenseMap<uint64_t, ValueByteReference*>>()),
-        cache(std::make_unique<DenseMap<InstructionKey, Value*,
-                                        InstructionKey::InstructionKeyInfo>>(
-            *other.cache)) {
-
-    // Deep copy of buffer, including ValueByteReference objects
-    for (const auto& [key, value] : *other.buffer) {
-      if (value) {
-        (*buffer)[key] =
-            new ValueByteReference(*value); // Deep copy of ValueByteReference
-      }
-    }
-  }
-
-  // Move Constructor
-  lifterClass(lifterClass&& other) noexcept = default;
-
-  // Copy Assignment
-  lifterClass& operator=(const lifterClass& other) {
-    if (this != &other) {
-      assumptions =
-          std::make_unique<DenseMap<Instruction*, APInt>>(*other.assumptions);
-      cache = std::make_unique<
-          DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>>(
-          *other.cache);
-      // Deep copy of buffer, including ValueByteReference objects
-      buffer = std::make_unique<DenseMap<uint64_t, ValueByteReference*>>();
-      for (const auto& [key, value] : *other.buffer) {
-        if (value) {
-          (*buffer)[key] =
-              new ValueByteReference(*value); // Deep copy of ValueByteReference
-        }
-      }
-    }
-    return *this;
-  }
-
-  // Move Assignment
-  lifterClass& operator=(lifterClass&& other) noexcept = delete;
-
-  // Destructor to handle manually allocated ValueByteReference objects
-  ~lifterClass() {
-    // Clean up manually allocated ValueByteReference objects in buffer
-    if (buffer) {
-      for (auto& [key, value] : *buffer) {
-        delete value;
-      }
-    }
-  }
+  lifterClass(const lifterClass& other) = default;
 
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
 
-  // shared globals
+  ZydisDisassembledInstruction* instruction = nullptr;
+  DenseMap<Instruction*, APInt>* assumptions;
+  DenseMap<uint64_t, ValueByteReference*> buffer;
+
+  unordered_map<Flag, Value*> FlagList; // doesnt need to be a map
+  RegisterManager Registers;
+
   Value* memory;
   Value* TEB;
   Function* fnc;
-
-  // we dont rely on this anymore? but fuck it, as long as they dont cause huge
-  // overhead
-  DomConditionCache* DC = new DomConditionCache();
-  unsigned long BIlistsize = 0;
-  vector<BranchInst*> BIlist;
 
   void liftInstruction();
   void liftInstructionSemantics();
@@ -368,10 +224,20 @@ public:
 
   SimplifyQuery createSimplifyQuery(Instruction* Inst);
 
+  DomConditionCache* DC = new DomConditionCache();
+
+  unsigned long BIlistsize = 0;
+
+  vector<BranchInst*> BIlist;
   void RegisterBranch(BranchInst* BI) {
     //
     BIlist.push_back(BI);
   }
+  unsigned int instct = 0;
+  SimplifyQuery* cachedquery;
+
+  DominatorTree* DT;
+  BasicBlock* lastBB = nullptr;
 
   DominatorTree* getDomTree() { return DT; }
 
@@ -386,6 +252,9 @@ public:
     lastBB = getLastBB;
   }
 
+  //
+  map<uint64_t, uint64_t> pageMap;
+
   void markMemPaged(uint64_t start, uint64_t end) {
     //
     pageMap[start] = end;
@@ -399,6 +268,7 @@ public:
     return address >= it->first && address < it->second;
   }
 
+  vector<Instruction*> memInfos;
   void updateMemoryOp(StoreInst* inst);
 
   void updateValueReference(Instruction* inst, Value* value, uint64_t address);
@@ -468,6 +338,7 @@ public:
   Value* getOrCreate(const InstructionKey& key, const Twine& Name);
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
                            Value* const op1);
+  DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo> cache;
 
   // end folders
 

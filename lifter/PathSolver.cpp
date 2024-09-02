@@ -199,6 +199,18 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
 
     lifterClass* newlifter = new lifterClass(*this);
 
+    newlifter->Registers = Registers;
+
+    newlifter->Registers.vec =
+        new llvm::SmallVector<Value*, 18>(*(Registers.vec));
+
+    newlifter->assumptions = new DenseMap<Instruction*, APInt>(*assumptions);
+    newlifter->buffer = deepCopyDenseMap(buffer);
+
+    newlifter->cache =
+        DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>(
+            cache);
+
     // for [newlifter], we can assume condition is false
     newlifter->blockInfo =
         BBInfo(firstcase.getZExtValue(), bb_false, Registers);
