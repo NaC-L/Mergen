@@ -405,8 +405,8 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 }
 
 Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
-  auto it = cache.find(key);
-  if (it != cache.end()) {
+  auto it = cache->find(key);
+  if (it != cache->end()) {
     return it->second;
   }
 
@@ -499,7 +499,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
     }
   }
 
-  cache[key] = newInstruction;
+  (*cache)[key] = newInstruction;
   return newInstruction;
 }
 

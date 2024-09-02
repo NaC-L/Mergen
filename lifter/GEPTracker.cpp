@@ -80,10 +80,10 @@ void lifterClass::addValueReference(Instruction* inst, Value* value,
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
-    delete buffer[address + i];
+    delete (*buffer)[address + i];
     BinaryOperations::WriteTo(address + i);
     printvalue2(address + i);
-    buffer[address + i] = new ValueByteReference(inst, value, i);
+    (*buffer)[address + i] = new ValueByteReference(inst, value, i);
     printvalue(value);
     printvalue2((uint64_t)address + i);
   }
@@ -101,26 +101,28 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
   vector<ValueByteReferenceRange> values; // we can just create an array here
   for (uint64_t i = 0; i < byteCount; ++i) {
     uint64_t currentAddress = startAddress + i;
-    if (buffer[currentAddress] == nullptr ||
-        buffer[currentAddress]->value != buffer[startAddress]->value ||
-        buffer[currentAddress]->byteOffset != i) {
+    if ((*buffer)[currentAddress] == nullptr ||
+        (*buffer)[currentAddress]->value != (*buffer)[startAddress]->value ||
+        (*buffer)[currentAddress]->byteOffset != i) {
       // contiguous = false; // non-contiguous value
     }
 
     // push if
-    if (values.empty() ||                                 // empty or
-        (buffer[currentAddress] && values.back().isRef && // ( its a reference
+    if (values.empty() || // empty or
+        ((*buffer)[currentAddress] &&
+         values.back().isRef && // ( its a reference
          (values.back().valinfo.ref->value !=
-              buffer[currentAddress]->value || // and references are not same or
+              (*buffer)[currentAddress]
+                  ->value || // and references are not same or
           values.back().valinfo.ref->byteOffset !=
-              buffer[currentAddress]->byteOffset - values.back().end +
+              (*buffer)[currentAddress]->byteOffset - values.back().end +
                   values.back().start)) //  reference offset is not directly
                                         //  next value )
     ) {
 
-      if (buffer[currentAddress]) {
+      if ((*buffer)[currentAddress]) {
         values.push_back(
-            ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
+            ValueByteReferenceRange((*buffer)[currentAddress], i, i + 1));
       } else {
         values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
       }

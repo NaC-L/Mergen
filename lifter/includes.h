@@ -285,8 +285,6 @@ using RegisterMap =
 // BB start address, BB pointer, Final registers in that RegisterMap so we can
 // use it later
 
-enum FlagOperation { SET_VALUE, SET_ONE, SET_ZERO, TOGGLE };
-
 enum Flag {
   FLAG_CF = 0,        // Carry flag
   FLAG_RESERVED1 = 1, // Reserved, typically not used by programs
