@@ -453,11 +453,11 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
           return createSelectFolder(
               select_inst->getCondition(),
               builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs1),
+                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1,
+                  select_inst->getTrueValue()),
               builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs1),
+                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1,
+                  select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -470,11 +470,11 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
           return createSelectFolder(
               select_inst->getCondition(),
               builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs1),
+                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1,
+                  select_inst->getTrueValue()),
               builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs1),
+                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1,
+                  select_inst->getFalseValue()),
               "lol2-");
     }
 
