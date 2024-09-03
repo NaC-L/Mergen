@@ -1,6 +1,7 @@
 #include "OperandUtils.h"
 #include "includes.h"
 #include "lifterClass.h"
+#include <Zydis/Register.h>
 #include <llvm/Analysis/DomConditionCache.h>
 #include <llvm/Analysis/InstructionSimplify.h>
 #include <llvm/Analysis/SimplifyQuery.h>
@@ -343,8 +344,8 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
   if (auto v_inst = dyn_cast<Instruction>(value)) {
     // Use find() to check if v_inst exists in the map
-    auto it = assumptions->find(v_inst);
-    if (it != assumptions->end()) {
+    auto it = assumptions.find(v_inst);
+    if (it != assumptions.end()) {
       auto a = it->second; // Retrieve the value associated with the instruction
       return KnownBits::makeConstant(a);
     }
@@ -547,13 +548,13 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
                                       Value* operand2, Type* destType,
                                       const Twine& Name) {
 
-  InstructionKey* key;
+  InstructionKey key;
   if (destType)
-    key = new InstructionKey(opcode, operand1, destType);
+    key = InstructionKey(opcode, operand1, destType);
   else
-    key = new InstructionKey(opcode, operand1, operand2);
+    key = InstructionKey(opcode, operand1, operand2);
 
-  Value* newValue = getOrCreate(*key, Name);
+  Value* newValue = getOrCreate(key, Name);
 
   return simplifyValue(
       newValue,
@@ -1125,6 +1126,7 @@ void lifterClass::Init_Flags() {
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
   auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
 
+  FlagList.resize(FLAGS_END);
   FlagList[FLAG_CF] = zero;
   FlagList[FLAG_PF] = zero;
   FlagList[FLAG_AF] = zero;
@@ -1136,8 +1138,7 @@ void lifterClass::Init_Flags() {
   FlagList[FLAG_OF] = zero;
 
   FlagList[FLAG_RESERVED1] = one;
-
-  Registers.vec->push_back(two);
+  Registers[ZYDIS_REGISTER_RFLAGS] = two;
 }
 
 // ???
@@ -1191,7 +1192,7 @@ void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
       TEB = arg;
     } else {
       arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
-      Registers.vec->push_back(arg);
+      Registers[(ZydisRegister)zydisRegister] = arg;
       zydisRegister++;
     }
   }
@@ -1206,7 +1207,7 @@ void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
 
   auto new_rip = createAddFolder(zero, value);
 
-  Registers.vec->push_back(new_rip);
+  Registers[ZYDIS_REGISTER_RIP] = new_rip;
 
   auto stackvalue = cast<Value>(
       ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));

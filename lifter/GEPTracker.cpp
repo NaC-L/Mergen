@@ -80,10 +80,9 @@ void lifterClass::addValueReference(Instruction* inst, Value* value,
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
-    delete buffer[address + i];
     BinaryOperations::WriteTo(address + i);
     printvalue2(address + i);
-    buffer[address + i] = new ValueByteReference(inst, value, i);
+    buffer[address + i] = ValueByteReference(inst, value, i);
     printvalue(value);
     printvalue2((uint64_t)address + i);
   }
@@ -97,28 +96,23 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
   }
 
   // bool contiguous = true;
-
   vector<ValueByteReferenceRange> values; // we can just create an array here
   for (uint64_t i = 0; i < byteCount; ++i) {
     uint64_t currentAddress = startAddress + i;
-    if (buffer[currentAddress] == nullptr ||
-        buffer[currentAddress]->value != buffer[startAddress]->value ||
-        buffer[currentAddress]->byteOffset != i) {
-      // contiguous = false; // non-contiguous value
-    }
 
     // push if
-    if (values.empty() ||                                 // empty or
-        (buffer[currentAddress] && values.back().isRef && // ( its a reference
-         (values.back().valinfo.ref->value !=
-              buffer[currentAddress]->value || // and references are not same or
-          values.back().valinfo.ref->byteOffset !=
-              buffer[currentAddress]->byteOffset - values.back().end +
+    if (values.empty() || // empty or
+        (buffer.contains(currentAddress) &&
+         values.back().isRef && // ( its a reference
+         (values.back().ref.value !=
+              buffer[currentAddress].value || // and references are not same or
+          values.back().ref.byteOffset !=
+              buffer[currentAddress].byteOffset - values.back().end +
                   values.back().start)) //  reference offset is not directly
                                         //  next value )
     ) {
 
-      if (buffer[currentAddress]) {
+      if (buffer.contains(currentAddress)) {
         values.push_back(
             ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
       } else {
@@ -137,10 +131,10 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
     unsigned bytesize = v.end - v.start;
 
     APInt mem_value(1, 0);
-    if (v.isRef && v.valinfo.ref != nullptr) {
-      byteValue = extractBytes(v.valinfo.ref->value, v.valinfo.ref->byteOffset,
-                               v.valinfo.ref->byteOffset + bytesize);
-    } else if (!v.isRef && BinaryOperations::readMemory(v.valinfo.memoryAddress,
+    if (v.isRef) {
+      byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
+                               v.ref.byteOffset + bytesize);
+    } else if (!v.isRef && BinaryOperations::readMemory(v.memoryAddress,
                                                         bytesize, mem_value)) {
       byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
     } else if (!v.isRef) {
