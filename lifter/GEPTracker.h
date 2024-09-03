@@ -18,27 +18,18 @@ public:
   Instruction* storeInst;
   Value* value;
   unsigned short byteOffset;
+  ValueByteReference() : storeInst(nullptr), value(nullptr), byteOffset(0) {}
 
   ValueByteReference(Instruction* inst, Value* val, short offset)
       : storeInst(inst), value(val), byteOffset(offset) {}
-
-  // Clone method to create a deep copy of ValueByteReference
-  ValueByteReference* clone() const {
-    return new ValueByteReference(
-        storeInst, value, byteOffset); // Create a new instance with copied data
-  }
 };
 
 class ValueByteReferenceRange {
 public:
-  union val {
-    ValueByteReference* ref;
+  union {
+    ValueByteReference ref;
     uint64_t memoryAddress;
-
-    val(ValueByteReference* vref) : ref(vref) {}
-    val(uint64_t addr) : memoryAddress(addr) {}
-
-  } valinfo;
+  };
 
   // size info, we can make this smaller because they can only be 0-8 range
   // (maybe higher for avx)
@@ -46,13 +37,12 @@ public:
   uint8_t end;
 
   bool isRef;
-  ValueByteReferenceRange(ValueByteReference* vref, uint8_t startv,
-                          uint8_t endv)
-      : valinfo(vref), start(startv), end(endv), isRef(true) {}
+  ValueByteReferenceRange(ValueByteReference vref, uint8_t startv, uint8_t endv)
+      : ref(vref), start(startv), end(endv), isRef(true) {}
 
   // Constructor for ValueByteReferenceRange using memoryAddress
   ValueByteReferenceRange(uint64_t addr, uint8_t startv, uint8_t endv)
-      : valinfo(addr), start(startv), end(endv), isRef(false) {}
+      : memoryAddress(addr), start(startv), end(endv), isRef(false) {}
 };
 
 namespace BinaryOperations {

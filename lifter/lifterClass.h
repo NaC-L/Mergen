@@ -9,13 +9,15 @@
 #define DEFINE_FUNCTION(name) void lift_##name()
 
 struct InstructionKey {
-  unsigned opcode;
+  unsigned char opcode;
   bool cast;
   Value* operand1;
   union {
     Value* operand2;
     Type* destType;
   };
+
+  InstructionKey() : opcode(0), cast(0), operand1(nullptr), operand2(nullptr){};
 
   InstructionKey(unsigned opcode, Value* operand1, Value* operand2)
       : opcode(opcode), cast(0), operand1(operand1), operand2(operand2){};
@@ -37,6 +39,7 @@ struct InstructionKey {
   struct InstructionKeyInfo {
     // Custom hash function
     static inline unsigned getHashValue(const InstructionKey& key) {
+
       auto h1 = llvm::hash_value(key.opcode);
       auto h2 = llvm::hash_value(key.operand1);
       auto h3 = key.cast ? llvm::hash_value(key.destType)
@@ -60,6 +63,7 @@ struct InstructionKey {
     }
   };
 };
+
 class RegisterManager {
 public:
   enum RegisterIndex {
@@ -83,15 +87,10 @@ public:
     RFLAGS_,
     REGISTER_COUNT // Total number of registers
   };
-  llvm::SmallVector<Value*, REGISTER_COUNT>* vec = nullptr;
+  llvm::SmallVector<Value*, REGISTER_COUNT> vec;
 
-  RegisterManager() { vec = new llvm::SmallVector<Value*, REGISTER_COUNT>; }
-
-  // Copy Constructor
-  RegisterManager(const RegisterManager& other) {
-    vec =
-        new llvm::SmallVector<Value*, REGISTER_COUNT>(*other.vec); // Deep copy
-  }
+  RegisterManager() { vec.resize(REGISTER_COUNT); }
+  RegisterManager(const RegisterManager& other) : vec(other.vec) {}
 
   // Overload the [] operator for getting register values
 
@@ -111,27 +110,17 @@ public:
 
   llvm::Value*& operator[](ZydisRegister key) {
     int index = getRegisterIndex(key);
-    return (*vec)[index];
-  }
-  RegisterManager& operator=(const RegisterManager& other) {
-    if (this != &other) {
-      delete vec; // Clean up existing resource
-      vec = new llvm::SmallVector<Value*, REGISTER_COUNT>(
-          *other.vec); // Deep copy
-    }
-    return *this;
+    return vec[index];
   }
 };
 struct BBInfo {
   uint64_t runtime_address;
   llvm::BasicBlock* block;
-  RegisterManager registers;
 
   BBInfo(){};
 
-  BBInfo(uint64_t runtime_address, llvm::BasicBlock* block,
-         RegisterManager& registers)
-      : runtime_address(runtime_address), block(block), registers(registers) {}
+  BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
+      : runtime_address(runtime_address), block(block) {}
 };
 
 class lifterClass {
@@ -139,26 +128,67 @@ public:
   IRBuilder<>& builder;
   BBInfo blockInfo;
 
-  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder) {
-    assumptions = new DenseMap<Instruction*, APInt>;
-  };
-
-  lifterClass(const lifterClass& other) = default;
-
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
+  // unique
 
-  ZydisDisassembledInstruction* instruction = nullptr;
-  DenseMap<Instruction*, APInt>* assumptions;
-  DenseMap<uint64_t, ValueByteReference*> buffer;
+  ZydisDecodedInstruction instruction;
+  ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+  DenseMap<Instruction*, APInt> assumptions;
+  DenseMap<uint64_t, ValueByteReference> buffer;
 
-  unordered_map<Flag, Value*> FlagList; // doesnt need to be a map
+  llvm::SmallVector<Value*, FLAGS_END> FlagList;
   RegisterManager Registers;
 
+  DomConditionCache* DC = new DomConditionCache();
+
+  unsigned int instct = 0;
+  SimplifyQuery* cachedquery;
+
+  DominatorTree* DT;
+  BasicBlock* lastBB = nullptr;
+  unsigned int BIlistsize = 0;
+
+  map<uint64_t, uint64_t> pageMap;
+  vector<BranchInst*> BIlist;
+  DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo> cache;
+  vector<Instruction*> memInfos;
+
+  // global
   Value* memory;
   Value* TEB;
   Function* fnc;
+
+  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder){};
+
+  lifterClass(const lifterClass& other)
+      : builder(other.builder), // Reference copied directly
+        blockInfo(
+            other.blockInfo), // Assuming BBInfo has a proper copy constructor
+        run(other.run), finished(other.finished),
+        isUnreachable(other.isUnreachable),
+        instruction(other.instruction), // Shallow copy of the pointer
+        assumptions(other.assumptions), // Deep copy of assumptions
+        buffer(other.buffer),
+        FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
+                                  // constructor
+        Registers(
+            other.Registers), // Assuming RegisterManager has a copy constructor
+        DC(other.DC),         // Deep copy of DC
+        instct(other.instct),
+        cachedquery(other.cachedquery), // Assuming raw pointer, copied directly
+        DT(other.DT),                   // Assuming pointer, copied directly
+        lastBB(other.lastBB), BIlistsize(other.BIlistsize),
+        pageMap(other.pageMap), // Deep copy handled by map's copy constructor
+        BIlist(other.BIlist), // Deep copy handled by vector's copy constructor
+        cache(other.cache), // Deep copy handled by DenseMap's copy constructor
+        memInfos(
+            other.memInfos),  // Deep copy handled by vector's copy constructor
+        memory(other.memory), // Shallow copy of the pointer
+        TEB(other.TEB),       // Shallow copy of the pointer
+        fnc(other.fnc)        // Shallow copy of the pointer
+  {}
 
   void liftInstruction();
   void liftInstructionSemantics();
@@ -224,20 +254,10 @@ public:
 
   SimplifyQuery createSimplifyQuery(Instruction* Inst);
 
-  DomConditionCache* DC = new DomConditionCache();
-
-  unsigned long BIlistsize = 0;
-
-  vector<BranchInst*> BIlist;
   void RegisterBranch(BranchInst* BI) {
     //
     BIlist.push_back(BI);
   }
-  unsigned int instct = 0;
-  SimplifyQuery* cachedquery;
-
-  DominatorTree* DT;
-  BasicBlock* lastBB = nullptr;
 
   DominatorTree* getDomTree() { return DT; }
 
@@ -252,9 +272,6 @@ public:
     lastBB = getLastBB;
   }
 
-  //
-  map<uint64_t, uint64_t> pageMap;
-
   void markMemPaged(uint64_t start, uint64_t end) {
     //
     pageMap[start] = end;
@@ -268,7 +285,6 @@ public:
     return address >= it->first && address < it->second;
   }
 
-  vector<Instruction*> memInfos;
   void updateMemoryOp(StoreInst* inst);
 
   void updateValueReference(Instruction* inst, Value* value, uint64_t address);
@@ -338,7 +354,6 @@ public:
   Value* getOrCreate(const InstructionKey& key, const Twine& Name);
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
                            Value* const op1);
-  DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo> cache;
 
   // end folders
 

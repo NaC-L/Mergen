@@ -239,13 +239,11 @@ void lifterClass::branchHelper(Value* condition, string instname, int numbered,
   block->setName(instname + to_string(numbered));
   auto function = block->getParent();
 
-  auto dest = instruction->operands[0];
-  auto true_jump_addr = dest.imm.value.s + instruction->runtime_address +
-                        instruction->info.length;
+  auto dest = operands[0];
+  auto true_jump_addr = dest.imm.value.s + blockInfo.runtime_address;
   Value* true_jump =
       ConstantInt::get(function->getReturnType(), true_jump_addr);
-  auto false_jump_addr =
-      instruction->runtime_address + instruction->info.length;
+  auto false_jump_addr = blockInfo.runtime_address;
   Value* false_jump =
       ConstantInt::get(function->getReturnType(), false_jump_addr);
   Value* next_jump = nullptr;
@@ -276,14 +274,13 @@ void lifterClass::lift_movsb() {
   //
 
   // Value* SRCptrvalue =
-  // GetOperandValue(instruction->operands[0],instruction->operands[0].size);
+  // GetOperandValue(operands[0],operands[0].size);
 
-  Value* DSTptrvalue =
-      GetOperandValue(instruction->operands[1], instruction->operands[1].size);
+  Value* DSTptrvalue = GetOperandValue(operands[1], operands[1].size);
 
-  SetOperandValue(instruction->operands[0], DSTptrvalue);
+  SetOperandValue(operands[0], DSTptrvalue);
 
-  bool isREP = (instruction->info.attributes & ZYDIS_ATTRIB_HAS_REP) != 0;
+  bool isREP = (instruction.attributes & ZYDIS_ATTRIB_HAS_REP) != 0;
 
   Value* DF = getFlag(FLAG_DF);
   auto one = ConstantInt::get(DF->getType(), 1);
@@ -293,20 +290,19 @@ void lifterClass::lift_movsb() {
   Value* Direction =
       builder.CreateSub(builder.CreateMul(DF, builder.CreateAdd(DF, one)), one);
 
-  auto SRCop = instruction->operands[2 + isREP];
-  auto DSTop = instruction->operands[3 + isREP];
+  auto SRCop = operands[2 + isREP];
+  auto DSTop = operands[3 + isREP];
 
   Value* SRCvalue = GetOperandValue(SRCop, SRCop.size);
   Value* DSTvalue = GetOperandValue(DSTop, DSTop.size);
 
   if (isREP) {
-    // if REP, instruction->operands[1] will be e/rax
+    // if REP, operands[1] will be e/rax
     // in that case, repeat and decrement e/rax until its 0
 
     // we can create a loop but I dont know how that would effect our
     // optimizations
-    Value* count = GetOperandValue(instruction->operands[2],
-                                   instruction->operands[2].size);
+    Value* count = GetOperandValue(operands[2], operands[2].size);
     if (auto countci = dyn_cast<ConstantInt>(count)) {
       Value* UpdateSRCvalue = SRCvalue;
       Value* UpdateDSTvalue = DSTvalue;
@@ -317,12 +313,11 @@ void lifterClass::lift_movsb() {
         // TODO: fix this loop
 
         // Value* SRCptrvalue = GetOperandValue(
-        // instruction->operands[0],
-        // instruction->operands[0].size);
-        DSTptrvalue = GetOperandValue(instruction->operands[1],
-                                      instruction->operands[1].size);
+        // operands[0],
+        // operands[0].size);
+        DSTptrvalue = GetOperandValue(operands[1], operands[1].size);
 
-        SetOperandValue(instruction->operands[0], DSTptrvalue);
+        SetOperandValue(operands[0], DSTptrvalue);
 
         UpdateSRCvalue = builder.CreateAdd(UpdateSRCvalue, Direction);
         UpdateDSTvalue = builder.CreateAdd(UpdateDSTvalue, Direction);
@@ -335,8 +330,7 @@ void lifterClass::lift_movsb() {
           debugging::increaseInstCounter();
       }
 
-      SetOperandValue(instruction->operands[2],
-                      ConstantInt::get(count->getType(), 0));
+      SetOperandValue(operands[2], ConstantInt::get(count->getType(), 0));
 
       return;
     } else {
@@ -351,38 +345,38 @@ void lifterClass::lift_movsb() {
   SetOperandValue(DSTop, UpdateDSTvalue);
 }
 void lifterClass::lift_movaps() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   auto Rvalue =
-      GetOperandValue(src, src.size, to_string(instruction->runtime_address));
-  SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+      GetOperandValue(src, src.size, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
 }
 void lifterClass::lift_mov() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   auto Rvalue =
-      GetOperandValue(src, src.size, to_string(instruction->runtime_address));
+      GetOperandValue(src, src.size, to_string(blockInfo.runtime_address));
 
-  switch (instruction->info.mnemonic) {
+  switch (instruction.mnemonic) {
   case ZYDIS_MNEMONIC_MOVSX: {
-    Rvalue = createSExtFolder(
-        Rvalue, Type::getIntNTy(context, dest.size),
-        "movsx-" + to_string(instruction->runtime_address) + "-");
+    Rvalue =
+        createSExtFolder(Rvalue, Type::getIntNTy(context, dest.size),
+                         "movsx-" + to_string(blockInfo.runtime_address) + "-");
     break;
   }
   case ZYDIS_MNEMONIC_MOVZX: {
-    Rvalue = createZExtFolder(
-        Rvalue, Type::getIntNTy(context, dest.size),
-        "movzx-" + to_string(instruction->runtime_address) + "-");
+    Rvalue =
+        createZExtFolder(Rvalue, Type::getIntNTy(context, dest.size),
+                         "movzx-" + to_string(blockInfo.runtime_address) + "-");
     break;
   }
   case ZYDIS_MNEMONIC_MOVSXD: {
-    Rvalue = createSExtFolder(
-        Rvalue, Type::getIntNTy(context, dest.size),
-        "movsxd-" + to_string(instruction->runtime_address) + "-");
+    Rvalue = createSExtFolder(Rvalue, Type::getIntNTy(context, dest.size),
+                              "movsxd-" + to_string(blockInfo.runtime_address) +
+                                  "-");
     break;
   }
   default: {
@@ -396,13 +390,13 @@ void lifterClass::lift_mov() {
 
   printvalue(Rvalue);
 
-  SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_cmovbz() {
 
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* zf = getFlag(FLAG_ZF);
   Value* cf = getFlag(FLAG_CF);
@@ -418,8 +412,8 @@ void lifterClass::lift_cmovbz() {
 }
 
 void lifterClass::lift_cmovnbz() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* Rvalue = GetOperandValue(src, src.size);
@@ -433,12 +427,12 @@ void lifterClass::lift_cmovnbz() {
   Value* resultValue =
       createSelectFolder(nbeCondition, Rvalue, Lvalue, "cmovnbe");
 
-  SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_cmovz() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* Rvalue = GetOperandValue(src, src.size);
@@ -447,13 +441,13 @@ void lifterClass::lift_cmovz() {
 
   Value* resultValue = createSelectFolder(zf, Rvalue, Lvalue, "cmovz");
 
-  SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_cmovnz() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* zf = getFlag(FLAG_ZF);
   zf = createICMPFolder(CmpInst::ICMP_EQ, zf,
@@ -468,8 +462,8 @@ void lifterClass::lift_cmovnz() {
 }
 void lifterClass::lift_cmovl() {
 
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
@@ -486,8 +480,8 @@ void lifterClass::lift_cmovl() {
 
 void lifterClass::lift_cmovb() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* cf = getFlag(FLAG_CF);
 
@@ -503,8 +497,8 @@ void lifterClass::lift_cmovb() {
 }
 
 void lifterClass::lift_cmovnb() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* Rvalue = GetOperandValue(src, src.size);
@@ -514,13 +508,13 @@ void lifterClass::lift_cmovnb() {
   Value* resultValue =
       createSelectFolder(builder.CreateNot(cf), Rvalue, Lvalue, "cmovnb");
 
-  SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_cmovns() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* sf = getFlag(FLAG_SF);
 
@@ -536,8 +530,8 @@ void lifterClass::lift_cmovns() {
 }
 // cmovnl = cmovge
 void lifterClass::lift_cmovnl() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
@@ -556,8 +550,8 @@ void lifterClass::lift_cmovnl() {
   SetOperandValue(dest, result);
 }
 void lifterClass::lift_cmovs() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* sf = getFlag(FLAG_SF);
 
@@ -571,8 +565,8 @@ void lifterClass::lift_cmovs() {
 
 void lifterClass::lift_cmovnle() {
 
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* zf = getFlag(FLAG_ZF);
   Value* sf = getFlag(FLAG_SF);
@@ -591,8 +585,8 @@ void lifterClass::lift_cmovnle() {
 }
 
 void lifterClass::lift_cmovle() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* zf = getFlag(FLAG_ZF);
   Value* sf = getFlag(FLAG_SF);
@@ -610,8 +604,8 @@ void lifterClass::lift_cmovle() {
 }
 
 void lifterClass::lift_cmovo() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* of = getFlag(FLAG_OF);
 
@@ -626,8 +620,8 @@ void lifterClass::lift_cmovo() {
   SetOperandValue(dest, result);
 }
 void lifterClass::lift_cmovno() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* of = getFlag(FLAG_OF);
 
@@ -643,8 +637,8 @@ void lifterClass::lift_cmovno() {
 }
 
 void lifterClass::lift_cmovp() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* pf = getFlag(FLAG_PF);
 
@@ -658,8 +652,8 @@ void lifterClass::lift_cmovp() {
 }
 
 void lifterClass::lift_cmovnp() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* pf = getFlag(FLAG_PF);
 
@@ -680,9 +674,9 @@ void lifterClass::lift_call() {
   // 1 = rip
   // 2 = register rsp
   // 3 = [rsp]
-  auto src = instruction->operands[0];        // value that we are pushing
-  auto rsp = instruction->operands[2];        // value that we are pushing
-  auto rsp_memory = instruction->operands[3]; // value that we are pushing
+  auto src = operands[0];        // value that we are pushing
+  auto rsp = operands[2];        // value that we are pushing
+  auto rsp_memory = operands[3]; // value that we are pushing
 
   auto RspValue = GetOperandValue(rsp, rsp.size);
 
@@ -690,19 +684,18 @@ void lifterClass::lift_call() {
                                     8); // assuming its x64
   auto result = createSubFolder(RspValue, val, "pushing_newrsp");
 
-  SetOperandValue(rsp, result, to_string(instruction->runtime_address));
+  SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
   ; // sub rsp 8 first,
 
   auto push_into_rsp = GetRegisterValue(ZYDIS_REGISTER_RIP);
 
   SetOperandValue(rsp_memory, push_into_rsp,
-                  to_string(instruction->runtime_address));
+                  to_string(blockInfo.runtime_address));
   ; // sub rsp 8 first,
 
   string block_name = "jmp-call";
 
-  uint64_t jump_address =
-      instruction->runtime_address + instruction->info.length;
+  uint64_t jump_address = blockInfo.runtime_address;
   switch (src.type) {
   case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
     jump_address += src.imm.value.s;
@@ -715,7 +708,7 @@ void lifterClass::lift_call() {
 
       callFunctionIR(registerValue->getName().str() + "fnc_ptr", nullptr);
 
-      SetOperandValue(rsp, RspValue, to_string(instruction->runtime_address));
+      SetOperandValue(rsp, RspValue, to_string(blockInfo.runtime_address));
       break;
       // registerValue =
       //    ConstantInt::get(Type::getInt32Ty(context), 0x1337);
@@ -740,7 +733,7 @@ void lifterClass::lift_call() {
 
   printvalue2(jump_address);
 
-  blockInfo = BBInfo(jump_address, bb, getRegisters());
+  blockInfo = BBInfo(jump_address, bb);
   run = 0;
 }
 
@@ -758,12 +751,12 @@ void lifterClass::lift_ret() {
   // [2] = rsp
   // [3] = [rsp]
 
-  auto rspaddr = instruction->operands[2];
+  auto rspaddr = operands[2];
 
   auto rsp = ZYDIS_REGISTER_RSP;
   auto rspvalue = GetRegisterValue(rsp);
-  if (instruction->operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
-    rspaddr = instruction->operands[3];
+  if (operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+    rspaddr = operands[3];
   }
 
   auto realval = GetOperandValue(rspaddr, rspaddr.size);
@@ -829,13 +822,13 @@ void lifterClass::lift_ret() {
                                     8); // assuming its x64
   auto rsp_result = createAddFolder(
       rspvalue, val,
-      "ret-new-rsp-" + to_string(instruction->runtime_address) + "-");
+      "ret-new-rsp-" + to_string(blockInfo.runtime_address) + "-");
 
-  if (instruction->operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
-    rspaddr = instruction->operands[3];
-    rsp_result = createAddFolder(
-        rsp_result, ConstantInt::get(rsp_result->getType(),
-                                     instruction->operands[0].imm.value.u));
+  if (operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+    rspaddr = operands[3];
+    rsp_result =
+        createAddFolder(rsp_result, ConstantInt::get(rsp_result->getType(),
+                                                     operands[0].imm.value.u));
   }
 
   SetRegisterValue(rsp, rsp_result); // then add rsp 8
@@ -846,13 +839,12 @@ void lifterClass::lift_ret() {
 int jmpcount = 0;
 void lifterClass::lift_jmp() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   auto Value = GetOperandValue(dest, 64);
   auto ripval = GetRegisterValue(ZYDIS_REGISTER_RIP);
   auto newRip = createAddFolder(
-      Value, ripval,
-      "jump-xd-" + to_string(instruction->runtime_address) + "-");
+      Value, ripval, "jump-xd-" + to_string(blockInfo.runtime_address) + "-");
 
   jmpcount++;
   auto targetv = GetOperandValue(dest, 64);
@@ -874,7 +866,7 @@ void lifterClass::lift_jnz() {
 
   auto zf = getFlag(FLAG_ZF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -892,7 +884,7 @@ void lifterClass::lift_js() {
 
   auto sf = getFlag(FLAG_SF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -907,7 +899,7 @@ void lifterClass::lift_jns() {
 
   auto sf = getFlag(FLAG_SF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -925,7 +917,7 @@ void lifterClass::lift_jz() {
 
   auto zf = getFlag(FLAG_ZF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -944,7 +936,7 @@ void lifterClass::lift_jle() {
   auto of = getFlag(FLAG_OF);
   auto zf = getFlag(FLAG_ZF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
   // auto newRip = createAddFolder( Value, ripval, "jle");
@@ -962,7 +954,7 @@ void lifterClass::lift_jl() {
   auto sf = getFlag(FLAG_SF);
   auto of = getFlag(FLAG_OF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
   // auto newRip = createAddFolder( Value, ripval, "jl");
@@ -978,7 +970,7 @@ void lifterClass::lift_jnl() {
   auto sf = getFlag(FLAG_SF);
   auto of = getFlag(FLAG_OF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
   // auto newRip = createAddFolder( Value, ripval, "jnl");
@@ -1000,7 +992,7 @@ void lifterClass::lift_jnle() {
   auto of = getFlag(FLAG_OF);
   auto zf = getFlag(FLAG_ZF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
   // auto newRip = createAddFolder( Value, ripval, "jle");
@@ -1018,7 +1010,7 @@ void lifterClass::lift_jbe() {
 
   auto cf = getFlag(FLAG_CF);
   auto zf = getFlag(FLAG_ZF);
-  printvalue(cf) printvalue(zf) // auto dest = instruction->operands[0];
+  printvalue(cf) printvalue(zf) // auto dest = operands[0];
 
       // auto Value = GetOperandValue( dest, 64);
       // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -1035,7 +1027,7 @@ void lifterClass::lift_jb() {
 
   auto cf = getFlag(FLAG_CF);
   printvalue(cf);
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -1051,7 +1043,7 @@ void lifterClass::lift_jnb() {
 
   auto cf = getFlag(FLAG_CF);
   printvalue(cf);
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -1066,7 +1058,7 @@ void lifterClass::lift_jnbe() {
 
   auto cf = getFlag(FLAG_CF);
   auto zf = getFlag(FLAG_ZF);
-  printvalue(cf) printvalue(zf) // auto dest = instruction->operands[0];
+  printvalue(cf) printvalue(zf) // auto dest = operands[0];
 
       // auto Value = GetOperandValue( dest, 64);
       // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -1083,7 +1075,7 @@ void lifterClass::lift_jo() {
 
   auto of = getFlag(FLAG_OF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -1100,7 +1092,7 @@ void lifterClass::lift_jno() {
 
   auto of = getFlag(FLAG_OF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -1116,7 +1108,7 @@ void lifterClass::lift_jp() {
 
   auto pf = getFlag(FLAG_PF);
   printvalue(pf);
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -1132,7 +1124,7 @@ void lifterClass::lift_jnp() {
 
   auto pf = getFlag(FLAG_PF);
 
-  // auto dest = instruction->operands[0];
+  // auto dest = operands[0];
 
   // auto Value = GetOperandValue( dest, 64);
   // auto ripval = GetRegisterValue( ZYDIS_REGISTER_RIP);
@@ -1149,8 +1141,8 @@ void lifterClass::lift_sbb() {
 
   //
 
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* Rvalue = GetOperandValue(src, dest.size);
@@ -1213,8 +1205,8 @@ FI;
 
 void lifterClass::lift_rcl() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto count = instruction->operands[1];
+  auto dest = operands[0];
+  auto count = operands[1];
 
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto countValue = GetOperandValue(count, dest.size);
@@ -1305,8 +1297,8 @@ ELIHW;
 */
 void lifterClass::lift_rcr() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto count = instruction->operands[1];
+  auto dest = operands[0];
+  auto count = operands[1];
 
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto countValue = GetOperandValue(count, dest.size);
@@ -1366,13 +1358,13 @@ void lifterClass::lift_rcr() {
 
 void lifterClass::lift_not() {
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   auto Rvalue = GetOperandValue(dest, dest.size);
-  Rvalue = createXorFolder(Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
-                           "realnot-" +
-                               to_string(instruction->runtime_address) + "-");
-  SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+  Rvalue =
+      createXorFolder(Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
+                      "realnot-" + to_string(blockInfo.runtime_address) + "-");
+  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
 
   printvalue(Rvalue);
   //  Flags Affected
@@ -1381,7 +1373,7 @@ void lifterClass::lift_not() {
 
 void lifterClass::lift_neg() {
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
   auto Rvalue = GetOperandValue(dest, dest.size);
 
   auto cf = createICMPFolder(CmpInst::ICMP_NE, Rvalue,
@@ -1479,11 +1471,11 @@ FI;
 
 void lifterClass::lift_sar() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto count = instruction->operands[1];
+  auto dest = operands[0];
+  auto count = operands[1];
 
   Value* Lvalue =
-      GetOperandValue(dest, dest.size, to_string(instruction->runtime_address));
+      GetOperandValue(dest, dest.size, to_string(blockInfo.runtime_address));
   Value* countValue = GetOperandValue(count, dest.size);
 
   Value* zero = ConstantInt::get(countValue->getType(), 0);
@@ -1495,7 +1487,7 @@ void lifterClass::lift_sar() {
   // ashrfolder
   Value* result = builder.CreateAShr(
       Lvalue, clampedCount,
-      "sar-lshr-" + to_string(instruction->runtime_address) + "-");
+      "sar-lshr-" + to_string(blockInfo.runtime_address) + "-");
 
   Value* isZeroed =
       createICMPFolder(CmpInst::ICMP_UGT, clampedCount,
@@ -1534,14 +1526,14 @@ void lifterClass::lift_sar() {
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
 
-  SetOperandValue(dest, result, to_string(instruction->runtime_address));
+  SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
   ;
 }
 // TODO fix
 void lifterClass::lift_shr() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto count = instruction->operands[1];
+  auto dest = operands[0];
+  auto count = operands[1];
 
   Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* countValue = GetOperandValue(count, dest.size);
@@ -1554,7 +1546,7 @@ void lifterClass::lift_shr() {
 
   Value* result = createLShrFolder(
       Lvalue, clampedCount,
-      "shr-lshr-" + to_string(instruction->runtime_address) + "-");
+      "shr-lshr-" + to_string(blockInfo.runtime_address) + "-");
   Value* zero = ConstantInt::get(countValue->getType(), 0);
   Value* isZeroed =
       createICMPFolder(CmpInst::ICMP_UGT, clampedCount,
@@ -1593,18 +1585,18 @@ void lifterClass::lift_shr() {
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
 
-  printvalue(Lvalue) printvalue(clampedCount) printvalue(result) printvalue(
-      isNotZero) printvalue(oldcf) printvalue(cfValue)
-      SetOperandValue(dest, result, to_string(instruction->runtime_address));
+  printvalue(Lvalue) printvalue(clampedCount) printvalue(result)
+      printvalue(isNotZero) printvalue(oldcf) printvalue(cfValue)
+          SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_shl() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto count = instruction->operands[1];
+  auto dest = operands[0];
+  auto count = operands[1];
 
   Value* Lvalue =
-      GetOperandValue(dest, dest.size, to_string(instruction->runtime_address));
+      GetOperandValue(dest, dest.size, to_string(blockInfo.runtime_address));
   Value* countValue = GetOperandValue(count, dest.size);
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
@@ -1686,11 +1678,11 @@ void lifterClass::lift_shl() {
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
 
-  SetOperandValue(dest, result, to_string(instruction->runtime_address));
+  SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_bswap() {
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   auto Lvalue = GetOperandValue(dest, dest.size);
   // if 16bit, 0 it
@@ -1725,9 +1717,9 @@ void lifterClass::lift_bswap() {
 
 void lifterClass::lift_cmpxchg() {
 
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
-  auto accop = instruction->operands[2];
+  auto dest = operands[0];
+  auto src = operands[1];
+  auto accop = operands[2];
 
   auto Rvalue = GetOperandValue(src, src.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
@@ -1775,24 +1767,24 @@ void lifterClass::lift_cmpxchg() {
 
 void lifterClass::lift_xchg() {
 
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   auto Rvalue = GetOperandValue(src, src.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
 
   printvalue(Lvalue) printvalue(Rvalue);
 
-  SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
   ;
   SetOperandValue(src, Lvalue);
 }
 
 void lifterClass::lift_shld() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto source = instruction->operands[1];
-  auto count = instruction->operands[2];
+  auto dest = operands[0];
+  auto source = operands[1];
+  auto count = operands[2];
 
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto sourceValue = GetOperandValue(source, dest.size);
@@ -1844,14 +1836,14 @@ void lifterClass::lift_shld() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_shrd() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto source = instruction->operands[1];
-  auto count = instruction->operands[2];
+  auto dest = operands[0];
+  auto source = operands[1];
+  auto count = operands[2];
 
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto sourceValue = GetOperandValue(source, dest.size);
@@ -1902,26 +1894,26 @@ void lifterClass::lift_shrd() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_lea() {
 
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   auto Rvalue = GetEffectiveAddress(src, dest.size);
 
   printvalue(Rvalue)
 
-      SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+      SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
   ;
 }
 
 // extract sub from this function, this is convoluted for no reason
 void lifterClass::lift_add_sub() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
@@ -1937,11 +1929,11 @@ void lifterClass::lift_add_sub() {
   auto op2LowerNibble =
       createAndFolder(Rvalue, lowerNibbleMask, "rvalLowerNibble");
 
-  switch (instruction->info.mnemonic) {
+  switch (instruction.mnemonic) {
   case ZYDIS_MNEMONIC_ADD: {
     result = createAddFolder(Lvalue, Rvalue,
-                             "realadd-" +
-                                 to_string(instruction->runtime_address) + "-");
+                             "realadd-" + to_string(blockInfo.runtime_address) +
+                                 "-");
     cf = createOrFolder(
         createICMPFolder(CmpInst::ICMP_ULT, result, Lvalue, "add_cf1"),
         createICMPFolder(CmpInst::ICMP_ULT, result, Rvalue, "add_cf2"),
@@ -1955,8 +1947,8 @@ void lifterClass::lift_add_sub() {
   }
   case ZYDIS_MNEMONIC_SUB: {
     result = createSubFolder(Lvalue, Rvalue,
-                             "realsub-" +
-                                 to_string(instruction->runtime_address) + "-");
+                             "realsub-" + to_string(blockInfo.runtime_address) +
+                                 "-");
 
     of = computeOverflowFlagSub(Lvalue, Rvalue, result);
 
@@ -1997,7 +1989,7 @@ void lifterClass::lift_add_sub() {
 
 void lifterClass::lift_imul2(bool isSigned) {
   LLVMContext& context = builder.getContext();
-  auto src = instruction->operands[0];
+  auto src = operands[0];
   auto Rvalue = GetRegisterValue(ZYDIS_REGISTER_AL);
 
   Value* Lvalue = GetOperandValue(src, src.size);
@@ -2054,14 +2046,14 @@ void lifterClass::lift_imul2(bool isSigned) {
 void lifterClass::lift_imul() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = instruction->operands[0]; // dest ?
-  if (dest.size == 8 && instruction->info.operand_count_visible == 1) {
+  auto dest = operands[0]; // dest ?
+  if (dest.size == 8 && instruction.operand_count_visible == 1) {
     lift_imul2(1);
     return;
   }
-  auto src = instruction->operands[1];
-  auto src2 = (instruction->info.operand_count_visible == 3)
-                  ? instruction->operands[2]
+  auto src = operands[1];
+  auto src2 = (instruction.operand_count_visible == 3)
+                  ? operands[2]
                   : dest; // if exists third operand
 
   Value* Rvalue = GetOperandValue(src, src.size);
@@ -2107,10 +2099,10 @@ void lifterClass::lift_imul() {
       result, builder.CreateSExt(truncresult, result->getType()), "cf");
   Value* of = cf;
 
-  if (instruction->info.operand_count_visible == 3) {
+  if (instruction.operand_count_visible == 3) {
     SetOperandValue(dest, truncresult);
-  } else if (instruction->info.operand_count_visible == 2) {
-    SetOperandValue(instruction->operands[0], truncresult);
+  } else if (instruction.operand_count_visible == 2) {
+    SetOperandValue(operands[0], truncresult);
   } else { // For one operand, result goes into ?dx:?ax if not a byte
            // operation
     auto splitResult = builder.CreateTruncOrBitCast(
@@ -2125,11 +2117,11 @@ void lifterClass::lift_imul() {
     printvalue(SEsplitResult);
 
     if (initialSize == 8) {
-      SetOperandValue(instruction->operands[1], result);
+      SetOperandValue(operands[1], result);
     } else {
 
-      SetOperandValue(instruction->operands[1], splitResult);
-      SetOperandValue(instruction->operands[2], highPartTruncated);
+      SetOperandValue(operands[1], splitResult);
+      SetOperandValue(operands[2], highPartTruncated);
     }
   }
 
@@ -2164,14 +2156,14 @@ void lifterClass::lift_mul() {
   */
 
   LLVMContext& context = builder.getContext();
-  auto src = instruction->operands[0];
+  auto src = operands[0];
 
-  if (src.size == 8 && instruction->info.operand_count_visible == 1) {
+  if (src.size == 8 && instruction.operand_count_visible == 1) {
     lift_imul2(0);
     return;
   }
-  auto dest1 = instruction->operands[1]; // ax
-  auto dest2 = instruction->operands[2];
+  auto dest1 = operands[1]; // ax
+  auto dest2 = operands[2];
 
   Value* Rvalue = GetOperandValue(src, dest1.size);
   Value* Lvalue = GetOperandValue(dest1, dest1.size);
@@ -2215,7 +2207,7 @@ void lifterClass::lift_mul() {
 void lifterClass::lift_div() {
 
   LLVMContext& context = builder.getContext();
-  auto src = instruction->operands[0];
+  auto src = operands[0];
 
   Value *divisor, *dividend, *quotient, *remainder;
 
@@ -2238,8 +2230,8 @@ void lifterClass::lift_div() {
         ZYDIS_REGISTER_AH,
         createZExtOrTruncFolder(remainder, Type::getIntNTy(context, src.size)));
   } else {
-    auto dividendLowop = instruction->operands[1];  // eax
-    auto dividendHighop = instruction->operands[2]; // edx
+    auto dividendLowop = operands[1];  // eax
+    auto dividendHighop = operands[2]; // edx
 
     divisor = GetOperandValue(src, src.size);
 
@@ -2293,7 +2285,7 @@ void lifterClass::lift_div() {
 
 void lifterClass::lift_idiv() {
   LLVMContext& context = builder.getContext();
-  auto src = instruction->operands[0];
+  auto src = operands[0];
   if (src.size == 8) {
     auto dividend = GetRegisterValue(ZYDIS_REGISTER_AX);
 
@@ -2318,8 +2310,8 @@ void lifterClass::lift_idiv() {
     printvalue(dividend);
     return;
   }
-  auto dividendLowop = instruction->operands[1];  // eax
-  auto dividendHighop = instruction->operands[2]; // edx
+  auto dividendLowop = operands[1];  // eax
+  auto dividendHighop = operands[2]; // edx
 
   auto Rvalue = GetOperandValue(src, src.size);
 
@@ -2372,13 +2364,12 @@ void lifterClass::lift_idiv() {
 
 void lifterClass::lift_xor() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto result = createXorFolder(
-      Lvalue, Rvalue,
-      "realxor-" + to_string(instruction->runtime_address) + "-");
+      Lvalue, Rvalue, "realxor-" + to_string(blockInfo.runtime_address) + "-");
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
@@ -2400,13 +2391,12 @@ void lifterClass::lift_xor() {
 
 void lifterClass::lift_or() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
-  auto result =
-      createOrFolder(Lvalue, Rvalue,
-                     "realor-" + to_string(instruction->runtime_address) + "-");
+  auto result = createOrFolder(
+      Lvalue, Rvalue, "realor-" + to_string(blockInfo.runtime_address) + "-");
 
   printvalue(Lvalue);
   printvalue(Rvalue);
@@ -2431,14 +2421,13 @@ void lifterClass::lift_or() {
 
 void lifterClass::lift_and() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
 
   auto result = createAndFolder(
-      Lvalue, Rvalue,
-      "realand-" + to_string(instruction->runtime_address) + "-");
+      Lvalue, Rvalue, "realand-" + to_string(blockInfo.runtime_address) + "-");
 
   auto sf = computeSignFlag(result);
   auto zf = computeZeroFlag(result);
@@ -2455,8 +2444,7 @@ void lifterClass::lift_and() {
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-  SetOperandValue(dest, result,
-                  "and" + to_string(instruction->runtime_address));
+  SetOperandValue(dest, result, "and" + to_string(blockInfo.runtime_address));
 }
 
 /*
@@ -2479,8 +2467,8 @@ FI
 */
 void lifterClass::lift_rol() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto Rvalue = GetOperandValue(src, dest.size);
 
@@ -2546,8 +2534,8 @@ FI
 */
 void lifterClass::lift_ror() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto Rvalue = GetOperandValue(src, dest.size);
 
@@ -2555,10 +2543,10 @@ void lifterClass::lift_ror() {
                                      Lvalue->getType()->getIntegerBitWidth());
   Rvalue = builder.CreateURem(Rvalue, size);
 
-  Value* result = createOrFolder(
-      createLShrFolder(Lvalue, Rvalue),
-      createShlFolder(Lvalue, createSubFolder(size, Rvalue)),
-      "ror-" + std::to_string(instruction->runtime_address) + "-");
+  Value* result =
+      createOrFolder(createLShrFolder(Lvalue, Rvalue),
+                     createShlFolder(Lvalue, createSubFolder(size, Rvalue)),
+                     "ror-" + std::to_string(blockInfo.runtime_address) + "-");
 
   Value* msb = createLShrFolder(
       result,
@@ -2601,7 +2589,7 @@ void lifterClass::lift_ror() {
 }
 
 void lifterClass::lift_inc() {
-  auto operand = instruction->operands[0];
+  auto operand = operands[0];
 
   Value* Lvalue = GetOperandValue(operand, operand.size);
 
@@ -2611,8 +2599,8 @@ void lifterClass::lift_inc() {
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
   // treat it as add r, 1 for flags
-  result = createAddFolder(
-      Lvalue, one, "inc-" + to_string(instruction->runtime_address) + "-");
+  result = createAddFolder(Lvalue, one,
+                           "inc-" + to_string(blockInfo.runtime_address) + "-");
   of = computeOverflowFlagAdd(Lvalue, one, result);
 
   printvalue(Lvalue) printvalue(result);
@@ -2631,7 +2619,7 @@ void lifterClass::lift_inc() {
 }
 
 void lifterClass::lift_dec() {
-  auto operand = instruction->operands[0];
+  auto operand = operands[0];
 
   Value* Lvalue = GetOperandValue(operand, operand.size);
 
@@ -2641,8 +2629,8 @@ void lifterClass::lift_dec() {
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
   // treat it as sub r, 1 for flags
-  result = createSubFolder(
-      Lvalue, one, "dec-" + to_string(instruction->runtime_address) + "-");
+  result = createSubFolder(Lvalue, one,
+                           "dec-" + to_string(blockInfo.runtime_address) + "-");
   of = computeOverflowFlagSub(Lvalue, one, result);
 
   printvalue(Lvalue) printvalue(result);
@@ -2662,32 +2650,32 @@ void lifterClass::lift_dec() {
 
 void lifterClass::lift_push() {
   LLVMContext& context = builder.getContext();
-  auto src = instruction->operands[0]; // value that we are pushing
-  auto dest = instruction->operands[2];
-  auto rsp = instruction->operands[1];
+  auto src = operands[0]; // value that we are pushing
+  auto dest = operands[2];
+  auto rsp = operands[1];
 
   auto Rvalue = GetOperandValue(src, dest.size);
   auto RspValue = GetOperandValue(rsp, rsp.size); // ?
   auto val = ConstantInt::getSigned(
       Type::getInt64Ty(context),
       dest.size / 8); // jokes on me apparently this is not a fixed value
-  auto result = createSubFolder(
-      RspValue, val,
-      "pushing_newrsp-" + to_string(instruction->runtime_address) + "-");
+  auto result = createSubFolder(RspValue, val,
+                                "pushing_newrsp-" +
+                                    to_string(blockInfo.runtime_address) + "-");
 
   printvalue(RspValue) printvalue(result)
-      SetOperandValue(rsp, result, to_string(instruction->runtime_address));
+      SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
   ; // sub rsp 8 first,
 
-  SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
   ; // then mov rsp, val
 }
 
 void lifterClass::lift_pushfq() {
   LLVMContext& context = builder.getContext();
-  auto src = instruction->operands[2];  // value that we are pushing rflags
-  auto dest = instruction->operands[1]; // [rsp]
-  auto rsp = instruction->operands[0];  // rsp
+  auto src = operands[2];  // value that we are pushing rflags
+  auto dest = operands[1]; // [rsp]
+  auto rsp = operands[0];  // rsp
 
   auto Rvalue = GetOperandValue(src, dest.size);
   // auto Rvalue = GetRFLAGS(builder);
@@ -2696,69 +2684,69 @@ void lifterClass::lift_pushfq() {
   auto val = ConstantInt::get(Type::getInt64Ty(context), src.size / 8);
   auto result = createSubFolder(RspValue, val);
 
-  SetOperandValue(rsp, result, to_string(instruction->runtime_address));
+  SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
   ; // sub rsp 8 first,
 
   // pushFlags( dest, Rvalue,
-  // to_string(instruction->runtime_address));;
-  SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+  // to_string(blockInfo.runtime_address));;
+  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
   ; // then mov rsp, val
 }
 
 void lifterClass::lift_pop() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0]; // value that we are pushing
-  auto src = instruction->operands[2];
-  auto rsp = instruction->operands[1];
+  auto dest = operands[0]; // value that we are pushing
+  auto src = operands[2];
+  auto rsp = operands[1];
 
   auto Rvalue =
-      GetOperandValue(src, dest.size, to_string(instruction->runtime_address));
+      GetOperandValue(src, dest.size, to_string(blockInfo.runtime_address));
   ;
   auto RspValue =
-      GetOperandValue(rsp, rsp.size, to_string(instruction->runtime_address));
+      GetOperandValue(rsp, rsp.size, to_string(blockInfo.runtime_address));
   ;
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     dest.size / 8); // assuming its x64
-  auto result = createAddFolder(
-      RspValue, val,
-      "popping_new_rsp-" + to_string(instruction->runtime_address) + "-");
+  auto result = createAddFolder(RspValue, val,
+                                "popping_new_rsp-" +
+                                    to_string(blockInfo.runtime_address) + "-");
 
   printvalue(Rvalue) printvalue(RspValue) printvalue(result)
 
       SetOperandValue(rsp, result); // then add rsp 8
 
-  SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
   ; // mov val, rsp first
 }
 
 void lifterClass::lift_popfq() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[2]; // value that we are pushing
-  auto src = instruction->operands[1];  // [rsp]
-  auto rsp = instruction->operands[0];  // rsp
+  auto dest = operands[2]; // value that we are pushing
+  auto src = operands[1];  // [rsp]
+  auto rsp = operands[0];  // rsp
 
   auto Rvalue =
-      GetOperandValue(src, dest.size, to_string(instruction->runtime_address));
+      GetOperandValue(src, dest.size, to_string(blockInfo.runtime_address));
   ;
   auto RspValue =
-      GetOperandValue(rsp, rsp.size, to_string(instruction->runtime_address));
+      GetOperandValue(rsp, rsp.size, to_string(blockInfo.runtime_address));
   ;
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     dest.size / 8); // assuming its x64
   auto result = createAddFolder(
-      RspValue, val, "popfq-" + to_string(instruction->runtime_address) + "-");
+      RspValue, val, "popfq-" + to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(dest, Rvalue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
   ; // mov val, rsp first
-  SetOperandValue(rsp, result, to_string(instruction->runtime_address));
+  SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
   ; // then add rsp 8
 }
 
 void lifterClass::lift_adc() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* Rvalue = GetOperandValue(src, dest.size);
@@ -2767,11 +2755,10 @@ void lifterClass::lift_adc() {
   cf = createZExtFolder(cf, Lvalue->getType());
 
   Value* tempResult = createAddFolder(
-      Lvalue, Rvalue,
-      "adc-temp-" + to_string(instruction->runtime_address) + "-");
+      Lvalue, Rvalue, "adc-temp-" + to_string(blockInfo.runtime_address) + "-");
   Value* result = createAddFolder(
       tempResult, cf,
-      "adc-result-" + to_string(instruction->runtime_address) + "-");
+      "adc-result-" + to_string(blockInfo.runtime_address) + "-");
   // The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(tempResult)
@@ -2807,20 +2794,19 @@ void lifterClass::lift_adc() {
 }
 
 void lifterClass::lift_xadd() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto Rvalue = GetOperandValue(src, src.size);
 
   Value* sumValue = createAddFolder(
-      Lvalue, Rvalue,
-      "xadd_sum-" + to_string(instruction->runtime_address) + "-");
+      Lvalue, Rvalue, "xadd_sum-" + to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(dest, sumValue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, sumValue, to_string(blockInfo.runtime_address));
   ;
 
-  SetOperandValue(src, Lvalue, to_string(instruction->runtime_address));
+  SetOperandValue(src, Lvalue, to_string(blockInfo.runtime_address));
   ;
   /*
   TEMP := SRC + DEST;
@@ -2868,10 +2854,8 @@ void lifterClass::lift_xadd() {
 
 void lifterClass::lift_test() {
   LLVMContext& context = builder.getContext();
-  Value* Lvalue =
-      GetOperandValue(instruction->operands[0], instruction->operands[0].size);
-  Value* Rvalue =
-      GetOperandValue(instruction->operands[1], instruction->operands[0].size);
+  Value* Lvalue = GetOperandValue(operands[0], operands[0].size);
+  Value* Rvalue = GetOperandValue(operands[1], operands[0].size);
 
   Value* testResult = createAndFolder(Lvalue, Rvalue, "testAnd");
 
@@ -2895,10 +2879,8 @@ void lifterClass::lift_test() {
 
 void lifterClass::lift_cmp() {
 
-  Value* Lvalue =
-      GetOperandValue(instruction->operands[0], instruction->operands[0].size);
-  Value* Rvalue =
-      GetOperandValue(instruction->operands[1], instruction->operands[0].size);
+  Value* Lvalue = GetOperandValue(operands[0], operands[0].size);
+  Value* Rvalue = GetOperandValue(operands[1], operands[0].size);
 
   Value* cmpResult = createSubFolder(Lvalue, Rvalue);
 
@@ -2932,7 +2914,7 @@ void lifterClass::lift_cmp() {
 }
 
 void lifterClass::lift_rdtsc() {
-  // cout << instruction->runtime_address << "\n";
+  // cout << blockInfo.runtime_address << "\n";
   LLVMContext& context = builder.getContext();
   auto rdtscCall = builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
   auto edxPart = createLShrFolder(rdtscCall, 32, "to_edx");
@@ -2944,10 +2926,10 @@ void lifterClass::lift_rdtsc() {
 
 void lifterClass::lift_cpuid() {
   LLVMContext& context = builder.getContext();
-  // instruction->operands[0] = eax
-  // instruction->operands[1] = ebx
-  // instruction->operands[2] = ecx
-  // instruction->operands[3] = edx
+  // operands[0] = eax
+  // operands[1] = ebx
+  // operands[2] = ecx
+  // operands[3] = edx
   /*
 
   c++
@@ -2994,8 +2976,7 @@ void lifterClass::lift_cpuid() {
   // int cpuInfo[4];
   // ArrayType* CpuInfoTy = ArrayType::get(Type::getInt32Ty(context), 4);
 
-  Value* eax =
-      GetOperandValue(instruction->operands[0], instruction->operands[0].size);
+  Value* eax = GetOperandValue(operands[0], operands[0].size);
   // one is eax, other is always 0?
   std::vector<Type*> AsmOutputs = {
       Type::getInt32Ty(context), Type::getInt32Ty(context),
@@ -3020,16 +3001,16 @@ void lifterClass::lift_cpuid() {
   Value* ecx = builder.CreateExtractValue(cpuidCall, 2, "ecx");
   Value* edx = builder.CreateExtractValue(cpuidCall, 3, "edx");
 
-  SetOperandValue(instruction->operands[0], eaxv);
-  SetOperandValue(instruction->operands[1], ebx);
-  SetOperandValue(instruction->operands[2], ecx);
-  SetOperandValue(instruction->operands[3], edx);
+  SetOperandValue(operands[0], eaxv);
+  SetOperandValue(operands[1], ebx);
+  SetOperandValue(operands[2], ecx);
+  SetOperandValue(operands[3], edx);
 }
 
 void lifterClass::lift_setnz() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
 
@@ -3041,7 +3022,7 @@ void lifterClass::lift_setnz() {
 void lifterClass::lift_seto() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* of = getFlag(FLAG_OF);
 
@@ -3052,7 +3033,7 @@ void lifterClass::lift_seto() {
 void lifterClass::lift_setno() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* of = getFlag(FLAG_OF);
 
@@ -3066,7 +3047,7 @@ void lifterClass::lift_setno() {
 void lifterClass::lift_setnb() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* cf = getFlag(FLAG_CF);
 
@@ -3088,7 +3069,7 @@ void lifterClass::lift_setbe() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
   SetOperandValue(dest, result);
 }
 
@@ -3103,14 +3084,14 @@ void lifterClass::lift_setnbe() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
   SetOperandValue(dest, result);
 }
 
 void lifterClass::lift_setns() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* sf = getFlag(FLAG_SF);
 
@@ -3129,27 +3110,27 @@ void lifterClass::lift_setp() {
 
   Value* result = createZExtFolder(pf, Type::getInt8Ty(context));
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   SetOperandValue(dest, result);
 }
 
 void lifterClass::lift_setnp() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* pf = getFlag(FLAG_PF);
 
   Value* resultValue =
       createZExtFolder(builder.CreateNot(pf), Type::getInt8Ty(context));
 
-  SetOperandValue(dest, resultValue, to_string(instruction->runtime_address));
+  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_setb() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* cf = getFlag(FLAG_CF);
 
@@ -3164,13 +3145,13 @@ void lifterClass::lift_sets() {
 
   Value* result = createZExtFolder(sf, Type::getInt8Ty(context));
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
   SetOperandValue(dest, result);
 }
 
 void lifterClass::lift_stosx() {
 
-  auto dest = instruction->operands[0]; // xdi
+  auto dest = operands[0]; // xdi
   Value* destValue = GetOperandValue(dest, dest.size);
   Value* DF = getFlag(FLAG_DF);
   // if df is 1, +
@@ -3189,7 +3170,7 @@ void lifterClass::lift_stosx() {
 
 void lifterClass::lift_setz() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
 
@@ -3201,7 +3182,7 @@ void lifterClass::lift_setz() {
 
 void lifterClass::lift_setnle() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
   Value* sf = getFlag(FLAG_SF);
@@ -3234,7 +3215,7 @@ void lifterClass::lift_setle() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
   SetOperandValue(dest, result);
 }
 
@@ -3247,7 +3228,7 @@ void lifterClass::lift_setnl() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
   SetOperandValue(dest, result);
 }
 
@@ -3260,14 +3241,14 @@ void lifterClass::lift_setl() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = instruction->operands[0];
+  auto dest = operands[0];
   SetOperandValue(dest, result);
 }
 
 void lifterClass::lift_bt() {
 
-  auto dest = instruction->operands[0];
-  auto bitIndex = instruction->operands[1];
+  auto dest = operands[0];
+  auto bitIndex = operands[1];
 
   // If the bit base operand specifies a register, the instruction takes
   // the modulo 16, 32, or 64 of the bit offset operand (modulo size
@@ -3305,8 +3286,8 @@ void lifterClass::lift_bt() {
 }
 
 void lifterClass::lift_btr() {
-  auto base = instruction->operands[0];
-  auto offset = instruction->operands[1];
+  auto base = operands[0];
+  auto offset = operands[1];
 
   unsigned baseBitWidth = base.size;
 
@@ -3318,9 +3299,9 @@ void lifterClass::lift_btr() {
 
   Value* baseVal = GetOperandValue(base, base.size);
 
-  Value* bit = createLShrFolder(
-      baseVal, bitOffsetMasked,
-      "btr-lshr-" + to_string(instruction->runtime_address) + "-");
+  Value* bit = createLShrFolder(baseVal, bitOffsetMasked,
+                                "btr-lshr-" +
+                                    to_string(blockInfo.runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -3332,9 +3313,8 @@ void lifterClass::lift_btr() {
                                 bitOffsetMasked, "btr-shl");
 
   mask = builder.CreateNot(mask); // invert mask
-  baseVal = createAndFolder(baseVal, mask,
-                            "btr-and-" +
-                                to_string(instruction->runtime_address) + "-");
+  baseVal = createAndFolder(
+      baseVal, mask, "btr-and-" + to_string(blockInfo.runtime_address) + "-");
 
   SetOperandValue(base, baseVal);
   printvalue(bitOffset);
@@ -3343,8 +3323,8 @@ void lifterClass::lift_btr() {
 }
 
 void lifterClass::lift_bsr() {
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* Rvalue = GetOperandValue(src, src.size);
   Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
@@ -3380,8 +3360,8 @@ void lifterClass::lift_bsr() {
 
 void lifterClass::lift_bsf() {
   LLVMContext& context = builder.getContext();
-  auto dest = instruction->operands[0];
-  auto src = instruction->operands[1];
+  auto dest = operands[0];
+  auto src = operands[1];
 
   Value* Rvalue = GetOperandValue(src, src.size);
 
@@ -3416,8 +3396,8 @@ void lifterClass::lift_bsf() {
 }
 
 void lifterClass::lift_btc() {
-  auto base = instruction->operands[0];
-  auto offset = instruction->operands[1];
+  auto base = operands[0];
+  auto offset = operands[1];
 
   unsigned baseBitWidth = base.size;
 
@@ -3429,9 +3409,9 @@ void lifterClass::lift_btc() {
 
   Value* baseVal = GetOperandValue(base, base.size);
 
-  Value* bit = createLShrFolder(
-      baseVal, bitOffsetMasked,
-      "btc-lshr-" + to_string(instruction->runtime_address) + "-");
+  Value* bit = createLShrFolder(baseVal, bitOffsetMasked,
+                                "btc-lshr-" +
+                                    to_string(blockInfo.runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -3442,9 +3422,8 @@ void lifterClass::lift_btc() {
   Value* mask = createShlFolder(ConstantInt::get(baseVal->getType(), 1),
                                 bitOffsetMasked, "btc-shl");
 
-  baseVal = createXorFolder(baseVal, mask,
-                            "btc-and-" +
-                                to_string(instruction->runtime_address) + "-");
+  baseVal = createXorFolder(
+      baseVal, mask, "btc-and-" + to_string(blockInfo.runtime_address) + "-");
 
   SetOperandValue(base, baseVal);
   printvalue(bitOffset);
@@ -3541,8 +3520,8 @@ void lifterClass::lift_cli() {
 }
 
 void lifterClass::lift_bts() {
-  auto base = instruction->operands[0];
-  auto offset = instruction->operands[1];
+  auto base = operands[0];
+  auto offset = operands[1];
 
   unsigned baseBitWidth = base.size;
 
@@ -3554,9 +3533,9 @@ void lifterClass::lift_bts() {
 
   Value* baseVal = GetOperandValue(base, base.size);
 
-  Value* bit = createLShrFolder(
-      baseVal, bitOffsetMasked,
-      "bts-lshr-" + to_string(instruction->runtime_address) + "-");
+  Value* bit = createLShrFolder(baseVal, bitOffsetMasked,
+                                "bts-lshr-" +
+                                    to_string(blockInfo.runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -3568,7 +3547,7 @@ void lifterClass::lift_bts() {
                                 bitOffsetMasked, "bts-shl");
 
   baseVal = createOrFolder(
-      baseVal, mask, "bts-or-" + to_string(instruction->runtime_address) + "-");
+      baseVal, mask, "bts-or-" + to_string(blockInfo.runtime_address) + "-");
 
   SetOperandValue(base, baseVal);
   printvalue(bitOffset);
@@ -3579,9 +3558,9 @@ void lifterClass::lift_bts() {
 void lifterClass::lift_cwd() {
   LLVMContext& context = builder.getContext();
 
-  Value* ax = createZExtOrTruncFolder(
-      GetOperandValue(instruction->operands[1], instruction->operands[1].size),
-      Type::getInt16Ty(context));
+  Value* ax =
+      createZExtOrTruncFolder(GetOperandValue(operands[1], operands[1].size),
+                              Type::getInt16Ty(context));
 
   Value* signBit = computeSignFlag(ax);
 
@@ -3591,15 +3570,15 @@ void lifterClass::lift_cwd() {
       ConstantInt::get(Type::getInt16Ty(context), 0),
       ConstantInt::get(Type::getInt16Ty(context), 0xFFFF), "setDX");
 
-  SetOperandValue(instruction->operands[0], dx);
+  SetOperandValue(operands[0], dx);
 }
 
 void lifterClass::lift_cdq() {
   LLVMContext& context = builder.getContext();
   // if eax is -, then edx is filled with ones FFFF_FFFF
-  Value* eax = createZExtOrTruncFolder(
-      GetOperandValue(instruction->operands[1], instruction->operands[1].size),
-      Type::getInt32Ty(context));
+  Value* eax =
+      createZExtOrTruncFolder(GetOperandValue(operands[1], operands[1].size),
+                              Type::getInt32Ty(context));
 
   Value* signBit = computeSignFlag(eax);
 
@@ -3609,16 +3588,16 @@ void lifterClass::lift_cdq() {
       ConstantInt::get(Type::getInt32Ty(context), 0),
       ConstantInt::get(Type::getInt32Ty(context), 0xFFFFFFFF), "setEDX");
 
-  SetOperandValue(instruction->operands[0], edx);
+  SetOperandValue(operands[0], edx);
 }
 
 void lifterClass::lift_cqo() {
 
   LLVMContext& context = builder.getContext();
   // if rax is -, then rdx is filled with ones FFFF_FFFF_FFFF_FFFF
-  Value* rax = createZExtOrTruncFolder(
-      GetOperandValue(instruction->operands[1], instruction->operands[1].size),
-      Type::getInt64Ty(context));
+  Value* rax =
+      createZExtOrTruncFolder(GetOperandValue(operands[1], operands[1].size),
+                              Type::getInt64Ty(context));
 
   Value* signBit = computeSignFlag(rax);
 
@@ -3629,46 +3608,45 @@ void lifterClass::lift_cqo() {
       ConstantInt::get(Type::getInt64Ty(context), 0xFFFFFFFFFFFFFFFF),
       "setRDX");
   printvalue(rax) printvalue(signBit) printvalue(rdx)
-      SetOperandValue(instruction->operands[0], rdx);
+      SetOperandValue(operands[0], rdx);
 }
 
 void lifterClass::lift_cbw() {
   LLVMContext& context = builder.getContext();
   Value* al = createZExtOrTruncFolder(
-      GetOperandValue(instruction->operands[1], instruction->operands[1].size),
-      Type::getInt8Ty(context));
+      GetOperandValue(operands[1], operands[1].size), Type::getInt8Ty(context));
 
   Value* ax = createSExtFolder(al, Type::getInt16Ty(context), "cbw");
 
-  SetOperandValue(instruction->operands[0], ax);
+  SetOperandValue(operands[0], ax);
 }
 
 void lifterClass::lift_cwde() {
   LLVMContext& context = builder.getContext();
-  Value* ax = createZExtOrTruncFolder(
-      GetOperandValue(instruction->operands[1], instruction->operands[1].size),
-      Type::getInt16Ty(context));
+  Value* ax =
+      createZExtOrTruncFolder(GetOperandValue(operands[1], operands[1].size),
+                              Type::getInt16Ty(context));
   printvalue(ax);
   Value* eax = createSExtFolder(ax, Type::getInt32Ty(context), "cwde");
   printvalue(eax);
-  SetOperandValue(instruction->operands[0], eax);
+  SetOperandValue(operands[0], eax);
 }
 
 void lifterClass::lift_cdqe() {
   LLVMContext& context = builder.getContext();
 
-  Value* eax = createZExtOrTruncFolder(
-      GetOperandValue(instruction->operands[1], instruction->operands[1].size),
-      Type::getInt32Ty(context), "cdqe-trunc");
+  Value* eax =
+      createZExtOrTruncFolder(GetOperandValue(operands[1], operands[1].size),
+                              Type::getInt32Ty(context), "cdqe-trunc");
 
   Value* rax = createSExtFolder(eax, Type::getInt64Ty(context), "cdqe");
 
-  SetOperandValue(instruction->operands[0], rax);
+  SetOperandValue(operands[0], rax);
 }
 
 void lifterClass::liftInstructionSemantics() {
 
-  switch (instruction->info.mnemonic) {
+  switch (instruction.mnemonic) {
   // movs
   case ZYDIS_MNEMONIC_MOVAPS: {
     lift_movaps();
@@ -4166,9 +4144,17 @@ void lifterClass::liftInstructionSemantics() {
   }
 
   default: {
-    cout << "not implemented: " << instruction->info.mnemonic
-         << " runtime: " << hex << instruction->runtime_address << " "
-         << instruction->text << "\n";
+
+    ZydisFormatter formatter;
+
+    ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+    char buffer[256];
+    ZydisFormatterFormatInstruction(
+        &formatter, &(instruction), operands, instruction.operand_count_visible,
+        &buffer[0], sizeof(buffer), blockInfo.runtime_address, ZYAN_NULL);
+
+    cout << "not implemented: " << instruction.mnemonic << " runtime: " << hex
+         << blockInfo.runtime_address << " " << buffer << "\n";
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_notimplemented.ll";
@@ -4185,14 +4171,13 @@ void lifterClass::liftInstruction() {
   LLVMContext& context = builder.getContext();
   // RIP gets updated before execution of the instruction->
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    instruction->runtime_address +
-                                        instruction->info.length);
+                                    blockInfo.runtime_address);
   SetRegisterValue(ZYDIS_REGISTER_RIP, val);
   auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
   printvalue(rsp);
 
   if (auto funcInfo =
-          funcsignatures::getFunctionInfo(instruction->runtime_address)) {
+          funcsignatures::getFunctionInfo(blockInfo.runtime_address)) {
     callFunctionIR(funcInfo->name.c_str(), funcInfo);
     cout << "calling: " << funcInfo->name.c_str() << "\n";
     auto next_jump = popStack();
@@ -4205,14 +4190,13 @@ void lifterClass::liftInstruction() {
                                  builder.GetInsertBlock()->getParent());
     builder.CreateBr(bb);
 
-    blockInfo = BBInfo(jump_address, bb, getRegisters());
+    blockInfo = BBInfo(jump_address, bb);
     run = 0;
     return;
   }
 
   // if really an import, jump_address + imagebase should return a string (?)
-  uint64_t jump_address =
-      instruction->runtime_address + instruction->info.length;
+  uint64_t jump_address = blockInfo.runtime_address;
   APInt temp;
   bool isReadable = BinaryOperations::readMemory(jump_address, 1, temp);
   bool isImport = BinaryOperations::isImport(jump_address);
@@ -4237,7 +4221,7 @@ void lifterClass::liftInstruction() {
 
     builder.CreateBr(bb);
 
-    blockInfo = BBInfo(jump_address, bb, getRegisters());
+    blockInfo = BBInfo(jump_address, bb);
     run = 0;
     return;
   }
