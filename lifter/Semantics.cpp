@@ -2247,12 +2247,13 @@ void lifterClass::lift_div() {
     printvalue(dividendHigh);
 
     dividend = builder.CreateOr(dividendHigh, dividendLow);
+    printvalue(dividend);
     Value* ZExtdivisor = createZExtFolder(divisor, dividend->getType());
 
     if (isa<ConstantInt>(ZExtdivisor) && isa<ConstantInt>(dividend)) {
 
       APInt divideCI = cast<ConstantInt>(ZExtdivisor)->getValue();
-      APInt dividendCI = cast<ConstantInt>(ZExtdivisor)->getValue();
+      APInt dividendCI = cast<ConstantInt>(dividend)->getValue();
 
       APInt quotientCI = dividendCI.udiv(divideCI);
       APInt remainderCI = dividendCI.urem(divideCI);
