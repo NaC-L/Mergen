@@ -164,6 +164,7 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
   error_code EC_noopt;
   llvm::raw_fd_ostream OS_noopt(Filename_noopt, EC_noopt);
 
+  lifting_module.print(OS_noopt, nullptr);
   final_optpass(function);
   string Filename = "output.ll";
   error_code EC;

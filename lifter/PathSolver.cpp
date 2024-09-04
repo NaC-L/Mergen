@@ -143,6 +143,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
                                        builder.GetInsertBlock()->getParent());
     auto bb_true = BasicBlock::Create(function->getContext(), "bb_true",
                                       builder.GetInsertBlock()->getParent());
+
     auto firstcase = pv[0];
     auto secondcase = pv[1];
 
