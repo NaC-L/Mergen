@@ -595,7 +595,8 @@ set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V) {
     printvalue2(op2_unknownbits_count);
     printvalue2(total_unknownbits_count);
 
-    if ((res_unknownbits_count >= total_unknownbits_count)) {
+    if ((res_unknownbits_count >= total_unknownbits_count) &&
+        res_unknownbits_count != 1) {
       auto v1 = computePossibleValues(op1);
       auto v2 = computePossibleValues(op2);
 
@@ -656,6 +657,9 @@ Value* lifterClass::solveLoad(LoadInst* load) {
     for (auto possiblevalue : x) {
       printvalue2(possiblevalue);
     }
+    auto x = computePossibleValues(loadOffset); // rename
+
+    llvm::Value* selectedValue = nullptr;
 
     for (auto xx : x) {
 
