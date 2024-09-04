@@ -652,10 +652,21 @@ Value* lifterClass::solveLoad(LoadInst* load) {
     }
   } else {
     // Get possible values from loadOffset
-    auto x = computePossibleValues(loadOffset);
-    llvm::Value* selectedValue = nullptr;
-    for (auto possiblevalue : x) {
-      printvalue2(possiblevalue);
+
+    if (isa<SelectInst>(loadOffset)) { // dyn_cast
+      auto select_inst = cast<SelectInst>(loadOffset);
+      if (isa<ConstantInt>(select_inst->getTrueValue()) &&
+          isa<ConstantInt>(select_inst->getFalseValue()))
+        // we should be able to do this whether
+        // this is a constant or not
+        return createSelectFolder(
+            select_inst->getCondition(),
+            retrieveCombinedValue(
+                cast<ConstantInt>(select_inst->getTrueValue())->getZExtValue(),
+                cloadsize, load),
+            retrieveCombinedValue(
+                cast<ConstantInt>(select_inst->getFalseValue())->getZExtValue(),
+                cloadsize, load));
     }
     auto x = computePossibleValues(loadOffset); // rename
 
