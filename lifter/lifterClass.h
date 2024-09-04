@@ -113,6 +113,7 @@ public:
     return vec[index];
   }
 };
+
 struct BBInfo {
   uint64_t runtime_address;
   llvm::BasicBlock* block;
@@ -121,6 +122,39 @@ struct BBInfo {
 
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
       : runtime_address(runtime_address), block(block) {}
+};
+
+class LazyFlag {
+public:
+  mutable std::optional<Value*>
+      value; // value, we have mutable because c++ is weird?
+
+  std::function<Value*()> calculation; // calculate value
+
+  LazyFlag() : value(nullptr), calculation(nullptr) {}
+  LazyFlag(Value* val) : value(val), calculation(nullptr) {}
+  LazyFlag(std::function<Value*()> calc)
+      : calculation(calc), value(std::nullopt) {}
+
+  // get value, calculate if doesnt exist
+  Value* get() const {
+    if (!value.has_value() && calculation) {
+
+      value = calculation();
+    }
+
+    return value.value_or(nullptr);
+  }
+
+  // Set a new value directly, bypassing lazy evaluation
+  void set(Value* newValue) {
+    value = newValue;
+    calculation = nullptr; // Disable lazy evaluation when setting directly
+  }
+  void setCalculation(std::function<Value*()> calc) {
+    calculation = calc;
+    value = std::nullopt; // Reset the stored value
+  }
 };
 
 class lifterClass {
@@ -138,7 +172,7 @@ public:
   DenseMap<Instruction*, APInt> assumptions;
   DenseMap<uint64_t, ValueByteReference> buffer;
 
-  llvm::SmallVector<Value*, FLAGS_END> FlagList;
+  llvm::SmallVector<LazyFlag, FLAGS_END> FlagList;
   RegisterManager Registers;
 
   DomConditionCache* DC = new DomConditionCache();
@@ -171,11 +205,11 @@ public:
         instruction(other.instruction), // Shallow copy of the pointer
         assumptions(other.assumptions), // Deep copy of assumptions
         buffer(other.buffer),
-        FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
-                                  // constructor
-        Registers(
-            other.Registers), // Assuming RegisterManager has a copy constructor
-        DC(other.DC),         // Deep copy of DC
+        FlagList(other.FlagList),   // Deep copy handled by unordered_map's copy
+                                    // constructor
+        Registers(other.Registers), // Assuming RegisterManager has a copy
+                                    // constructor
+        DC(other.DC),               // Deep copy of DC
         instct(other.instct),
         cachedquery(other.cachedquery), // Assuming raw pointer, copied directly
         DT(other.DT),                   // Assuming pointer, copied directly
@@ -202,6 +236,7 @@ public:
 
   // getters-setters
   Value* setFlag(Flag flag, Value* newValue = nullptr);
+  void setFlag(Flag flag, std::function<Value*()> calculation);
   Value* getFlag(Flag flag);
   RegisterManager& getRegisters();
   void setRegisters(RegisterManager newRegisters);

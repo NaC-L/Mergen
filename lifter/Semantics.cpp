@@ -1136,8 +1136,6 @@ void lifterClass::lift_jnp() {
 
 void lifterClass::lift_sbb() {
 
-  //
-
   auto dest = operands[0];
   auto src = operands[1];
 
@@ -1920,26 +1918,32 @@ void lifterClass::lift_add_sub() {
   Value* af = nullptr;
   Value* of = nullptr;
 
-  auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-  auto RvalueLowerNibble =
-      createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
-  auto op2LowerNibble =
-      createAndFolder(Rvalue, lowerNibbleMask, "rvalLowerNibble");
-
   switch (instruction.mnemonic) {
   case ZYDIS_MNEMONIC_ADD: {
     result = createAddFolder(Lvalue, Rvalue,
                              "realadd-" + to_string(blockInfo.runtime_address) +
                                  "-");
-    cf = createOrFolder(
-        createICMPFolder(CmpInst::ICMP_ULT, result, Lvalue, "add_cf1"),
-        createICMPFolder(CmpInst::ICMP_ULT, result, Rvalue, "add_cf2"),
-        "add_cf");
-    auto sumLowerNibble = createAddFolder(RvalueLowerNibble, op2LowerNibble,
-                                          "add_sumLowerNibble");
-    af = createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask,
-                          "add_af");
-    of = computeOverflowFlagAdd(Lvalue, Rvalue, result);
+
+    setFlag(FLAG_AF, [this, result, Lvalue, Rvalue]() {
+      auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
+      auto RvalueLowerNibble =
+          createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
+      auto op2LowerNibble =
+          createAndFolder(Rvalue, lowerNibbleMask, "rvalLowerNibble");
+      auto sumLowerNibble = createAddFolder(RvalueLowerNibble, op2LowerNibble,
+                                            "add_sumLowerNibble");
+      return createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble,
+                              lowerNibbleMask, "add_af");
+    });
+    setFlag(FLAG_CF, [this, result, Lvalue, Rvalue]() {
+      return createOrFolder(
+          createICMPFolder(CmpInst::ICMP_ULT, result, Lvalue, "add_cf1"),
+          createICMPFolder(CmpInst::ICMP_ULT, result, Rvalue, "add_cf2"),
+          "add_cf");
+    });
+    setFlag(FLAG_OF, [this, result, Lvalue, Rvalue]() {
+      return computeOverflowFlagAdd(Lvalue, Rvalue, result);
+    });
     break;
   }
   case ZYDIS_MNEMONIC_SUB: {
@@ -1947,11 +1951,23 @@ void lifterClass::lift_add_sub() {
                              "realsub-" + to_string(blockInfo.runtime_address) +
                                  "-");
 
-    of = computeOverflowFlagSub(Lvalue, Rvalue, result);
+    setFlag(FLAG_AF, [this, result, Lvalue, Rvalue]() {
+      auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
+      auto RvalueLowerNibble =
+          createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
+      auto op2LowerNibble =
+          createAndFolder(Rvalue, lowerNibbleMask, "rvalLowerNibble");
+      return createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble,
+                              op2LowerNibble, "sub_af");
+    });
 
-    cf = createICMPFolder(CmpInst::ICMP_UGT, Rvalue, Lvalue, "add_cf");
-    af = createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble, op2LowerNibble,
-                          "add_af");
+    setFlag(FLAG_CF, [this, result, Lvalue, Rvalue]() {
+      return createICMPFolder(CmpInst::ICMP_UGT, Rvalue, Lvalue, "add_cf");
+    });
+
+    setFlag(FLAG_OF, [this, result, Lvalue, Rvalue]() {
+      return computeOverflowFlagSub(Lvalue, Rvalue, result);
+    });
     break;
   }
   default:
@@ -1963,22 +1979,19 @@ void lifterClass::lift_add_sub() {
   The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
   */
 
-  auto sf = computeSignFlag(result);
-  auto zf = computeZeroFlag(result);
-  auto pf = computeParityFlag(result);
+  setFlag(FLAG_SF, [this, result]() {
+    return computeSignFlag(
+        result); // This lambda captures 'result' and 'this' for use inside
+  });
 
-  setFlag(FLAG_OF, of);
-  setFlag(FLAG_SF, sf);
-  setFlag(FLAG_ZF, zf);
-  setFlag(FLAG_AF, af);
-  setFlag(FLAG_CF, cf);
-  setFlag(FLAG_PF, pf);
+  setFlag(FLAG_ZF, [this, result]() { return computeZeroFlag(result); });
+
+  setFlag(FLAG_PF, [this, result]() { return computeParityFlag(result); });
 
   printvalue(Lvalue);
   printvalue(Rvalue);
   printvalue(result);
   printvalue(cf);
-  printvalue(sf);
   printvalue(of);
 
   SetOperandValue(dest, result);
