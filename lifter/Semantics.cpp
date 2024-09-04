@@ -1343,7 +1343,7 @@ void lifterClass::lift_rcr() {
       createICMPFolder(CmpInst::ICMP_EQ, actualCount,
                        ConstantInt::get(actualCount->getType(), 1));
 
-  newCF = createSelectFolder(isCountOne, newOF, getFlag(FLAG_OF));
+  newOF = createSelectFolder(isCountOne, newOF, getFlag(FLAG_OF));
   result = createSelectFolder(isCountOne, result, Lvalue);
 
   SetOperandValue(dest, result);
