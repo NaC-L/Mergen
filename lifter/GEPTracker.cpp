@@ -390,7 +390,7 @@ void removeDuplicateOffsets(vector<Instruction*>& vec) {
 
 set<APInt, APIntComparator> getPossibleValues(const llvm::KnownBits& known,
                                               unsigned max_unknown) {
-  if (max_unknown <= 16) {
+  if (max_unknown >= 16) {
     UNREACHABLE("There is a very huge chance that this shouldnt happen");
   }
   llvm::APInt base = known.One;
