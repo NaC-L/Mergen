@@ -277,7 +277,8 @@ inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
 }
 #endif
 
-#define STACKP_VALUE 0x14FEA8
+#define STACKP_VALUE 1376040
+// if this value changes, its only for debug purposes
 
 using ReverseRegisterMap = DenseMap<Value*, int>;
 using RegisterMap = DenseMap<int,

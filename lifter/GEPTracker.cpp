@@ -672,7 +672,7 @@ Value* lifterClass::solveLoad(LoadInst* load) {
 
     llvm::Value* selectedValue = nullptr;
 
-    for (auto xx : x) {
+    for (auto xx : x) { // rename
 
       auto isPaged = isMemPaged(xx.getZExtValue());
       if (!isPaged)
