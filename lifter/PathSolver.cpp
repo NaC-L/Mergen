@@ -64,7 +64,7 @@ void final_optpass(Function* clonedFuncx) {
     size_t beforeSize = module->getInstructionCount();
 
     modulePassManager =
-        passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+        passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O1);
 
     modulePassManager.addPass(GEPLoadPass());
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
