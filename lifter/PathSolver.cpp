@@ -194,9 +194,10 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
       function->getParent()->print(OS, nullptr);
     });
     outs() << "created a new path\n";
+    outs().flush();
   }
   if (pv.size() > 2) {
-    llvm_unreachable_internal("cant reach more than 2 paths!");
+    UNREACHABLE("cant reach more than 2 paths!");
   }
 
   return result;

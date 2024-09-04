@@ -2,7 +2,6 @@
 
 #include "FunctionSignatures.h"
 #include "GEPTracker.h"
-#include "OperandUtils.h"
 #include "PathSolver.h"
 #include "includes.h"
 #include "lifterClass.h"
@@ -40,8 +39,7 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
            lifter->blockInfo.runtime_address > 0;) {
       if (BinaryOperations::isWrittenTo(lifter->blockInfo.runtime_address)) {
         printvalueforce2(lifter->blockInfo.runtime_address);
-        outs() << "SelfModifyingCode!\n";
-        outs().flush();
+        UNREACHABLE("Found Self Modifying Code! we dont support it");
       }
 
       ZydisDecoder decoder;
@@ -65,7 +63,7 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
             sizeof(buffer), runtime_address, ZYAN_NULL);
 
         cout << hex << counter << ":" << buffer << "\n";
-        cout << "runtime: " << runtime_address << endl;
+        cout << "runtime: " << lifter->blockInfo.runtime_address << endl;
       });
 
       lifter->blockInfo.runtime_address += lifter->instruction.length;
@@ -162,16 +160,14 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
 
   cout << "\nlifting complete, " << dec << ms << " milliseconds has past"
        << endl;
+  string Filename_noopt = "output_no_opts.ll";
+  error_code EC_noopt;
+  llvm::raw_fd_ostream OS_noopt(Filename_noopt, EC_noopt);
 
   final_optpass(function);
   string Filename = "output.ll";
   error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);
-
-  if (EC) {
-    llvm::errs() << "Could not open file: " << EC.message();
-    return;
-  }
 
   lifting_module.print(OS, nullptr);
 

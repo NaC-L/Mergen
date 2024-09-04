@@ -259,10 +259,9 @@ void lifterClass::pagedCheck(Value* address, Instruction* ctxI) {
   case MEMORY_NOT_PAGED: {
     printvalueforce(address);
     cout.flush();
-    llvm_unreachable_internal(
-        "\nmemory is not paged, so we(more likely) or the program "
-        "probably do some incorrect stuff "
-        "we abort to avoid incorrect output\n");
+    UNREACHABLE("\nmemory is not paged, so we(more likely) or the program "
+                "probably do some incorrect stuff "
+                "we abort to avoid incorrect output\n");
     break;
   }
   case MEMORY_MIGHT_BE_PAGED: {
@@ -524,7 +523,7 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
         default: {
           outs() << "\n : " << cast<ICmpInst>(inst)->getPredicate();
           outs().flush();
-          llvm_unreachable_internal(
+          UNREACHABLE(
               "Unsupported operation in calculatePossibleValues ICMP.\n");
           break;
         }
@@ -534,8 +533,7 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
       default:
         outs() << "\n : " << inst->getOpcode();
         outs().flush();
-        llvm_unreachable_internal(
-            "Unsupported operation in calculatePossibleValues.\n");
+        UNREACHABLE("Unsupported operation in calculatePossibleValues.\n");
         break;
       }
     }
