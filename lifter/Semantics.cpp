@@ -4151,8 +4151,8 @@ void lifterClass::liftInstructionSemantics() {
         &formatter, &(instruction), operands, instruction.operand_count_visible,
         &buffer[0], sizeof(buffer), blockInfo.runtime_address, ZYAN_NULL);
 
-    outs() << "not implemented: " << instruction.mnemonic << " runtime: " << hex
-           << blockInfo.runtime_address << " " << buffer << "\n";
+    cout << "not implemented: " << instruction.mnemonic << " runtime: " << hex
+         << blockInfo.runtime_address << " " << buffer << endl;
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_notimplemented.ll";
