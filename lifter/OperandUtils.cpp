@@ -350,7 +350,7 @@ KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
       return KnownBits::makeConstant(a);
     }
   }
-  KnownBits knownBits(64);
+  KnownBits knownBits(value->getType()->getIntegerBitWidth());
   knownBits.resetAll();
   if (value->getType() == Type::getInt128Ty(value->getContext()))
     return knownBits;
