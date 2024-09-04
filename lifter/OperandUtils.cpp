@@ -1118,7 +1118,6 @@ Value* lifterClass::createSExtOrTruncFolder(Value* V, Type* DestTy,
 %extendedValue13 = zext i8 %trunc11 to i64
 %maskedreg14 = and i64 %newreg9, -256
 */
-
 void lifterClass::Init_Flags() {
   LLVMContext& context = builder.getContext();
   auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
@@ -1126,21 +1125,20 @@ void lifterClass::Init_Flags() {
   auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
 
   FlagList.resize(FLAGS_END);
-  FlagList[FLAG_CF] = zero;
-  FlagList[FLAG_PF] = zero;
-  FlagList[FLAG_AF] = zero;
-  FlagList[FLAG_ZF] = zero;
-  FlagList[FLAG_SF] = zero;
-  FlagList[FLAG_TF] = zero;
-  FlagList[FLAG_IF] = zero;
-  FlagList[FLAG_DF] = zero;
-  FlagList[FLAG_OF] = zero;
+  FlagList[FLAG_CF].set(zero);
+  FlagList[FLAG_PF].set(zero);
+  FlagList[FLAG_AF].set(zero);
+  FlagList[FLAG_ZF].set(zero);
+  FlagList[FLAG_SF].set(zero);
+  FlagList[FLAG_TF].set(zero);
+  FlagList[FLAG_IF].set(zero);
+  FlagList[FLAG_DF].set(zero);
+  FlagList[FLAG_OF].set(zero);
 
-  FlagList[FLAG_RESERVED1] = one;
+  FlagList[FLAG_RESERVED1].set(one);
   Registers[ZYDIS_REGISTER_RFLAGS] = two;
 }
 
-// ???
 Value* lifterClass::setFlag(Flag flag, Value* newValue) {
   LLVMContext& context = builder.getContext();
   newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
@@ -1149,17 +1147,30 @@ Value* lifterClass::setFlag(Flag flag, Value* newValue) {
       flag == FLAG_DF)
     return nullptr;
 
-  return FlagList[flag] = newValue;
+  FlagList[flag].set(newValue); // Set the new value directly
+  return newValue;
 }
+
+void lifterClass::setFlag(Flag flag, std::function<Value*()> calculation) {
+  // If the flag is one of the reserved ones, do not modify
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
+      flag == FLAG_DF)
+    return;
+
+  // lazy calculation
+  FlagList[flag].setCalculation(calculation);
+}
+
 Value* lifterClass::getFlag(Flag flag) {
-  if (FlagList[flag])
-    return FlagList[flag];
+  Value* result = FlagList[flag].get(); // Retrieve the value,
+  if (result) // if its somehow nullptr, just return False as value
+    return result;
 
   LLVMContext& context = builder.getContext();
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-// for love of god this is so ugly
+// destroy these
 RegisterManager& lifterClass::getRegisters() { return Registers; }
 void lifterClass::setRegisters(RegisterManager newRegisters) {
   Registers = newRegisters;

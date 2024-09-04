@@ -2,6 +2,7 @@
 #include "OperandUtils.h"
 #include "includes.h"
 #include "lifterClass.h"
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/InstrTypes.h>
