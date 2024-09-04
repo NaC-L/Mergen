@@ -96,7 +96,8 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
   }
 
   // bool contiguous = true;
-  vector<ValueByteReferenceRange> values; // we can just create an array here
+  SmallVector<ValueByteReferenceRange, 64>
+      values; // we can just create an array here
   for (uint64_t i = 0; i < byteCount; ++i) {
     uint64_t currentAddress = startAddress + i;
 
