@@ -1,7 +1,6 @@
 ﻿#include "FunctionSignatures.h"
 #include "GEPTracker.h"
 #include "OperandUtils.h"
-#include "PathSolver.h"
 #include "includes.h"
 #include "lifterClass.h"
 #include "utils.h"
@@ -255,8 +254,6 @@ void lifterClass::branchHelper(Value* condition, string instname, int numbered,
 
   uint64_t destination = 0;
   solvePath(function, destination, next_jump);
-
-  ValueToValueMapTy VMap_test;
 
   block->setName("previousjmp_block-" + to_string(destination) + "-");
   // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
@@ -4153,8 +4150,8 @@ void lifterClass::liftInstructionSemantics() {
         &formatter, &(instruction), operands, instruction.operand_count_visible,
         &buffer[0], sizeof(buffer), blockInfo.runtime_address, ZYAN_NULL);
 
-    cout << "not implemented: " << instruction.mnemonic << " runtime: " << hex
-         << blockInfo.runtime_address << " " << buffer << "\n";
+    outs() << "not implemented: " << instruction.mnemonic << " runtime: " << hex
+           << blockInfo.runtime_address << " " << buffer << "\n";
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_notimplemented.ll";
@@ -4162,7 +4159,7 @@ void lifterClass::liftInstructionSemantics() {
       raw_fd_ostream OS(Filename, EC);
       builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
-    llvm_unreachable_internal("Instruction not implemented");
+    UNREACHABLE("Instruction not implemented");
   }
   }
 }
@@ -4179,7 +4176,8 @@ void lifterClass::liftInstruction() {
   if (auto funcInfo =
           funcsignatures::getFunctionInfo(blockInfo.runtime_address)) {
     callFunctionIR(funcInfo->name.c_str(), funcInfo);
-    cout << "calling: " << funcInfo->name.c_str() << "\n";
+    outs() << "calling: " << funcInfo->name.c_str() << "\n";
+    outs().flush();
     auto next_jump = popStack();
 
     // get [rsp], jump there
@@ -4208,8 +4206,9 @@ void lifterClass::liftInstruction() {
     // actually call the function first
 
     auto functionName = BinaryOperations::getName(jump_address);
-    cout << "calling : " << functionName << " addr: " << (uint64_t)jump_address
-         << endl;
+    outs() << "calling : " << functionName
+           << " addr: " << (uint64_t)jump_address;
+    outs().flush();
 
     callFunctionIR(functionName, nullptr);
 
@@ -4233,7 +4232,7 @@ void lifterClass::liftInstruction() {
       raw_fd_ostream OS(Filename, EC);
       builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
-    llvm_unreachable_internal("Trying to execute invalid external function");
+    UNREACHABLE("Trying to execute invalid external function");
   }
 
   // do something for prefixes like rep here

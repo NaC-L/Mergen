@@ -7,18 +7,17 @@
 #ifndef ZYDIS_STATIC_BUILD
 #define ZYDIS_STATIC_BUILD
 #endif // ZYDIS_STATIC_BUILD
-#ifndef NDEBUG
-#define NDEBUG
-#endif
 
-// #define _NODEV
+// #define _NODEV why?
+#define UNREACHABLE(msg) llvm_unreachable_internal(msg, __FILE__, __LINE__)
 
 #ifndef _NODEV
 #define printvalue(x)                                                          \
   do {                                                                         \
     debugging::printLLVMValue(x, #x);                                          \
   } while (0);
-// outs() << " " #x " : "; x->print(outs()); outs() << "\n";  outs().flush();
+// outs() << " " #x " : "; x->print(outs());
+// outs() << "\n";  outs().flush();
 #define printvalue2(x)                                                         \
   do {                                                                         \
     debugging::printValue(x, #x);                                              \
@@ -156,7 +155,8 @@
 #include "llvm/Transforms/IPO/DeadArgumentElimination.h"
 #include "llvm/Transforms/IPO/ElimAvailExtern.h"
 
-// #include "llvm/Transforms/IPO/EmbedBitcodePass.h"
+// #include
+// "llvm/Transforms/IPO/EmbedBitcodePass.h"
 #include "llvm/Transforms/IPO/ForceFunctionAttrs.h"
 #include "llvm/Transforms/IPO/FunctionAttrs.h"
 #include "llvm/Transforms/IPO/GlobalDCE.h"
@@ -167,7 +167,8 @@
 #include "llvm/Transforms/IPO/InferFunctionAttrs.h"
 #include "llvm/Transforms/IPO/Inliner.h"
 #include "llvm/Transforms/IPO/LowerTypeTests.h"
-// #include "llvm/Transforms/IPO/MemProfContextDisambiguation.h"
+// #include
+// "llvm/Transforms/IPO/MemProfContextDisambiguation.h"
 #include "llvm/Analysis/ValueLattice.h"
 #include "llvm/Transforms/IPO/MergeFunctions.h"
 #include "llvm/Transforms/IPO/ModuleInliner.h"
@@ -276,53 +277,67 @@ inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
 }
 #endif
 
-#define RIP 0x007FFFFFFF400000
 #define STACKP_VALUE 0x14FEA8
 
 using ReverseRegisterMap = DenseMap<Value*, int>;
-using RegisterMap =
-    DenseMap<int, Value*>; // we dont actually need this to be a map
-// BB start address, BB pointer, Final registers in that RegisterMap so we can
-// use it later
+using RegisterMap = DenseMap<int,
+                             Value*>; // we dont actually need
+                                      // this to be a map
+// BB start address, BB pointer, Final registers
+// in that RegisterMap so we can use it later
 
 enum FlagOperation { SET_VALUE, SET_ONE, SET_ZERO, TOGGLE };
 
 enum Flag {
   FLAG_CF = 0,        // Carry flag
-  FLAG_RESERVED1 = 1, // Reserved, typically not used by programs
+  FLAG_RESERVED1 = 1, // Reserved, typically not
+                      // used by programs
   FLAG_PF = 2,        // Parity flag
-  FLAG_RESERVED3 = 3, // Reserved, typically not used by programs
+  FLAG_RESERVED3 = 3, // Reserved, typically not
+                      // used by programs
   FLAG_AF = 4,        // Adjust flag
-  FLAG_RESERVED5 = 5, // Reserved, typically not used by programs
+  FLAG_RESERVED5 = 5, // Reserved, typically not
+                      // used by programs
   FLAG_ZF = 6,        // Zero flag
   FLAG_SF = 7,        // Sign flag
   FLAG_TF = 8,        // Trap flag
   FLAG_IF = 9,        // Interrupt enable flag
   FLAG_DF = 10,       // Direction flag
   FLAG_OF = 11,       // Overflow flag
-  FLAG_IOPL =
-      12, // I/O privilege level (286+ only) always all-1s on 8086 and 186
-  FLAG_IOPL2 =
-      13,       // I/O privilege level (286+ only) always all-1s on 8086 and 186
-  FLAG_NT = 14, // Nested task flag (286+ only), always 1 on 8086 and 186
-  FLAG_MD = 15, // Mode flag (NEC V-series only), reserved on all Intel CPUs.
-                // Always 1 on 8086 / 186, 0 on 286 and later.
-  FLAG_RF = 16, // Resume flag (386+ only)
-  FLAG_VM = 17, // Virtual 8086 mode flag (386+ only)
-  FLAG_AC = 18, // Alignment Check (486+, ring 3),
-  FLAG_VIF = 19,   // Virtual interrupt flag (Pentium+)
-  FLAG_VIP = 20,   // Virtual interrupt pending (Pentium+)
-  FLAG_ID = 21,    // Able to use CPUID instruction (Pentium+)
-  FLAG_RES22 = 22, //  Reserved, typically not used by programs
-  FLAG_RES23 = 23, //  Reserved, typically not used by programs
-  FLAG_RES24 = 24, //  Reserved, typically not used by programs
-  FLAG_RES25 = 25, //  Reserved, typically not used by programs
-  FLAG_RES26 = 26, //  Reserved, typically not used by programs
-  FLAG_RES27 = 27, //  Reserved, typically not used by programs
-  FLAG_RES28 = 28, //  Reserved, typically not used by programs
-  FLAG_RES29 = 29, //  Reserved, typically not used by programs
-  FLAG_AES = 30,   // AES key schedule loaded flag
-  FLAG_AI = 31,    // Alternate Instruction Set enabled
+  FLAG_IOPL = 12,     // I/O privilege level (286+ only)
+                      // always all-1s on 8086 and 186
+  FLAG_IOPL2 = 13,    // I/O privilege level (286+ only)
+                      // always all-1s on 8086 and 186
+  FLAG_NT = 14,       // Nested task flag (286+ only),
+                      // always 1 on 8086 and 186
+  FLAG_MD = 15,       // Mode flag (NEC V-series only),
+                      // reserved on all Intel CPUs. Always 1
+                      // on 8086 / 186, 0 on 286 and later.
+  FLAG_RF = 16,       // Resume flag (386+ only)
+  FLAG_VM = 17,       // Virtual 8086 mode flag (386+ only)
+  FLAG_AC = 18,       // Alignment Check (486+, ring 3),
+  FLAG_VIF = 19,      // Virtual interrupt flag (Pentium+)
+  FLAG_VIP = 20,      // Virtual interrupt pending (Pentium+)
+  FLAG_ID = 21,       // Able to use CPUID instruction
+                      // (Pentium+)
+  FLAG_RES22 = 22,    //  Reserved, typically not
+                      //  used by programs
+  FLAG_RES23 = 23,    //  Reserved, typically not
+                      //  used by programs
+  FLAG_RES24 = 24,    //  Reserved, typically not
+                      //  used by programs
+  FLAG_RES25 = 25,    //  Reserved, typically not
+                      //  used by programs
+  FLAG_RES26 = 26,    //  Reserved, typically not
+                      //  used by programs
+  FLAG_RES27 = 27,    //  Reserved, typically not
+                      //  used by programs
+  FLAG_RES28 = 28,    //  Reserved, typically not
+                      //  used by programs
+  FLAG_RES29 = 29,    //  Reserved, typically not
+                      //  used by programs
+  FLAG_AES = 30,      // AES key schedule loaded flag
+  FLAG_AI = 31,       // Alternate Instruction Set enabled
   // reserved above 32-63
   FLAGS_END = 32
 };

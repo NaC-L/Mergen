@@ -536,7 +536,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
       break;
     // Add other cast operations as needed
     default:
-      llvm_unreachable("Unsupported cast opcode");
+      UNREACHABLE("Unsupported cast opcode");
     }
   }
 
@@ -665,8 +665,7 @@ KnownBits computeKnownBitsFromOperation(KnownBits vv1, KnownBits vv2,
   default:
     outs() << "\n : " << opcode;
     outs().flush();
-    llvm_unreachable_internal(
-        "Unsupported operation in calculatePossibleValues.\n");
+    UNREACHABLE("Unsupported operation in calculatePossibleValues.\n");
     break;
   }
   /*
