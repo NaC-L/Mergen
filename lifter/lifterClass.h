@@ -336,7 +336,8 @@ public:
   void loadMemoryOp(LoadInst* inst);
 
   void insertMemoryOp(StoreInst* inst);
-  set<APInt, APIntComparator> computePossibleValues(Value* V);
+  set<APInt, APIntComparator> computePossibleValues(Value* V,
+                                                    unsigned char Depth = 0);
 
   Value* extractBytes(Value* value, uint64_t startOffset, uint64_t endOffset);
   // end analysis

@@ -545,7 +545,11 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
   return res;
 }
 
-set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V) {
+set<APInt, APIntComparator>
+lifterClass::computePossibleValues(Value* V, unsigned char Depth) {
+  if (Depth > 16) {
+    UNREACHABLE("Depth exceeded");
+  }
   set<APInt, APIntComparator> res;
   printvalue(V);
   if (auto v_ci = dyn_cast<ConstantInt>(V)) {
@@ -555,14 +559,14 @@ set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V) {
   if (auto v_inst = dyn_cast<Instruction>(V)) {
 
     if (v_inst->getNumOperands() == 1)
-      return computePossibleValues(v_inst->getOperand(0));
+      return computePossibleValues(v_inst->getOperand(0), Depth + 1);
 
     if (v_inst->getOpcode() == Instruction::Select) {
       auto trueValue = v_inst->getOperand(1);
       auto falseValue = v_inst->getOperand(2);
 
-      auto trueValues = computePossibleValues(trueValue);
-      auto falseValues = computePossibleValues(falseValue);
+      auto trueValues = computePossibleValues(trueValue, Depth + 1);
+      auto falseValues = computePossibleValues(falseValue, Depth + 1);
 
       // Combine all possible values from both branches
       res.insert(trueValues.begin(), trueValues.end());
@@ -598,8 +602,8 @@ set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V) {
 
     if ((res_unknownbits_count >= total_unknownbits_count) &&
         res_unknownbits_count != 1) {
-      auto v1 = computePossibleValues(op1);
-      auto v2 = computePossibleValues(op2);
+      auto v1 = computePossibleValues(op1, Depth + 1);
+      auto v2 = computePossibleValues(op2, Depth + 1);
 
       printvalue(v_inst);
       printvalue2(v_knownbits);
@@ -669,18 +673,18 @@ Value* lifterClass::solveLoad(LoadInst* load) {
                 cast<ConstantInt>(select_inst->getFalseValue())->getZExtValue(),
                 cloadsize, load));
     }
-    auto x = computePossibleValues(loadOffset); // rename
+    auto possibleValues = computePossibleValues(loadOffset, 0);
 
     llvm::Value* selectedValue = nullptr;
 
-    for (auto xx : x) { // rename
+    for (auto possibleValue : possibleValues) { // rename
 
-      auto isPaged = isMemPaged(xx.getZExtValue());
+      auto isPaged = isMemPaged(possibleValue.getZExtValue());
       if (!isPaged)
         continue;
-      printvalue2(xx);
+      printvalue2(possibleValue);
       auto possible_values_from_mem =
-          retrieveCombinedValue(xx.getZExtValue(), cloadsize, load);
+          retrieveCombinedValue(possibleValue.getZExtValue(), cloadsize, load);
       printvalue2((uint64_t)cloadsize);
       printvalue(possible_values_from_mem);
 
@@ -688,9 +692,9 @@ Value* lifterClass::solveLoad(LoadInst* load) {
         selectedValue = possible_values_from_mem;
       } else {
 
-        llvm::Value* comparison =
-            createICMPFolder(CmpInst::ICMP_EQ, loadOffset,
-                             llvm::ConstantInt::get(loadOffset->getType(), xx));
+        llvm::Value* comparison = createICMPFolder(
+            CmpInst::ICMP_EQ, loadOffset,
+            llvm::ConstantInt::get(loadOffset->getType(), possibleValue));
         printvalue(comparison);
         selectedValue =
             createSelectFolder(comparison, possible_values_from_mem,
