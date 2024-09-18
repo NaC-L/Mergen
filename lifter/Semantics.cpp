@@ -1914,9 +1914,6 @@ void lifterClass::lift_add_sub() {
   auto Lvalue = GetOperandValue(dest, dest.size);
 
   Value* result = nullptr;
-  Value* cf = nullptr;
-  Value* af = nullptr;
-  Value* of = nullptr;
 
   switch (instruction.mnemonic) {
   case ZYDIS_MNEMONIC_ADD: {
@@ -1991,8 +1988,6 @@ void lifterClass::lift_add_sub() {
   printvalue(Lvalue);
   printvalue(Rvalue);
   printvalue(result);
-  printvalue(cf);
-  printvalue(of);
 
   SetOperandValue(dest, result);
 }
