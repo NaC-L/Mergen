@@ -9,7 +9,7 @@
 #define DEFINE_FUNCTION(name) void lift_##name()
 
 struct InstructionKey {
-  unsigned char opcode;
+  uint8_t opcode;
   bool cast;
   Value* operand1;
   union {
@@ -19,10 +19,10 @@ struct InstructionKey {
 
   InstructionKey() : opcode(0), cast(0), operand1(nullptr), operand2(nullptr){};
 
-  InstructionKey(unsigned opcode, Value* operand1, Value* operand2)
+  InstructionKey(uint8_t opcode, Value* operand1, Value* operand2)
       : opcode(opcode), cast(0), operand1(operand1), operand2(operand2){};
 
-  InstructionKey(unsigned opcode, Value* operand1, Type* destType)
+  InstructionKey(uint8_t opcode, Value* operand1, Type* destType)
       : opcode(opcode), cast(1), operand1(operand1), destType(destType){};
 
   bool operator==(const InstructionKey& other) const {
@@ -59,7 +59,7 @@ struct InstructionKey {
     }
 
     static inline InstructionKey getTombstoneKey() {
-      return InstructionKey(~0U, nullptr, static_cast<Value*>(nullptr));
+      return InstructionKey(255, nullptr, static_cast<Value*>(nullptr));
     }
   };
 };
@@ -94,7 +94,7 @@ public:
 
   // Overload the [] operator for getting register values
 
-  int getRegisterIndex(ZydisRegister key) const {
+  int getRegisterIndex(const ZydisRegister key) const {
 
     if (key == ZYDIS_REGISTER_RIP) {
       return RIP_;
@@ -151,7 +151,7 @@ public:
     value = newValue;
     calculation = nullptr; // Disable lazy evaluation when setting directly
   }
-  void setCalculation(std::function<Value*()> calc) {
+  void setCalculation(const std::function<Value*()> calc) {
     calculation = calc;
     value = std::nullopt; // Reset the stored value
   }
@@ -226,8 +226,8 @@ public:
 
   void liftInstruction();
   void liftInstructionSemantics();
-  void branchHelper(Value* condition, const string& instname, int numbered,
-                    bool reverse = false);
+  void branchHelper(Value* condition, const string& instname,
+                    const int numbered, const bool reverse = false);
 
   // init
   void Init_Flags();
@@ -235,28 +235,28 @@ public:
   // end init
 
   // getters-setters
-  Value* setFlag(Flag flag, Value* newValue = nullptr);
-  void setFlag(Flag flag, std::function<Value*()> calculation);
-  Value* getFlag(Flag flag);
+  Value* setFlag(const Flag flag, Value* newValue = nullptr);
+  void setFlag(const Flag flag, std::function<Value*()> calculation);
+  Value* getFlag(const Flag flag);
   RegisterManager& getRegisters();
   void setRegisters(RegisterManager newRegisters);
   void InitRegisters(Function* function, ZyanU64 rip);
-  Value* GetValueFromHighByteRegister(int reg);
-  Value* GetRegisterValue(int key);
-  Value* SetValueToHighByteRegister(int reg, Value* value);
-  Value* SetValueToSubRegister_8b(int reg, Value* value);
-  Value* SetValueToSubRegister_16b(int reg, Value* value);
-  void SetRegisterValue(int key, Value* value);
+  Value* GetValueFromHighByteRegister(const ZydisRegister reg);
+  Value* GetRegisterValue(const ZydisRegister key);
+  Value* SetValueToHighByteRegister(const ZydisRegister reg, Value* value);
+  Value* SetValueToSubRegister_8b(const ZydisRegister reg, Value* value);
+  Value* SetValueToSubRegister_16b(const ZydisRegister reg, Value* value);
+  void SetRegisterValue(const ZydisRegister key, Value* value);
   void SetRFLAGSValue(Value* value);
   PATH_info solvePath(Function* function, uint64_t& dest, Value* simplifyValue);
   void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
                                         ReverseRegisterMap rVMap);
   void simplifyUsers(Value* newValue, DataLayout& DL,
-                     ReverseRegisterMap flippedRegisterMap); // remove
+                     ReverseRegisterMap flippedRegisterMap); // remove?
   Value* popStack();
   void pushFlags(const vector<Value*>& value, const string& address);
   vector<Value*> GetRFLAGS();
-  Value* GetOperandValue(const ZydisDecodedOperand& op, int possiblesize,
+  Value* GetOperandValue(const ZydisDecodedOperand& op, const int possiblesize,
                          const string& address = "");
   Value* SetOperandValue(const ZydisDecodedOperand& op, Value* value,
                          const string& address = "");
@@ -265,7 +265,8 @@ public:
   // misc
   void callFunctionIR(const string& functionName,
                       funcsignatures::functioninfo* funcInfo);
-  Value* GetEffectiveAddress(const ZydisDecodedOperand& op, int possiblesize);
+  Value* GetEffectiveAddress(const ZydisDecodedOperand& op,
+                             const int possiblesize);
   vector<Value*> parseArgs(funcsignatures::functioninfo* funcInfo);
   FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
                               LLVMContext& context);
@@ -322,12 +323,14 @@ public:
 
   void updateMemoryOp(StoreInst* inst);
 
-  void updateValueReference(Instruction* inst, Value* value, uint64_t address);
+  void updateValueReference(Instruction* inst, Value* value,
+                            const uint64_t address);
 
-  Value* retrieveCombinedValue(uint64_t startAddress, uint64_t byteCount,
-                               Value* orgLoad);
+  Value* retrieveCombinedValue(const uint64_t startAddress,
+                               const uint8_t byteCount, Value* orgLoad);
 
-  void addValueReference(Instruction* inst, Value* value, uint64_t address);
+  void addValueReference(Instruction* inst, Value* value,
+                         const uint64_t address);
 
   isPaged isValuePaged(Value* address, Instruction* ctxI);
 
@@ -337,9 +340,10 @@ public:
 
   void insertMemoryOp(StoreInst* inst);
   set<APInt, APIntComparator> computePossibleValues(Value* V,
-                                                    unsigned char Depth = 0);
+                                                    const uint8_t Depth = 0);
 
-  Value* extractBytes(Value* value, uint64_t startOffset, uint64_t endOffset);
+  Value* extractBytes(Value* value, const uint8_t startOffset,
+                      const uint8_t endOffset);
   // end analysis
 
   // folders
@@ -373,19 +377,21 @@ public:
 
   Value* createLShrFolder(Value* LHS, Value* RHS, const Twine& Name = "");
 
-  Value* createLShrFolder(Value* LHS, uint64_t RHS, const Twine& Name = "");
+  Value* createLShrFolder(Value* LHS, const uint64_t RHS,
+                          const Twine& Name = "");
 
-  Value* createLShrFolder(Value* LHS, APInt RHS, const Twine& Name = "");
+  Value* createLShrFolder(Value* LHS, const APInt RHS, const Twine& Name = "");
 
   Value* createShlFolder(Value* LHS, Value* RHS, const Twine& Name = "");
 
-  Value* createShlFolder(Value* LHS, uint64_t RHS, const Twine& Name = "");
+  Value* createShlFolder(Value* LHS, const uint64_t RHS,
+                         const Twine& Name = "");
 
-  Value* createShlFolder(Value* LHS, APInt RHS, const Twine& Name = "");
+  Value* createShlFolder(Value* LHS, const APInt RHS, const Twine& Name = "");
   Value* folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
                       Instruction::BinaryOps opcode);
-  Value* createInstruction(unsigned opcode, Value* operand1, Value* operand2,
-                           Type* destType, const Twine& Name);
+  Value* createInstruction(const unsigned opcode, Value* operand1,
+                           Value* operand2, Type* destType, const Twine& Name);
 
   Value* getOrCreate(const InstructionKey& key, const Twine& Name);
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
@@ -449,7 +455,7 @@ public:
   DEFINE_FUNCTION(shrd);
   DEFINE_FUNCTION(lea);
   DEFINE_FUNCTION(add_sub);
-  void lift_imul2(bool isSigned);
+  void lift_imul2(const bool isSigned);
   DEFINE_FUNCTION(imul);
   DEFINE_FUNCTION(mul);
   DEFINE_FUNCTION(div2);
