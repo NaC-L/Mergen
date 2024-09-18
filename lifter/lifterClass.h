@@ -184,7 +184,7 @@ public:
   BasicBlock* lastBB = nullptr;
   unsigned int BIlistsize = 0;
 
-  map<uint64_t, uint64_t> pageMap;
+  map<int64_t, int64_t> pageMap;
   vector<BranchInst*> BIlist;
   DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo> cache;
   vector<Instruction*> memInfos;
@@ -308,12 +308,12 @@ public:
     lastBB = getLastBB;
   }
 
-  void markMemPaged(uint64_t start, uint64_t end) {
+  void markMemPaged(const int64_t start, const int64_t end) {
     //
     pageMap[start] = end;
   }
 
-  bool isMemPaged(uint64_t address) {
+  bool isMemPaged(const int64_t address) {
     auto it = pageMap.upper_bound(address);
     if (it == pageMap.begin())
       return false;
