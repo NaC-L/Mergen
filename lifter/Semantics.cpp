@@ -98,7 +98,7 @@ vector<Value*> lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
 }
 
 // probably move this stuff somewhere else
-void lifterClass::callFunctionIR(string functionName,
+void lifterClass::callFunctionIR(const string& functionName,
                                  funcsignatures::functioninfo* funcInfo) {
   auto& context = builder.getContext();
 
@@ -227,8 +227,8 @@ Value* lifterClass::computeSignFlag(Value* value) { // x < 0 = sf
 // this function is used for jumps that are related to user, ex: vms using
 // different handlers, jmptables, etc.
 
-void lifterClass::branchHelper(Value* condition, string instname, int numbered,
-                               bool reverse) {
+void lifterClass::branchHelper(Value* condition, const string& instname,
+                               int numbered, bool reverse) {
   // TODO:
   // save the current state of memory, registers etc.,
   // after execution is finished, return to latest state and continue

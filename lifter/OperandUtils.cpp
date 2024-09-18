@@ -1409,7 +1409,7 @@ void lifterClass::SetRegisterValue(int key, Value* value) {
   Registers[newKey] = value;
 }
 
-Value* lifterClass::GetEffectiveAddress(ZydisDecodedOperand& op,
+Value* lifterClass::GetEffectiveAddress(const ZydisDecodedOperand& op,
                                         int possiblesize) {
   LLVMContext& context = builder.getContext();
 
@@ -1472,8 +1472,8 @@ Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress) {
   return pointer;
 }
 
-Value* lifterClass::GetOperandValue(ZydisDecodedOperand& op, int possiblesize,
-                                    string address) {
+Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
+                                    int possiblesize, const string& address) {
   LLVMContext& context = builder.getContext();
   auto type = Type::getIntNTy(context, possiblesize);
 
@@ -1574,8 +1574,8 @@ Value* lifterClass::GetOperandValue(ZydisDecodedOperand& op, int possiblesize,
   }
 }
 
-Value* lifterClass::SetOperandValue(ZydisDecodedOperand& op, Value* value,
-                                    string address) {
+Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
+                                    const string& address) {
   LLVMContext& context = builder.getContext();
   value = simplifyValue(
       value,
@@ -1681,7 +1681,8 @@ vector<Value*> lifterClass::GetRFLAGS() {
   return rflags;
 }
 
-void lifterClass::pushFlags(vector<Value*> value, string address) {
+void lifterClass::pushFlags(const vector<Value*>& value,
+                            const string& address) {
   LLVMContext& context = builder.getContext();
 
   auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);

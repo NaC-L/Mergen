@@ -226,7 +226,7 @@ public:
 
   void liftInstruction();
   void liftInstructionSemantics();
-  void branchHelper(Value* condition, string instname, int numbered,
+  void branchHelper(Value* condition, const string& instname, int numbered,
                     bool reverse = false);
 
   // init
@@ -252,20 +252,20 @@ public:
   void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
                                         ReverseRegisterMap rVMap);
   void simplifyUsers(Value* newValue, DataLayout& DL,
-                     ReverseRegisterMap flippedRegisterMap);
+                     ReverseRegisterMap flippedRegisterMap); // remove
   Value* popStack();
-  void pushFlags(vector<Value*> value, string address);
+  void pushFlags(const vector<Value*>& value, const string& address);
   vector<Value*> GetRFLAGS();
-  Value* GetOperandValue(ZydisDecodedOperand& op, int possiblesize,
-                         string address = "");
-  Value* SetOperandValue(ZydisDecodedOperand& op, Value* value,
-                         string address = "");
+  Value* GetOperandValue(const ZydisDecodedOperand& op, int possiblesize,
+                         const string& address = "");
+  Value* SetOperandValue(const ZydisDecodedOperand& op, Value* value,
+                         const string& address = "");
   Value* GetRFLAGSValue();
   // end getters-setters
   // misc
-  void callFunctionIR(string functionName,
+  void callFunctionIR(const string& functionName,
                       funcsignatures::functioninfo* funcInfo);
-  Value* GetEffectiveAddress(ZydisDecodedOperand& op, int possiblesize);
+  Value* GetEffectiveAddress(const ZydisDecodedOperand& op, int possiblesize);
   vector<Value*> parseArgs(funcsignatures::functioninfo* funcInfo);
   FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
                               LLVMContext& context);
