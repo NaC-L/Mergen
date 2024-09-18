@@ -89,7 +89,7 @@ void lifterClass::addValueReference(Instruction* inst, Value* value,
 }
 
 Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
-                                          uint64_t byteCount, Value* orgLoad) {
+                                          uint8_t byteCount, Value* orgLoad) {
   LLVMContext& context = builder.getContext();
   if (byteCount == 0) {
     return nullptr;
@@ -98,7 +98,7 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
   // bool contiguous = true;
   SmallVector<ValueByteReferenceRange, 64>
       values; // we can just create an array here
-  for (uint64_t i = 0; i < byteCount; ++i) {
+  for (uint8_t i = 0; i < byteCount; ++i) {
     uint64_t currentAddress = startAddress + i;
 
     // push if
@@ -129,7 +129,7 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
   int m = 0;
   for (auto v : values) {
     Value* byteValue = nullptr;
-    unsigned bytesize = v.end - v.start;
+    uint8_t bytesize = v.end - v.start;
 
     APInt mem_value(1, 0);
     if (v.isRef) {
@@ -157,8 +157,8 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
   return result;
 }
 
-Value* lifterClass::extractBytes(Value* value, uint64_t startOffset,
-                                 uint64_t endOffset) {
+Value* lifterClass::extractBytes(Value* value, uint8_t startOffset,
+                                 uint8_t endOffset) {
   LLVMContext& context = builder.getContext();
 
   if (!value) {
@@ -166,9 +166,9 @@ Value* lifterClass::extractBytes(Value* value, uint64_t startOffset,
         Type::getIntNTy(context, (endOffset - startOffset) * 8), 0);
   }
 
-  uint64_t byteCount = endOffset - startOffset;
+  uint8_t byteCount = endOffset - startOffset;
 
-  uint64_t shiftAmount = startOffset * 8;
+  uint8_t shiftAmount = startOffset * 8;
 
   printvalue2(endOffset);
 
@@ -545,8 +545,8 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
   return res;
 }
 
-set<APInt, APIntComparator>
-lifterClass::computePossibleValues(Value* V, unsigned char Depth) {
+set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V,
+                                                               uint8_t Depth) {
   if (Depth > 16) {
     UNREACHABLE("Depth exceeded");
   }

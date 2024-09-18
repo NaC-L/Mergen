@@ -31,7 +31,7 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
 
     lifter->builder.SetInsertPoint(lifter->blockInfo.block);
 
-    BinaryOperations::initBases(data, data);
+    BinaryOperations::initBases(data, data); // nice
 
     lifter->run = 1;
 
@@ -88,7 +88,7 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
   }
 }
 
-void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
+void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
                                        unsigned char* fileBase) {
 
   LLVMContext context;
@@ -118,11 +118,11 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
   auto functionType =
       llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 
-  string function_name = "main";
+  const string function_name = "main";
   auto function =
       llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
                              function_name.c_str(), lifting_module);
-  string block_name = "entry";
+  const string block_name = "entry";
   auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
   llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
@@ -139,9 +139,9 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
   auto ADDRESS = ntHeaders->optional_header.image_base;
   auto imageSize = ntHeaders->optional_header.size_image;
   auto stackSize = ntHeaders->optional_header.size_stack_reserve;
-  uint64_t RVA = static_cast<uint64_t>(runtime_address - ADDRESS);
-  uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
-  uint8_t* dataAtAddress = fileBase + fileOffset;
+  const uint64_t RVA = static_cast<uint64_t>(runtime_address - ADDRESS);
+  const uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
+  const uint8_t* dataAtAddress = fileBase + fileOffset;
   cout << hex << "0x" << (int)*dataAtAddress << endl;
   original_address = ADDRESS;
   cout << "address: " << ADDRESS << " imageSize: " << imageSize
@@ -160,13 +160,13 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
 
   cout << "\nlifting complete, " << dec << ms << " milliseconds has past"
        << endl;
-  string Filename_noopt = "output_no_opts.ll";
+  const string Filename_noopt = "output_no_opts.ll";
   error_code EC_noopt;
   llvm::raw_fd_ostream OS_noopt(Filename_noopt, EC_noopt);
 
   lifting_module.print(OS_noopt, nullptr);
   final_optpass(function);
-  string Filename = "output.ll";
+  const string Filename = "output.ll";
   error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);
 

@@ -47,17 +47,17 @@ public:
 
 namespace BinaryOperations {
 
-  const char* getName(uint64_t offset);
+  const char* getName(const uint64_t offset);
 
-  void initBases(void* file_base, ZyanU8* data);
+  void initBases(void* file_base, ZyanU8* data); // ?
 
   void getBases(void** file_base, ZyanU8** data);
 
-  bool isImport(uint64_t addr);
+  bool isImport(const uint64_t addr);
 
-  bool readMemory(uint64_t addr, unsigned byteSize, APInt& value);
+  bool readMemory(const uint64_t addr, unsigned byteSize, APInt& value);
 
-  bool isWrittenTo(uint64_t addr);
+  bool isWrittenTo(const uint64_t addr);
 
 }; // namespace BinaryOperations
 

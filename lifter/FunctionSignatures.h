@@ -7,7 +7,7 @@
 namespace funcsignatures {
 
   struct funcArgInfo {
-    uint8_t reg;
+    ZydisRegister reg;
 
     struct argTypeInfo {
       uint8_t size : 4; // 4 bits for size
@@ -16,8 +16,8 @@ namespace funcsignatures {
       argTypeInfo(ArgType type, bool isPtr)
           : size(static_cast<uint8_t>(type)), isPtr(isPtr ? 1 : 0), pad(0) {}
     } argtype;
-    funcArgInfo(uint8_t Reg, ArgType type, bool isPtr)
-        : reg(Reg), argtype(type, isPtr) {};
+    funcArgInfo(ZydisRegister Reg, ArgType type, bool isPtr)
+        : reg(Reg), argtype(type, isPtr){};
   };
 
   using funcArgInfos = std::vector<funcsignatures::funcArgInfo>;
@@ -110,7 +110,7 @@ namespace funcsignatures {
                                              size_t size);
   void createOffsetMap();
   functioninfo* getFunctionInfo(uint64_t addr);
-  functioninfo* getFunctionInfo(std::string name);
+  functioninfo* getFunctionInfo(const std::string& name);
   extern std::unordered_map<std::vector<unsigned char>, functioninfo,
                             VectorHash>
       siglookup;

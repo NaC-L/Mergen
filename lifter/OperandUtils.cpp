@@ -590,7 +590,8 @@ Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
   return inst;
 }
 
-KnownBits computeKnownBitsFromOperation(KnownBits vv1, KnownBits vv2,
+KnownBits computeKnownBitsFromOperation(const KnownBits& vv1,
+                                        const KnownBits& vv2,
                                         Instruction::BinaryOps opcode) {
 
   if (opcode >= Instruction::Shl && opcode <= Instruction::AShr) {
@@ -933,7 +934,7 @@ Value* lifterClass::createLShrFolder(Value* LHS, uint64_t RHS,
 Value* lifterClass::createLShrFolder(Value* LHS, APInt RHS, const Twine& Name) {
   return createLShrFolder(LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
-std::optional<bool> foldKnownBits(CmpInst::Predicate P, KnownBits LHS,
+std::optional<bool> foldKnownBits(CmpInst::Predicate P, const KnownBits& LHS,
                                   KnownBits RHS) {
 
   switch (P) {
@@ -1139,7 +1140,7 @@ void lifterClass::Init_Flags() {
   Registers[ZYDIS_REGISTER_RFLAGS] = two;
 }
 
-Value* lifterClass::setFlag(Flag flag, Value* newValue) {
+Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
   LLVMContext& context = builder.getContext();
   newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
   printvalue2((int32_t)flag) printvalue(newValue);
@@ -1151,7 +1152,8 @@ Value* lifterClass::setFlag(Flag flag, Value* newValue) {
   return newValue;
 }
 
-void lifterClass::setFlag(Flag flag, std::function<Value*()> calculation) {
+void lifterClass::setFlag(const Flag flag,
+                          std::function<Value*()> calculation) {
   // If the flag is one of the reserved ones, do not modify
   if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
       flag == FLAG_DF)
@@ -1161,7 +1163,7 @@ void lifterClass::setFlag(Flag flag, std::function<Value*()> calculation) {
   FlagList[flag].setCalculation(calculation);
 }
 
-Value* lifterClass::getFlag(Flag flag) {
+Value* lifterClass::getFlag(const Flag flag) {
   Value* result = FlagList[flag].get(); // Retrieve the value,
   if (result) // if its somehow nullptr, just return False as value
     return result;
@@ -1170,7 +1172,7 @@ Value* lifterClass::getFlag(Flag flag) {
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-// destroy these
+// destroy these functions below
 RegisterManager& lifterClass::getRegisters() { return Registers; }
 void lifterClass::setRegisters(RegisterManager newRegisters) {
   Registers = newRegisters;
@@ -1186,7 +1188,8 @@ void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
   // rsp
   // rsp_unaligned = %rsp % 16
   // rsp_aligned_to16 = rsp - rsp_unaligned
-  int zydisRegister = ZYDIS_REGISTER_RAX;
+  int zydisRegister =
+      ZYDIS_REGISTER_RAX; // int because we cant increment ZydisRegister
 
   auto argEnd = function->arg_end();
   for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
@@ -1228,10 +1231,10 @@ void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
   return;
 }
 
-Value* lifterClass::GetValueFromHighByteRegister(int reg) {
+Value* lifterClass::GetValueFromHighByteRegister(const ZydisRegister reg) {
 
   Value* fullRegisterValue = Registers[ZydisRegisterGetLargestEnclosing(
-      ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg)];
+      ZYDIS_MACHINE_MODE_LONG_64, reg)];
 
   Value* shiftedValue = createLShrFolder(fullRegisterValue, 8, "highreg");
 
@@ -1271,7 +1274,7 @@ Value* lifterClass::GetRFLAGSValue() {
   return rflags;
 }
 
-Value* lifterClass::GetRegisterValue(int key) {
+Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
 
   if (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
       key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH) {
@@ -1280,9 +1283,8 @@ Value* lifterClass::GetRegisterValue(int key) {
 
   ZydisRegister newKey =
       (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
-          ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,
-                                             (ZydisRegister)key)
-          : (ZydisRegister)key;
+          ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, key)
+          : key;
 
   if (key == ZYDIS_REGISTER_RFLAGS || key == ZYDIS_REGISTER_EFLAGS) {
     return GetRFLAGSValue();
@@ -1297,12 +1299,13 @@ Value* lifterClass::GetRegisterValue(int key) {
   return Registers[newKey];
 }
 
-Value* lifterClass::SetValueToHighByteRegister(int reg, Value* value) {
+Value* lifterClass::SetValueToHighByteRegister(const ZydisRegister reg,
+                                               Value* value) {
   LLVMContext& context = builder.getContext();
   int shiftValue = 8;
 
-  ZydisRegister fullRegKey = ZydisRegisterGetLargestEnclosing(
-      ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
+  ZydisRegister fullRegKey =
+      ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, reg);
   Value* fullRegisterValue = Registers[fullRegKey];
 
   Value* eightBitValue = createAndFolder(
@@ -1323,7 +1326,8 @@ Value* lifterClass::SetValueToHighByteRegister(int reg, Value* value) {
   return newRegisterValue;
 }
 
-Value* lifterClass::SetValueToSubRegister_8b(int reg, Value* value) {
+Value* lifterClass::SetValueToSubRegister_8b(const ZydisRegister reg,
+                                             Value* value) {
   LLVMContext& context = builder.getContext();
   ZydisRegister fullRegKey = ZydisRegisterGetLargestEnclosing(
       ZYDIS_MACHINE_MODE_LONG_64, static_cast<ZydisRegister>(reg));
@@ -1361,7 +1365,8 @@ Value* lifterClass::SetValueToSubRegister_8b(int reg, Value* value) {
   return updatedReg;
 }
 
-Value* lifterClass::SetValueToSubRegister_16b(int reg, Value* value) {
+Value* lifterClass::SetValueToSubRegister_16b(const ZydisRegister reg,
+                                              Value* value) {
 
   ZydisRegister fullRegKey = ZydisRegisterGetLargestEnclosing(
       ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
@@ -1378,7 +1383,7 @@ Value* lifterClass::SetValueToSubRegister_16b(int reg, Value* value) {
   return updatedReg;
 }
 
-void lifterClass::SetRegisterValue(int key, Value* value) {
+void lifterClass::SetRegisterValue(const ZydisRegister key, Value* value) {
   if ((key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
        key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) {
 
@@ -1403,9 +1408,8 @@ void lifterClass::SetRegisterValue(int key, Value* value) {
 
   ZydisRegister newKey =
       (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
-          ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64,
-                                             (ZydisRegister)key)
-          : (ZydisRegister)key;
+          ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, key)
+          : key;
   Registers[newKey] = value;
 }
 
