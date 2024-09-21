@@ -350,19 +350,19 @@ KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
       return KnownBits::makeConstant(a);
     }
   }
-  KnownBits knownBits(value->getType()->getIntegerBitWidth());
+  KnownBits knownBits(64);
   knownBits.resetAll();
   if (value->getType() == Type::getInt128Ty(value->getContext()))
     return knownBits;
 
   if (auto CIv = dyn_cast<ConstantInt>(value)) {
-    return KnownBits::makeConstant(APInt(64, CIv->getZExtValue(), false));
+    return KnownBits::makeConstant(APInt(value->getType()->getIntegerBitWidth(),
+                                         CIv->getZExtValue(), false));
   }
   auto SQ = createSimplifyQuery(ctxI);
 
   computeKnownBits(value, knownBits, 0, SQ);
-
-  return knownBits;
+  return knownBits.trunc(value->getType()->getIntegerBitWidth());
 }
 
 Value* simplifyValue(Value* v, const DataLayout& DL) {
@@ -861,8 +861,9 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   }
   }
   // this part analyses if we can simplify the instruction
-  if (auto simplifiedByPM = doPatternMatching(opcode, LHS, RHS))
+  if (auto simplifiedByPM = doPatternMatching(opcode, LHS, RHS)) {
     return simplifiedByPM;
+  }
 
   auto inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
 
@@ -878,9 +879,10 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   printvalue2(RHSKB);
 
   auto computedBits = computeKnownBitsFromOperation(LHSKB, RHSKB, opcode);
-  if (computedBits.isConstant() && !computedBits.hasConflict())
+  if (computedBits.isConstant() && !computedBits.hasConflict()) {
     return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
                            computedBits.getConstant().getZExtValue());
+  }
 
   return inst;
 }
