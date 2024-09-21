@@ -360,7 +360,15 @@ public:
 
   Value* createICMPFolder(CmpInst::Predicate P, Value* LHS, Value* RHS,
                           const Twine& Name = "");
+  Value* createNotFolder(Value* LHS, const Twine& Name = "");
+  Value* createMulFolder(Value* LHS, Value* RHS, const Twine& Name = "");
 
+  Value* createSDivFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+  Value* createUDivFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+
+  Value* createSRemFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+  Value* createURemFolder(Value* LHS, Value* RHS, const Twine& Name = "");
+  Value* createAShrFolder(Value* LHS, Value* RHS, const Twine& Name = "");
   Value* createAndFolder(Value* LHS, Value* RHS, const Twine& Name = "");
 
   Value* createTruncFolder(Value* V, Type* DestTy, const Twine& Name = "");
