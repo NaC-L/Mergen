@@ -907,8 +907,35 @@ Value* lifterClass::createXorFolder(Value* LHS, Value* RHS, const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::Xor);
 }
 
+Value* lifterClass::createNotFolder(Value* LHS, const Twine& Name) {
+
+  return createXorFolder(LHS, Constant::getAllOnesValue(LHS->getType()), Name);
+}
+
 Value* lifterClass::createAndFolder(Value* LHS, Value* RHS, const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::And);
+}
+
+Value* lifterClass::createMulFolder(Value* LHS, Value* RHS, const Twine& Name) {
+  return folderBinOps(LHS, RHS, Name, Instruction::Mul);
+}
+
+Value* lifterClass::createSDivFolder(Value* LHS, Value* RHS,
+                                     const Twine& Name) {
+  return folderBinOps(LHS, RHS, Name, Instruction::SDiv);
+}
+Value* lifterClass::createUDivFolder(Value* LHS, Value* RHS,
+                                     const Twine& Name) {
+  return folderBinOps(LHS, RHS, Name, Instruction::UDiv);
+}
+
+Value* lifterClass::createSRemFolder(Value* LHS, Value* RHS,
+                                     const Twine& Name) {
+  return folderBinOps(LHS, RHS, Name, Instruction::SRem);
+}
+Value* lifterClass::createURemFolder(Value* LHS, Value* RHS,
+                                     const Twine& Name) {
+  return folderBinOps(LHS, RHS, Name, Instruction::URem);
 }
 
 Value* lifterClass::createShlFolder(Value* LHS, Value* RHS, const Twine& Name) {
@@ -918,6 +945,10 @@ Value* lifterClass::createShlFolder(Value* LHS, Value* RHS, const Twine& Name) {
 Value* lifterClass::createLShrFolder(Value* LHS, Value* RHS,
                                      const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::LShr);
+}
+Value* lifterClass::createAShrFolder(Value* LHS, Value* RHS,
+                                     const Twine& Name) {
+  return folderBinOps(LHS, RHS, Name, Instruction::AShr);
 }
 
 Value* lifterClass::createShlFolder(Value* LHS, uint64_t RHS,
@@ -975,36 +1006,6 @@ Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
       return SI->getCondition();
   }
 
-  switch (P) {
-  case CmpInst::ICMP_UGT: {
-    // Check if LHS is the result of a call to @llvm.ctpop.i64
-    if (match(RHS, m_SpecificInt(64))) {
-      // Check if LHS is `and i64 %neg, 255`
-      Value* Neg = nullptr;
-      if (match(LHS, m_And(m_Value(Neg), m_SpecificInt(255)))) {
-        // Check if `neg` is `sub nsw i64 0, %125`
-        Value* CtpopResult = nullptr;
-        if (match(Neg, m_Sub(m_Zero(), m_Value(CtpopResult)))) {
-          // Check if `%125` is a call to `llvm.ctpop.i64`
-          if (auto* CI = dyn_cast<CallInst>(CtpopResult)) {
-            if (CI->getCalledFunction() &&
-                CI->getCalledFunction()->getIntrinsicID() == Intrinsic::ctpop) {
-              Value* R8 = CI->getArgOperand(0);
-              // Replace with: %isIndexInBound = icmp ne i64 %r8, 0
-              auto* isIndexInBound =
-                  builder.CreateICmpNE(R8, builder.getInt64(0), Name);
-              return isIndexInBound;
-            }
-          }
-        }
-      }
-    }
-    break;
-  }
-  default: {
-    break;
-  }
-  }
   // c = add a, b
   // cmp x, c, 0
   // =>
@@ -1437,7 +1438,7 @@ Value* lifterClass::GetEffectiveAddress(const ZydisDecodedOperand& op,
     if (op.mem.scale > 1) {
       Value* scaleValue =
           ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-      indexValue = builder.CreateMul(indexValue, scaleValue, "mul_ea");
+      indexValue = createMulFolder(indexValue, scaleValue, "mul_ea");
     }
   }
 
@@ -1522,7 +1523,7 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
       if (op.mem.scale > 1) {
         Value* scaleValue =
             ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-        indexValue = builder.CreateMul(indexValue, scaleValue);
+        indexValue = createMulFolder(indexValue, scaleValue);
       }
     }
 
@@ -1612,7 +1613,7 @@ Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
       if (op.mem.scale > 1) {
         Value* scaleValue =
             ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-        indexValue = builder.CreateMul(indexValue, scaleValue, "mul_ea");
+        indexValue = createMulFolder(indexValue, scaleValue, "mul_ea");
       }
     }
 

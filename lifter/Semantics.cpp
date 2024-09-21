@@ -192,25 +192,25 @@ The method above takes around 4 operations, but only works on bytes.
 Value* lifterClass::computeParityFlag(Value* value) {
   LLVMContext& context = value->getContext();
 
-  Value* lsb = builder.CreateZExt(
+  Value* lsb = createZExtFolder(
       createAndFolder(value, ConstantInt::get(value->getType(), 0xFF), "lsb"),
       Type::getInt64Ty(context));
 
   // s or u rem?
   Value* parity = createAndFolder(
 
-      builder.CreateURem(
+      createURemFolder(
           createAndFolder(
 
-              builder.CreateMul(
+              createMulFolder(
                   lsb, ConstantInt::get(lsb->getType(), 0x0101010101010101),
                   "pf1"),
               ConstantInt::get(lsb->getType(), 0x8040201008040201ULL), "pf2"),
           ConstantInt::get(lsb->getType(), 0x1FF), "pf3"),
       ConstantInt::get(lsb->getType(), 1), "pf4");
   // parity
-  parity =
-      builder.CreateICmpEQ(ConstantInt::get(lsb->getType(), 0), parity, "pf5");
+  parity = createICMPFolder(CmpInst::ICMP_EQ,
+                            ConstantInt::get(lsb->getType(), 0), parity, "pf5");
   return parity; // Returns 1 if even parity, 0 if odd
 }
 
@@ -285,7 +285,7 @@ void lifterClass::lift_movsb() {
   // v = sign * bytesize ; bytesize is 1
 
   Value* Direction =
-      builder.CreateSub(builder.CreateMul(DF, builder.CreateAdd(DF, one)), one);
+      createSubFolder(createMulFolder(DF, createAddFolder(DF, one)), one);
 
   auto SRCop = operands[2 + isREP];
   auto DSTop = operands[3 + isREP];
@@ -316,8 +316,8 @@ void lifterClass::lift_movsb() {
 
         SetOperandValue(operands[0], DSTptrvalue);
 
-        UpdateSRCvalue = builder.CreateAdd(UpdateSRCvalue, Direction);
-        UpdateDSTvalue = builder.CreateAdd(UpdateDSTvalue, Direction);
+        UpdateSRCvalue = createAddFolder(UpdateSRCvalue, Direction);
+        UpdateDSTvalue = createAddFolder(UpdateDSTvalue, Direction);
         printvalue(UpdateDSTvalue) printvalue(UpdateSRCvalue);
 
         SetOperandValue(SRCop, UpdateSRCvalue);
@@ -335,8 +335,8 @@ void lifterClass::lift_movsb() {
     }
   }
 
-  Value* UpdateSRCvalue = builder.CreateAdd(SRCvalue, Direction);
-  Value* UpdateDSTvalue = builder.CreateAdd(DSTvalue, Direction);
+  Value* UpdateSRCvalue = createAddFolder(SRCvalue, Direction);
+  Value* UpdateDSTvalue = createAddFolder(DSTvalue, Direction);
 
   SetOperandValue(SRCop, UpdateSRCvalue);
   SetOperandValue(DSTop, UpdateDSTvalue);
@@ -418,8 +418,8 @@ void lifterClass::lift_cmovnbz() {
   Value* cf = getFlag(FLAG_CF);
   Value* zf = getFlag(FLAG_ZF);
 
-  Value* nbeCondition = createAndFolder(builder.CreateNot(cf),
-                                        builder.CreateNot(zf), "nbeCondition");
+  Value* nbeCondition =
+      createAndFolder(createNotFolder(cf), createNotFolder(zf), "nbeCondition");
 
   Value* resultValue =
       createSelectFolder(nbeCondition, Rvalue, Lvalue, "cmovnbe");
@@ -503,7 +503,7 @@ void lifterClass::lift_cmovnb() {
   Value* cf = getFlag(FLAG_CF);
 
   Value* resultValue =
-      createSelectFolder(builder.CreateNot(cf), Rvalue, Lvalue, "cmovnb");
+      createSelectFolder(createNotFolder(cf), Rvalue, Lvalue, "cmovnb");
 
   SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
 }
@@ -570,7 +570,7 @@ void lifterClass::lift_cmovnle() {
   Value* of = getFlag(FLAG_OF);
 
   Value* condition = createAndFolder(
-      builder.CreateNot(zf, "notZF"),
+      createNotFolder(zf, "notZF"),
       createICMPFolder(CmpInst::ICMP_EQ, sf, of, "sf_eq_of"), "cmovnle_cond");
 
   Value* Rvalue = GetOperandValue(src, dest.size);
@@ -622,7 +622,7 @@ void lifterClass::lift_cmovno() {
 
   Value* of = getFlag(FLAG_OF);
 
-  printvalue(of) of = builder.CreateNot(of, "negateOF");
+  printvalue(of) of = createNotFolder(of, "negateOF");
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
@@ -654,7 +654,7 @@ void lifterClass::lift_cmovnp() {
 
   Value* pf = getFlag(FLAG_PF);
 
-  pf = builder.CreateNot(pf, "negatePF");
+  pf = createNotFolder(pf, "negatePF");
 
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
@@ -1480,7 +1480,7 @@ void lifterClass::lift_sar() {
   Value* clampedCount = createAndFolder(
       countValue, ConstantInt::get(countValue->getType(), maskC), "sarclamp");
   // ashrfolder
-  Value* result = builder.CreateAShr(
+  Value* result = createAShrFolder(
       Lvalue, clampedCount,
       "sar-lshr-" + to_string(blockInfo.runtime_address) + "-");
 
@@ -1507,7 +1507,7 @@ void lifterClass::lift_sar() {
   Value* oldcf = getFlag(FLAG_CF);
   cfValue = createSelectFolder(isNotZero, cfValue, oldcf);
   cfValue = createSelectFolder(
-      isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)), cfValue);
+      isZeroed, createTruncFolder(zero, Type::getInt1Ty(context)), cfValue);
 
   Value* sf = computeSignFlag(result);
   Value* zf = computeZeroFlag(result);
@@ -1548,7 +1548,7 @@ void lifterClass::lift_shr() {
                        ConstantInt::get(clampedCount->getType(), bitWidth - 1));
   result = createSelectFolder(isZeroed, zero, result, "shiftValue");
 
-  Value* cfValue = builder.CreateTrunc(
+  Value* cfValue = createTruncFolder(
       createLShrFolder(
           Lvalue,
           createSubFolder(clampedCount,
@@ -1567,7 +1567,7 @@ void lifterClass::lift_shr() {
   Value* oldcf = getFlag(FLAG_CF);
   cfValue = createSelectFolder(isNotZero, cfValue, oldcf, "cfValue1");
   cfValue = createSelectFolder(
-      isZeroed, builder.CreateTrunc(zero, Type::getInt1Ty(context)), cfValue,
+      isZeroed, createTruncFolder(zero, Type::getInt1Ty(context)), cfValue,
       "cfValue2");
   Value* sf = computeSignFlag(result);
   Value* zf = computeZeroFlag(result);
@@ -1720,7 +1720,7 @@ void lifterClass::lift_cmpxchg() {
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto accum = GetOperandValue(accop, dest.size);
 
-  auto sub = builder.CreateSub(accum, Lvalue);
+  auto sub = createSubFolder(accum, Lvalue);
 
   auto of = computeOverflowFlagSub(Lvalue, Rvalue, sub);
 
@@ -1786,7 +1786,7 @@ void lifterClass::lift_shld() {
   auto countValue = GetOperandValue(count, dest.size);
 
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  auto effectiveCountValue = builder.CreateURem(
+  auto effectiveCountValue = createURemFolder(
       countValue, ConstantInt::get(countValue->getType(), bitWidth),
       "effectiveShiftCount");
 
@@ -1845,7 +1845,7 @@ void lifterClass::lift_shrd() {
   auto countValue = GetOperandValue(count, dest.size);
 
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  auto effectiveCountValue = builder.CreateURem(
+  auto effectiveCountValue = createURemFolder(
       countValue, ConstantInt::get(countValue->getType(), bitWidth),
       "effectiveShiftCount");
 
@@ -1999,14 +1999,14 @@ void lifterClass::lift_imul2(bool isSigned) {
 
   Value* Lvalue = GetOperandValue(src, src.size);
   if (isSigned) { // do this in a prettier way
-    Lvalue = builder.CreateSExt(Lvalue, Type::getIntNTy(context, src.size * 2));
+    Lvalue = createSExtFolder(Lvalue, Type::getIntNTy(context, src.size * 2));
 
-    Rvalue = builder.CreateSExtOrTrunc(
+    Rvalue = createSExtOrTruncFolder(
         Rvalue, Type::getIntNTy(context,
                                 src.size)); // make sure the size is correct,
                                             // 1 byte, GetRegisterValue doesnt
                                             // ensure we have the correct size
-    Rvalue = builder.CreateSExtOrTrunc(Rvalue, Lvalue->getType());
+    Rvalue = createSExtOrTruncFolder(Rvalue, Lvalue->getType());
   } else {
     Lvalue = createZExtFolder(Lvalue, Type::getIntNTy(context, src.size * 2));
 
@@ -2017,21 +2017,21 @@ void lifterClass::lift_imul2(bool isSigned) {
                                             // ensure we have the correct size
     Rvalue = createZExtOrTruncFolder(Rvalue, Lvalue->getType());
   }
-  Value* result = builder.CreateMul(Rvalue, Lvalue);
-  Value* lowerresult = builder.CreateTrunc(
+  Value* result = createMulFolder(Rvalue, Lvalue);
+  Value* lowerresult = createTruncFolder(
       result, Type::getIntNTy(context, src.size), "lowerResult");
   Value* of;
   Value* cf;
   if (isSigned) {
-    of = builder.CreateICmpNE(
-        result, builder.CreateSExt(lowerresult, result->getType()));
+    of = createICMPFolder(CmpInst::ICMP_NE, result,
+                          createSExtFolder(lowerresult, result->getType()));
     cf = of;
   } else {
-    Value* highPart = builder.CreateLShr(result, src.size, "highPart");
-    Value* highPartTruncated = builder.CreateTrunc(
+    Value* highPart = createLShrFolder(result, src.size, "highPart");
+    Value* highPartTruncated = createTruncFolder(
         highPart, Type::getIntNTy(context, src.size), "truncatedHighPart");
-    cf = builder.CreateICmpNE(highPartTruncated,
-                              ConstantInt::get(result->getType(), 0), "cf");
+    cf = createICMPFolder(CmpInst::ICMP_NE, highPartTruncated,
+                          ConstantInt::get(result->getType(), 0), "cf");
     of = cf;
   }
 
@@ -2067,17 +2067,15 @@ void lifterClass::lift_imul() {
   printvalue2(initialSize);
   printvalue(Rvalue);
   printvalue(Lvalue);
-  Rvalue =
-      builder.CreateSExt(Rvalue, Type::getIntNTy(context, initialSize * 2));
-  Lvalue =
-      builder.CreateSExt(Lvalue, Type::getIntNTy(context, initialSize * 2));
+  Rvalue = createSExtFolder(Rvalue, Type::getIntNTy(context, initialSize * 2));
+  Lvalue = createSExtFolder(Lvalue, Type::getIntNTy(context, initialSize * 2));
 
-  Value* result = builder.CreateMul(Lvalue, Rvalue, "intmul");
+  Value* result = createMulFolder(Lvalue, Rvalue, "intmul");
 
   // Flags
 
-  Value* highPart = builder.CreateLShr(result, initialSize, "highPart");
-  Value* highPartTruncated = builder.CreateTrunc(
+  Value* highPart = createLShrFolder(result, initialSize, "highPart");
+  Value* highPartTruncated = createTruncFolder(
       highPart, Type::getIntNTy(context, initialSize), "truncatedHighPart");
 
   /*
@@ -2097,11 +2095,12 @@ void lifterClass::lift_imul() {
           ELSE CF := 0; OF := 0; FI;
   */
 
-  Value* truncresult = builder.CreateTrunc(
+  Value* truncresult = createTruncFolder(
       result, Type::getIntNTy(context, initialSize), "truncRes");
 
-  Value* cf = builder.CreateICmpNE(
-      result, builder.CreateSExt(truncresult, result->getType()), "cf");
+  Value* cf =
+      createICMPFolder(CmpInst::ICMP_NE, result,
+                       createSExtFolder(truncresult, result->getType()), "cf");
   Value* of = cf;
 
   if (instruction.operand_count_visible == 3) {
@@ -2110,12 +2109,12 @@ void lifterClass::lift_imul() {
     SetOperandValue(operands[0], truncresult);
   } else { // For one operand, result goes into ?dx:?ax if not a byte
            // operation
-    auto splitResult = builder.CreateTruncOrBitCast(
+    auto splitResult = createTruncFolder(
         result, Type::getIntNTy(context, initialSize), "splitResult");
-    Value* SEsplitResult = builder.CreateSExt(splitResult, result->getType());
+    Value* SEsplitResult = createSExtFolder(splitResult, result->getType());
     printvalue(splitResult);
     printvalue(result);
-    cf = builder.CreateICmpNE(SEsplitResult, result);
+    cf = createICMPFolder(CmpInst::ICMP_NE, SEsplitResult, result);
     of = cf;
     printvalue(of);
     printvalue(result);
@@ -2178,26 +2177,26 @@ void lifterClass::lift_mul() {
   Rvalue = createZExtFolder(Rvalue, Type::getIntNTy(context, initialSize * 2));
   Lvalue = createZExtFolder(Lvalue, Type::getIntNTy(context, initialSize * 2));
 
-  Value* result = builder.CreateMul(Lvalue, Rvalue, "intmul");
+  Value* result = createMulFolder(Lvalue, Rvalue, "intmul");
 
   // Flags
   auto resultType = Type::getIntNTy(context, initialSize);
 
-  Value* highPart = builder.CreateLShr(result, initialSize, "highPart");
-  Value* highPartTruncated = builder.CreateTrunc(
+  Value* highPart = createLShrFolder(result, initialSize, "highPart");
+  Value* highPartTruncated = createTruncFolder(
       highPart, Type::getIntNTy(context, initialSize), "truncatedHighPart");
 
   /* The OF and CF flags are set to 0 if the upper half of the result is
    * 0; otherwise, they are set to 1. The SF, ZF, AF, and PF flags are
    * undefined.
    */
-  Value* cf = builder.CreateICmpNE(highPartTruncated,
-                                   ConstantInt::get(resultType, 0), "cf");
+  Value* cf = createICMPFolder(CmpInst::ICMP_NE, highPartTruncated,
+                               ConstantInt::get(resultType, 0), "cf");
   Value* of = cf;
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  auto splitResult = builder.CreateTruncOrBitCast(
+  auto splitResult = createTruncFolder(
       result, Type::getIntNTy(context, initialSize), "splitResult");
   // if not byte operation, result goes into ?dx:?ax
 
@@ -2224,8 +2223,8 @@ void lifterClass::lift_div() {
     divisor = createZExtFolder(divisor, Type::getIntNTy(context, src.size * 2));
     dividend = createZExtOrTruncFolder(dividend, divisor->getType());
 
-    remainder = builder.CreateURem(dividend, divisor);
-    quotient = builder.CreateUDiv(dividend, divisor);
+    remainder = createURemFolder(dividend, divisor);
+    quotient = createUDivFolder(dividend, divisor);
 
     SetRegisterValue(
         ZYDIS_REGISTER_AL,
@@ -2248,13 +2247,13 @@ void lifterClass::lift_div() {
     dividendHigh = createZExtFolder(dividendHigh, dividendLow->getType());
     uint8_t bitWidth = src.size;
 
-    dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
+    dividendHigh = createShlFolder(dividendHigh, bitWidth);
 
     printvalue2(bitWidth);
     printvalue(dividendLow);
     printvalue(dividendHigh);
 
-    dividend = builder.CreateOr(dividendHigh, dividendLow);
+    dividend = createOrFolder(dividendHigh, dividendLow);
     printvalue(dividend);
     Value* ZExtdivisor = createZExtFolder(divisor, dividend->getType());
 
@@ -2274,8 +2273,8 @@ void lifterClass::lift_div() {
       quotient = ConstantInt::get(divisor->getType(), quotientCI);
       remainder = ConstantInt::get(divisor->getType(), remainderCI);
     } else {
-      quotient = builder.CreateUDiv(dividend, ZExtdivisor);
-      remainder = builder.CreateURem(dividend, ZExtdivisor);
+      quotient = createUDivFolder(dividend, ZExtdivisor);
+      remainder = createURemFolder(dividend, ZExtdivisor);
     }
 
     SetOperandValue(dividendLowop,
@@ -2296,11 +2295,10 @@ void lifterClass::lift_idiv() {
     auto dividend = GetRegisterValue(ZYDIS_REGISTER_AX);
 
     Value* divisor = GetOperandValue(src, src.size);
-    divisor =
-        builder.CreateSExt(divisor, Type::getIntNTy(context, src.size * 2));
-    dividend = builder.CreateSExtOrTrunc(dividend, divisor->getType());
-    Value* remainder = builder.CreateSRem(dividend, divisor);
-    Value* quotient = builder.CreateSDiv(dividend, divisor);
+    divisor = createSExtFolder(divisor, Type::getIntNTy(context, src.size * 2));
+    dividend = createSExtOrTruncFolder(dividend, divisor->getType());
+    Value* remainder = createSRemFolder(dividend, divisor);
+    Value* quotient = createSDivFolder(dividend, divisor);
 
     SetRegisterValue(
         ZYDIS_REGISTER_AL,
@@ -2331,14 +2329,14 @@ void lifterClass::lift_idiv() {
   dividendHigh = createZExtFolder(dividendHigh, dividendLow->getType());
   uint8_t bitWidth = src.size;
 
-  dividendHigh = builder.CreateShl(dividendHigh, bitWidth);
+  dividendHigh = createShlFolder(dividendHigh, bitWidth);
   printvalue2(bitWidth);
   printvalue(dividendLow);
   printvalue(dividendHigh);
 
-  dividend = builder.CreateOr(dividendHigh, dividendLow);
+  dividend = createOrFolder(dividendHigh, dividendLow);
   printvalue(dividend);
-  Value* divide = builder.CreateSExt(Rvalue, dividend->getType());
+  Value* divide = createSExtFolder(Rvalue, dividend->getType());
   Value *quotient, *remainder;
   if (isa<ConstantInt>(divide) && isa<ConstantInt>(dividend)) {
 
@@ -2355,8 +2353,8 @@ void lifterClass::lift_idiv() {
     quotient = ConstantInt::get(Rvalue->getType(), quotientCI);
     remainder = ConstantInt::get(Rvalue->getType(), remainderCI);
   } else {
-    quotient = builder.CreateSDiv(dividend, divide);
-    remainder = builder.CreateSRem(dividend, divide);
+    quotient = createSDivFolder(dividend, divide);
+    remainder = createSRemFolder(dividend, divide);
   }
   SetOperandValue(dividendLowop,
                   createZExtOrTruncFolder(quotient, Rvalue->getType()));
@@ -2547,7 +2545,7 @@ void lifterClass::lift_ror() {
 
   auto size = ConstantInt::getSigned(Lvalue->getType(),
                                      Lvalue->getType()->getIntegerBitWidth());
-  Rvalue = builder.CreateURem(Rvalue, size);
+  Rvalue = createURemFolder(Rvalue, size);
 
   Value* result =
       createOrFolder(createLShrFolder(Lvalue, Rvalue),
@@ -2898,10 +2896,10 @@ void lifterClass::lift_cmp() {
       CmpInst::ICMP_SLT, cmpResult, ConstantInt::get(cmpResult->getType(), 0));
 
   Value* of = createOrFolder(
-      createAndFolder(signL, createAndFolder(builder.CreateNot(signR),
-                                             builder.CreateNot(signResult),
+      createAndFolder(signL, createAndFolder(createNotFolder(signR),
+                                             createNotFolder(signResult),
                                              "cmp-and1-")),
-      createAndFolder(builder.CreateNot(signL),
+      createAndFolder(createNotFolder(signL),
                       createAndFolder(signR, signResult), "cmp-and2-"),
       "cmp-OF-or");
 
@@ -3021,7 +3019,7 @@ void lifterClass::lift_setnz() {
   Value* zf = getFlag(FLAG_ZF);
 
   Value* result =
-      createZExtFolder(builder.CreateNot(zf), Type::getInt8Ty(context));
+      createZExtFolder(createNotFolder(zf), Type::getInt8Ty(context));
 
   SetOperandValue(dest, result);
 }
@@ -3043,7 +3041,7 @@ void lifterClass::lift_setno() {
 
   Value* of = getFlag(FLAG_OF);
 
-  Value* notOf = builder.CreateNot(of, "notOF");
+  Value* notOf = createNotFolder(of, "notOF");
 
   Value* result = createZExtFolder(notOf, Type::getInt8Ty(context));
 
@@ -3085,8 +3083,8 @@ void lifterClass::lift_setnbe() {
   Value* cf = getFlag(FLAG_CF);
   Value* zf = getFlag(FLAG_ZF);
 
-  Value* condition = createAndFolder(builder.CreateNot(cf),
-                                     builder.CreateNot(zf), "setnbe-and");
+  Value* condition =
+      createAndFolder(createNotFolder(cf), createNotFolder(zf), "setnbe-and");
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
@@ -3128,7 +3126,7 @@ void lifterClass::lift_setnp() {
   Value* pf = getFlag(FLAG_PF);
 
   Value* resultValue =
-      createZExtFolder(builder.CreateNot(pf), Type::getInt8Ty(context));
+      createZExtFolder(createNotFolder(pf), Type::getInt8Ty(context));
 
   SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
 }
@@ -3166,10 +3164,10 @@ void lifterClass::lift_stosx() {
 
   auto one = ConstantInt::get(DF->getType(), 1);
   Value* Direction =
-      builder.CreateSub(builder.CreateMul(DF, builder.CreateAdd(DF, one)), one);
+      createSubFolder(createMulFolder(DF, createAddFolder(DF, one)), one);
 
   Value* result = createAddFolder(
-      destValue, builder.CreateMul(
+      destValue, createMulFolder(
                      Direction, ConstantInt::get(DF->getType(), destbitwidth)));
   SetOperandValue(dest, result);
 }
@@ -3318,7 +3316,7 @@ void lifterClass::lift_btr() {
   Value* mask = createShlFolder(ConstantInt::get(baseVal->getType(), 1),
                                 bitOffsetMasked, "btr-shl");
 
-  mask = builder.CreateNot(mask); // invert mask
+  mask = createNotFolder(mask); // invert mask
   baseVal = createAndFolder(
       baseVal, mask, "btr-and-" + to_string(blockInfo.runtime_address) + "-");
 
@@ -3393,7 +3391,7 @@ void lifterClass::lift_bsf() {
     Value* possibleResult = ConstantInt::get(intType, i);
     Value* condition =
         createAndFolder(continuecounting, isBitZero, "bsfcondition");
-    continuecounting = builder.CreateNot(isBitZero);
+    continuecounting = createNotFolder(isBitZero);
     result = createSelectFolder(condition, result, possibleResult,
                                 "updateResultOnFirstNonZeroBit");
   }
@@ -3466,12 +3464,17 @@ void lifterClass::lift_sahf() {
   auto ah = GetRegisterValue(ZYDIS_REGISTER_AH);
   // RFLAGS(SF:ZF:0:AF:0:PF:1:CF) := AH;
   //
-  auto cf = builder.CreateAnd(ah, (1 << FLAG_CF));
+  auto cf =
+      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_CF)));
   // + 2
-  auto pf = builder.CreateAnd(ah, (1 << FLAG_PF));
-  auto af = builder.CreateAnd(ah, (1 << FLAG_AF));
-  auto zf = builder.CreateAnd(ah, (1 << FLAG_ZF));
-  auto sf = builder.CreateAnd(ah, (1 << FLAG_SF));
+  auto pf =
+      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_PF)));
+  auto af =
+      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_AF)));
+  auto zf =
+      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_ZF)));
+  auto sf =
+      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_SF)));
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_PF, pf);
   setFlag(FLAG_AF, af);
