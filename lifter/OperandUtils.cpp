@@ -1295,7 +1295,7 @@ Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
 
   /*
   if (Registers.find(newKey) == Registers.end()) {
-          throw std::runtime_error("register not found"); exit(-1);
+          UNREACHABLE("register not found"); exit(-1);
   }
   */
 
@@ -1576,7 +1576,7 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
     return retval;
   }
   default: {
-    throw std::runtime_error("operand type not implemented");
+    UNREACHABLE("operand type not implemented");
   }
   }
 }
@@ -1662,7 +1662,7 @@ Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
   } break;
 
   default: {
-    throw std::runtime_error("operand type not implemented");
+    UNREACHABLE("operand type not implemented");
     // return nullptr;
   }
   }

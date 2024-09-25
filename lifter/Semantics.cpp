@@ -331,7 +331,7 @@ void lifterClass::lift_movsb() {
 
       return;
     } else {
-      throw "fix rep";
+      UNREACHABLE("fix rep");
     }
   }
 
