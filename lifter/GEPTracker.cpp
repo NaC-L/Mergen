@@ -14,31 +14,24 @@
 namespace BinaryOperations {
 
   // wtf man
-  void* file_base_g;
   ZyanU8* data_g;
 
-  void initBases(void* file_base, ZyanU8* data) {
-    file_base_g = file_base;
-    data_g = data;
-  }
+  void initBases(ZyanU8* data) { data_g = data; }
 
-  void getBases(void** file_base, ZyanU8** data) {
-    *file_base = file_base_g;
-    *data = data_g;
-  }
+  void getBases(ZyanU8** data) { *data = data_g; }
 
   const char* getName(uint64_t offset) {
-    auto dosHeader = (win::dos_header_t*)file_base_g;
+    auto dosHeader = (win::dos_header_t*)data_g;
     auto ntHeaders =
-        (win::nt_headers_x64_t*)((uint8_t*)file_base_g + dosHeader->e_lfanew);
+        (win::nt_headers_x64_t*)((uint8_t*)data_g + dosHeader->e_lfanew);
     auto rvaOffset = FileHelper::RvaToFileOffset(ntHeaders, offset);
-    return (const char*)file_base_g + rvaOffset;
+    return (const char*)data_g + rvaOffset;
   }
   bool isImport(uint64_t addr) {
     APInt tmp;
-    auto dosHeader = (win::dos_header_t*)file_base_g;
+    auto dosHeader = (win::dos_header_t*)data_g;
     auto ntHeaders =
-        (win::nt_headers_x64_t*)((uint8_t*)file_base_g + dosHeader->e_lfanew);
+        (win::nt_headers_x64_t*)((uint8_t*)data_g + dosHeader->e_lfanew);
     return readMemory(ntHeaders->optional_header.image_base + addr, 1, tmp);
   }
 

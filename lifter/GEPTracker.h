@@ -49,9 +49,9 @@ namespace BinaryOperations {
 
   const char* getName(const uint64_t offset);
 
-  void initBases(void* file_base, ZyanU8* data); // ?
+  void initBases(ZyanU8* data); // ?
 
-  void getBases(void** file_base, ZyanU8** data);
+  void getBases(ZyanU8** data);
 
   bool isImport(const uint64_t addr);
 
