@@ -135,6 +135,9 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
   main->fnc = function;
   main->initDomTree(*function);
   auto dosHeader = (win::dos_header_t*)fileBase;
+  if (*(unsigned short*)fileBase != 0x5a4d) {
+    UNREACHABLE("Only PE files are supported");
+  }
   auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
   auto ADDRESS = ntHeaders->optional_header.image_base;
   auto imageSize = ntHeaders->optional_header.size_image;
