@@ -34,7 +34,7 @@ namespace funcsignatures {
     return &(functions[addr]);
   }
 
-  functioninfo* getFunctionInfo(std::string name) {
+  functioninfo* getFunctionInfo(const std::string& name) {
     if (functionsByName.count(name) == 0)
       return nullptr;
     return &(functionsByName[name]);

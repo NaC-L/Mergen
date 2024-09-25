@@ -59,6 +59,7 @@ FetchContent_MakeAvailable(Zydis)
 
 # Target: lifter
 set(lifter_SOURCES
+	"lifter/FunctionSignatures.cpp"
 	"lifter/GEPTracker.cpp"
 	"lifter/OperandUtils.cpp"
 	"lifter/PathSolver.cpp"
@@ -66,11 +67,13 @@ set(lifter_SOURCES
 	"lifter/lifter.cpp"
 	"lifter/utils.cpp"
 	"lifter/CustomPasses.hpp"
+	"lifter/FunctionSignatures.h"
 	"lifter/GEPTracker.h"
 	"lifter/OperandUtils.h"
 	"lifter/PathSolver.h"
 	"lifter/Semantics.h"
 	"lifter/includes.h"
+	"lifter/lifterClass.h"
 	"lifter/utils.h"
 	cmake.toml
 )
