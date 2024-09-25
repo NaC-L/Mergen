@@ -31,7 +31,7 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
 
     lifter->builder.SetInsertPoint(lifter->blockInfo.block);
 
-    BinaryOperations::initBases(data, data); // nice
+    BinaryOperations::initBases(data); // sigh
 
     lifter->run = 1;
 
@@ -211,7 +211,7 @@ int main(int argc, char* argv[]) {
   FileHelper::setFileBase(fileBase);
 
   funcsignatures::search_signatures(fileData);
-  funcsignatures::createOffsetMap();
+  funcsignatures::createOffsetMap(); // ?
   for (const auto& [key, value] : funcsignatures::siglookup) {
     value.display();
   }
