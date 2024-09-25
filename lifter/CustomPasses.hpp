@@ -73,10 +73,9 @@ public:
 // refactor
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
-  void* file_base;
   ZyanU8* data;
 
-  GEPLoadPass() { BinaryOperations::getBases(&file_base, &data); }
+  GEPLoadPass() { BinaryOperations::getBases(&data); }
 
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
     bool hasChanged = false;
