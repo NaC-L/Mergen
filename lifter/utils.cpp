@@ -24,27 +24,6 @@ namespace FileHelper {
     return 0;
   }
 
-  uint64_t secCharacteristics(win::nt_headers_x64_t* ntHeaders, uint32_t rva) {
-    auto sectionHeader = ntHeaders->get_sections();
-    for (int i = 0; i < ntHeaders->file_header.num_sections;
-         i++, sectionHeader++) {
-      if (rva >= sectionHeader->virtual_address &&
-          rva <
-              (sectionHeader->virtual_address + sectionHeader->virtual_size)) {
-        return sectionHeader->characteristics.mem_execute;
-      }
-    }
-    return 0;
-  }
-
-  uint64_t getSectionCharacteristics(void* fileBase, uint64_t rva) {
-    auto dosHeader = (win::dos_header_t*)fileBase;
-    auto ntHeaders =
-        (win::nt_headers_x64_t*)((uint8_t*)fileBase + dosHeader->e_lfanew);
-    auto ADDRESS = rva - ntHeaders->optional_header.image_base;
-    return secCharacteristics(ntHeaders, ADDRESS);
-  }
-
   uint64_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva) {
     auto sectionHeader = ntHeaders->get_sections();
     for (int i = 0; i < ntHeaders->file_header.num_sections;
@@ -64,7 +43,7 @@ namespace FileHelper {
     return 0;
   }
 
-  uint64_t address_to_mapped_address(void* fileBase, uint64_t rva) {
+  uint64_t address_to_mapped_address(uint64_t rva) {
     auto dosHeader = (win::dos_header_t*)fileBase;
     auto ntHeaders =
         (win::nt_headers_x64_t*)((uint8_t*)fileBase + dosHeader->e_lfanew);
@@ -135,6 +114,8 @@ namespace debugging {
   template void printValue<KnownBits>(const KnownBits& v, const char* name);
   template void printValue<APInt>(const APInt& v, const char* name);
   template void printValue<ROP_info>(const ROP_info& v, const char* name);
+  template void printValue<ConstantRange>(const ConstantRange& v,
+                                          const char* name);
 
 } // namespace debugging
 
@@ -182,7 +163,10 @@ namespace timer {
     running = true;
   }
 
-  double getTimer() { return elapsedTime.count(); }
+  double getTimer() {
+    elapsedTime += clock::now() - startTime;
+    return elapsedTime.count();
+  }
 
   double stopTimer() {
     if (running) {

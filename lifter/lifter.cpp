@@ -2,108 +2,94 @@
 
 #include "FunctionSignatures.h"
 #include "GEPTracker.h"
-#include "OperandUtils.h"
-#include "Semantics.h"
+#include "PathSolver.h"
 #include "includes.h"
+#include "lifterClass.h"
 #include "nt/nt_headers.hpp"
 #include "utils.h"
-#include <cstdlib>
 #include <fstream>
 
-// new datatype for BBInfo? Something like a domtree
-vector<BBInfo> added_blocks_addresses;
+vector<lifterClass*> lifters;
 uint64_t original_address = 0;
-
+unsigned int pathNo = 0;
 // consider having this function in a class, later we can use multi-threading to
 // explore different paths
-void asm_to_zydis_to_lift(IRBuilder<>& builder, ZyanU8* data,
-                          ZyanU64 runtime_address,
-                          shared_ptr<vector<BBInfo>> blockAddresses,
-                          ZyanU64 file_base) {
+void asm_to_zydis_to_lift(ZyanU8* data) {
 
-  bool run = 1;
-  while (run) {
+  while (lifters.size() > 0) {
+    lifterClass* lifter = lifters.back();
 
-    while (blockAddresses->size() > 0) {
+    uint64_t offset = FileHelper::address_to_mapped_address(
+        lifter->blockInfo.runtime_address);
+    debugging::doIfDebug([&]() {
+      cout << "runtime_addr: " << lifter->blockInfo.runtime_address
+           << " offset:" << offset << " byte there: 0x" << (int)*(data + offset)
+           << endl;
+      cout << "offset: " << offset << " file_base?: " << original_address
+           << " runtime: " << lifter->blockInfo.runtime_address << endl;
+    });
 
-      runtime_address = get<0>(blockAddresses->back());
-      uint64_t offset = FileHelper::address_to_mapped_address((void*)file_base,
-                                                              runtime_address);
+    lifter->builder.SetInsertPoint(lifter->blockInfo.block);
+
+    BinaryOperations::initBases(data); // sigh
+
+    lifter->run = 1;
+
+    for (; lifter->run && !lifter->finished &&
+           lifter->blockInfo.runtime_address > 0;) {
+      if (BinaryOperations::isWrittenTo(lifter->blockInfo.runtime_address)) {
+        printvalueforce2(lifter->blockInfo.runtime_address);
+        UNREACHABLE("Found Self Modifying Code! we dont support it");
+      }
+
+      ZydisDecoder decoder;
+      ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64,
+                       ZYDIS_STACK_WIDTH_64);
+
+      ZydisDecoderDecodeFull(&decoder, data + offset, 15,
+                             &(lifter->instruction), lifter->operands);
+
+      auto counter = debugging::increaseInstCounter() - 1;
 
       debugging::doIfDebug([&]() {
-        cout << "runtime_addr: " << runtime_address << " offset:" << offset
-             << " byte there: 0x" << (int)*(uint8_t*)(file_base + offset)
-             << endl;
-        cout << "offset: " << offset << " file_base?: " << original_address
-             << " runtime: " << runtime_address << endl;
+        ZydisFormatter formatter;
+
+        ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+        char buffer[256];
+        ZyanU64 runtime_address = 0;
+        ZydisFormatterFormatInstruction(
+            &formatter, &(lifter->instruction), lifter->operands,
+            lifter->instruction.operand_count_visible, &buffer[0],
+            sizeof(buffer), runtime_address, ZYAN_NULL);
+
+        cout << hex << counter << ":" << buffer << "\n";
+        cout << "runtime: " << lifter->blockInfo.runtime_address << endl;
       });
 
-      auto nextBasicBlock = get<1>(blockAddresses->back());
-      added_blocks_addresses.push_back(blockAddresses->back());
+      lifter->blockInfo.runtime_address += lifter->instruction.length;
+      lifter->liftInstruction();
+      if (lifter->finished) {
 
-      builder.SetInsertPoint(nextBasicBlock);
+        lifter->run = 0;
+        lifters.pop_back();
 
-      // will use this for exploring multiple branches
-      setRegisters(get<2>(blockAddresses->back()));
-      //
-
-      // update only when its needed
-      blockAddresses->pop_back();
-
-      BinaryOperations::initBases((void*)file_base, data);
-      size_t last_value;
-
-      bool run = 1;
-
-      if (!blockAddresses->empty()) {
-        last_value = get<0>(blockAddresses->back());
-      } else {
-
-        last_value = 0;
+        debugging::doIfDebug([&]() {
+          std::string Filename = "output_path_" + to_string(++pathNo) + ".ll";
+          std::error_code EC;
+          raw_fd_ostream OS(Filename, EC);
+          lifter->fnc->getParent()->print(OS, nullptr);
+        });
+        outs() << "next lifter instance\n";
+        continue;
       }
 
-      for (; run && runtime_address > 0;) {
-        if (BinaryOperations::isWrittenTo(runtime_address)) {
-          printvalueforce2(runtime_address);
-          outs() << "SelfModifyingCode!\n";
-          outs().flush();
-        }
-
-        if ((blockAddresses->size() == 0 ||
-             (last_value == get<0>(blockAddresses->back())))) {
-
-          // why tf compiler tells this is unused?
-          ZydisDisassembledInstruction instruction;
-          ZydisDisassembleIntel(ZYDIS_MACHINE_MODE_LONG_64, runtime_address,
-                                data + offset, 15, &instruction);
-
-          auto counter = debugging::increaseInstCounter() - 1;
-          debugging::doIfDebug([&]() {
-            cout << hex << counter << ":" << instruction.text << "\n";
-            cout << "runtime: " << instruction.runtime_address << endl;
-          });
-
-          liftInstruction(builder, instruction, blockAddresses, run);
-
-          offset += instruction.info.length;
-          runtime_address += instruction.info.length;
-
-        } else {
-          break;
-        }
-      }
+      offset += lifter->instruction.length;
     }
-    run = 0;
   }
 }
 
-void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
-                                       uint64_t file_base) {
-  ZydisDecoder decoder;
-  ZydisFormatter formatter;
-
-  ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
-  ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
+                                       unsigned char* fileBase) {
 
   LLVMContext context;
   string mod_name = "my_lifting_module";
@@ -132,34 +118,60 @@ void InitFunction_and_LiftInstructions(ZyanU64 runtime_address,
   auto functionType =
       llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 
-  string function_name = "main";
+  const string function_name = "main";
   auto function =
       llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
                              function_name.c_str(), lifting_module);
-
-  string block_name = "entry";
+  const string block_name = "entry";
   auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
   llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
-  auto RegisterList = InitRegisters(builder, function, runtime_address);
+  // auto RegisterList = InitRegisters(builder, function, runtime_address);
 
-  GEPStoreTracker::initDomTree(*function);
+  lifterClass* main = new lifterClass(builder);
+  main->InitRegisters(function, runtime_address);
+  main->blockInfo = BBInfo(runtime_address, bb);
 
-  shared_ptr<vector<BBInfo>> blockAddresses = make_shared<vector<BBInfo>>();
+  main->fnc = function;
+  main->initDomTree(*function);
+  auto dosHeader = (win::dos_header_t*)fileBase;
+  if (*(unsigned short*)fileBase != 0x5a4d) {
+    UNREACHABLE("Only PE files are supported");
+  }
+  auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
+  auto ADDRESS = ntHeaders->optional_header.image_base;
+  auto imageSize = ntHeaders->optional_header.size_image;
+  auto stackSize = ntHeaders->optional_header.size_stack_reserve;
+  const uint64_t RVA = static_cast<uint64_t>(runtime_address - ADDRESS);
+  const uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
+  const uint8_t* dataAtAddress = fileBase + fileOffset;
+  cout << hex << "0x" << (int)*dataAtAddress << endl;
+  original_address = ADDRESS;
+  cout << "address: " << ADDRESS << " imageSize: " << imageSize
+       << " filebase: " << (uint64_t)fileBase << " fOffset: " << fileOffset
+       << " RVA: " << RVA << endl;
 
-  blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
+  main->markMemPaged(STACKP_VALUE - stackSize, STACKP_VALUE + stackSize);
+  main->markMemPaged(ADDRESS, ADDRESS + imageSize);
 
-  asm_to_zydis_to_lift(builder, (uint8_t*)file_base, runtime_address,
-                       blockAddresses, file_base);
+  // blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
+  lifters.push_back(main);
 
-  string Filename = "output.ll";
+  asm_to_zydis_to_lift(fileBase);
+
+  long long ms = timer::getTimer();
+
+  cout << "\nlifting complete, " << dec << ms << " milliseconds has past"
+       << endl;
+  const string Filename_noopt = "output_no_opts.ll";
+  error_code EC_noopt;
+  llvm::raw_fd_ostream OS_noopt(Filename_noopt, EC_noopt);
+
+  lifting_module.print(OS_noopt, nullptr);
+  final_optpass(function);
+  const string Filename = "output.ll";
   error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);
-
-  if (EC) {
-    llvm::errs() << "Could not open file: " << EC.message();
-    return;
-  }
 
   lifting_module.print(OS, nullptr);
 
@@ -201,35 +213,17 @@ int main(int argc, char* argv[]) {
 
   FileHelper::setFileBase(fileBase);
 
-  auto dosHeader = (win::dos_header_t*)fileBase;
-  auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
-  auto ADDRESS = ntHeaders->optional_header.image_base;
-  auto imageSize = ntHeaders->optional_header.size_image;
-  auto stackSize = ntHeaders->optional_header.size_stack_reserve;
-  GEPStoreTracker::markMemPaged(STACKP_VALUE - stackSize,
-                                STACKP_VALUE + stackSize);
-  GEPStoreTracker::markMemPaged(ADDRESS, ADDRESS + imageSize);
-
-  uint64_t RVA = static_cast<uint64_t>(startAddr - ADDRESS);
-  uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
-  uint8_t* dataAtAddress = fileBase + fileOffset;
-  cout << hex << "0x" << (int)*dataAtAddress << endl;
-  original_address = ADDRESS;
-  cout << "address: " << ADDRESS << " imageSize: " << imageSize
-       << " filebase: " << (uint64_t)fileBase << " fOffset: " << fileOffset
-       << " RVA: " << RVA << endl;
-
   funcsignatures::search_signatures(fileData);
-  funcsignatures::createOffsetMap();
+  funcsignatures::createOffsetMap(); // ?
   for (const auto& [key, value] : funcsignatures::siglookup) {
     value.display();
   }
-
   long long ms = timer::getTimer();
   cout << "\n" << dec << ms << " milliseconds has past" << endl;
 
-  InitFunction_and_LiftInstructions(startAddr, (uint64_t)fileBase);
+  InitFunction_and_LiftInstructions(startAddr, fileBase);
   long long milliseconds = timer::stopTimer();
   cout << "\n" << dec << milliseconds << " milliseconds has past" << endl;
-  cout << "Executed " << debugging::increaseInstCounter() - 1 << " total insts";
+  cout << "Lifted and optimized " << debugging::increaseInstCounter() - 1
+       << " total insts";
 }
