@@ -1,3 +1,5 @@
+### Awarded the VTIL award by Back Engineering Labs for 2024 :trophy:
+
 # Project Overview:
 Mergen is a tool engineered to convert Assembly code into LLVM Intermediate Representation (IR).
 This tool is designed for:
