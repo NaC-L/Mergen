@@ -341,6 +341,73 @@ void lifterClass::lift_movsb() {
   SetOperandValue(SRCop, UpdateSRCvalue);
   SetOperandValue(DSTop, UpdateDSTvalue);
 }
+void lifterClass::lift_movsq() {
+
+  // DEST := SRC;
+  // movsq copies 8 bytes (quadword)
+  // sign = DF (-1/+1)
+  // incdecv = size*sign (sq means size is 8)
+  //
+
+  Value* DSTptrvalue = GetOperandValue(operands[1], operands[1].size);
+
+  SetOperandValue(operands[0], DSTptrvalue);
+
+  bool isREP = (instruction.attributes & ZYDIS_ATTRIB_HAS_REP) != 0;
+
+  Value* DF = getFlag(FLAG_DF);
+  auto eight = ConstantInt::get(DF->getType(), 8);
+  auto one = ConstantInt::get(DF->getType(), 1);
+
+  // sign = (DF*(DF+1)) - 1
+  // v = sign * quadword size (8 bytes)
+
+  Value* Direction = createMulFolder(
+      createSubFolder(createMulFolder(DF, createAddFolder(DF, one)), one),
+      eight);
+
+  auto SRCop = operands[2 + isREP];
+  auto DSTop = operands[3 + isREP];
+
+  Value* SRCvalue = GetOperandValue(SRCop, SRCop.size);
+  Value* DSTvalue = GetOperandValue(DSTop, DSTop.size);
+
+  if (isREP) {
+    Value* count = GetOperandValue(operands[2], operands[2].size);
+    if (auto countci = dyn_cast<ConstantInt>(count)) {
+      Value* UpdateSRCvalue = SRCvalue;
+      Value* UpdateDSTvalue = DSTvalue;
+      uint64_t looptime = countci->getZExtValue();
+
+      for (int i = looptime; i > 0; i--) {
+        DSTptrvalue = GetOperandValue(operands[1], operands[1].size);
+
+        SetOperandValue(operands[0], DSTptrvalue);
+
+        UpdateSRCvalue = createAddFolder(UpdateSRCvalue, Direction);
+        UpdateDSTvalue = createAddFolder(UpdateDSTvalue, Direction);
+
+        SetOperandValue(SRCop, UpdateSRCvalue);
+        SetOperandValue(DSTop, UpdateDSTvalue);
+
+        if (i > 1)
+          debugging::increaseInstCounter();
+      }
+
+      SetOperandValue(operands[2], ConstantInt::get(count->getType(), 0));
+
+      return;
+    } else {
+      UNREACHABLE("fix rep");
+    }
+  }
+
+  Value* UpdateSRCvalue = createAddFolder(SRCvalue, Direction);
+  Value* UpdateDSTvalue = createAddFolder(DSTvalue, Direction);
+
+  SetOperandValue(SRCop, UpdateSRCvalue);
+  SetOperandValue(DSTop, UpdateDSTvalue);
+}
 void lifterClass::lift_movaps() {
   auto dest = operands[0];
   auto src = operands[1];
@@ -3673,7 +3740,10 @@ void lifterClass::liftInstructionSemantics() {
     lift_movsb();
     break;
   }
-
+  case ZYDIS_MNEMONIC_MOVSQ: {
+    lift_movsq();
+    break;
+  }
     // cmov
   case ZYDIS_MNEMONIC_CMOVZ: {
     lift_cmovz();
