@@ -3652,18 +3652,9 @@ void lifterClass::liftInstructionSemantics() {
     lift_mov();
     break;
   }
-  case ZYDIS_MNEMONIC_MOVSB: {
-    lift_movsX();
-    break;
-  }
-  case ZYDIS_MNEMONIC_MOVSW: {
-    lift_movsX();
-    break;
-  }
-  case ZYDIS_MNEMONIC_MOVSD: {
-    lift_movsX();
-    break;
-  }
+  case ZYDIS_MNEMONIC_MOVSB:
+  case ZYDIS_MNEMONIC_MOVSW:
+  case ZYDIS_MNEMONIC_MOVSD:
   case ZYDIS_MNEMONIC_MOVSQ: {
     lift_movsX();
     break;
