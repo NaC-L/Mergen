@@ -259,112 +259,29 @@ void lifterClass::branchHelper(Value* condition, const string& instname,
   // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
   // "\n";
 }
-
-void lifterClass::lift_movsb() {
+void lifterClass::lift_movsX() {
+  // Get the size based on the operand
+  int size = operands[1].size;
 
   // DEST := SRC;
-  // [esi] = [edi]
+  // Parameterize size and direction
   // sign = DF (-1/+1)
-  // incdecv = size*sign (sb means size is 1)
-  // esi += incdecv
-  // edi += incdecv
-  //
+  // incdecv = size*sign
 
-  // Value* SRCptrvalue =
-  // GetOperandValue(operands[0],operands[0].size);
-
-  Value* DSTptrvalue = GetOperandValue(operands[1], operands[1].size);
-
+  Value* DSTptrvalue = GetOperandValue(operands[1], size);
   SetOperandValue(operands[0], DSTptrvalue);
 
   bool isREP = (instruction.attributes & ZYDIS_ATTRIB_HAS_REP) != 0;
 
   Value* DF = getFlag(FLAG_DF);
-  auto one = ConstantInt::get(DF->getType(), 1);
-  // sign = (x*(x+1)) - 1
-  // v = sign * bytesize ; bytesize is 1
-
-  Value* Direction =
-      createSubFolder(createMulFolder(DF, createAddFolder(DF, one)), one);
-
-  auto SRCop = operands[2 + isREP];
-  auto DSTop = operands[3 + isREP];
-
-  Value* SRCvalue = GetOperandValue(SRCop, SRCop.size);
-  Value* DSTvalue = GetOperandValue(DSTop, DSTop.size);
-
-  if (isREP) {
-    // if REP, operands[1] will be e/rax
-    // in that case, repeat and decrement e/rax until its 0
-
-    // we can create a loop but I dont know how that would effect our
-    // optimizations
-    Value* count = GetOperandValue(operands[2], operands[2].size);
-    if (auto countci = dyn_cast<ConstantInt>(count)) {
-      Value* UpdateSRCvalue = SRCvalue;
-      Value* UpdateDSTvalue = DSTvalue;
-      uint64_t looptime = countci->getZExtValue();
-      printvalue2(looptime);
-
-      for (int i = looptime; i > 0; i--) {
-        // TODO: fix this loop
-
-        // Value* SRCptrvalue = GetOperandValue(
-        // operands[0],
-        // operands[0].size);
-        DSTptrvalue = GetOperandValue(operands[1], operands[1].size);
-
-        SetOperandValue(operands[0], DSTptrvalue);
-
-        UpdateSRCvalue = createAddFolder(UpdateSRCvalue, Direction);
-        UpdateDSTvalue = createAddFolder(UpdateDSTvalue, Direction);
-        printvalue(UpdateDSTvalue) printvalue(UpdateSRCvalue);
-
-        SetOperandValue(SRCop, UpdateSRCvalue);
-        SetOperandValue(DSTop, UpdateDSTvalue);
-        // bad cheat
-        if (i > 1)
-          debugging::increaseInstCounter();
-      }
-
-      SetOperandValue(operands[2], ConstantInt::get(count->getType(), 0));
-
-      return;
-    } else {
-      UNREACHABLE("fix rep");
-    }
-  }
-
-  Value* UpdateSRCvalue = createAddFolder(SRCvalue, Direction);
-  Value* UpdateDSTvalue = createAddFolder(DSTvalue, Direction);
-
-  SetOperandValue(SRCop, UpdateSRCvalue);
-  SetOperandValue(DSTop, UpdateDSTvalue);
-}
-void lifterClass::lift_movsq() {
-
-  // DEST := SRC;
-  // movsq copies 8 bytes (quadword)
-  // sign = DF (-1/+1)
-  // incdecv = size*sign (sq means size is 8)
-  //
-
-  Value* DSTptrvalue = GetOperandValue(operands[1], operands[1].size);
-
-  SetOperandValue(operands[0], DSTptrvalue);
-
-  bool isREP = (instruction.attributes & ZYDIS_ATTRIB_HAS_REP) != 0;
-
-  Value* DF = getFlag(FLAG_DF);
-  auto eight = ConstantInt::get(DF->getType(), 8);
+  auto byteSize = ConstantInt::get(DF->getType(), size);
   auto one = ConstantInt::get(DF->getType(), 1);
 
   // sign = (DF*(DF+1)) - 1
-  // v = sign * quadword size (8 bytes)
-
+  // v = sign * byteSize
   Value* Direction = createMulFolder(
       createSubFolder(createMulFolder(DF, createAddFolder(DF, one)), one),
-      eight);
+      byteSize);
 
   auto SRCop = operands[2 + isREP];
   auto DSTop = operands[3 + isREP];
@@ -380,8 +297,7 @@ void lifterClass::lift_movsq() {
       uint64_t looptime = countci->getZExtValue();
 
       for (int i = looptime; i > 0; i--) {
-        DSTptrvalue = GetOperandValue(operands[1], operands[1].size);
-
+        DSTptrvalue = GetOperandValue(operands[1], size);
         SetOperandValue(operands[0], DSTptrvalue);
 
         UpdateSRCvalue = createAddFolder(UpdateSRCvalue, Direction);
@@ -395,7 +311,6 @@ void lifterClass::lift_movsq() {
       }
 
       SetOperandValue(operands[2], ConstantInt::get(count->getType(), 0));
-
       return;
     } else {
       UNREACHABLE("fix rep");
@@ -408,6 +323,7 @@ void lifterClass::lift_movsq() {
   SetOperandValue(SRCop, UpdateSRCvalue);
   SetOperandValue(DSTop, UpdateDSTvalue);
 }
+
 void lifterClass::lift_movaps() {
   auto dest = operands[0];
   auto src = operands[1];
@@ -3737,11 +3653,19 @@ void lifterClass::liftInstructionSemantics() {
     break;
   }
   case ZYDIS_MNEMONIC_MOVSB: {
-    lift_movsb();
+    lift_movsX();
+    break;
+  }
+  case ZYDIS_MNEMONIC_MOVSW: {
+    lift_movsX();
+    break;
+  }
+  case ZYDIS_MNEMONIC_MOVSD: {
+    lift_movsX();
     break;
   }
   case ZYDIS_MNEMONIC_MOVSQ: {
-    lift_movsq();
+    lift_movsX();
     break;
   }
     // cmov
