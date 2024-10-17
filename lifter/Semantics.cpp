@@ -12,6 +12,8 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 
+#define __directionSize__ 64
+
 FunctionType* lifterClass::parseArgsType(funcsignatures::functioninfo* funcInfo,
                                          LLVMContext& context) {
   if (!funcInfo) {
@@ -260,6 +262,7 @@ void lifterClass::branchHelper(Value* condition, const string& instname,
   // "\n";
 }
 void lifterClass::lift_movsX() {
+  LLVMContext& context = builder.getContext();
   // Get the size based on the operand
   int size = operands[1].size;
 
@@ -275,13 +278,14 @@ void lifterClass::lift_movsX() {
 
   Value* DF = getFlag(FLAG_DF);
   auto byteSize = ConstantInt::get(DF->getType(), size);
-  auto one = ConstantInt::get(DF->getType(), 1);
 
   // sign = (DF*(DF+1)) - 1
   // v = sign * byteSize
-  Value* Direction = createMulFolder(
-      createSubFolder(createMulFolder(DF, createAddFolder(DF, one)), one),
-      byteSize);
+
+  auto byteSizeValue = dyn_cast<ConstantInt>(byteSize)->getSExtValue();
+
+  Value* Direction = createSelectFolder(DF, ConstantInt::get(Type::getIntNTy(context, __directionSize__),1 * byteSizeValue),
+      ConstantInt::get(Type::getIntNTy(context, __directionSize__),-1 * byteSizeValue));
 
   auto SRCop = operands[2 + isREP];
   auto DSTop = operands[3 + isREP];
