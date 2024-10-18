@@ -259,7 +259,7 @@ void lifterClass::branchHelper(Value* condition, const string& instname,
   // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
   // "\n";
 }
-void lifterClass::lift_movsX() {
+void lifterClass::lift_movs_X() {
   LLVMContext& context = builder.getContext();
   // Get the size based on the operand
   int size = operands[1].size;
