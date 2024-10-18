@@ -408,7 +408,7 @@ public:
   // end folders
 
   // semantics definition
-  DEFINE_FUNCTION(movsb);
+  DEFINE_FUNCTION(movs_X);
   DEFINE_FUNCTION(movaps);
   DEFINE_FUNCTION(mov);
   DEFINE_FUNCTION(cmovbz);
