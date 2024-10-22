@@ -3437,11 +3437,13 @@ void lifterClass::lift_lahf() {
   af = createShlFolder(createZExtFolder(af, Type::getInt8Ty(context)), FLAG_AF);
   zf = createShlFolder(createZExtFolder(zf, Type::getInt8Ty(context)), FLAG_ZF);
   sf = createShlFolder(createZExtFolder(sf, Type::getInt8Ty(context)), FLAG_SF);
-  Value* Rvalue = createOrFolder(
-      createOrFolder(createOrFolder(cf, pf), createOrFolder(af, sf)), sf);
+  Value* Rvalue = createAddFolder(
+      createOrFolder(
+          createOrFolder(createOrFolder(cf, pf), createOrFolder(af, sf)), zf),
+      ConstantInt::get(cf->getType(), 2));
 
   printvalue(sf) printvalue(zf) printvalue(af) printvalue(pf) printvalue(cf);
-
+  printvalue(Rvalue);
   SetRegisterValue(ZYDIS_REGISTER_AH, Rvalue);
 }
 void lifterClass::lift_sahf() {
