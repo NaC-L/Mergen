@@ -3451,17 +3451,20 @@ void lifterClass::lift_sahf() {
   auto ah = GetRegisterValue(ZYDIS_REGISTER_AH);
   // RFLAGS(SF:ZF:0:AF:0:PF:1:CF) := AH;
   //
-  auto cf =
-      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_CF)));
+  printvalue(GetRegisterValue(ZYDIS_REGISTER_RAX));
+  printvalue(ah);
+  Value* one = ConstantInt::get(ah->getType(), 1);
+  auto cf = createAndFolder(
+      createLShrFolder(ah, ConstantInt::get(ah->getType(), FLAG_CF)), one);
   // + 2
-  auto pf =
-      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_PF)));
-  auto af =
-      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_AF)));
-  auto zf =
-      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_ZF)));
-  auto sf =
-      createAndFolder(ah, ConstantInt::get(ah->getType(), (1 << FLAG_SF)));
+  auto pf = createAndFolder(
+      createLShrFolder(ah, ConstantInt::get(ah->getType(), FLAG_PF)), one);
+  auto af = createAndFolder(
+      createLShrFolder(ah, ConstantInt::get(ah->getType(), FLAG_AF)), one);
+  auto zf = createAndFolder(
+      createLShrFolder(ah, ConstantInt::get(ah->getType(), FLAG_ZF)), one);
+  auto sf = createAndFolder(
+      createLShrFolder(ah, ConstantInt::get(ah->getType(), FLAG_SF)), one);
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_PF, pf);
   setFlag(FLAG_AF, af);
