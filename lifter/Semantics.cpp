@@ -2499,8 +2499,11 @@ void lifterClass::lift_rol() {
   auto Rvalue = GetOperandValue(src, dest.size);
 
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  Rvalue = createAndFolder(
-      Rvalue, ConstantInt::get(Rvalue->getType(), bitWidth - 1), "maskRvalue");
+  unsigned maskc = bitWidth == 64 ? 0x3f : 0x1f;
+  Rvalue = createURemFolder(
+      createAndFolder(Rvalue, ConstantInt::get(Rvalue->getType(), maskc),
+                      "maskRvalue"),
+      ConstantInt::get(Rvalue->getType(), bitWidth + 1));
 
   Value* shiftedLeft = createShlFolder(Lvalue, Rvalue);
   Value* shiftedRight = createLShrFolder(
