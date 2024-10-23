@@ -2565,19 +2565,24 @@ void lifterClass::lift_ror() {
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto Rvalue = GetOperandValue(src, dest.size);
 
-  auto size = ConstantInt::getSigned(Lvalue->getType(),
-                                     Lvalue->getType()->getIntegerBitWidth());
-  Rvalue = createURemFolder(Rvalue, size);
+  auto bitWidth = ConstantInt::getSigned(
+      Lvalue->getType(), Lvalue->getType()->getIntegerBitWidth());
+  auto size = Lvalue->getType()->getIntegerBitWidth();
+  unsigned maskc = size == 64 ? 0x3f : 0x1f;
+  Rvalue = createURemFolder(
+      createAndFolder(Rvalue, ConstantInt::get(Rvalue->getType(), maskc),
+                      "maskRvalue"),
+      ConstantInt::get(Rvalue->getType(), size + 1));
 
   Value* result =
       createOrFolder(createLShrFolder(Lvalue, Rvalue),
-                     createShlFolder(Lvalue, createSubFolder(size, Rvalue)),
+                     createShlFolder(Lvalue, createSubFolder(bitWidth, Rvalue)),
                      "ror-" + std::to_string(blockInfo.runtime_address) + "-");
 
   Value* msb = createLShrFolder(
       result,
       createSubFolder(
-          size,
+          bitWidth,
           ConstantInt::get(context,
                            APInt(Rvalue->getType()->getIntegerBitWidth(), 1))));
   Value* cf = createZExtOrTruncFolder(msb, Type::getInt1Ty(context), "ror-cf");
@@ -2585,7 +2590,7 @@ void lifterClass::lift_ror() {
   Value* secondMsb = createLShrFolder(
       result,
       createSubFolder(
-          size,
+          bitWidth,
           ConstantInt::get(context,
                            APInt(Rvalue->getType()->getIntegerBitWidth(), 2))),
       "ror2ndmsb");
@@ -2613,6 +2618,7 @@ void lifterClass::lift_ror() {
 
       SetOperandValue(dest, result);
 }
+
 
 void lifterClass::lift_inc() {
   auto operand = operands[0];
