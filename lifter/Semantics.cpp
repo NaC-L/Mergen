@@ -1198,15 +1198,20 @@ void lifterClass::lift_rcl() {
   auto actualCount = createAndFolder(
       countValue, ConstantInt::get(countValue->getType(), maskC),
       "actualCount");
-
+  printvalue(actualCount);
+  actualCount = bitWidth <= 16
+                    ? createURemFolder(
+                          actualCount,
+                          ConstantInt::get(countValue->getType(), bitWidth + 1),
+                          "actualCount2")
+                    : actualCount;
+  printvalue(actualCount);
   auto wideType = Type::getIntNTy(context, dest.size * 2);
   auto wideLvalue = createZExtFolder(Lvalue, wideType);
   auto cf_extended = createZExtFolder(carryFlag, wideType);
-  auto shiftedInCF = createShlFolder(cf_extended, dest.size, "shiftedincf");
-  wideLvalue =
-      createOrFolder(wideLvalue, createZExtFolder(shiftedInCF, wideType,
-                                                  "shiftedInCFExtended"));
+  auto shiftedInCF = cf_extended;
 
+  actualCount = createZExtFolder(actualCount, wideLvalue->getType());
   auto leftShifted = createShlFolder(
       wideLvalue,
       createZExtFolder(actualCount, wideType, "actualCountExtended"),
@@ -1220,15 +1225,19 @@ void lifterClass::lift_rcl() {
       createOrFolder(leftShifted, createZExtFolder(rightShifted, wideType,
                                                    "rightShiftedExtended"));
 
+  rotated = createLShrFolder(rotated, actualCount);
+  rotated = createShlFolder(rotated, actualCount);
+  rotated = createOrFolder(rotated, shiftedInCF);
+
   auto result = createZExtOrTruncFolder(rotated, Lvalue->getType());
 
-  auto newCFBitPosition = ConstantInt::get(rotated->getType(), dest.size - 1);
+  auto newCFBitPosition = ConstantInt::get(rotated->getType(), dest.size);
   auto newCF =
       createZExtOrTruncFolder(createLShrFolder(rotated, newCFBitPosition),
                               Type::getInt1Ty(context), "rclnewcf");
 
   auto msbAfterRotate =
-      createZExtOrTruncFolder(createLShrFolder(result, dest.size - 1),
+      createZExtOrTruncFolder(createLShrFolder(result, dest.size),
                               Type::getInt1Ty(context), "rclmsbafterrotate");
   auto isCountOne =
       createICMPFolder(CmpInst::ICMP_EQ, actualCount,
@@ -1237,12 +1246,20 @@ void lifterClass::lift_rcl() {
                                        Type::getInt1Ty(context));
   newOF = createSelectFolder(isCountOne, newOF, getFlag(FLAG_OF));
 
-  printvalue(Lvalue) printvalue(countValue) printvalue(carryFlag)
-      printvalue(cf_extended) printvalue(shiftedInCF) printvalue(actualCount)
-          printvalue(wideLvalue) printvalue(leftShifted)
-              printvalue(rightShifted) printvalue(rotated) printvalue(result)
+  auto isCountZero =
+      createICMPFolder(CmpInst::ICMP_EQ, actualCount,
+                       ConstantInt::get(actualCount->getType(), 0));
+  result = createSelectFolder(isCountZero, Lvalue, result);
+  newCF = createSelectFolder(isCountZero, carryFlag, newCF);
+  newOF = createSelectFolder(isCountZero, getFlag(FLAG_OF), newOF);
+  printvalue(newCFBitPosition);
+  printvalue(newCF);
+  printvalue(Lvalue) printvalue(countValue) printvalue(carryFlag);
+  printvalue(cf_extended) printvalue(shiftedInCF) printvalue(actualCount);
+  printvalue(wideLvalue) printvalue(leftShifted) printvalue(rightShifted);
+  printvalue(rotated) printvalue(result);
 
-                  SetOperandValue(dest, result);
+  SetOperandValue(dest, result);
   setFlag(FLAG_CF, newCF);
   setFlag(FLAG_OF, newOF);
 }
