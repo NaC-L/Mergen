@@ -840,13 +840,18 @@ void lifterClass::lift_jmp() {
   auto targetv = GetOperandValue(dest, 64);
   auto trunc = createZExtOrTruncFolder(targetv, Type::getInt64Ty(context),
                                        "jmp-register");
+  printvalue(ripval);
   printvalue(trunc);
   uint64_t destination = 0;
   auto function = builder.GetInsertBlock()->getParent();
   if (dest.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+
     trunc = createAddFolder(trunc, ripval);
+    printvalue(trunc);
   }
   solvePath(function, destination, trunc);
+  printvalue2(destination);
+  printvalue(newRip);
   SetRegisterValue(ZYDIS_REGISTER_RIP, newRip);
 }
 
