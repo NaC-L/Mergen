@@ -872,21 +872,6 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
 
   return inst;
 }
-Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
-                                    const Twine& Name) {
-  GEPinfo key = {Address, cast<uint8_t>(Type->getScalarSizeInBits()),
-                 Base == TEB};
-  auto it = GEPcache.lookup(key);
-  if (it) {
-    return it;
-  }
-
-  std::vector<Value*> indices;
-  indices.push_back(Address);
-  auto v = builder.CreateGEP(Type, Base, indices);
-  GEPcache.insert({key, v});
-  return v;
-}
 
 Value* lifterClass::createAddFolder(Value* LHS, Value* RHS, const Twine& Name) {
 
@@ -1552,13 +1537,14 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
 
     Type* loadType = Type::getIntNTy(context, possiblesize);
 
+    std::vector<Value*> indices;
+    indices.push_back(effectiveAddress);
     Value* memoryOperand = memoryAlloc;
     if (op.mem.segment == ZYDIS_REGISTER_GS)
       memoryOperand = TEB;
 
-    Value* pointer =
-        createGEPFolder(Type::getInt8Ty(context), memoryOperand,
-                        effectiveAddress, "GEPLoadxd-" + address + "-");
+    Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryOperand,
+                                       indices, "GEPLoadxd-" + address + "-");
 
     auto retval =
         builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
@@ -1638,13 +1624,15 @@ Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
           createAddFolder(effectiveAddress, dispValue, "disp_set");
     }
 
+    std::vector<Value*> indices;
+    indices.push_back(effectiveAddress);
+
     auto memoryOperand = memoryAlloc;
     if (op.mem.segment == ZYDIS_REGISTER_GS)
       memoryOperand = TEB;
 
-    Value* pointer =
-        createGEPFolder(Type::getInt8Ty(context), memoryOperand,
-                        effectiveAddress, "GEPSTORE-" + address + "-");
+    Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryOperand,
+                                       indices, "GEPSTORE-" + address + "-");
 
     pointer = simplifyValue(
         pointer,
@@ -1705,8 +1693,10 @@ void lifterClass::pushFlags(const vector<Value*>& value,
       byteVal = createOrFolder(byteVal, shiftedFlag, "pushflagbyteval");
     }
 
-    Value* pointer = createGEPFolder(Type::getInt8Ty(context), memoryAlloc, rsp,
-                                     "GEPSTORE-" + address + "-");
+    std::vector<Value*> indices;
+    indices.push_back(rsp);
+    Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,
+                                       indices, "GEPSTORE-" + address + "-");
 
     auto store = builder.CreateStore(byteVal, pointer, "storebyte");
 
@@ -1723,8 +1713,11 @@ Value* lifterClass::popStack() {
   auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
   // should we get a address calculator function, do we need that?
 
-  Value* pointer = createGEPFolder(Type::getInt8Ty(context), memoryAlloc, rsp,
-                                   "GEPLoadPOPStack--");
+  std::vector<Value*> indices;
+  indices.push_back(rsp);
+
+  Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,
+                                     indices, "GEPLoadPOPStack--");
 
   auto loadType = Type::getInt64Ty(context);
   auto returnValue = builder.CreateLoad(loadType, pointer, "PopStack-");
