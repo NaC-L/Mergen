@@ -267,6 +267,30 @@ void lifterClass::branchHelper(Value* condition, const string& instname,
   // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
   // "\n";
 }
+
+void lifterClass::lift_bextr() {
+  auto src2 = operands[2];
+  auto src1 = operands[1];
+  auto dst = operands[0];
+  auto info = GetOperandValue(src2, src2.size);
+  auto source = GetOperandValue(src1, src1.size);
+
+  auto start = createTruncFolder(info, Type::getInt8Ty(fnc->getContext()));
+
+  auto len = createTruncFolder(
+      createLShrFolder(info, ConstantInt::get(info->getType(), 8)),
+      Type::getInt8Ty(fnc->getContext()));
+
+  Value* bitmask = createAShrFolder(
+      createShlFolder(ConstantInt::get(len->getType(), 1), len), len);
+  auto source2 =
+      createAndFolder(source, createZExtFolder(bitmask, source->getType()));
+
+  SetOperandValue(dst, source2);
+  setFlag(FLAG_ZF, createICMPFolder(CmpInst::ICMP_EQ, source2,
+                                    ConstantInt::get(source->getType(), 0)));
+}
+
 void lifterClass::lift_movs_X() {
   LLVMContext& context = builder.getContext();
   // Get the size based on the operand
@@ -1847,6 +1871,42 @@ void lifterClass::lift_xchg() {
   SetOperandValue(src, Lvalue);
 }
 
+void lifterClass::lift_popcnt() {
+  auto dest = operands[0]; // count
+  auto src = operands[1];  // src
+
+  auto zero = builder.getIntN(dest.size, 0);
+  auto one = builder.getIntN(dest.size, 1);
+
+  auto destsize = builder.getIntN(dest.size, dest.size + 1);
+
+  auto srcV = GetOperandValue(src, src.size);
+  printvalue(srcV); // if src is 0, count 0
+
+  // create intrinsic for popct
+  auto popcnt = Intrinsic::getDeclaration(builder.GetInsertBlock()->getModule(),
+                                          Intrinsic::ctpop, srcV->getType());
+  auto popcntV = builder.CreateCall(popcnt, {srcV});
+  auto destV = simplifyValue(
+      popcntV,
+      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+  printvalue(destV);
+
+  setFlag(FLAG_OF, builder.getInt1(0));
+
+  setFlag(FLAG_SF, builder.getInt1(0));
+
+  setFlag(FLAG_ZF, computeZeroFlag(destV));
+
+  setFlag(FLAG_AF, builder.getInt1(0));
+
+  setFlag(FLAG_CF, builder.getInt1(0));
+
+  setFlag(FLAG_PF, builder.getInt1(0));
+
+  SetOperandValue(dest, destV);
+}
+
 void lifterClass::lift_shld() {
   LLVMContext& context = builder.getContext();
   auto dest = operands[0];
@@ -2520,6 +2580,28 @@ void lifterClass::lift_and() {
   SetOperandValue(dest, result, "and" + to_string(blockInfo.runtime_address));
 }
 
+void lifterClass::lift_andn() {
+  LLVMContext& context = builder.getContext();
+  auto dest = operands[0];
+  auto src = operands[1];
+  auto Rvalue = GetOperandValue(src, dest.size);
+  auto Lvalue = GetOperandValue(dest, dest.size);
+
+  auto result =
+      createAndFolder(createNotFolder(Lvalue), Rvalue,
+                      "realand-" + to_string(blockInfo.runtime_address) + "-");
+
+  auto sf = computeSignFlag(result);
+  auto zf = computeZeroFlag(result);
+  // auto pf = computeParityFlag(result);
+
+  // The OF and CF flags are cleared; the SF, ZF, and PF flags are set
+  // according to the result. The state of the AF flag is undefined.
+  setFlag(FLAG_SF, sf);
+  setFlag(FLAG_ZF, zf);
+
+  // setFlag(FLAG_PF, [this, result]() { return computeParityFlag(result); });
+
   setFlag(FLAG_OF, ConstantInt::getSigned(Type::getInt1Ty(context), 0));
   setFlag(FLAG_CF, ConstantInt::getSigned(Type::getInt1Ty(context), 0));
 
@@ -3104,6 +3186,52 @@ void lifterClass::lift_cpuid() {
   SetOperandValue(operands[3], edx);
 }
 
+uint64_t alternative_pext(uint64_t source, uint64_t mask) {
+  uint64_t result = 0;
+  int bit_position = 0;
+  for (uint64_t i = 0; i < 64; ++i) {
+    if (mask & (1ULL << i)) {
+      if (source & (1ULL << i)) {
+        result |= (1ULL << bit_position);
+      }
+      ++bit_position;
+    }
+  }
+  return result;
+}
+
+void lifterClass::lift_pext() {
+  const auto dest = operands[0];
+  const auto src1 = operands[1];
+  const auto src2 = operands[2];
+
+  const auto src1v = GetOperandValue(operands[1], operands[1].size);
+  const auto src2v = GetOperandValue(operands[2], operands[2].size);
+  if (isa<ConstantInt>(src1v) && isa<ConstantInt>(src2v)) {
+    const auto src1_c = cast<ConstantInt>(src1v);
+    const auto src2_c = cast<ConstantInt>(src2v);
+    const auto res =
+        alternative_pext(src1_c->getZExtValue(), src2_c->getZExtValue());
+    printvalue(src1_c);
+    printvalue(src2_c);
+    printvalue2(res);
+    SetOperandValue(dest, ConstantInt::get(src1v->getType(), res));
+  } else {
+    Function* fakyu = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("pext",
+                                  Type::getIntNTy(fnc->getContext(), dest.size))
+            .getCallee());
+    auto rs = builder.CreateCall(fakyu, {src1v, src2v});
+    SetOperandValue(
+        dest,
+        createAndFolder(
+            rs, ConstantInt::get(rs->getType(),
+                                 rs->getType()->getIntegerBitWidth() * 2 - 1)));
+    // UNREACHABLE("lazy mf");
+  }
+}
+
 void lifterClass::lift_setnz() {
   LLVMContext& context = builder.getContext();
 
@@ -3419,7 +3547,48 @@ void lifterClass::lift_btr() {
   printvalue(mask);
 }
 
+void lifterClass::lift_lzcnt() {
+  // check
+  auto dest = operands[0];
+  auto src = operands[1];
+
+  Value* Rvalue = GetOperandValue(src, src.size);
+  Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
+                                   ConstantInt::get(Rvalue->getType(), 0));
+  Value* isOperandSize = createICMPFolder(
+      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), dest.size));
+  setFlag(FLAG_ZF, isZero);
+  setFlag(FLAG_CF, isOperandSize);
+
+  unsigned bitWidth = Rvalue->getType()->getIntegerBitWidth();
+
+  Value* index = ConstantInt::get(Rvalue->getType(), bitWidth - 1);
+  Value* zeroVal = ConstantInt::get(Rvalue->getType(), 0);
+  Value* oneVal = ConstantInt::get(Rvalue->getType(), 1);
+
+  Value* bitPosition = ConstantInt::get(Rvalue->getType(), -1);
+
+  for (unsigned i = 0; i < bitWidth; ++i) {
+
+    Value* mask = createShlFolder(oneVal, index);
+
+    Value* test = createAndFolder(Rvalue, mask, "bsrtest");
+    Value* isBitSet = createICMPFolder(CmpInst::ICMP_NE, test, zeroVal);
+
+    Value* tmpPosition = createSelectFolder(isBitSet, index, bitPosition);
+
+    Value* isPositionUnset = createICMPFolder(
+        CmpInst::ICMP_EQ, bitPosition, ConstantInt::get(Rvalue->getType(), -1));
+    bitPosition = createSelectFolder(isPositionUnset, tmpPosition, bitPosition);
+
+    index = createSubFolder(index, oneVal);
+  }
+
+  SetOperandValue(dest, bitPosition);
+}
+
 void lifterClass::lift_bsr() {
+  // check
   auto dest = operands[0];
   auto src = operands[1];
 
@@ -3455,7 +3624,40 @@ void lifterClass::lift_bsr() {
   SetOperandValue(dest, bitPosition);
 }
 
+void lifterClass::lift_blsr() {
+  auto tmp = operands[0];
+  auto src = operands[1];
+
+  Value* source = GetOperandValue(src, src.size);
+  auto one = ConstantInt::get(source->getType(), 1);
+  auto temp = createAndFolder(createSubFolder(source, one), source);
+
+  SetOperandValue(tmp, temp);
+  setFlag(FLAG_ZF, computeZeroFlag(temp));
+  setFlag(FLAG_SF, computeSignFlag(temp));
+}
+
+void lifterClass::lift_bzhi() {
+  auto dst = operands[0];
+  auto src = operands[1];
+  auto src2 = operands[2];
+
+  Value* source = GetOperandValue(src, src.size);
+  Value* source2 = GetOperandValue(src, 8);
+  auto one = ConstantInt::get(source2->getType(), 1);
+  auto bitmask = createAShrFolder(createShlFolder(one, source2), source2);
+  auto result = createAndFolder(source, bitmask);
+  SetOperandValue(dst, result);
+  setFlag(FLAG_ZF, computeZeroFlag(result));
+  setFlag(FLAG_SF, computeSignFlag(result));
+  setFlag(FLAG_OF, ConstantInt::get(source->getType(), 0));
+  auto CF = createICMPFolder(CmpInst::ICMP_SGE, source2,
+                             ConstantInt::get(source->getType(), dst.size - 1));
+  setFlag(FLAG_CF, CF);
+}
+
 void lifterClass::lift_bsf() {
+  // TODOs
   LLVMContext& context = builder.getContext();
   auto dest = operands[0];
   auto src = operands[1];
@@ -3465,6 +3667,50 @@ void lifterClass::lift_bsf() {
   Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
                                    ConstantInt::get(Rvalue->getType(), 0));
   setFlag(FLAG_ZF, isZero);
+
+  Type* intType = Rvalue->getType();
+  uint64_t intWidth = intType->getIntegerBitWidth();
+
+  Value* result = ConstantInt::get(intType, intWidth);
+  Value* one = ConstantInt::get(intType, 1);
+
+  Value* continuecounting = ConstantInt::get(Type::getInt1Ty(context), 1);
+  for (uint64_t i = 0; i < intWidth; ++i) {
+    Value* bitMask =
+        createShlFolder(one, ConstantInt::get(intType, i));        // a = v >> i
+    Value* bitSet = createAndFolder(Rvalue, bitMask, "bsfbitset"); // b = a & 1
+    Value* isBitZero = createICMPFolder(
+        CmpInst::ICMP_EQ, bitSet, ConstantInt::get(intType, 0)); // c = b == 0
+    // continue until isBitZero is 1
+    // 0010
+    // if continuecounting, select
+    Value* possibleResult = ConstantInt::get(intType, i);
+    Value* condition = createAndFolder(continuecounting, isBitZero,
+                                       "bsfcondition"); // cond = cc, c, 0
+    continuecounting = createNotFolder(isBitZero);      // cc = ~c
+    result = createSelectFolder(
+        condition, result, possibleResult,
+        "updateResultOnFirstNonZeroBit"); // cond ift res(64) , i
+  }
+
+  SetOperandValue(dest, result);
+}
+
+void lifterClass::lift_tzcnt() {
+  LLVMContext& context = builder.getContext();
+  auto dest = operands[0];
+  auto src = operands[1];
+
+  Value* Rvalue = GetOperandValue(src, src.size);
+
+  Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
+                                   ConstantInt::get(Rvalue->getType(), 0));
+  setFlag(FLAG_ZF, isZero);
+
+  Value* isEq2OperandSize = createICMPFolder(
+      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), src.size));
+
+  setFlag(FLAG_CF, isEq2OperandSize);
 
   Type* intType = Rvalue->getType();
   uint64_t intWidth = intType->getIntegerBitWidth();
@@ -3773,6 +4019,10 @@ void lifterClass::liftInstructionSemantics() {
     lift_movs_X();
     break;
   }
+  case ZYDIS_MNEMONIC_BEXTR: {
+    lift_bextr();
+    break;
+  }
     // cmov
   case ZYDIS_MNEMONIC_CMOVZ: {
     lift_cmovz();
@@ -3957,6 +4207,10 @@ void lifterClass::liftInstructionSemantics() {
     lift_shl();
     break;
   }
+  case ZYDIS_MNEMONIC_POPCNT: {
+    lift_popcnt();
+    break;
+  }
   case ZYDIS_MNEMONIC_SHLD: {
     lift_shld();
     break;
@@ -4040,6 +4294,10 @@ void lifterClass::liftInstructionSemantics() {
     lift_and();
     break;
   }
+  case ZYDIS_MNEMONIC_ANDN: {
+    lift_andn();
+    break;
+  }
   case ZYDIS_MNEMONIC_ROR: {
     lift_ror();
 
@@ -4083,6 +4341,10 @@ void lifterClass::liftInstructionSemantics() {
   }
   case ZYDIS_MNEMONIC_CPUID: {
     lift_cpuid();
+    break;
+  }
+  case ZYDIS_MNEMONIC_PEXT: {
+    lift_pext();
     break;
   }
 
@@ -4168,12 +4430,28 @@ void lifterClass::liftInstructionSemantics() {
     lift_btr();
     break;
   }
+  case ZYDIS_MNEMONIC_LZCNT: {
+    lift_lzcnt();
+    break;
+  }
   case ZYDIS_MNEMONIC_BSR: {
     lift_bsr();
     break;
   }
   case ZYDIS_MNEMONIC_BSF: {
     lift_bsf();
+    break;
+  }
+  case ZYDIS_MNEMONIC_BLSR: {
+    lift_blsr();
+    break;
+  }
+  case ZYDIS_MNEMONIC_BZHI: {
+    lift_bzhi();
+    break;
+  }
+  case ZYDIS_MNEMONIC_TZCNT: {
+    lift_tzcnt();
     break;
   }
   case ZYDIS_MNEMONIC_BTC: {
