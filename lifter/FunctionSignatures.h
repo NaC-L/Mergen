@@ -1,7 +1,9 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
-#include "includes.h"
+#include <Zydis/Register.h>
+#include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // 8 << (arg.argtype.size - 1)
