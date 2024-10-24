@@ -1271,6 +1271,11 @@ Value* lifterClass::GetRFLAGSValue() {
 
 Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
 
+  if (key == ZYDIS_REGISTER_RIP) {
+    return ConstantInt::getSigned(Type::getInt64Ty(builder.getContext()),
+                                  blockInfo.runtime_address);
+  }
+
   if (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
       key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH) {
     return GetValueFromHighByteRegister(key);

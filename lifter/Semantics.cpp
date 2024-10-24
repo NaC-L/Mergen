@@ -4217,6 +4217,7 @@ void lifterClass::liftInstructionSemantics() {
 void lifterClass::liftInstruction() {
   LLVMContext& context = builder.getContext();
   // RIP gets updated before execution of the instruction->
+  /*
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     blockInfo.runtime_address);
   SetRegisterValue(ZYDIS_REGISTER_RIP, val);
