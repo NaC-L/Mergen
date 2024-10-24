@@ -1,12 +1,15 @@
 #pragma once
 #include "includes.h"
+#include <llvm/IR/Dominators.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Instruction.h>
+#include <llvm/IR/Value.h>
 
-Value* simplifyValue(Value* v, const DataLayout& DL);
 
-Value* getMemory();
+llvm::Value* simplifyValue(llvm::Value* v, const llvm::DataLayout& DL);
 
-ReverseRegisterMap flipRegisterMap();
+llvm::Value* getMemory();
 
-Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress);
 
-bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT);
+bool comesBefore(llvm::Instruction* a, llvm::Instruction* b,
+                 llvm::DominatorTree& DT);

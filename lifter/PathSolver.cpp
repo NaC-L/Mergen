@@ -2,6 +2,8 @@
 #include "OperandUtils.h"
 #include "includes.h"
 #include "lifterClass.h"
+#include "utils.h"
+#include <iostream>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -58,11 +60,11 @@ void final_optpass(Function* clonedFuncx) {
 
   llvm::Module* module = clonedFuncx->getParent();
 
-  bool changed;
+  bool changed = 0;
   do {
     changed = false;
 
-    size_t beforeSize = module->getInstructionCount();
+    const size_t beforeSize = module->getInstructionCount();
 
     modulePassManager =
         passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O1);
@@ -73,12 +75,9 @@ void final_optpass(Function* clonedFuncx) {
 
     modulePassManager.run(*module, moduleAnalysisManager);
 
-    size_t afterSize = module->getInstructionCount();
+    const size_t afterSize = module->getInstructionCount();
 
-    if (beforeSize != afterSize) {
-
-      changed = true;
-    }
+    changed = beforeSize != afterSize;
 
   } while (changed);
 
@@ -111,8 +110,8 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
   if (PATH_info solved = getConstraintVal(function, simplifyValue, dest)) {
     if (solved == PATH_solved) {
       run = 0;
-      outs() << "Solved the constraint and moving to next path\n";
-      outs().flush();
+      std::cout << "Solved the constraint and moving to next path\n"
+                << std::flush;
       auto bb_solved =
           BasicBlock::Create(function->getContext(), "bb_constraint",
                              builder.GetInsertBlock()->getParent());
@@ -128,9 +127,6 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
   run = 0;
   auto pvset = computePossibleValues(simplifyValue);
   vector<APInt> pv(pvset.begin(), pvset.end());
-  for (auto vv : pv) {
-    printvalue2(vv);
-  }
   if (pv.size() == 1) {
     printvalue2(pv[0]);
     auto bb_solved = BasicBlock::Create(function->getContext(), "bb_false",
@@ -174,6 +170,8 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
 
     RegisterBranch(BR);
 
+    printvalue2(firstcase);
+    printvalue2(secondcase);
     blockInfo = BBInfo(secondcase.getZExtValue(), bb_true);
     // for [this], we can assume condition is true
     // we can simplify any value tied to is dependent on condition,
@@ -183,6 +181,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
 
     // for [newlifter], we can assume condition is false
     newlifter->blockInfo = BBInfo(firstcase.getZExtValue(), bb_false);
+    printvalue(condition);
     newlifter->assumptions[cast<Instruction>(condition)] = 1;
 
     assumptions[cast<Instruction>(condition)] = 0;
@@ -195,8 +194,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
       raw_fd_ostream OS(Filename, EC);
       function->getParent()->print(OS, nullptr);
     });
-    outs() << "created a new path\n";
-    outs().flush();
+    std::cout << "created a new path\n" << std::flush;
   }
   if (pv.size() > 2) {
     UNREACHABLE("cant reach more than 2 paths!");
