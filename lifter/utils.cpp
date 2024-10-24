@@ -76,32 +76,60 @@ namespace FileHelper {
   }
 
 } // namespace FileHelper
+
 namespace debugging {
   int ic = 1;
   int increaseInstCounter() { return ++ic; }
   bool shouldDebug = false;
-  void enableDebug() {
-    shouldDebug = 1;
-    cout << "Debugging enabled\n";
+  llvm::raw_ostream* debugStream = nullptr;
+  std::unique_ptr<llvm::raw_fd_ostream> fileStream;
+
+  void enableDebug(const std::string& filename = "") {
+    shouldDebug = true;
+    if (!filename.empty()) {
+      std::error_code EC;
+      fileStream = std::make_unique<llvm::raw_fd_ostream>(filename, EC);
+      if (EC) {
+        llvm::errs() << "Error opening debug file: " << EC.message() << "\n";
+        fileStream.reset();
+        debugStream = &llvm::errs();
+        shouldDebug = false;
+        return;
+      }
+      debugStream = fileStream.get();
+    } else {
+      debugStream = &llvm::outs();
+    }
+    llvm::outs() << "Debugging enabled\n";
   }
+
   void printLLVMValue(llvm::Value* v, const char* name) {
-    if (!shouldDebug)
+    if (!shouldDebug || !debugStream)
       return;
-    outs() << " " << name << " : ";
-    v->print(outs());
-    outs() << "\n";
-    outs().flush();
+    *debugStream << " " << name << " : ";
+    v->print(*debugStream);
+    *debugStream << "\n";
+    debugStream->flush();
   }
+
+  // Other functions remain the same, but use debugStream instead of
+  // llvm::outs() For example:
+  template <typename T> void printValue(const T& v, const char* name) {
+    if (!shouldDebug || !debugStream)
+      return;
+    if constexpr (std::is_same_v<T, uint8_t> || std::is_same_v<T, int8_t>) {
+      *debugStream << " " << name << " : " << static_cast<int>(v) << "\n";
+      debugStream->flush();
+      return;
+    } else
+      *debugStream << " " << name << " : " << v << "\n";
+    debugStream->flush();
+  }
+
   void doIfDebug(const std::function<void(void)>& dothis) {
     if (!shouldDebug)
       return;
     (dothis)();
-  }
-  template <typename T> void printValue(const T& v, const char* name) {
-    if (!shouldDebug)
-      return;
-    outs() << " " << name << " : " << v << "\n";
-    outs().flush();
   }
 
   template void printValue<uint64_t>(const uint64_t& v, const char* name);
@@ -137,8 +165,8 @@ namespace argparser {
   }
 
   std::map<std::string, std::function<void()>> options = {
-      {"-d", debugging::enableDebug},
-      {"--enable-debug", debugging::enableDebug},
+      {"-d", []() { debugging::enableDebug("debug.txt"); }},
+      //
       {"-h", printHelp}};
 
   void parseArguments(std::vector<std::string>& args) {
