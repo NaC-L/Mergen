@@ -552,8 +552,7 @@ Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
   return inst;
 }
 
-KnownBits computeKnownBitsFromOperation(const KnownBits& vv1,
-                                        const KnownBits& vv2,
+KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
                                         Instruction::BinaryOps opcode) {
 
   if (opcode >= Instruction::Shl && opcode <= Instruction::AShr) {
@@ -1155,7 +1154,7 @@ void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
 // ??
 
-void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
+void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
 
   // rsp
   // rsp_unaligned = %rsp % 16
