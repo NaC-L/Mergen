@@ -404,7 +404,7 @@ inline bool isCast(uint8_t opcode) {
 };
 
 Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
-  auto it = cache.lookup(key);
+  auto it = cache.lookup(key.opcode, key);
   if (it) {
     return it;
   }
@@ -536,7 +536,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
     }
   }
 
-  cache.insert(key, newInstruction);
+  cache.insert(key.opcode, key, newInstruction);
   return newInstruction;
 }
 

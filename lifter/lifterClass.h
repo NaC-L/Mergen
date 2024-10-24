@@ -59,15 +59,18 @@ class InstructionCache {
 public:
   InstructionCache() {}
 
-  void insert(const InstructionKey& key, Value* value) {
+  void insert(uint8_t opcode, const InstructionKey& key, Value* value) {
     // Insert the key-value pair into the cache for the given opcode
-    opcodeCaches[key] = value;
+    opcodeCaches[opcode].insert({key, value});
   }
 
-  Value* lookup(const InstructionKey& key) const {
-    auto itOpcode = opcodeCaches.lookup(key);
-    if (itOpcode) {
-      return itOpcode;
+  Value* lookup(uint8_t opcode, const InstructionKey& key) const {
+    auto itOpcode = opcodeCaches.find(opcode);
+    if (itOpcode != opcodeCaches.end()) {
+      auto it = itOpcode->second.find(key);
+      if (it != itOpcode->second.end()) {
+        return it->second;
+      }
     }
     return nullptr; // Handle cache miss appropriately
   }
@@ -75,7 +78,8 @@ public:
 private:
   using CacheMap = llvm::DenseMap<InstructionKey, Value*,
                                   InstructionKey::InstructionKeyInfo>;
-  CacheMap opcodeCaches; // Dynamic allocation of CacheMaps
+  std::unordered_map<uint8_t, CacheMap>
+      opcodeCaches; // Dynamic allocation of CacheMaps
 };
 
 class RegisterManager {
