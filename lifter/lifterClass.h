@@ -9,42 +9,32 @@
 #define DEFINE_FUNCTION(name) void lift_##name()
 
 struct InstructionKey {
-  uint8_t opcode;
-  bool cast;
   Value* operand1;
   union {
     Value* operand2;
     Type* destType;
   };
 
-  InstructionKey() : opcode(0), cast(0), operand1(nullptr), operand2(nullptr){};
+  InstructionKey() : operand1(nullptr), operand2(nullptr){};
 
-  InstructionKey(uint8_t opcode, Value* operand1, Value* operand2)
-      : opcode(opcode), cast(0), operand1(operand1), operand2(operand2){};
+  InstructionKey(Value* operand1, Value* operand2)
+      : operand1(operand1), operand2(operand2){};
 
-  InstructionKey(uint8_t opcode, Value* operand1, Type* destType)
-      : opcode(opcode), cast(1), operand1(operand1), destType(destType){};
+  InstructionKey(Value* operand1, Type* destType)
+      : operand1(operand1), destType(destType){};
 
   bool operator==(const InstructionKey& other) const {
-    if (cast != other.cast)
+    if (operand1 != other.operand1)
       return false;
-    if (cast) {
-      return opcode == other.opcode && operand1 == other.operand1 &&
-             destType == other.destType;
-    } else {
-      return opcode == other.opcode && operand1 == other.operand1 &&
-             operand2 == other.operand2;
-    }
+    return operand2 == other.operand2;
   }
   struct InstructionKeyInfo {
     // Custom hash function
     static inline unsigned getHashValue(const InstructionKey& key) {
 
-      auto h1 = llvm::hash_value(key.opcode);
       auto h2 = llvm::hash_value(key.operand1);
-      auto h3 = key.cast ? llvm::hash_value(key.destType)
-                         : llvm::hash_value(key.operand2);
-      return llvm::hash_combine(h1, h2, h3);
+      auto h3 = llvm::hash_value(key.destType);
+      return llvm::hash_combine(h2, h3);
     }
 
     // Equality function
@@ -55,13 +45,46 @@ struct InstructionKey {
 
     // Define empty and tombstone keys
     static inline InstructionKey getEmptyKey() {
-      return InstructionKey(0, nullptr, static_cast<Value*>(nullptr));
+      return InstructionKey(nullptr, static_cast<Value*>(nullptr));
     }
 
     static inline InstructionKey getTombstoneKey() {
-      return InstructionKey(255, nullptr, static_cast<Value*>(nullptr));
+      return InstructionKey(nullptr, cast<Value*>(-1));
     }
   };
+};
+
+class InstructionCache {
+public:
+  InstructionCache() {}
+
+  void insert(uint8_t opcode, const InstructionKey& key, Value* value) {
+    // Insert the key-value pair into the cache for the given opcode
+    opcodeCaches[opcode].insert({key, value});
+  }
+
+  Value* lookup(uint8_t opcode, const InstructionKey& key) const {
+    auto itOpcode = opcodeCaches.find(opcode);
+    if (itOpcode != opcodeCaches.end()) {
+      auto it = itOpcode->second.find(key);
+      if (it != itOpcode->second.end()) {
+        return it->second;
+      }
+    }
+    return nullptr; // Handle cache miss appropriately
+  }
+
+private:
+  using CacheMap = llvm::DenseMap<InstructionKey, Value*,
+                                  InstructionKey::InstructionKeyInfo>;
+  std::unordered_map<uint8_t, CacheMap>
+      opcodeCaches; // Dynamic allocation of CacheMaps
+};
+
+class floatingPointValue {
+public:
+  Value* v1;
+  Value* v2;
 };
 
 class RegisterManager {
@@ -87,25 +110,30 @@ public:
     RFLAGS_,
     REGISTER_COUNT // Total number of registers
   };
-  llvm::SmallVector<Value*, REGISTER_COUNT> vec;
+  std::array<Value*, REGISTER_COUNT> vec;
 
-  RegisterManager() { vec.resize(REGISTER_COUNT); }
+  RegisterManager() {}
   RegisterManager(const RegisterManager& other) : vec(other.vec) {}
 
   // Overload the [] operator for getting register values
 
   int getRegisterIndex(const ZydisRegister key) const {
 
-    if (key == ZYDIS_REGISTER_RIP) {
+    switch (key) {
+    case ZYDIS_REGISTER_RIP: {
       return RIP_;
     }
-
-    if (key == ZYDIS_REGISTER_RFLAGS) {
+    case ZYDIS_REGISTER_RFLAGS: {
       return RFLAGS_;
     }
+    default: {
+      // For ordered registers RAX to R15, map directly by offset from RAX
+      assert(key >= ZYDIS_REGISTER_RAX && key <= ZYDIS_REGISTER_R15 &&
+             "Key must be between RAX and R15");
 
-    // For ordered registers RAX to R15, map directly by offset from RAX
-    return key - ZYDIS_REGISTER_RAX;
+      return key - ZYDIS_REGISTER_RAX;
+    }
+    }
   }
 
   llvm::Value*& operator[](ZydisRegister key) {
@@ -169,10 +197,12 @@ public:
 
   ZydisDecodedInstruction instruction;
   ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-  DenseMap<Instruction*, APInt> assumptions;
-  DenseMap<uint64_t, ValueByteReference> buffer;
+  llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
+  llvm::DenseMap<uint64_t, ValueByteReference> buffer;
+  using flagManager = std::array<LazyFlag, FLAGS_END>;
+  // llvm::DenseMap<Value*, flagManager> flagbuffer;
 
-  llvm::SmallVector<LazyFlag, FLAGS_END> FlagList;
+  flagManager FlagList;
   RegisterManager Registers;
 
   DomConditionCache* DC = new DomConditionCache();
@@ -184,10 +214,52 @@ public:
   BasicBlock* lastBB = nullptr;
   unsigned int BIlistsize = 0;
 
-  map<int64_t, int64_t> pageMap;
-  vector<BranchInst*> BIlist;
-  DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo> cache;
-  vector<Instruction*> memInfos;
+  std::map<int64_t, int64_t> pageMap;
+  std::vector<llvm::BranchInst*> BIlist;
+  // DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>
+  // cache;
+  InstructionCache cache;
+  struct GEPinfo {
+    Value* addr;
+    uint8_t type;
+    bool TEB;
+
+    GEPinfo() : addr(nullptr), type(0), TEB(0){};
+
+    GEPinfo(Value* addr, uint8_t type, bool TEB)
+        : addr(addr), type(type), TEB(TEB){};
+
+    bool operator==(const GEPinfo& other) const {
+      if (addr != other.addr)
+        return false;
+      if (type != other.type)
+        return false;
+      return TEB == other.TEB;
+    }
+
+    struct GEPinfoKeyInfo {
+      // Custom hash function
+      static inline unsigned getHashValue(const GEPinfo& key) {
+        auto h2 = llvm::hash_value(key.addr);
+        auto h3 = llvm::hash_value(key.type + key.TEB);
+        return llvm::hash_combine(h2, h3);
+      }
+
+      // Equality function
+      static inline bool isEqual(const GEPinfo& lhs, const GEPinfo& rhs) {
+        return lhs == rhs;
+      }
+
+      // Define empty and tombstone keys
+      static inline GEPinfo getEmptyKey() { return GEPinfo(nullptr, 0, 0); }
+
+      static inline GEPinfo getTombstoneKey() {
+        return GEPinfo(nullptr, -1, -1);
+      }
+    };
+  };
+  DenseMap<GEPinfo, Value*, GEPinfo::GEPinfoKeyInfo> GEPcache;
+  std::vector<llvm::Instruction*> memInfos;
 
   // global
   Value* memory;
@@ -350,6 +422,9 @@ public:
   Value* createSelectFolder(Value* C, Value* True, Value* False,
                             const Twine& Name = "");
 
+  Value* createGEPFolder(Type* Type, Value* Address, Value* Base,
+                         const Twine& Name = "");
+
   Value* createAddFolder(Value* LHS, Value* RHS, const Twine& Name = "");
 
   Value* createSubFolder(Value* LHS, Value* RHS, const Twine& Name = "");
@@ -401,7 +476,8 @@ public:
   Value* createInstruction(const unsigned opcode, Value* operand1,
                            Value* operand2, Type* destType, const Twine& Name);
 
-  Value* getOrCreate(const InstructionKey& key, const Twine& Name);
+  Value* getOrCreate(const InstructionKey& key, uint8_t opcode,
+                     const Twine& Name);
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
                            Value* const op1);
 

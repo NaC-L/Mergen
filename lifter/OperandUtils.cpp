@@ -399,19 +399,20 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
   return v;
 }
 
-Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
-  auto it = cache.find(key);
-  if (it != cache.end()) {
-    return it->second;
+inline bool isCast(uint8_t opcode) {
+  return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
+};
+
+Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
+                                const Twine& Name) {
+  auto it = cache.lookup(opcode, key);
+  if (it) {
+    return it;
   }
 
   Value* newInstruction = nullptr;
 
-  if (key.cast == 0) {
-    printvalue2(key.opcode);
-    printvalue2(key.cast);
-    printvalue(key.operand1);
-    printvalue(key.operand2);
+  if (isCast(opcode) == 0) {
     // Binary instruction
     if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
       printvalue2(
@@ -419,9 +420,9 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
       if (isa<ConstantInt>(key.operand2))
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                 select_inst->getTrueValue(), key.operand2),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                 select_inst->getFalseValue(), key.operand2),
             "lola-");
     }
@@ -432,9 +433,9 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
       if (isa<ConstantInt>(key.operand1))
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                 key.operand1, select_inst->getTrueValue()),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                 key.operand1, select_inst->getFalseValue()),
             "lolb-");
     }
@@ -446,12 +447,10 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
                                                                 // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1,
-                  select_inst->getTrueValue()),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1,
-                  select_inst->getFalseValue()),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  lhs1, select_inst->getTrueValue()),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  rhs1, select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -463,12 +462,10 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
                                                                 // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1,
-                  select_inst->getTrueValue()),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1,
-                  select_inst->getFalseValue()),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  lhs1, select_inst->getTrueValue()),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  rhs1, select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -480,12 +477,10 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
                                                                // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  select_inst->getTrueValue(), lhs),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  select_inst->getFalseValue(), rhs),
               "lol2-");
     } else if (match(key.operand2,
                      m_ZExtOrSExtOrSelf(
@@ -495,20 +490,18 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
                                                                // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  select_inst->getTrueValue(), lhs),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  select_inst->getFalseValue(), rhs),
               "lol2-");
     }
     newInstruction =
-        builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+        builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                             key.operand1, key.operand2, Name);
-  } else if (key.cast) {
+  } else if (isCast(opcode)) {
     // Cast instruction
-    switch (key.opcode) {
+    switch (opcode) {
 
     case Instruction::Trunc:
     case Instruction::ZExt:
@@ -517,15 +510,15 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
       if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                                select_inst->getTrueValue(), key.destType),
-            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                                select_inst->getFalseValue(), key.destType),
             "lol-");
       }
 
       newInstruction =
-          builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+          builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                              key.operand1, key.destType);
       break;
     // Add other cast operations as needed
@@ -534,7 +527,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
     }
   }
 
-  cache[key] = newInstruction;
+  cache.insert(opcode, key, newInstruction);
   return newInstruction;
 }
 
@@ -544,11 +537,11 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
 
   InstructionKey key;
   if (destType)
-    key = InstructionKey(opcode, operand1, destType);
+    key = InstructionKey(operand1, destType);
   else
-    key = InstructionKey(opcode, operand1, operand2);
+    key = InstructionKey(operand1, operand2);
 
-  Value* newValue = getOrCreate(key, Name);
+  Value* newValue = getOrCreate(key, opcode, Name);
 
   return simplifyValue(
       newValue,
@@ -855,11 +848,10 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   }
   }
   // this part analyses if we can simplify the instruction
-  if (auto simplifiedByPM = doPatternMatching(opcode, LHS, RHS)) {
-    return simplifiedByPM;
-  }
-
-  auto inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
+  Value* inst;
+  inst = doPatternMatching(opcode, LHS, RHS);
+  if (!inst)
+    inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
 
   // knownbits is recursive, and goes back 5 instructions, ideally it would be
   // not recursive and store the info for all values
@@ -1122,7 +1114,6 @@ void lifterClass::Init_Flags() {
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
   auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
 
-  FlagList.resize(FLAGS_END);
   FlagList[FLAG_CF].set(zero);
   FlagList[FLAG_PF].set(zero);
   FlagList[FLAG_AF].set(zero);
