@@ -178,6 +178,7 @@ public:
     value = newValue;
     calculation = nullptr; // Disable lazy evaluation when setting directly
   }
+  void setCalculation(const std::function<llvm::Value*()> calc) {
     calculation = calc;
     value = std::nullopt; // Reset the stored value
   }
@@ -185,6 +186,7 @@ public:
 
 class lifterClass {
 public:
+  llvm::IRBuilder<>& builder;
   BBInfo blockInfo;
 
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
@@ -212,9 +214,10 @@ public:
   llvm::BasicBlock* lastBB = nullptr;
   unsigned int BIlistsize = 0;
 
-  map<int64_t, int64_t> pageMap;
-  vector<BranchInst*> BIlist;
-  vector<Instruction*> memInfos;
+  std::map<int64_t, int64_t> pageMap;
+  std::vector<llvm::BranchInst*> BIlist;
+  // DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>
+  // cache;
   InstructionCache cache;
   struct GEPinfo {
     Value* addr;
@@ -402,16 +405,13 @@ public:
     return address >= it->first && address < it->second;
   }
 
-  void updateMemoryOp(StoreInst* inst);
-
-  void updateValueReference(Instruction* inst, Value* value,
-                            const uint64_t address);
+  set<APInt, APIntComparator> getPossibleValues(const llvm::KnownBits& known,
+                                                unsigned max_unknown);
 
   Value* retrieveCombinedValue(const uint64_t startAddress,
                                const uint8_t byteCount, Value* orgLoad);
 
-  void addValueReference(Instruction* inst, Value* value,
-                         const uint64_t address);
+  void addValueReference(Value* value, const uint64_t address);
 
   isPaged isValuePaged(Value* address, Instruction* ctxI);
 

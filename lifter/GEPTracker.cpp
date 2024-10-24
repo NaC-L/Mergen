@@ -68,14 +68,13 @@ namespace BinaryOperations {
 
 }; // namespace BinaryOperations
 
-void lifterClass::addValueReference(Instruction* inst, Value* value,
-                                    uint64_t address) {
+void lifterClass::addValueReference(Value* value, uint64_t address) {
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
     BinaryOperations::WriteTo(address + i);
     printvalue2(address + i);
-    buffer[address + i] = ValueByteReference(inst, value, i);
+    buffer[address + i] = ValueByteReference(value, i);
     printvalue(value);
     printvalue2((uint64_t)address + i);
   }
@@ -313,7 +312,7 @@ void lifterClass::insertMemoryOp(StoreInst* inst) {
 
   auto gepOffsetCI = cast<ConstantInt>(gepOffset);
 
-  addValueReference(inst, inst->getValueOperand(), gepOffsetCI->getZExtValue());
+  addValueReference(inst->getValueOperand(), gepOffsetCI->getZExtValue());
   BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
 }
 
@@ -386,9 +385,18 @@ void removeDuplicateOffsets(vector<Instruction*>& vec) {
   vec.assign(uniqueInstructions.rbegin(), uniqueInstructions.rend());
 }
 
-set<APInt, APIntComparator> getPossibleValues(const llvm::KnownBits& known,
-                                              unsigned max_unknown) {
-  if (max_unknown >= 16) {
+set<APInt, APIntComparator>
+lifterClass::getPossibleValues(const llvm::KnownBits& known,
+                               unsigned max_unknown) {
+
+  if (max_unknown >= 4) {
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_too_many_unk.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+    });
+    printvalueforce2(max_unknown);
     UNREACHABLE("There is a very huge chance that this shouldnt happen");
   }
   llvm::APInt base = known.One;
