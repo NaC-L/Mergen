@@ -874,8 +874,7 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
 }
 Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
                                     const Twine& Name) {
-  GEPinfo key = {Address, cast<uint8_t>(Type->getScalarSizeInBits()),
-                 Base == TEB};
+  GEPinfo key(Address, Type->getScalarSizeInBits(), Base == TEB);
   auto it = GEPcache.lookup(key);
   if (it) {
     return it;
