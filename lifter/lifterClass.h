@@ -49,7 +49,7 @@ struct InstructionKey {
     }
 
     static inline InstructionKey getTombstoneKey() {
-      return InstructionKey(nullptr, static_cast<Value*>(nullptr));
+      return InstructionKey(nullptr, static_cast<Value*>(-1));
     }
   };
 };
