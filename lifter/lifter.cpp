@@ -8,6 +8,9 @@
 #include "nt/nt_headers.hpp"
 #include "utils.h"
 #include <fstream>
+#include <iostream>
+#include <llvm/IR/IRBuilderFolder.h>
+#include <llvm/Support/NativeFormatting.h>
 
 vector<lifterClass*> lifters;
 uint64_t original_address = 0;

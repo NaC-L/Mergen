@@ -2,14 +2,23 @@
 #include "OperandUtils.h"
 #include "includes.h"
 #include "lifterClass.h"
+#include "nt/nt_headers.hpp"
+#include "utils.h"
+#include <iostream>
+#include <llvm/ADT/DenseSet.h>
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/AssumptionCache.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/ValueTracking.h>
+#include <llvm/Analysis/WithCache.h>
 #include <llvm/IR/ConstantRange.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/KnownBits.h>
+#include <llvm/TargetParser/Triple.h>
+#include <llvm/Transforms/Utils/SCCPSolver.h>
 
 namespace BinaryOperations {
 
@@ -35,7 +44,7 @@ namespace BinaryOperations {
     return readMemory(ntHeaders->optional_header.image_base + addr, 1, tmp);
   }
 
-  unordered_set<uint64_t> MemWrites;
+  DenseSet<uint64_t> MemWrites;
 
   bool isWrittenTo(uint64_t addr) {
     return MemWrites.find(addr) != MemWrites.end();
