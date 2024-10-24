@@ -403,7 +403,7 @@ inline bool isCast(uint8_t opcode) {
   return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
 };
 
-Value* lifterClass::getOrCreate(unsigned opcode, const InstructionKey& key,
+Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
                                 const Twine& Name) {
   auto it = cache.lookup(opcode, key);
   if (it) {
@@ -413,8 +413,6 @@ Value* lifterClass::getOrCreate(unsigned opcode, const InstructionKey& key,
   Value* newInstruction = nullptr;
 
   if (isCast(opcode) == 0) {
-    printvalue(key.operand1);
-    printvalue(key.operand2);
     // Binary instruction
     if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
       printvalue2(
@@ -501,7 +499,7 @@ Value* lifterClass::getOrCreate(unsigned opcode, const InstructionKey& key,
     newInstruction =
         builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                             key.operand1, key.operand2, Name);
-  } else {
+  } else if (isCast(opcode)) {
     // Cast instruction
     switch (opcode) {
 
@@ -543,7 +541,7 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
   else
     key = InstructionKey(operand1, operand2);
 
-  Value* newValue = getOrCreate(opcode, key, Name);
+  Value* newValue = getOrCreate(key, opcode, Name);
 
   return simplifyValue(
       newValue,

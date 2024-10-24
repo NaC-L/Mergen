@@ -24,7 +24,9 @@ struct InstructionKey {
       : operand1(operand1), destType(destType){};
 
   bool operator==(const InstructionKey& other) const {
-    return operand1 == other.operand1 && destType == other.destType;
+    if (operand1 != other.operand1)
+      return false;
+    return operand2 == other.operand2;
   }
   struct InstructionKeyInfo {
     // Custom hash function
@@ -416,7 +418,7 @@ public:
   Value* createInstruction(const unsigned opcode, Value* operand1,
                            Value* operand2, Type* destType, const Twine& Name);
 
-  Value* getOrCreate(unsigned opcode, const InstructionKey& key,
+  Value* getOrCreate(const InstructionKey& key, uint8_t opcode,
                      const Twine& Name);
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
                            Value* const op1);
