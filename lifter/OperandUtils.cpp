@@ -539,9 +539,9 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
 
   InstructionKey key;
   if (destType)
-    key = InstructionKey(opcode, operand1, destType);
+    key = InstructionKey(operand1, destType);
   else
-    key = InstructionKey(opcode, operand1, operand2);
+    key = InstructionKey(operand1, operand2);
 
   Value* newValue = getOrCreate(opcode, key, Name);
 

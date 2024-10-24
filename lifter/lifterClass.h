@@ -9,33 +9,30 @@
 #define DEFINE_FUNCTION(name) void lift_##name()
 
 struct InstructionKey {
-  uint8_t opcode;
   Value* operand1;
   union {
     Value* operand2;
     Type* destType;
   };
 
-  InstructionKey() : opcode(0), operand1(nullptr), operand2(nullptr){};
+  InstructionKey() : operand1(nullptr), operand2(nullptr){};
 
-  InstructionKey(uint8_t opcode, Value* operand1, Value* operand2)
-      : opcode(opcode), operand1(operand1), operand2(operand2){};
+  InstructionKey(Value* operand1, Value* operand2)
+      : operand1(operand1), operand2(operand2){};
 
-  InstructionKey(uint8_t opcode, Value* operand1, Type* destType)
-      : opcode(opcode), operand1(operand1), destType(destType){};
+  InstructionKey(Value* operand1, Type* destType)
+      : operand1(operand1), destType(destType){};
 
   bool operator==(const InstructionKey& other) const {
-    return opcode == other.opcode && operand1 == other.operand1 &&
-           destType == other.destType;
+    return operand1 == other.operand1 && destType == other.destType;
   }
   struct InstructionKeyInfo {
     // Custom hash function
     static inline unsigned getHashValue(const InstructionKey& key) {
 
-      auto h1 = llvm::hash_value(key.opcode);
       auto h2 = llvm::hash_value(key.operand1);
       auto h3 = llvm::hash_value(key.destType);
-      return llvm::hash_combine(h1, h2, h3);
+      return llvm::hash_combine(h2, h3);
     }
 
     // Equality function
@@ -46,11 +43,11 @@ struct InstructionKey {
 
     // Define empty and tombstone keys
     static inline InstructionKey getEmptyKey() {
-      return InstructionKey(0, nullptr, static_cast<Value*>(nullptr));
+      return InstructionKey(nullptr, static_cast<Value*>(nullptr));
     }
 
     static inline InstructionKey getTombstoneKey() {
-      return InstructionKey(255, nullptr, static_cast<Value*>(nullptr));
+      return InstructionKey(nullptr, static_cast<Value*>(nullptr));
     }
   };
 };
