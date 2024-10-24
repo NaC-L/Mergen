@@ -10,31 +10,23 @@
 
 struct InstructionKey {
   uint8_t opcode;
-  bool cast;
   Value* operand1;
   union {
     Value* operand2;
     Type* destType;
   };
 
-  InstructionKey() : opcode(0), cast(0), operand1(nullptr), operand2(nullptr){};
+  InstructionKey() : opcode(0), operand1(nullptr), operand2(nullptr){};
 
   InstructionKey(uint8_t opcode, Value* operand1, Value* operand2)
-      : opcode(opcode), cast(0), operand1(operand1), operand2(operand2){};
+      : opcode(opcode), operand1(operand1), operand2(operand2){};
 
   InstructionKey(uint8_t opcode, Value* operand1, Type* destType)
-      : opcode(opcode), cast(1), operand1(operand1), destType(destType){};
+      : opcode(opcode), operand1(operand1), destType(destType){};
 
   bool operator==(const InstructionKey& other) const {
-    if (cast != other.cast)
-      return false;
-    if (cast) {
-      return opcode == other.opcode && operand1 == other.operand1 &&
-             destType == other.destType;
-    } else {
-      return opcode == other.opcode && operand1 == other.operand1 &&
-             operand2 == other.operand2;
-    }
+    return opcode == other.opcode && operand1 == other.operand1 &&
+           destType == other.destType;
   }
   struct InstructionKeyInfo {
     // Custom hash function
@@ -42,8 +34,7 @@ struct InstructionKey {
 
       auto h1 = llvm::hash_value(key.opcode);
       auto h2 = llvm::hash_value(key.operand1);
-      auto h3 = key.cast ? llvm::hash_value(key.destType)
-                         : llvm::hash_value(key.operand2);
+      auto h3 = llvm::hash_value(key.destType);
       return llvm::hash_combine(h1, h2, h3);
     }
 

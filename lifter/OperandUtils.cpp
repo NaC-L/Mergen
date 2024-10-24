@@ -412,8 +412,6 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
   Value* newInstruction = nullptr;
 
   if (isCast(key.opcode) == 0) {
-    printvalue2(key.opcode);
-    printvalue2(key.cast);
     printvalue(key.operand1);
     printvalue(key.operand2);
     // Binary instruction
@@ -510,7 +508,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
     newInstruction =
         builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
                             key.operand1, key.operand2, Name);
-  } else if (key.cast) {
+  } else {
     // Cast instruction
     switch (key.opcode) {
 
