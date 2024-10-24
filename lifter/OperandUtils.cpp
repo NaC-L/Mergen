@@ -175,9 +175,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
       // if a is 0, select B
       // if a is -1, select C
       // then... ?
-      printvalue(A);
-      printvalue(B);
-      printvalue(C);
       if (auto X_inst = dyn_cast<Instruction>(A)) {
 
         auto possible_condition = analyzeValueKnownBits(X_inst, X_inst);
@@ -202,7 +199,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 
     if (isXAndNotX(op0, op1, X) || isXAndNotX(op1, op0, X)) {
       auto possibleSimplifyand = ConstantInt::get(op1->getType(), 0);
-      printvalue(possibleSimplifyand);
       return possibleSimplifyand;
     }
     // ~X & ~X
@@ -224,13 +220,11 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 
     if (isXorNotX(op0, op1, X) || isXorNotX(op1, op0, X)) {
       auto possibleSimplify = ConstantInt::get(op1->getType(), -1);
-      printvalue(possibleSimplify);
       return possibleSimplify;
     }
 
     if (match(op0, m_Specific(op1))) {
       auto possibleSimplify = ConstantInt::get(op1->getType(), 0);
-      printvalue(possibleSimplify);
       return possibleSimplify;
     }
 
@@ -256,7 +250,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleNotAOrB = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Not(m_Value(C))) && match(B, m_Constant(constant_v))) {
             // ~(~a | b) -> a & ~b
-            printvalue(C);
             return createAndNot(C, constant_v, "not-PConst-");
           }
           return nullptr;
@@ -265,7 +258,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleAOrBci = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Value(C)) && match(B, m_Constant(constant_v))) {
             // ~(a | b(ci)) -> ~a & ~b
-            printvalue(C);
             return createAndFolder(
 
                 createXorFolder(C, Constant::getAllOnesValue(C->getType()),
@@ -280,8 +272,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleNotAOrNotB = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Not(m_Value(C))) && match(B, m_Not(m_Value(D)))) {
             // ~(~a | ~b) -> a & b
-            printvalue(C);
-            printvalue(D);
             return createAndFolder(C, D, "not-P1-");
           }
           return nullptr;
@@ -636,8 +626,7 @@ KnownBits computeKnownBitsFromOperation(const KnownBits& vv1,
   }
 
   default:
-    outs() << "\n : " << opcode;
-    outs().flush();
+    std::cout << "\n : " << opcode;
     UNREACHABLE("Unsupported operation in calculatePossibleValues.\n");
     break;
   }
@@ -847,8 +836,6 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   // road
   auto LHSKB = analyzeValueKnownBits(LHS, dyn_cast<Instruction>(inst));
   auto RHSKB = analyzeValueKnownBits(RHS, dyn_cast<Instruction>(inst));
-  printvalue2(LHSKB);
-  printvalue2(RHSKB);
 
   auto computedBits = computeKnownBitsFromOperation(LHSKB, RHSKB, opcode);
   if (computedBits.isConstant() && !computedBits.hasConflict()) {
@@ -1530,7 +1517,6 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
           createAddFolder(effectiveAddress, dispValue, "memory_addr");
     }
     printvalue(effectiveAddress);
-
     Type* loadType = Type::getIntNTy(context, possiblesize);
 
     Value* memoryOperand = memoryAlloc;
@@ -1618,9 +1604,6 @@ Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
       effectiveAddress =
           createAddFolder(effectiveAddress, dispValue, "disp_set");
     }
-
-    std::vector<Value*> indices;
-    indices.push_back(effectiveAddress);
 
     auto memoryOperand = memoryAlloc;
     if (op.mem.segment == ZYDIS_REGISTER_GS)
