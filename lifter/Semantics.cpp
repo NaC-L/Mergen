@@ -98,8 +98,8 @@ vector<Value*> lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
 }
 
 // probably move this stuff somewhere else
-void lifterClass::callFunctionIR(const string& functionName,
-                                 funcsignatures::functioninfo* funcInfo) {
+Value* lifterClass::callFunctionIR(const string& functionName,
+                                   funcsignatures::functioninfo* funcInfo) {
   auto& context = builder.getContext();
 
   /*
