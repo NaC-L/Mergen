@@ -1173,12 +1173,7 @@ Value* lifterClass::getFlag(const Flag flag) {
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-// destroy these functions below
-RegisterManager& lifterClass::getRegisters() { return Registers; }
-void lifterClass::setRegisters(RegisterManager newRegisters) {
-  Registers = newRegisters;
-}
-
+// ??
 Value* memoryAlloc;
 Value* TEB;
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
