@@ -6,7 +6,9 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/DomConditionCache.h>
 
+#ifndef DEFINE_FUNCTION
 #define DEFINE_FUNCTION(name) void lift_##name()
+#endif
 
 struct InstructionKey {
   Value* operand1;
@@ -600,4 +602,6 @@ public:
   // end semantics definition
 };
 extern vector<lifterClass*> lifters;
+
+#undef DEFINE_FUNCTION
 #endif // LIFTERCLASS_H
