@@ -536,7 +536,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
     }
   }
 
-  cache[key] = newInstruction;
+  cache.insert(key, newInstruction);
   return newInstruction;
 }
 

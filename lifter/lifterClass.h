@@ -55,6 +55,29 @@ struct InstructionKey {
   };
 };
 
+class InstructionCache {
+public:
+  InstructionCache() {}
+
+  void insert(const InstructionKey& key, Value* value) {
+    // Insert the key-value pair into the cache for the given opcode
+    opcodeCaches[key] = value;
+  }
+
+  Value* lookup(const InstructionKey& key) const {
+    auto itOpcode = opcodeCaches.lookup(key);
+    if (itOpcode) {
+      return itOpcode;
+    }
+    return nullptr; // Handle cache miss appropriately
+  }
+
+private:
+  using CacheMap = llvm::DenseMap<InstructionKey, Value*,
+                                  InstructionKey::InstructionKeyInfo>;
+  CacheMap opcodeCaches; // Dynamic allocation of CacheMaps
+};
+
 class RegisterManager {
 public:
   enum RegisterIndex {
@@ -177,7 +200,7 @@ public:
 
   map<int64_t, int64_t> pageMap;
   vector<BranchInst*> BIlist;
-  DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo> cache;
+  InstructionCache cache;
   vector<Instruction*> memInfos;
 
   // global
