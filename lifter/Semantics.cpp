@@ -4253,7 +4253,8 @@ void lifterClass::liftInstruction() {
   bool isReadable = BinaryOperations::readMemory(jump_address, 1, temp);
   bool isImport = BinaryOperations::isImport(jump_address);
   if (!isReadable && isImport &&
-      cast<ConstantInt>(rsp)->getValue() != STACKP_VALUE) {
+      cast<ConstantInt>(GetRegisterValue(ZYDIS_REGISTER_RSP))->getValue() !=
+          STACKP_VALUE) {
     printvalueforce2(jump_address);
     auto bb = BasicBlock::Create(context, "returnToOrgCF",
                                  builder.GetInsertBlock()->getParent());
