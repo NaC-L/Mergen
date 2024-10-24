@@ -316,10 +316,13 @@ void lifterClass::lift_movs_X() {
   auto SRCop = operands[2 + isREP];
   auto DSTop = operands[3 + isREP];
   printvalue(DF);
-  Value* Direction = createSelectFolder(DF, ConstantInt::get(Type::getIntNTy(context, SRCop.size),1 * byteSizeValue),
-      ConstantInt::get(Type::getIntNTy(context, SRCop.size),-1 * byteSizeValue));
+  Value* Direction = createSelectFolder(
+      DF,
+      ConstantInt::get(Type::getIntNTy(context, SRCop.size), 1 * byteSizeValue),
+      ConstantInt::get(Type::getIntNTy(context, SRCop.size),
+                       -1 * byteSizeValue));
   printvalue(Direction);
-  
+
   Value* SRCvalue = GetOperandValue(SRCop, SRCop.size);
   Value* DSTvalue = GetOperandValue(DSTop, DSTop.size);
 
@@ -357,7 +360,7 @@ void lifterClass::lift_movs_X() {
   SetOperandValue(SRCop, UpdateSRCvalue);
   SetOperandValue(DSTop, UpdateDSTvalue);
 }
-
+/*
 void lifterClass::lift_movaps() {
   auto dest = operands[0];
   auto src = operands[1];
@@ -488,7 +491,11 @@ void lifterClass::lift_cmovl() {
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
   Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-
+  printvalue(sf);
+  printvalue(sf);
+  printvalue(Rvalue);
+  printvalue(Lvalue);
+  printvalue(result);
   SetOperandValue(dest, result);
 }
 
@@ -506,10 +513,9 @@ void lifterClass::lift_cmovb() {
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
   Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-  printvalue(sf);
-  printvalue(sf);
-  printvalue(Rvalue);
+  printvalue(condition);
   printvalue(Lvalue);
+  printvalue(Rvalue);
   printvalue(result);
   SetOperandValue(dest, result);
 }
@@ -598,10 +604,7 @@ void lifterClass::lift_cmovnle() {
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
   Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-  printvalue(condition);
-  printvalue(Lvalue);
-  printvalue(Rvalue);
-  printvalue(result);
+
   SetOperandValue(dest, result);
 }
 
@@ -2190,8 +2193,8 @@ void lifterClass::lift_imul() {
                   ? operands[2]
                   : dest; // if exists third operand
 
-  Value* Rvalue = GetOperandValue(src, src.size);
-  Value* Lvalue = GetOperandValue(src2, src2.size);
+  Value* Lvalue = GetOperandValue(src, src.size);
+  Value* Rvalue = GetOperandValue(src2, src2.size);
   uint8_t initialSize = src.size;
   printvalue2(initialSize);
   printvalue(Rvalue);
@@ -2759,7 +2762,6 @@ void lifterClass::lift_ror() {
       SetOperandValue(dest, result);
 }
 
-
 void lifterClass::lift_inc() {
   auto operand = operands[0];
 
@@ -2912,7 +2914,7 @@ void lifterClass::lift_popfq() {
   SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
   // mov val, rsp first
   SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
-  ; // then add rsp 8
+  // then add rsp 8
 }
 
 void lifterClass::lift_adc() {
@@ -4539,8 +4541,9 @@ void lifterClass::liftInstructionSemantics() {
         &formatter, &(instruction), operands, instruction.operand_count_visible,
         &buffer[0], sizeof(buffer), blockInfo.runtime_address, ZYAN_NULL);
 
-    cout << "not implemented: " << instruction.mnemonic << " runtime: " << hex
-         << blockInfo.runtime_address << " " << buffer << endl;
+    std::cout << "not implemented: " << instruction.mnemonic
+              << " runtime: " << std::hex << blockInfo.runtime_address << " "
+              << buffer << std::endl;
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_notimplemented.ll";
@@ -4566,8 +4569,7 @@ void lifterClass::liftInstruction() {
   printvalue2(blockInfo.runtime_address);
   auto funcInfo = funcsignatures::getFunctionInfo(blockInfo.runtime_address);
 
-  if (auto funcInfo =
-          funcsignatures::getFunctionInfo(blockInfo.runtime_address)) {
+  if (funcInfo) {
     callFunctionIR(funcInfo->name.c_str(), funcInfo);
     outs() << "calling: " << funcInfo->name.c_str() << "\n";
     outs().flush();
@@ -4619,6 +4621,9 @@ void lifterClass::liftInstruction() {
     return;
   }
   if (!isReadable && !isImport) {
+    printvalueforce2(jump_address);
+    printvalueforce2(isReadable);
+    printvalueforce2(isImport);
     // done something wrong;
     debugging::doIfDebug([&]() {
       std::string Filename = "output_external.ll";
@@ -4626,6 +4631,7 @@ void lifterClass::liftInstruction() {
       raw_fd_ostream OS(Filename, EC);
       builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
+    outs().flush();
     UNREACHABLE("Trying to execute invalid external function");
   }
 
