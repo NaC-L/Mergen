@@ -94,18 +94,22 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
   for (uint8_t i = 0; i < byteCount; ++i) {
     uint64_t currentAddress = startAddress + i;
 
-    // push if
-    if (values.empty() || // empty or
-        (buffer.contains(currentAddress) &&
-         values.back().isRef && // ( its a reference
-         (values.back().ref.value !=
-              buffer[currentAddress].value || // and references are not same or
-          values.back().ref.byteOffset !=
-              buffer[currentAddress].byteOffset - values.back().end +
-                  values.back().start)) //  reference offset is not directly
-                                        //  next value )
-    ) {
+    auto isDifferentReferenceOrDiscontinuousOffset =
+        [this](const ValueByteReferenceRange& lastRef,
+               uint64_t currentAddress) {
+          const auto& currentValue = buffer[currentAddress];
+          return lastRef.ref.value != currentValue.value ||
+                 lastRef.ref.byteOffset !=
+                     currentValue.byteOffset - (lastRef.end - lastRef.start);
+        };
 
+    bool isEmpty = values.empty();
+    bool isContained = buffer.contains(currentAddress);
+    bool isLastReference = !isEmpty && values.back().isRef;
+    // push if
+    if (isEmpty || (isContained && isLastReference &&
+                    isDifferentReferenceOrDiscontinuousOffset(
+                        values.back(), currentAddress))) {
       if (buffer.contains(currentAddress)) {
         values.push_back(
             ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
