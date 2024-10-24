@@ -9,37 +9,6 @@
 #endif // ZYDIS_STATIC_BUILD
 
 // #define _NODEV why?
-#define UNREACHABLE(msg) llvm_unreachable_internal(msg, __FILE__, __LINE__)
-
-#ifndef _NODEV
-#define printvalue(x)                                                          \
-  do {                                                                         \
-    debugging::printLLVMValue(x, #x);                                          \
-  } while (0);
-// outs() << " " #x " : "; x->print(outs());
-// outs() << "\n";  outs().flush();
-#define printvalue2(x)                                                         \
-  do {                                                                         \
-    debugging::printValue(x, #x);                                              \
-  } while (0);
-#else
-#define printvalue(x) ((void)0);
-#define printvalue2(x) ((void)0);
-#endif // _NODEV
-
-#define printvalueforce(x)                                                     \
-  do {                                                                         \
-    outs() << " " #x " : ";                                                    \
-    x->print(outs());                                                          \
-    outs() << "\n";                                                            \
-    outs().flush();                                                            \
-  } while (0);
-
-#define printvalueforce2(x)                                                    \
-  do {                                                                         \
-    outs() << " " #x " : " << x << "\n";                                       \
-    outs().flush();                                                            \
-  } while (0);
 
 #pragma warning(disable : 4996)
 #pragma warning(disable : 4146)
@@ -280,14 +249,10 @@ inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
 #define STACKP_VALUE 1376040
 // if this value changes, its only for debug purposes
 
-using ReverseRegisterMap = DenseMap<Value*, int>;
-using RegisterMap = DenseMap<int,
-                             Value*>; // we dont actually need
-                                      // this to be a map
-// BB start address, BB pointer, Final registers
-// in that RegisterMap so we can use it later
-
-enum FlagOperation { SET_VALUE, SET_ONE, SET_ZERO, TOGGLE };
+using ReverseRegisterMap = llvm::DenseMap<llvm::Value*, int>;
+using RegisterMap = llvm::DenseMap<int,
+                                   llvm::Value*>; // we dont actually need
+                                                  // this to be a map
 
 enum Flag {
   FLAG_CF = 0,        // Carry flag
@@ -340,7 +305,7 @@ enum Flag {
   FLAG_AES = 30,      // AES key schedule loaded flag
   FLAG_AI = 31,       // Alternate Instruction Set enabled
   // reserved above 32-63
-  FLAGS_END = 32
+  FLAGS_END = FLAG_IOPL
 };
 
 enum opaque_info { NOT_OPAQUE = 0, OPAQUE_TRUE = 1, OPAQUE_FALSE = 2 };
@@ -354,11 +319,3 @@ enum JMP_info {
   JOP_jmp = 0,
   JOP_jmp_unsolved = 1,
 };
-
-enum PATH_info {
-  PATH_unsolved = 0,
-  PATH_solved = 1,
-};
-
-// 8 << (arg.argtype.size - 1)
-enum ArgType { NONE = 0, I8 = 1, I16 = 2, I32 = 3, I64 = 4 };

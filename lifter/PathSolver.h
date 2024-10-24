@@ -3,7 +3,10 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
 
-void final_optpass(Function* clonedFuncx);
+enum PATH_info {
+  PATH_unsolved = 0,
+  PATH_solved = 1,
+};
 
 void final_optpass(llvm::Function* clonedFuncx);
 

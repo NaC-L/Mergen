@@ -6,6 +6,48 @@
 #include <cstdint>
 #include <linuxpe>
 
+// #define _NODEV why?
+
+#ifndef UNREACHABLE
+#define UNREACHABLE(msg)                                                       \
+  do {                                                                         \
+                                                                               \
+    llvm::outs().flush();                                                      \
+    std::cout.flush();                                                         \
+    llvm_unreachable_internal(msg, __FILE__, __LINE__);                        \
+  } while (0)
+#endif
+
+#ifndef _NODEV
+#define printvalue(x)                                                          \
+  do {                                                                         \
+    debugging::printLLVMValue(x, #x);                                          \
+  } while (0);
+// outs() << " " #x " : "; x->print(outs());
+// outs() << "\n";  outs().flush();
+#define printvalue2(x)                                                         \
+  do {                                                                         \
+    debugging::printValue(x, #x);                                              \
+  } while (0);
+#else
+#define printvalue(x) ((void)0);
+#define printvalue2(x) ((void)0);
+#endif // _NODEV
+
+#define printvalueforce(x)                                                     \
+  do {                                                                         \
+    outs() << " " #x " : ";                                                    \
+    x->print(outs());                                                          \
+    outs() << "\n";                                                            \
+    outs().flush();                                                            \
+  } while (0);
+
+#define printvalueforce2(x)                                                    \
+  do {                                                                         \
+    outs() << " " #x " : " << x << "\n";                                       \
+    outs().flush();                                                            \
+  } while (0);
+
 namespace FileHelper {
 
   win::section_header_t*
