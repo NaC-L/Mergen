@@ -16,17 +16,23 @@ unsigned int pathNo = 0;
 // explore different paths
 void asm_to_zydis_to_lift(ZyanU8* data) {
 
+  ZydisDecoder decoder;
+  ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
+
   while (lifters.size() > 0) {
     lifterClass* lifter = lifters.back();
 
     uint64_t offset = FileHelper::address_to_mapped_address(
         lifter->blockInfo.runtime_address);
     debugging::doIfDebug([&]() {
-      cout << "runtime_addr: " << lifter->blockInfo.runtime_address
-           << " offset:" << offset << " byte there: 0x" << (int)*(data + offset)
-           << endl;
-      cout << "offset: " << offset << " file_base?: " << original_address
-           << " runtime: " << lifter->blockInfo.runtime_address << endl;
+      const auto printv =
+          "runtime_addr: " + to_string(lifter->blockInfo.runtime_address) +
+          " offset:" + to_string(offset) + " byte there: 0x" +
+          to_string((int)*(data + offset)) + "\n" +
+          "offset: " + to_string(offset) +
+          " file_base: " + to_string(original_address) +
+          " runtime: " + to_string(lifter->blockInfo.runtime_address) + "\n";
+      printvalue2(printv);
     });
 
     lifter->builder.SetInsertPoint(lifter->blockInfo.block);
@@ -41,10 +47,6 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
         printvalueforce2(lifter->blockInfo.runtime_address);
         UNREACHABLE("Found Self Modifying Code! we dont support it");
       }
-
-      ZydisDecoder decoder;
-      ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64,
-                       ZYDIS_STACK_WIDTH_64);
 
       ZydisDecoderDecodeFull(&decoder, data + offset, 15,
                              &(lifter->instruction), lifter->operands);
