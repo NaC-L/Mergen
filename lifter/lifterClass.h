@@ -207,6 +207,8 @@ public:
 
   map<int64_t, int64_t> pageMap;
   vector<BranchInst*> BIlist;
+  DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo> cache;
+  vector<Instruction*> memInfos;
   InstructionCache cache;
 
   // global
