@@ -14,6 +14,7 @@ uint64_t original_address = 0;
 unsigned int pathNo = 0;
 // consider having this function in a class, later we can use multi-threading to
 // explore different paths
+unsigned int breaking = 0;
 void asm_to_zydis_to_lift(ZyanU8* data) {
 
   ZydisDecoder decoder;
@@ -51,6 +52,7 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
       ZydisDecoderDecodeFull(&decoder, data + offset, 15,
                              &(lifter->instruction), lifter->operands);
 
+      ++(lifter->counter);
       auto counter = debugging::increaseInstCounter() - 1;
 
       debugging::doIfDebug([&]() {
@@ -63,9 +65,12 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
             &formatter, &(lifter->instruction), lifter->operands,
             lifter->instruction.operand_count_visible, &buffer[0],
             sizeof(buffer), runtime_address, ZYAN_NULL);
-
-        cout << hex << counter << ":" << buffer << "\n";
-        cout << "runtime: " << lifter->blockInfo.runtime_address << endl;
+        const auto ct = (format_hex_no_prefix(lifter->counter, 0));
+        printvalue2(ct);
+        const auto inst = buffer;
+        printvalue2(inst);
+        const auto runtime = lifter->blockInfo.runtime_address;
+        printvalue2(runtime);
       });
 
       lifter->blockInfo.runtime_address += lifter->instruction.length;
@@ -82,6 +87,8 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
           lifter->fnc->getParent()->print(OS, nullptr);
         });
         outs() << "next lifter instance\n";
+
+        delete lifter;
         continue;
       }
 
@@ -170,6 +177,9 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
   llvm::raw_fd_ostream OS_noopt(Filename_noopt, EC_noopt);
 
   lifting_module.print(OS_noopt, nullptr);
+
+  cout << "\nwriting complete, " << dec << ms << " milliseconds has past"
+       << endl;
   final_optpass(function);
   const string Filename = "output.ll";
   error_code EC;
