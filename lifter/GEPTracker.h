@@ -15,13 +15,19 @@ struct APIntComparator {
 
 class ValueByteReference {
 public:
-  Instruction* storeInst;
-  Value* value;
-  unsigned short byteOffset;
-  ValueByteReference() : storeInst(nullptr), value(nullptr), byteOffset(0) {}
+  // Instruction* storeInst;
+  llvm::Value* value;
+  uint8_t byteOffset;
+  // ValueByteReference() : storeInst(nullptr), value(nullptr), byteOffset(0) {}
+  ValueByteReference() : value(nullptr), byteOffset(0) {}
 
-  ValueByteReference(Instruction* inst, Value* val, short offset)
-      : storeInst(inst), value(val), byteOffset(offset) {}
+  /*
+    ValueByteReference(Instruction* inst, Value* val, short offset)
+        : storeInst(inst), value(val), byteOffset(offset) {}
+        */
+
+  ValueByteReference(llvm::Value* val, short offset)
+      : value(val), byteOffset(offset) {}
 };
 
 class ValueByteReferenceRange {
