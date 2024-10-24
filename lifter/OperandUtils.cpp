@@ -70,11 +70,25 @@ SimplifyQuery lifterClass::createSimplifyQuery(Instruction* Inst) {
   // updateDomTree(*fnc);
   // auto DT = getDomTree();
   auto DL = fnc->getParent()->getDataLayout();
-  static llvm::TargetLibraryInfoImpl TLIImpl(
+  static TargetLibraryInfoImpl TLIImpl(
       Triple(fnc->getParent()->getTargetTriple()));
-  static llvm::TargetLibraryInfo TLI(TLIImpl);
+  static TargetLibraryInfo TLI(TLIImpl);
+  if (BIlist.size() != BIlistsize) {
+    BIlistsize = BIlist.size();
+    DC = new DomConditionCache();
 
-  SimplifyQuery SQ(DL, &TLI, DT, nullptr, Inst, true, true, nullptr);
+    for (auto BI : BIlist) {
+
+      DC->registerBranch(BI);
+      SmallVector<Value*, 16> Affected;
+      findAffectedValues(BI->getCondition(), Affected);
+      for (auto affectedvalues : Affected) {
+        printvalue(affectedvalues);
+      }
+    }
+  }
+
+  SimplifyQuery SQ(DL, &TLI, DT, nullptr, Inst, true, true, DC);
 
   return SQ;
 }
