@@ -156,17 +156,18 @@ struct BBInfo {
 
 class LazyFlag {
 public:
-  std::optional<llvm::Value*> value;
+  mutable std::optional<Value*>
+      value; // value, we have mutable because c++ is weird?
 
-  std::function<llvm::Value*()> calculation; // calculate value
+  std::function<Value*()> calculation; // calculate value
 
   LazyFlag() : value(nullptr), calculation(nullptr) {}
-  LazyFlag(llvm::Value* val) : value(val), calculation(nullptr) {}
-  LazyFlag(std::function<llvm::Value*()> calc)
+  LazyFlag(Value* val) : value(val), calculation(nullptr) {}
+  LazyFlag(std::function<Value*()> calc)
       : calculation(calc), value(std::nullopt) {}
 
   // get value, calculate if doesnt exist
-  llvm::Value* get() {
+  Value* get() const {
     if (!value.has_value() && calculation) {
 
       value = calculation();
@@ -176,11 +177,11 @@ public:
   }
 
   // Set a new value directly, bypassing lazy evaluation
-  void set(llvm::Value* newValue) {
+  void set(Value* newValue) {
     value = newValue;
     calculation = nullptr; // Disable lazy evaluation when setting directly
   }
-  void setCalculation(const std::function<llvm::Value*()> calc) {
+  void setCalculation(const std::function<Value*()> calc) {
     calculation = calc;
     value = std::nullopt; // Reset the stored value
   }
@@ -188,38 +189,34 @@ public:
 
 class lifterClass {
 public:
-  llvm::IRBuilder<>& builder;
+  IRBuilder<>& builder;
   BBInfo blockInfo;
 
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
-  uint32_t counter = 0;
   // unique
 
   ZydisDecodedInstruction instruction;
   ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-  llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
-  llvm::DenseMap<uint64_t, ValueByteReference> buffer;
-  using flagManager = std::array<LazyFlag, FLAGS_END>;
-  // llvm::DenseMap<Value*, flagManager> flagbuffer;
+  DenseMap<Instruction*, APInt> assumptions;
+  DenseMap<uint64_t, ValueByteReference> buffer;
 
-  flagManager FlagList;
+  llvm::SmallVector<LazyFlag, FLAGS_END> FlagList;
   RegisterManager Registers;
 
-  llvm::DomConditionCache* DC = new DomConditionCache();
+  DomConditionCache* DC = new DomConditionCache();
 
   unsigned int instct = 0;
-  llvm::SimplifyQuery* cachedquery;
+  SimplifyQuery* cachedquery;
 
-  llvm::DominatorTree* DT;
-  llvm::BasicBlock* lastBB = nullptr;
+  DominatorTree* DT;
+  BasicBlock* lastBB = nullptr;
   unsigned int BIlistsize = 0;
 
-  std::map<int64_t, int64_t> pageMap;
-  std::vector<llvm::BranchInst*> BIlist;
-  // DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>
-  // cache;
+  map<int64_t, int64_t> pageMap;
+  vector<BranchInst*> BIlist;
+  vector<Instruction*> memInfos;
   InstructionCache cache;
   struct GEPinfo {
     Value* addr;
@@ -261,31 +258,28 @@ public:
     };
   };
   DenseMap<GEPinfo, Value*, GEPinfo::GEPinfoKeyInfo> GEPcache;
-  std::vector<llvm::Instruction*> memInfos;
 
   // global
-  llvm::Value* memory;
-  llvm::Value* TEB;
-  llvm::Function* fnc;
+  Value* memory;
+  Value* TEB;
+  Function* fnc;
 
-  lifterClass(llvm::IRBuilder<>& irbuilder) : builder(irbuilder){};
+  lifterClass(IRBuilder<>& irbuilder) : builder(irbuilder){};
 
   lifterClass(const lifterClass& other)
       : builder(other.builder), // Reference copied directly
         blockInfo(
             other.blockInfo), // Assuming BBInfo has a proper copy constructor
-        run(other.run), finished(other.finished), counter(other.counter),
+        run(other.run), finished(other.finished),
         isUnreachable(other.isUnreachable),
         instruction(other.instruction), // Shallow copy of the pointer
         assumptions(other.assumptions), // Deep copy of assumptions
         buffer(other.buffer),
-        FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
-                                  // constructor
-        RegistersFP(other.RegistersFP), // Assuming RegisterManager has a copy
-                                        // constructor
-        Registers(other.Registers),     // Assuming RegisterManager has a copy
-                                        // constructor
-        DC(other.DC),                   // Deep copy of DC
+        FlagList(other.FlagList),   // Deep copy handled by unordered_map's copy
+                                    // constructor
+        Registers(other.Registers), // Assuming RegisterManager has a copy
+                                    // constructor
+        DC(other.DC),               // Deep copy of DC
         instct(other.instct),
         cachedquery(other.cachedquery), // Assuming raw pointer, copied directly
         DT(other.DT),                   // Assuming pointer, copied directly
@@ -302,75 +296,69 @@ public:
 
   void liftInstruction();
   void liftInstructionSemantics();
+  void branchHelper(Value* condition, const string& instname,
                     const int numbered, const bool reverse = false);
 
   // init
   void Init_Flags();
-  void initDomTree(llvm::Function& F) { DT = new DominatorTree(F); }
+  void initDomTree(Function& F) { DT = new DominatorTree(F); }
   // end init
 
   // getters-setters
-  llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
-  void setFlag(const Flag flag, std::function<llvm::Value*()> calculation);
-  llvm::Value* getFlag(const Flag flag);
-  void InitRegisters(llvm::Function* function, ZyanU64 rip);
-  llvm::Value* GetValueFromHighByteRegister(const ZydisRegister reg);
-  llvm::Value* GetRegisterValue(const ZydisRegister key);
-  llvm::Value* SetValueToHighByteRegister(const ZydisRegister reg,
-                                          llvm::Value* value);
-  llvm::Value* SetValueToSubRegister_8b(const ZydisRegister reg,
-                                        llvm::Value* value);
-  llvm::Value* SetValueToSubRegister_16b(const ZydisRegister reg,
-                                         llvm::Value* value);
-  void SetRegisterValue(const ZydisRegister key, llvm::Value* value);
-  void SetRFLAGSValue(llvm::Value* value);
-  PATH_info solvePath(llvm::Function* function, uint64_t& dest,
-                      llvm::Value* simplifyValue);
-  llvm::Value* popStack();
-  void pushFlags(const std::vector<llvm::Value*>& value,
-                 const std::string& address);
-  std::vector<llvm::Value*> GetRFLAGS();
-
-  simpleFPV GetOperandValueFP(const ZydisDecodedOperand& op,
-                              const std::string& address = "");
-  simpleFPV SetOperandValueFP(const ZydisDecodedOperand& op, simpleFPV value,
-                              const std::string& address = "");
-
-  llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
-                               const int possiblesize,
-                               const std::string& address = "");
-  llvm::Value* SetOperandValue(const ZydisDecodedOperand& op,
-                               llvm::Value* value,
-                               const std::string& address = "");
-  llvm::Value* GetRFLAGSValue();
+  Value* setFlag(const Flag flag, Value* newValue = nullptr);
+  void setFlag(const Flag flag, std::function<Value*()> calculation);
+  Value* getFlag(const Flag flag);
+  RegisterManager& getRegisters();
+  void setRegisters(RegisterManager newRegisters);
+  void InitRegisters(Function* function, ZyanU64 rip);
+  Value* GetValueFromHighByteRegister(const ZydisRegister reg);
+  Value* GetRegisterValue(const ZydisRegister key);
+  Value* SetValueToHighByteRegister(const ZydisRegister reg, Value* value);
+  Value* SetValueToSubRegister_8b(const ZydisRegister reg, Value* value);
+  Value* SetValueToSubRegister_16b(const ZydisRegister reg, Value* value);
+  void SetRegisterValue(const ZydisRegister key, Value* value);
+  void SetRFLAGSValue(Value* value);
+  PATH_info solvePath(Function* function, uint64_t& dest, Value* simplifyValue);
+  void replaceAllUsesWithandReplaceRMap(Value* v, Value* nv,
+                                        ReverseRegisterMap rVMap);
+  void simplifyUsers(Value* newValue, DataLayout& DL,
+                     ReverseRegisterMap flippedRegisterMap); // remove?
+  Value* popStack();
+  void pushFlags(const vector<Value*>& value, const string& address);
+  vector<Value*> GetRFLAGS();
+  Value* GetOperandValue(const ZydisDecodedOperand& op, const int possiblesize,
+                         const string& address = "");
+  Value* SetOperandValue(const ZydisDecodedOperand& op, Value* value,
+                         const string& address = "");
+  Value* GetRFLAGSValue();
   // end getters-setters
   // misc
-  llvm::Value* callFunctionIR(const std::string& functionName,
-                              funcsignatures::functioninfo* funcInfo);
-  llvm::Value* GetEffectiveAddress(const ZydisDecodedOperand& op,
-                                   const int possiblesize);
-  std::vector<llvm::Value*> parseArgs(funcsignatures::functioninfo* funcInfo);
-  llvm::FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
-                                    llvm::LLVMContext& context);
+  void callFunctionIR(const string& functionName,
+                      funcsignatures::functioninfo* funcInfo);
+  Value* GetEffectiveAddress(const ZydisDecodedOperand& op,
+                             const int possiblesize);
+  vector<Value*> parseArgs(funcsignatures::functioninfo* funcInfo);
+  FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
+                              LLVMContext& context);
 
-  llvm::Value* computeSignFlag(Value* value);
-  llvm::Value* computeZeroFlag(Value* value);
-  llvm::Value* computeParityFlag(Value* value);
-  llvm::Value* computeAuxFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf);
-  llvm::Value* computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf,
-                                      Value* sub);
+  Value* computeSignFlag(Value* value);
+  Value* computeZeroFlag(Value* value);
+  Value* computeParityFlag(Value* value);
+  Value* computeAuxFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf);
+  Value* computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf,
+                                Value* sub);
 
-  llvm::Value* computeOverflowFlagSub(Value* Lvalue, Value* Rvalue, Value* sub);
-  llvm::Value* computeOverflowFlagAdd(Value* Lvalue, Value* Rvalue, Value* add);
-  llvm::Value* computeOverflowFlagAdc(Value* Lvalue, Value* Rvalue, Value* cf,
-                                      Value* add);
+  Value* computeOverflowFlagSub(Value* Lvalue, Value* Rvalue, Value* sub);
+  Value* computeOverflowFlagAdd(Value* Lvalue, Value* Rvalue, Value* add);
+  Value* computeOverflowFlagAdc(Value* Lvalue, Value* Rvalue, Value* cf,
+                                Value* add);
   // end misc
   // analysis
-  llvm::KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI);
+  KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI);
 
-  llvm::Value* solveLoad(LoadInst* load);
+  Value* solveLoad(LoadInst* load);
 
-  llvm::SimplifyQuery createSimplifyQuery(Instruction* Inst);
+  SimplifyQuery createSimplifyQuery(Instruction* Inst);
 
   void RegisterBranch(BranchInst* BI) {
     //
@@ -403,6 +391,7 @@ public:
     return address >= it->first && address < it->second;
   }
 
+  void updateMemoryOp(StoreInst* inst);
 
   void updateValueReference(Instruction* inst, Value* value,
                             const uint64_t address);
