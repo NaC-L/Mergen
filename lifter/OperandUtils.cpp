@@ -189,9 +189,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
       // if a is 0, select B
       // if a is -1, select C
       // then... ?
-      printvalue(A);
-      printvalue(B);
-      printvalue(C);
       if (auto X_inst = dyn_cast<Instruction>(A)) {
 
         auto possible_condition = analyzeValueKnownBits(X_inst, X_inst);
@@ -216,7 +213,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 
     if (isXAndNotX(op0, op1, X) || isXAndNotX(op1, op0, X)) {
       auto possibleSimplifyand = ConstantInt::get(op1->getType(), 0);
-      printvalue(possibleSimplifyand);
       return possibleSimplifyand;
     }
     // ~X & ~X
@@ -238,13 +234,11 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 
     if (isXorNotX(op0, op1, X) || isXorNotX(op1, op0, X)) {
       auto possibleSimplify = ConstantInt::get(op1->getType(), -1);
-      printvalue(possibleSimplify);
       return possibleSimplify;
     }
 
     if (match(op0, m_Specific(op1))) {
       auto possibleSimplify = ConstantInt::get(op1->getType(), 0);
-      printvalue(possibleSimplify);
       return possibleSimplify;
     }
 
@@ -270,7 +264,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleNotAOrB = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Not(m_Value(C))) && match(B, m_Constant(constant_v))) {
             // ~(~a | b) -> a & ~b
-            printvalue(C);
             return createAndNot(C, constant_v, "not-PConst-");
           }
           return nullptr;
@@ -279,7 +272,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleAOrBci = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Value(C)) && match(B, m_Constant(constant_v))) {
             // ~(a | b(ci)) -> ~a & ~b
-            printvalue(C);
             return createAndFolder(
 
                 createXorFolder(C, Constant::getAllOnesValue(C->getType()),
@@ -294,8 +286,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleNotAOrNotB = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Not(m_Value(C))) && match(B, m_Not(m_Value(D)))) {
             // ~(~a | ~b) -> a & b
-            printvalue(C);
-            printvalue(D);
             return createAndFolder(C, D, "not-P1-");
           }
           return nullptr;
@@ -1129,7 +1119,6 @@ void lifterClass::Init_Flags() {
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
   auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
 
-  FlagList.resize(FLAGS_END);
   FlagList[FLAG_CF].set(zero);
   FlagList[FLAG_PF].set(zero);
   FlagList[FLAG_AF].set(zero);
@@ -1147,8 +1136,9 @@ void lifterClass::Init_Flags() {
 Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
   LLVMContext& context = builder.getContext();
   newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
-  printvalue2((int32_t)flag) printvalue(newValue);
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
+  // printvalue2((int32_t)flag) printvalue(newValue);
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
+      flag == FLAG_DF)
     return nullptr;
 
   FlagList[flag].set(newValue); // Set the new value directly
@@ -1158,7 +1148,8 @@ Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
 void lifterClass::setFlag(const Flag flag,
                           std::function<Value*()> calculation) {
   // If the flag is one of the reserved ones, do not modify
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
+      flag == FLAG_DF)
     return;
 
   // lazy calculation
@@ -1174,16 +1165,12 @@ Value* lifterClass::getFlag(const Flag flag) {
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-// destroy these functions below
-RegisterManager& lifterClass::getRegisters() { return Registers; }
-void lifterClass::setRegisters(RegisterManager newRegisters) {
-  Registers = newRegisters;
-}
-
+// ??
 Value* memoryAlloc;
 Value* TEB;
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
+// ??
 
 void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
 
@@ -1215,7 +1202,7 @@ void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
 
   LLVMContext& context = builder.getContext();
 
-  auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
+  const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
 
   auto value =
       cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
@@ -1268,9 +1255,9 @@ Value* lifterClass::GetRFLAGSValue() {
     int shiftAmount = flag;
     Value* shiftedFlagValue = createShlFolder(
 
-        createZExtFolder(flagValue, Type::getInt64Ty(context), "createrflag1"),
+        createZExtFolder(flagValue, Type::getInt64Ty(context), "createrflag1-"),
         ConstantInt::get(Type::getInt64Ty(context), shiftAmount),
-        "createrflag2");
+        "createrflag2-");
     rflags = createOrFolder(rflags, shiftedFlagValue, "creatingrflag");
   }
   return rflags;
@@ -1342,23 +1329,19 @@ Value* lifterClass::SetValueToSubRegister_8b(const ZydisRegister reg,
   fullRegisterValue =
       createZExtOrTruncFolder(fullRegisterValue, Type::getInt64Ty(context));
 
-  uint64_t mask = 0xFFFFFFFFFFFFFFFFULL;
-  if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
-      reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
-    mask = 0xFFFFFFFFFFFF00FFULL;
-  } else {
-    mask = 0xFFFFFFFFFFFFFF00ULL;
-  }
-
-  Value* maskValue = ConstantInt::get(Type::getInt64Ty(context), mask);
   Value* extendedValue =
       createZExtFolder(value, Type::getInt64Ty(context), "extendedValue");
 
+  bool isHighByteReg = (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
+                        reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH);
+
+  uint64_t mask = isHighByteReg ? 0xFFFFFFFFFFFF00FFULL : 0xFFFFFFFFFFFFFF00ULL;
+
+  Value* maskValue = ConstantInt::get(Type::getInt64Ty(context), mask);
   Value* maskedFullReg =
       createAndFolder(fullRegisterValue, maskValue, "maskedreg");
 
-  if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
-      reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
+  if (isHighByteReg) {
     extendedValue = createShlFolder(extendedValue, 8, "shiftedValue");
   }
 
