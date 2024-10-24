@@ -559,14 +559,31 @@ set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V,
       return computePossibleValues(v_inst->getOperand(0), Depth + 1);
 
     if (v_inst->getOpcode() == Instruction::Select) {
+      auto cond = v_inst->getOperand(0);
       auto trueValue = v_inst->getOperand(1);
       auto falseValue = v_inst->getOperand(2);
 
-      auto trueValues = computePossibleValues(trueValue, Depth + 1);
-      auto falseValues = computePossibleValues(falseValue, Depth + 1);
+      auto kb = analyzeValueKnownBits(cond, v_inst);
+      printvalue2(kb);
 
+      if (kb.isZero()) {
+        auto falseValues = computePossibleValues(falseValue, Depth + 1);
+
+        res.insert(falseValues.begin(), falseValues.end());
+        return res;
+      }
+      if (kb.isNonZero()) {
+        auto falseValues = computePossibleValues(falseValue, Depth + 1);
+
+        res.insert(falseValues.begin(), falseValues.end());
+        return res;
+      }
+      auto trueValues = computePossibleValues(trueValue, Depth + 1);
       // Combine all possible values from both branches
       res.insert(trueValues.begin(), trueValues.end());
+
+      auto falseValues = computePossibleValues(falseValue, Depth + 1);
+
       res.insert(falseValues.begin(), falseValues.end());
       return res;
     }
@@ -582,13 +599,14 @@ set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V,
     printvalue2(analyzeValueKnownBits(V, v_inst));
     auto v_knownbits = analyzeValueKnownBits(v_inst, v_inst);
     unsigned int res_unknownbits_count =
-        llvm::popcount(~(v_knownbits.One | v_knownbits.Zero).getZExtValue());
+        llvm::popcount(~(v_knownbits.One | v_knownbits.Zero).getZExtValue()) -
+        64 + v_knownbits.getBitWidth();
 
     auto total_unk = ~((op1_knownbits.One | op1_knownbits.Zero) &
                        (op2_knownbits.One | op2_knownbits.Zero));
 
     unsigned int total_unknownbits_count =
-        llvm::popcount(total_unk.getZExtValue());
+        llvm::popcount(total_unk.getZExtValue()) - 64 + total_unk.getBitWidth();
     printvalue2(v_knownbits);
     printvalue2(op1_knownbits);
     printvalue2(op2_knownbits);
