@@ -403,8 +403,9 @@ inline bool isCast(uint8_t opcode) {
   return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
 };
 
-Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
-  auto it = cache.lookup(key.opcode, key);
+Value* lifterClass::getOrCreate(unsigned opcode, const InstructionKey& key,
+                                const Twine& Name) {
+  auto it = cache.lookup(opcode, key);
   if (it) {
     return it;
   }
@@ -536,7 +537,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
     }
   }
 
-  cache.insert(key.opcode, key, newInstruction);
+  cache.insert(opcode, key, newInstruction);
   return newInstruction;
 }
 
@@ -550,7 +551,7 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
   else
     key = InstructionKey(opcode, operand1, operand2);
 
-  Value* newValue = getOrCreate(key, Name);
+  Value* newValue = getOrCreate(opcode, key, Name);
 
   return simplifyValue(
       newValue,
