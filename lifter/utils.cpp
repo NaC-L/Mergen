@@ -131,7 +131,6 @@ namespace debugging {
       return;
     (dothis)();
   }
-
   template void printValue<uint64_t>(const uint64_t& v, const char* name);
   template void printValue<uint32_t>(const uint32_t& v, const char* name);
   template void printValue<uint16_t>(const uint16_t& v, const char* name);
@@ -193,7 +192,6 @@ namespace timer {
   using duration = std::chrono::duration<double, std::milli>;
 
   time_point startTime;
-  duration elapsedTime{0};
   bool running = false;
 
   void startTimer() {
@@ -202,29 +200,24 @@ namespace timer {
   }
 
   double getTimer() {
-    elapsedTime += clock::now() - startTime;
-    return elapsedTime.count();
+    if (running) {
+      return std::chrono::duration_cast<duration>(clock::now() - startTime)
+          .count();
+    }
+    return 0.0;
   }
 
   double stopTimer() {
     if (running) {
-      elapsedTime += clock::now() - startTime;
       running = false;
+      return std::chrono::duration_cast<duration>(clock::now() - startTime)
+          .count();
     }
-    return elapsedTime.count();
+    return 0.0;
   }
 
-  void suspendTimer() {
-    if (running) {
-      elapsedTime += clock::now() - startTime;
-      running = false;
-    }
-  }
-
-  void resumeTimer() {
-    if (!running) {
-      startTime = clock::now();
-      running = true;
-    }
+  void resetTimer() {
+    startTime = clock::now();
+    running = true;
   }
 } // namespace timer
