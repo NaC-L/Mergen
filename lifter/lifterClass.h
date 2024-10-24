@@ -2,9 +2,17 @@
 #define LIFTERCLASS_H
 #include "FunctionSignatures.h"
 #include "GEPTracker.h"
+#include "PathSolver.h"
 #include "includes.h"
+#include "utils.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/DomConditionCache.h>
+#include <llvm/Analysis/SimplifyQuery.h>
+#include <llvm/IR/Dominators.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/Support/KnownBits.h>
+#include <set>
 
 #define DEFINE_FUNCTION(name) void lift_##name()
 
