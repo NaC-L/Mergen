@@ -874,16 +874,10 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
 }
 Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
                                     const Twine& Name) {
-  GEPinfo key(Address, Type->getScalarSizeInBits(), Base == TEB);
-  auto it = GEPcache.lookup(key);
-  if (it) {
-    return it;
-  }
 
   std::vector<Value*> indices;
   indices.push_back(Address);
   auto v = builder.CreateGEP(Type, Base, indices);
-  GEPcache.insert({key, v});
   return v;
 }
 
