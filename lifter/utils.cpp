@@ -7,7 +7,6 @@
 #include <llvm/Analysis/ValueLattice.h>
 #include <llvm/Support/KnownBits.h>
 #include <map>
-#include <z3++.h>
 
 namespace FileHelper {
 
@@ -116,7 +115,6 @@ namespace debugging {
   template void printValue<bool>(const bool& v, const char* name);
   template void printValue<std::string>(const std::string& v, const char* name);
   template void printValue<char*>(char* const& v, const char* name);
-  template void printValue<z3::expr>(const z3::expr& v, const char* name);
   template void printValue<char[256]>(char const (&)[256], const char* name);
   template void
   printValue<llvm::FormattedNumber>(llvm::FormattedNumber const(&),
