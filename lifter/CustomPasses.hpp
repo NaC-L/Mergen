@@ -4,19 +4,21 @@
 #include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "includes.h"
+#include "utils.h"
 #include "llvm/IR/PassManager.h"
-#include <llvm/Analysis/WithCache.h>
+#include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/Support/KnownBits.h>
 
 class PromotePseudoStackPass
     : public llvm::PassInfoMixin<PromotePseudoStackPass> {
 public:
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
-    Value* memory = getMemory();
+    llvm::Value* memory = getMemory();
 
     bool hasChanged = false;
-    Value* stackMemory = NULL;
+    llvm::Value* stackMemory = NULL;
     for (auto& F : M) {
       if (!stackMemory) {
         llvm::IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());

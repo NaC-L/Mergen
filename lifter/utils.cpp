@@ -1,9 +1,13 @@
+#include "utils.h"
 #include "coff/section_header.hpp"
-#include "includes.h"
 #include "nt/nt_headers.hpp"
 #include "llvm/IR/Value.h"
+#include <chrono>
+#include <iostream>
 #include <llvm/Analysis/ValueLattice.h>
-#include <ratio>
+#include <llvm/Support/KnownBits.h>
+#include <map>
+
 namespace FileHelper {
 
   static void* fileBase = nullptr;
@@ -72,34 +76,61 @@ namespace FileHelper {
   }
 
 } // namespace FileHelper
+
 namespace debugging {
   int ic = 1;
   int increaseInstCounter() { return ++ic; }
   bool shouldDebug = false;
-  void enableDebug() {
-    shouldDebug = 1;
-    cout << "Debugging enabled\n";
+  llvm::raw_ostream* debugStream = nullptr;
+  std::unique_ptr<llvm::raw_fd_ostream> fileStream;
+
+  void enableDebug(const std::string& filename = "") {
+    shouldDebug = true;
+    if (!filename.empty()) {
+      std::error_code EC;
+      fileStream = std::make_unique<llvm::raw_fd_ostream>(filename, EC);
+      if (EC) {
+        llvm::errs() << "Error opening debug file: " << EC.message() << "\n";
+        fileStream.reset();
+        debugStream = &llvm::errs();
+        shouldDebug = false;
+        return;
+      }
+      debugStream = fileStream.get();
+    } else {
+      debugStream = &llvm::outs();
+    }
+    llvm::outs() << "Debugging enabled\n";
   }
+
   void printLLVMValue(llvm::Value* v, const char* name) {
-    if (!shouldDebug)
+    if (!shouldDebug || !debugStream)
       return;
-    outs() << " " << name << " : ";
-    v->print(outs());
-    outs() << "\n";
-    outs().flush();
+    *debugStream << " " << name << " : ";
+    v->print(*debugStream);
+    *debugStream << "\n";
+    debugStream->flush();
   }
+
+  // Other functions remain the same, but use debugStream instead of
+  // llvm::outs() For example:
+  template <typename T> void printValue(const T& v, const char* name) {
+    if (!shouldDebug || !debugStream)
+      return;
+    if constexpr (std::is_same_v<T, uint8_t> || std::is_same_v<T, int8_t>) {
+      *debugStream << " " << name << " : " << static_cast<int>(v) << "\n";
+      debugStream->flush();
+      return;
+    } else
+      *debugStream << " " << name << " : " << v << "\n";
+    debugStream->flush();
+  }
+
   void doIfDebug(const std::function<void(void)>& dothis) {
     if (!shouldDebug)
       return;
     (dothis)();
   }
-  template <typename T> void printValue(const T& v, const char* name) {
-    if (!shouldDebug)
-      return;
-    outs() << " " << name << " : " << v << "\n";
-    outs().flush();
-  }
-
   template void printValue<uint64_t>(const uint64_t& v, const char* name);
   template void printValue<uint32_t>(const uint32_t& v, const char* name);
   template void printValue<uint16_t>(const uint16_t& v, const char* name);
@@ -109,14 +140,20 @@ namespace debugging {
   template void printValue<int16_t>(const int16_t& v, const char* name);
   template void printValue<int8_t>(const int8_t& v, const char* name);
   template void printValue<bool>(const bool& v, const char* name);
-  template void printValue<ValueLatticeElement>(const ValueLatticeElement& v,
+  template void printValue<std::string>(const std::string& v, const char* name);
+  template void printValue<char*>(char* const& v, const char* name);
+  template void printValue<char[256]>(char const (&)[256], const char* name);
+  template void
+  printValue<llvm::FormattedNumber>(llvm::FormattedNumber const(&),
+                                    const char* name);
+  template void
+  printValue<llvm::ValueLatticeElement>(const llvm::ValueLatticeElement& v,
+                                        const char* name);
+  template void printValue<llvm::KnownBits>(const llvm::KnownBits& v,
+                                            const char* name);
+  template void printValue<llvm::APInt>(const llvm::APInt& v, const char* name);
+  template void printValue<llvm::ConstantRange>(const llvm::ConstantRange& v,
                                                 const char* name);
-  template void printValue<KnownBits>(const KnownBits& v, const char* name);
-  template void printValue<APInt>(const APInt& v, const char* name);
-  template void printValue<ROP_info>(const ROP_info& v, const char* name);
-  template void printValue<ConstantRange>(const ConstantRange& v,
-                                          const char* name);
-
 } // namespace debugging
 
 namespace argparser {
@@ -127,8 +164,8 @@ namespace argparser {
   }
 
   std::map<std::string, std::function<void()>> options = {
-      {"-d", debugging::enableDebug},
-      {"--enable-debug", debugging::enableDebug},
+      {"-d", []() { debugging::enableDebug("debug.txt"); }},
+      //
       {"-h", printHelp}};
 
   void parseArguments(std::vector<std::string>& args) {
@@ -155,7 +192,6 @@ namespace timer {
   using duration = std::chrono::duration<double, std::milli>;
 
   time_point startTime;
-  duration elapsedTime{0};
   bool running = false;
 
   void startTimer() {
@@ -164,29 +200,24 @@ namespace timer {
   }
 
   double getTimer() {
-    elapsedTime += clock::now() - startTime;
-    return elapsedTime.count();
+    if (running) {
+      return std::chrono::duration_cast<duration>(clock::now() - startTime)
+          .count();
+    }
+    return 0.0;
   }
 
   double stopTimer() {
     if (running) {
-      elapsedTime += clock::now() - startTime;
       running = false;
+      return std::chrono::duration_cast<duration>(clock::now() - startTime)
+          .count();
     }
-    return elapsedTime.count();
+    return 0.0;
   }
 
-  void suspendTimer() {
-    if (running) {
-      elapsedTime += clock::now() - startTime;
-      running = false;
-    }
-  }
-
-  void resumeTimer() {
-    if (!running) {
-      startTime = clock::now();
-      running = true;
-    }
+  void resetTimer() {
+    startTime = clock::now();
+    running = true;
   }
 } // namespace timer

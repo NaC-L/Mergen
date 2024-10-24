@@ -1,15 +1,23 @@
 #include "GEPTracker.h"
 #include "OperandUtils.h"
-#include "includes.h"
 #include "lifterClass.h"
+#include "nt/nt_headers.hpp"
+#include "utils.h"
+#include <iostream>
+#include <llvm/ADT/DenseSet.h>
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/AssumptionCache.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/ValueTracking.h>
+#include <llvm/Analysis/WithCache.h>
 #include <llvm/IR/ConstantRange.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/KnownBits.h>
+#include <llvm/TargetParser/Triple.h>
+#include <llvm/Transforms/Utils/SCCPSolver.h>
 
 namespace BinaryOperations {
 
@@ -35,7 +43,7 @@ namespace BinaryOperations {
     return readMemory(ntHeaders->optional_header.image_base + addr, 1, tmp);
   }
 
-  unordered_set<uint64_t> MemWrites;
+  DenseSet<uint64_t> MemWrites;
 
   bool isWrittenTo(uint64_t addr) {
     return MemWrites.find(addr) != MemWrites.end();
@@ -68,14 +76,13 @@ namespace BinaryOperations {
 
 }; // namespace BinaryOperations
 
-void lifterClass::addValueReference(Instruction* inst, Value* value,
-                                    uint64_t address) {
+void lifterClass::addValueReference(Value* value, uint64_t address) {
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
     BinaryOperations::WriteTo(address + i);
     printvalue2(address + i);
-    buffer[address + i] = ValueByteReference(inst, value, i);
+    buffer[address + i] = ValueByteReference(value, i);
     printvalue(value);
     printvalue2((uint64_t)address + i);
   }
@@ -256,7 +263,14 @@ void lifterClass::pagedCheck(Value* address, Instruction* ctxI) {
   switch (paged) {
   case MEMORY_NOT_PAGED: {
     printvalueforce(address);
-    cout.flush();
+    printvalueforce2(instruction.mnemonic);
+    printvalueforce2(blockInfo.runtime_address);
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_paged_error.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+    });
     UNREACHABLE("\nmemory is not paged, so we(more likely) or the program "
                 "probably do some incorrect stuff "
                 "we abort to avoid incorrect output\n");
@@ -313,7 +327,7 @@ void lifterClass::insertMemoryOp(StoreInst* inst) {
 
   auto gepOffsetCI = cast<ConstantInt>(gepOffset);
 
-  addValueReference(inst, inst->getValueOperand(), gepOffsetCI->getZExtValue());
+  addValueReference(inst->getValueOperand(), gepOffsetCI->getZExtValue());
   BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
 }
 
@@ -386,9 +400,18 @@ void removeDuplicateOffsets(vector<Instruction*>& vec) {
   vec.assign(uniqueInstructions.rbegin(), uniqueInstructions.rend());
 }
 
-set<APInt, APIntComparator> getPossibleValues(const llvm::KnownBits& known,
-                                              unsigned max_unknown) {
-  if (max_unknown >= 16) {
+set<APInt, APIntComparator>
+lifterClass::getPossibleValues(const llvm::KnownBits& known,
+                               unsigned max_unknown) {
+
+  if (max_unknown >= 4) {
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_too_many_unk.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+    });
+    printvalueforce2(max_unknown);
     UNREACHABLE("There is a very huge chance that this shouldnt happen");
   }
   llvm::APInt base = known.One;
@@ -544,7 +567,14 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
 
 set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V,
                                                                uint8_t Depth) {
+  printvalue2(Depth);
   if (Depth > 16) {
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_depth_exceeded.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+    });
     UNREACHABLE("Depth exceeded");
   }
   set<APInt, APIntComparator> res;

@@ -1,10 +1,17 @@
 #include "OperandUtils.h"
-#include "includes.h"
 #include "lifterClass.h"
+#include "utils.h"
+#include <Zydis/Mnemonic.h>
 #include <Zydis/Register.h>
+#include <Zydis/SharedTypes.h>
+#include <iostream>
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Analysis/ConstantFolding.h>
 #include <llvm/Analysis/DomConditionCache.h>
 #include <llvm/Analysis/InstructionSimplify.h>
 #include <llvm/Analysis/SimplifyQuery.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/ValueLattice.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Constants.h>
@@ -12,6 +19,8 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PatternMatch.h>
 #include <llvm/Support/KnownBits.h>
+#include <llvm/TargetParser/Triple.h>
+#include <optional>
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -70,25 +79,11 @@ SimplifyQuery lifterClass::createSimplifyQuery(Instruction* Inst) {
   // updateDomTree(*fnc);
   // auto DT = getDomTree();
   auto DL = fnc->getParent()->getDataLayout();
-  static TargetLibraryInfoImpl TLIImpl(
+  static llvm::TargetLibraryInfoImpl TLIImpl(
       Triple(fnc->getParent()->getTargetTriple()));
-  static TargetLibraryInfo TLI(TLIImpl);
-  if (BIlist.size() != BIlistsize) {
-    BIlistsize = BIlist.size();
-    DC = new DomConditionCache();
+  static llvm::TargetLibraryInfo TLI(TLIImpl);
 
-    for (auto BI : BIlist) {
-
-      DC->registerBranch(BI);
-      SmallVector<Value*, 16> Affected;
-      findAffectedValues(BI->getCondition(), Affected);
-      for (auto affectedvalues : Affected) {
-        printvalue(affectedvalues);
-      }
-    }
-  }
-
-  SimplifyQuery SQ(DL, &TLI, DT, nullptr, Inst, true, true, DC);
+  SimplifyQuery SQ(DL, &TLI, DT, nullptr, Inst, true, true, nullptr);
 
   return SQ;
 }
@@ -189,9 +184,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
       // if a is 0, select B
       // if a is -1, select C
       // then... ?
-      printvalue(A);
-      printvalue(B);
-      printvalue(C);
       if (auto X_inst = dyn_cast<Instruction>(A)) {
 
         auto possible_condition = analyzeValueKnownBits(X_inst, X_inst);
@@ -216,7 +208,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 
     if (isXAndNotX(op0, op1, X) || isXAndNotX(op1, op0, X)) {
       auto possibleSimplifyand = ConstantInt::get(op1->getType(), 0);
-      printvalue(possibleSimplifyand);
       return possibleSimplifyand;
     }
     // ~X & ~X
@@ -238,13 +229,11 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 
     if (isXorNotX(op0, op1, X) || isXorNotX(op1, op0, X)) {
       auto possibleSimplify = ConstantInt::get(op1->getType(), -1);
-      printvalue(possibleSimplify);
       return possibleSimplify;
     }
 
     if (match(op0, m_Specific(op1))) {
       auto possibleSimplify = ConstantInt::get(op1->getType(), 0);
-      printvalue(possibleSimplify);
       return possibleSimplify;
     }
 
@@ -270,7 +259,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleNotAOrB = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Not(m_Value(C))) && match(B, m_Constant(constant_v))) {
             // ~(~a | b) -> a & ~b
-            printvalue(C);
             return createAndNot(C, constant_v, "not-PConst-");
           }
           return nullptr;
@@ -279,7 +267,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleAOrBci = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Value(C)) && match(B, m_Constant(constant_v))) {
             // ~(a | b(ci)) -> ~a & ~b
-            printvalue(C);
             return createAndFolder(
 
                 createXorFolder(C, Constant::getAllOnesValue(C->getType()),
@@ -294,8 +281,6 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto handleNotAOrNotB = [&](Value* A, Value* B) -> Value* {
           if (match(A, m_Not(m_Value(C))) && match(B, m_Not(m_Value(D)))) {
             // ~(~a | ~b) -> a & b
-            printvalue(C);
-            printvalue(D);
             return createAndFolder(C, D, "not-P1-");
           }
           return nullptr;
@@ -342,6 +327,7 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 }
 
 KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
+
   if (auto v_inst = dyn_cast<Instruction>(value)) {
     // Use find() to check if v_inst exists in the map
     auto it = assumptions.find(v_inst);
@@ -399,19 +385,20 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
   return v;
 }
 
-Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
-  auto it = cache.find(key);
-  if (it != cache.end()) {
-    return it->second;
+inline bool isCast(uint8_t opcode) {
+  return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
+};
+
+Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
+                                const Twine& Name) {
+  auto it = cache.lookup(opcode, key);
+  if (it) {
+    return it;
   }
 
   Value* newInstruction = nullptr;
 
-  if (key.cast == 0) {
-    printvalue2(key.opcode);
-    printvalue2(key.cast);
-    printvalue(key.operand1);
-    printvalue(key.operand2);
+  if (isCast(opcode) == 0) {
     // Binary instruction
     if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
       printvalue2(
@@ -419,9 +406,9 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
       if (isa<ConstantInt>(key.operand2))
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                 select_inst->getTrueValue(), key.operand2),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                 select_inst->getFalseValue(), key.operand2),
             "lola-");
     }
@@ -432,9 +419,9 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
       if (isa<ConstantInt>(key.operand1))
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                 key.operand1, select_inst->getTrueValue()),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                 key.operand1, select_inst->getFalseValue()),
             "lolb-");
     }
@@ -446,12 +433,10 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
                                                                 // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1,
-                  select_inst->getTrueValue()),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1,
-                  select_inst->getFalseValue()),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  lhs1, select_inst->getTrueValue()),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  rhs1, select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -463,12 +448,10 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
                                                                 // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1,
-                  select_inst->getTrueValue()),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1,
-                  select_inst->getFalseValue()),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  lhs1, select_inst->getTrueValue()),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  rhs1, select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -480,12 +463,10 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
                                                                // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  select_inst->getTrueValue(), lhs),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  select_inst->getFalseValue(), rhs),
               "lol2-");
     } else if (match(key.operand2,
                      m_ZExtOrSExtOrSelf(
@@ -495,37 +476,34 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
                                                                // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(
-                  static_cast<Instruction::BinaryOps>(key.opcode),
-                  select_inst->getFalseValue(), rhs),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  select_inst->getTrueValue(), lhs),
+              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                  select_inst->getFalseValue(), rhs),
               "lol2-");
     }
     newInstruction =
-        builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
+        builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                             key.operand1, key.operand2, Name);
-  } else if (key.cast) {
+  } else if (isCast(opcode)) {
     // Cast instruction
-    switch (key.opcode) {
+    switch (opcode) {
 
     case Instruction::Trunc:
     case Instruction::ZExt:
     case Instruction::SExt:
-      printvalue(key.operand1);
       if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                                select_inst->getTrueValue(), key.destType),
-            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                                select_inst->getFalseValue(), key.destType),
             "lol-");
       }
 
       newInstruction =
-          builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+          builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                              key.operand1, key.destType);
       break;
     // Add other cast operations as needed
@@ -534,7 +512,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
     }
   }
 
-  cache[key] = newInstruction;
+  cache.insert(opcode, key, newInstruction);
   return newInstruction;
 }
 
@@ -544,11 +522,11 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
 
   InstructionKey key;
   if (destType)
-    key = InstructionKey(opcode, operand1, destType);
+    key = InstructionKey(operand1, destType);
   else
-    key = InstructionKey(opcode, operand1, operand2);
+    key = InstructionKey(operand1, operand2);
 
-  Value* newValue = getOrCreate(key, Name);
+  Value* newValue = getOrCreate(key, opcode, Name);
 
   return simplifyValue(
       newValue,
@@ -572,6 +550,7 @@ Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
   auto inst = builder.CreateSelect(C, True, False, Name);
 
   auto RHSKBSELECT_C = analyzeValueKnownBits(C, dyn_cast<Instruction>(inst));
+
   printvalue2(RHSKBSELECT_C);
   if (!(RHSKBSELECT_C.isUnknown())) {
     auto constant_cond = RHSKBSELECT_C.getConstant();
@@ -584,10 +563,14 @@ Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
   return inst;
 }
 
-KnownBits computeKnownBitsFromOperation(const KnownBits& vv1,
-                                        const KnownBits& vv2,
+KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
                                         Instruction::BinaryOps opcode) {
-
+  if (vv1.getBitWidth() > vv2.getBitWidth()) {
+    vv2 = vv2.zext(vv1.getBitWidth());
+  }
+  if (vv2.getBitWidth() > vv1.getBitWidth()) {
+    vv1 = vv1.zext(vv2.getBitWidth());
+  }
   if (opcode >= Instruction::Shl && opcode <= Instruction::AShr) {
     auto ugt_result = KnownBits::ugt(
         vv2,
@@ -658,8 +641,7 @@ KnownBits computeKnownBitsFromOperation(const KnownBits& vv1,
   }
 
   default:
-    outs() << "\n : " << opcode;
-    outs().flush();
+    std::cout << "\n : " << opcode;
     UNREACHABLE("Unsupported operation in calculatePossibleValues.\n");
     break;
   }
@@ -784,8 +766,7 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
     if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
       if (RHSConst->isZero())
         return LHS;
-
-      if (RHSConst->getZExtValue() > LHS->getType()->getIntegerBitWidth()) {
+      if (RHSConst->getZExtValue() >= LHS->getType()->getIntegerBitWidth()) {
         return builder.getIntN(LHS->getType()->getIntegerBitWidth(), 0);
       }
     }
@@ -855,11 +836,10 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   }
   }
   // this part analyses if we can simplify the instruction
-  if (auto simplifiedByPM = doPatternMatching(opcode, LHS, RHS)) {
-    return simplifiedByPM;
-  }
-
-  auto inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
+  Value* inst;
+  inst = doPatternMatching(opcode, LHS, RHS);
+  if (!inst)
+    inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
 
   // knownbits is recursive, and goes back 5 instructions, ideally it would be
   // not recursive and store the info for all values
@@ -869,8 +849,6 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   // road
   auto LHSKB = analyzeValueKnownBits(LHS, dyn_cast<Instruction>(inst));
   auto RHSKB = analyzeValueKnownBits(RHS, dyn_cast<Instruction>(inst));
-  printvalue2(LHSKB);
-  printvalue2(RHSKB);
 
   auto computedBits = computeKnownBitsFromOperation(LHSKB, RHSKB, opcode);
   if (computedBits.isConstant() && !computedBits.hasConflict()) {
@@ -879,6 +857,21 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   }
 
   return inst;
+}
+
+Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
+                                    const Twine& Name) {
+  GEPinfo key(Address, Type->getIntegerBitWidth(), Base == TEB);
+  auto it = GEPcache.lookup(key);
+  if (it) {
+    return it;
+  }
+
+  std::vector<Value*> indices;
+  indices.push_back(Address);
+  auto v = builder.CreateGEP(Type, Base, indices);
+  GEPcache.insert({key, v});
+  return v;
 }
 
 Value* lifterClass::createAddFolder(Value* LHS, Value* RHS, const Twine& Name) {
@@ -1089,6 +1082,7 @@ Value* lifterClass::createZExtOrTruncFolder(Value* V, Type* DestTy,
 Value* lifterClass::createSExtFolder(Value* V, Type* DestTy,
                                      const Twine& Name) {
   auto result = createInstruction(Instruction::SExt, V, nullptr, DestTy, Name);
+
 #ifdef TESTFOLDER8
   if (auto ctxI = dyn_cast<Instruction>(result)) {
     KnownBits KnownRHS = analyzeValueKnownBits(result, ctxI);
@@ -1122,7 +1116,6 @@ void lifterClass::Init_Flags() {
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
   auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
 
-  FlagList.resize(FLAGS_END);
   FlagList[FLAG_CF].set(zero);
   FlagList[FLAG_PF].set(zero);
   FlagList[FLAG_AF].set(zero);
@@ -1140,8 +1133,9 @@ void lifterClass::Init_Flags() {
 Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
   LLVMContext& context = builder.getContext();
   newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
-  printvalue2((int32_t)flag) printvalue(newValue);
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
+  // printvalue2((int32_t)flag) printvalue(newValue);
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
+      flag == FLAG_DF)
     return nullptr;
 
   FlagList[flag].set(newValue); // Set the new value directly
@@ -1151,7 +1145,8 @@ Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
 void lifterClass::setFlag(const Flag flag,
                           std::function<Value*()> calculation) {
   // If the flag is one of the reserved ones, do not modify
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
+      flag == FLAG_DF)
     return;
 
   // lazy calculation
@@ -1167,18 +1162,13 @@ Value* lifterClass::getFlag(const Flag flag) {
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-// destroy these functions below
-RegisterManager& lifterClass::getRegisters() { return Registers; }
-void lifterClass::setRegisters(RegisterManager newRegisters) {
-  Registers = newRegisters;
-}
-
+// ??
 Value* memoryAlloc;
 Value* TEB;
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
 
-void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
+void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
 
   // rsp
   // rsp_unaligned = %rsp % 16
@@ -1208,7 +1198,7 @@ void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
 
   LLVMContext& context = builder.getContext();
 
-  auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
+  const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
 
   auto value =
       cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
@@ -1261,9 +1251,9 @@ Value* lifterClass::GetRFLAGSValue() {
     int shiftAmount = flag;
     Value* shiftedFlagValue = createShlFolder(
 
-        createZExtFolder(flagValue, Type::getInt64Ty(context), "createrflag1"),
+        createZExtFolder(flagValue, Type::getInt64Ty(context), "createrflag1-"),
         ConstantInt::get(Type::getInt64Ty(context), shiftAmount),
-        "createrflag2");
+        "createrflag2-");
     rflags = createOrFolder(rflags, shiftedFlagValue, "creatingrflag");
   }
   return rflags;
@@ -1335,23 +1325,19 @@ Value* lifterClass::SetValueToSubRegister_8b(const ZydisRegister reg,
   fullRegisterValue =
       createZExtOrTruncFolder(fullRegisterValue, Type::getInt64Ty(context));
 
-  uint64_t mask = 0xFFFFFFFFFFFFFFFFULL;
-  if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
-      reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
-    mask = 0xFFFFFFFFFFFF00FFULL;
-  } else {
-    mask = 0xFFFFFFFFFFFFFF00ULL;
-  }
-
-  Value* maskValue = ConstantInt::get(Type::getInt64Ty(context), mask);
   Value* extendedValue =
       createZExtFolder(value, Type::getInt64Ty(context), "extendedValue");
 
+  bool isHighByteReg = (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
+                        reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH);
+
+  uint64_t mask = isHighByteReg ? 0xFFFFFFFFFFFF00FFULL : 0xFFFFFFFFFFFFFF00ULL;
+
+  Value* maskValue = ConstantInt::get(Type::getInt64Ty(context), mask);
   Value* maskedFullReg =
       createAndFolder(fullRegisterValue, maskValue, "maskedreg");
 
-  if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
-      reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
+  if (isHighByteReg) {
     extendedValue = createShlFolder(extendedValue, 8, "shiftedValue");
   }
 
@@ -1542,17 +1528,15 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
           createAddFolder(effectiveAddress, dispValue, "memory_addr");
     }
     printvalue(effectiveAddress);
-
     Type* loadType = Type::getIntNTy(context, possiblesize);
 
-    std::vector<Value*> indices;
-    indices.push_back(effectiveAddress);
     Value* memoryOperand = memoryAlloc;
     if (op.mem.segment == ZYDIS_REGISTER_GS)
       memoryOperand = TEB;
 
-    Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryOperand,
-                                       indices, "GEPLoadxd-" + address + "-");
+    Value* pointer =
+        createGEPFolder(Type::getInt8Ty(context), memoryOperand,
+                        effectiveAddress, "GEPLoadxd-" + address + "-");
 
     auto retval =
         builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
@@ -1632,15 +1616,13 @@ Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
           createAddFolder(effectiveAddress, dispValue, "disp_set");
     }
 
-    std::vector<Value*> indices;
-    indices.push_back(effectiveAddress);
-
     auto memoryOperand = memoryAlloc;
     if (op.mem.segment == ZYDIS_REGISTER_GS)
       memoryOperand = TEB;
 
-    Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryOperand,
-                                       indices, "GEPSTORE-" + address + "-");
+    Value* pointer =
+        createGEPFolder(Type::getInt8Ty(context), memoryOperand,
+                        effectiveAddress, "GEPSTORE-" + address + "-");
 
     pointer = simplifyValue(
         pointer,
@@ -1701,14 +1683,10 @@ void lifterClass::pushFlags(const vector<Value*>& value,
       byteVal = createOrFolder(byteVal, shiftedFlag, "pushflagbyteval");
     }
 
-    std::vector<Value*> indices;
-    indices.push_back(rsp);
-    Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,
-                                       indices, "GEPSTORE-" + address + "-");
+    Value* pointer = createGEPFolder(Type::getInt8Ty(context), memoryAlloc, rsp,
+                                     "GEPSTORE-" + address + "-");
 
     auto store = builder.CreateStore(byteVal, pointer, "storebyte");
-
-    printvalue(rsp) printvalue(pointer) printvalue(byteVal) printvalue(store);
 
     insertMemoryOp(cast<StoreInst>(store));
     rsp = createAddFolder(rsp, ConstantInt::get(rsp->getType(), 1));
@@ -1721,11 +1699,8 @@ Value* lifterClass::popStack() {
   auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
   // should we get a address calculator function, do we need that?
 
-  std::vector<Value*> indices;
-  indices.push_back(rsp);
-
-  Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,
-                                     indices, "GEPLoadPOPStack--");
+  Value* pointer = createGEPFolder(Type::getInt8Ty(context), memoryAlloc, rsp,
+                                   "GEPLoadPOPStack--");
 
   auto loadType = Type::getInt64Ty(context);
   auto returnValue = builder.CreateLoad(loadType, pointer, "PopStack-");
