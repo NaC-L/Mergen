@@ -503,7 +503,7 @@ Value* lifterClass::getOrCreate(unsigned opcode, const InstructionKey& key,
                             key.operand1, key.operand2, Name);
   } else {
     // Cast instruction
-    switch (key.opcode) {
+    switch (opcode) {
 
     case Instruction::Trunc:
     case Instruction::ZExt:
@@ -512,15 +512,15 @@ Value* lifterClass::getOrCreate(unsigned opcode, const InstructionKey& key,
       if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                                select_inst->getTrueValue(), key.destType),
-            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                                select_inst->getFalseValue(), key.destType),
             "lol-");
       }
 
       newInstruction =
-          builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
+          builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
                              key.operand1, key.destType);
       break;
     // Add other cast operations as needed
