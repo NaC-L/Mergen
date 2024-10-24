@@ -134,6 +134,7 @@ Value* lifterClass::callFunctionIR(const string& functionName,
   SetRegisterValue(ZYDIS_REGISTER_RAX,
                    callresult); // rax = externalfunc()
   // check if the function is exit or something similar to that
+  return callresult;
 }
 
 Value* lifterClass::computeOverflowFlagAdc(Value* Lvalue, Value* Rvalue,
