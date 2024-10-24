@@ -766,7 +766,7 @@ void lifterClass::lift_ret() {
 
   uint64_t destination = 0;
 
-  ROP_info rop_result = ROP_return;
+  uint8_t rop_result = ROP_return;
 
   if (llvm::ConstantInt* constInt =
           llvm::dyn_cast<llvm::ConstantInt>(rspvalue)) {
