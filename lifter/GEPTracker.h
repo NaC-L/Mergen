@@ -1,7 +1,6 @@
 #ifndef GEPTracker_H
 #define GEPTracker_H
 
-#include "includes.h"
 #include <Zycore/Types.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/IR/Value.h>
@@ -40,7 +39,6 @@ public:
     uint64_t memoryAddress;
   };
 
-  // (maybe higher for avx)
   uint8_t start;
   uint8_t end;
 
