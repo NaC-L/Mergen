@@ -399,11 +399,11 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
   return v;
 }
 
-inline bool isCast(uint8_t opcode) {
+inline bool isCast(unsigned opcode) {
   return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
 };
 
-Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
+Value* lifterClass::getOrCreate(const InstructionKey& key, unsigned opcode,
                                 const Twine& Name) {
   auto it = cache.lookup(opcode, key);
   if (it) {
