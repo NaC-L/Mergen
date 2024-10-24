@@ -751,8 +751,7 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
     if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
       if (RHSConst->isZero())
         return LHS;
-
-      if (RHSConst->getZExtValue() > LHS->getType()->getIntegerBitWidth()) {
+      if (RHSConst->getZExtValue() >= LHS->getType()->getIntegerBitWidth()) {
         return builder.getIntN(LHS->getType()->getIntegerBitWidth(), 0);
       }
     }
@@ -822,11 +821,10 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   }
   }
   // this part analyses if we can simplify the instruction
-  if (auto simplifiedByPM = doPatternMatching(opcode, LHS, RHS)) {
-    return simplifiedByPM;
-  }
-
-  auto inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
+  Value* inst;
+  inst = doPatternMatching(opcode, LHS, RHS);
+  if (!inst)
+    inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
 
   // knownbits is recursive, and goes back 5 instructions, ideally it would be
   // not recursive and store the info for all values
@@ -1153,7 +1151,7 @@ Value* TEB;
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
 
-void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
+void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
 
   // rsp
   // rsp_unaligned = %rsp % 16
@@ -1184,6 +1182,7 @@ void lifterClass::InitRegisters(Function* function, ZyanU64 rip) {
   LLVMContext& context = builder.getContext();
 
   auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
+  const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
 
   auto value =
       cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
@@ -1310,23 +1309,19 @@ Value* lifterClass::SetValueToSubRegister_8b(const ZydisRegister reg,
   fullRegisterValue =
       createZExtOrTruncFolder(fullRegisterValue, Type::getInt64Ty(context));
 
-  uint64_t mask = 0xFFFFFFFFFFFFFFFFULL;
-  if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
-      reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
-    mask = 0xFFFFFFFFFFFF00FFULL;
-  } else {
-    mask = 0xFFFFFFFFFFFFFF00ULL;
-  }
-
-  Value* maskValue = ConstantInt::get(Type::getInt64Ty(context), mask);
   Value* extendedValue =
       createZExtFolder(value, Type::getInt64Ty(context), "extendedValue");
 
+  bool isHighByteReg = (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
+                        reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH);
+
+  uint64_t mask = isHighByteReg ? 0xFFFFFFFFFFFF00FFULL : 0xFFFFFFFFFFFFFF00ULL;
+
+  Value* maskValue = ConstantInt::get(Type::getInt64Ty(context), mask);
   Value* maskedFullReg =
       createAndFolder(fullRegisterValue, maskValue, "maskedreg");
 
-  if (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
-      reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH) {
+  if (isHighByteReg) {
     extendedValue = createShlFolder(extendedValue, 8, "shiftedValue");
   }
 
