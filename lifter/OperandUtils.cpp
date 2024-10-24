@@ -555,7 +555,12 @@ Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
 KnownBits computeKnownBitsFromOperation(const KnownBits& vv1,
                                         const KnownBits& vv2,
                                         Instruction::BinaryOps opcode) {
-
+  if (vv1.getBitWidth() > vv2.getBitWidth()) {
+    vv2 = vv2.zext(vv1.getBitWidth());
+  }
+  if (vv2.getBitWidth() > vv1.getBitWidth()) {
+    vv1 = vv1.zext(vv2.getBitWidth());
+  }
   if (opcode >= Instruction::Shl && opcode <= Instruction::AShr) {
     auto ugt_result = KnownBits::ugt(
         vv2,
