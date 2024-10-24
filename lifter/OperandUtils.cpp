@@ -399,15 +399,19 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
   return v;
 }
 
+inline bool isCast(uint8_t opcode) {
+  return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
+};
+
 Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
-  auto it = cache.find(key);
-  if (it != cache.end()) {
-    return it->second;
+  auto it = cache.lookup(key);
+  if (it) {
+    return it;
   }
 
   Value* newInstruction = nullptr;
 
-  if (key.cast == 0) {
+  if (isCast(key.opcode) == 0) {
     printvalue2(key.opcode);
     printvalue2(key.cast);
     printvalue(key.operand1);
