@@ -640,7 +640,8 @@ KnownBits computeKnownBitsFromOperation(const KnownBits& vv1,
   }
 
   default:
-    std::cout << "\n : " << opcode;
+    outs() << "\n : " << opcode;
+    outs().flush();
     UNREACHABLE("Unsupported operation in calculatePossibleValues.\n");
     break;
   }
@@ -765,7 +766,8 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
     if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
       if (RHSConst->isZero())
         return LHS;
-      if (RHSConst->getZExtValue() >= LHS->getType()->getIntegerBitWidth()) {
+
+      if (RHSConst->getZExtValue() > LHS->getType()->getIntegerBitWidth()) {
         return builder.getIntN(LHS->getType()->getIntegerBitWidth(), 0);
       }
     }
@@ -835,10 +837,11 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   }
   }
   // this part analyses if we can simplify the instruction
-  Value* inst;
-  inst = doPatternMatching(opcode, LHS, RHS);
-  if (!inst)
-    inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
+  if (auto simplifiedByPM = doPatternMatching(opcode, LHS, RHS)) {
+    return simplifiedByPM;
+  }
+
+  auto inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
 
   // knownbits is recursive, and goes back 5 instructions, ideally it would be
   // not recursive and store the info for all values
