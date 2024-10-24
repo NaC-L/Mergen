@@ -512,6 +512,7 @@ public:
   DEFINE_FUNCTION(cmovno);
   DEFINE_FUNCTION(cmovp);
   DEFINE_FUNCTION(cmovnp);
+  DEFINE_FUNCTION(popcnt);
   //
   DEFINE_FUNCTION(call);
   DEFINE_FUNCTION(ret);
@@ -558,6 +559,7 @@ public:
   DEFINE_FUNCTION(xor);
   DEFINE_FUNCTION(or);
   DEFINE_FUNCTION(and);
+  DEFINE_FUNCTION(andn);
   DEFINE_FUNCTION(rol);
   DEFINE_FUNCTION(ror);
   DEFINE_FUNCTION(inc);
@@ -572,6 +574,7 @@ public:
   DEFINE_FUNCTION(cmp);
   DEFINE_FUNCTION(rdtsc);
   DEFINE_FUNCTION(cpuid);
+  DEFINE_FUNCTION(pext);
   //
   DEFINE_FUNCTION(setnz);
   DEFINE_FUNCTION(seto);
@@ -593,8 +596,12 @@ public:
   DEFINE_FUNCTION(bt);
   DEFINE_FUNCTION(btr);
   DEFINE_FUNCTION(bts);
+  DEFINE_FUNCTION(lzcnt);
+  DEFINE_FUNCTION(bzhi);
   DEFINE_FUNCTION(bsr);
   DEFINE_FUNCTION(bsf);
+  DEFINE_FUNCTION(blsr);
+  DEFINE_FUNCTION(tzcnt);
   DEFINE_FUNCTION(btc);
   DEFINE_FUNCTION(lahf);
   DEFINE_FUNCTION(sahf);
@@ -610,6 +617,7 @@ public:
   DEFINE_FUNCTION(cbw);
   DEFINE_FUNCTION(cwde);
   DEFINE_FUNCTION(cdqe);
+  DEFINE_FUNCTION(bextr);
   // end semantics definition
 };
 extern vector<lifterClass*> lifters;
