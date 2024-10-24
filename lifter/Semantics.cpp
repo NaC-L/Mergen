@@ -4220,8 +4220,11 @@ void lifterClass::liftInstruction() {
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     blockInfo.runtime_address);
   SetRegisterValue(ZYDIS_REGISTER_RIP, val);
-  auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
-  printvalue(rsp);
+  */
+  // auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
+  // printvalue(rsp);
+  printvalue2(blockInfo.runtime_address);
+  auto funcInfo = funcsignatures::getFunctionInfo(blockInfo.runtime_address);
 
   if (auto funcInfo =
           funcsignatures::getFunctionInfo(blockInfo.runtime_address)) {
