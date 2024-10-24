@@ -399,20 +399,19 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
   return v;
 }
 
-inline bool isCast(uint8_t opcode) {
-  return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
-};
-
-Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
-                                const Twine& Name) {
-  auto it = cache.lookup(opcode, key);
-  if (it) {
-    return it;
+Value* lifterClass::getOrCreate(const InstructionKey& key, const Twine& Name) {
+  auto it = cache.find(key);
+  if (it != cache.end()) {
+    return it->second;
   }
 
   Value* newInstruction = nullptr;
 
-  if (isCast(opcode) == 0) {
+  if (key.cast == 0) {
+    printvalue2(key.opcode);
+    printvalue2(key.cast);
+    printvalue(key.operand1);
+    printvalue(key.operand2);
     // Binary instruction
     if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
       printvalue2(
@@ -420,9 +419,9 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
       if (isa<ConstantInt>(key.operand2))
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
                                 select_inst->getTrueValue(), key.operand2),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
                                 select_inst->getFalseValue(), key.operand2),
             "lola-");
     }
@@ -433,9 +432,9 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
       if (isa<ConstantInt>(key.operand1))
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
                                 key.operand1, select_inst->getTrueValue()),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
                                 key.operand1, select_inst->getFalseValue()),
             "lolb-");
     }
@@ -447,10 +446,12 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
                                                                 // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  lhs1, select_inst->getTrueValue()),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  rhs1, select_inst->getFalseValue()),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1,
+                  select_inst->getTrueValue()),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1,
+                  select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -462,10 +463,12 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
                                                                 // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  lhs1, select_inst->getTrueValue()),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  rhs1, select_inst->getFalseValue()),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), lhs1,
+                  select_inst->getTrueValue()),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode), rhs1,
+                  select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -477,10 +480,12 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
                                                                // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  select_inst->getFalseValue(), rhs),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode),
+                  select_inst->getTrueValue(), lhs),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode),
+                  select_inst->getFalseValue(), rhs),
               "lol2-");
     } else if (match(key.operand2,
                      m_ZExtOrSExtOrSelf(
@@ -490,34 +495,37 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
                                                                // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  select_inst->getFalseValue(), rhs),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode),
+                  select_inst->getTrueValue(), lhs),
+              builder.CreateBinOp(
+                  static_cast<Instruction::BinaryOps>(key.opcode),
+                  select_inst->getFalseValue(), rhs),
               "lol2-");
     }
     newInstruction =
-        builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+        builder.CreateBinOp(static_cast<Instruction::BinaryOps>(key.opcode),
                             key.operand1, key.operand2, Name);
-  } else if (isCast(opcode)) {
+  } else if (key.cast) {
     // Cast instruction
-    switch (opcode) {
+    switch (key.opcode) {
 
     case Instruction::Trunc:
     case Instruction::ZExt:
     case Instruction::SExt:
+      printvalue(key.operand1);
       if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
+            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
                                select_inst->getTrueValue(), key.destType),
-            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
+            builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
                                select_inst->getFalseValue(), key.destType),
             "lol-");
       }
 
       newInstruction =
-          builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
+          builder.CreateCast(static_cast<Instruction::CastOps>(key.opcode),
                              key.operand1, key.destType);
       break;
     // Add other cast operations as needed
@@ -526,7 +534,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
     }
   }
 
-  cache.insert(opcode, key, newInstruction);
+  cache[key] = newInstruction;
   return newInstruction;
 }
 
@@ -536,11 +544,11 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
 
   InstructionKey key;
   if (destType)
-    key = InstructionKey(operand1, destType);
+    key = InstructionKey(opcode, operand1, destType);
   else
-    key = InstructionKey(operand1, operand2);
+    key = InstructionKey(opcode, operand1, operand2);
 
-  Value* newValue = getOrCreate(key, opcode, Name);
+  Value* newValue = getOrCreate(key, Name);
 
   return simplifyValue(
       newValue,
