@@ -1240,9 +1240,9 @@ Value* lifterClass::GetRFLAGSValue() {
     int shiftAmount = flag;
     Value* shiftedFlagValue = createShlFolder(
 
-        createZExtFolder(flagValue, Type::getInt64Ty(context), "createrflag1"),
+        createZExtFolder(flagValue, Type::getInt64Ty(context), "createrflag1-"),
         ConstantInt::get(Type::getInt64Ty(context), shiftAmount),
-        "createrflag2");
+        "createrflag2-");
     rflags = createOrFolder(rflags, shiftedFlagValue, "creatingrflag");
   }
   return rflags;
