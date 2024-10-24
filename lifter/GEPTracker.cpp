@@ -255,7 +255,14 @@ void lifterClass::pagedCheck(Value* address, Instruction* ctxI) {
   switch (paged) {
   case MEMORY_NOT_PAGED: {
     printvalueforce(address);
-    cout.flush();
+    printvalueforce2(instruction.mnemonic);
+    printvalueforce2(blockInfo.runtime_address);
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_paged_error.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+    });
     UNREACHABLE("\nmemory is not paged, so we(more likely) or the program "
                 "probably do some incorrect stuff "
                 "we abort to avoid incorrect output\n");
@@ -552,7 +559,14 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
 
 set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V,
                                                                uint8_t Depth) {
+  printvalue2(Depth);
   if (Depth > 16) {
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_depth_exceeded.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+    });
     UNREACHABLE("Depth exceeded");
   }
   set<APInt, APIntComparator> res;
