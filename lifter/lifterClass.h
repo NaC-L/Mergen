@@ -216,6 +216,46 @@ public:
   vector<BranchInst*> BIlist;
   vector<Instruction*> memInfos;
   InstructionCache cache;
+  struct GEPinfo {
+    Value* addr;
+    uint8_t type;
+    bool TEB;
+
+    GEPinfo() : addr(nullptr), type(0), TEB(0){};
+
+    GEPinfo(Value* addr, uint8_t type, bool TEB)
+        : addr(addr), type(type), TEB(TEB){};
+
+    bool operator==(const GEPinfo& other) const {
+      if (addr != other.addr)
+        return false;
+      if (type != other.type)
+        return false;
+      return TEB == other.TEB;
+    }
+
+    struct GEPinfoKeyInfo {
+      // Custom hash function
+      static inline unsigned getHashValue(const GEPinfo& key) {
+        auto h2 = llvm::hash_value(key.addr);
+        auto h3 = llvm::hash_value(key.type + key.TEB);
+        return llvm::hash_combine(h2, h3);
+      }
+
+      // Equality function
+      static inline bool isEqual(const GEPinfo& lhs, const GEPinfo& rhs) {
+        return lhs == rhs;
+      }
+
+      // Define empty and tombstone keys
+      static inline GEPinfo getEmptyKey() { return GEPinfo(nullptr, 0, 0); }
+
+      static inline GEPinfo getTombstoneKey() {
+        return GEPinfo(nullptr, -1, -1);
+      }
+    };
+  };
+  DenseMap<GEPinfo, Value*, GEPinfo::GEPinfoKeyInfo> GEPcache;
 
   // global
   Value* memory;
@@ -377,6 +417,9 @@ public:
   // folders
   Value* createSelectFolder(Value* C, Value* True, Value* False,
                             const Twine& Name = "");
+
+  Value* createGEPFolder(Type* Type, Value* Address, Value* Base,
+                         const Twine& Name = "");
 
   Value* createAddFolder(Value* LHS, Value* RHS, const Twine& Name = "");
 
