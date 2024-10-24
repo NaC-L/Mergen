@@ -277,11 +277,6 @@ public:
         instruction(other.instruction), // Shallow copy of the pointer
         assumptions(other.assumptions), // Deep copy of assumptions
         buffer(other.buffer),
-        FlagList(other.FlagList),   // Deep copy handled by unordered_map's copy
-                                    // constructor
-        Registers(other.Registers), // Assuming RegisterManager has a copy
-                                    // constructor
-        DC(other.DC),               // Deep copy of DC
         FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
                                   // constructor
         Registers(other.Registers),     // Assuming RegisterManager has a copy
@@ -332,11 +327,6 @@ public:
   void pushFlags(const std::vector<llvm::Value*>& value,
                  const std::string& address);
   std::vector<llvm::Value*> GetRFLAGS();
-
-  simpleFPV GetOperandValueFP(const ZydisDecodedOperand& op,
-                              const std::string& address = "");
-  simpleFPV SetOperandValueFP(const ZydisDecodedOperand& op, simpleFPV value,
-                              const std::string& address = "");
 
   llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
                                const int possiblesize,
