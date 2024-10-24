@@ -423,7 +423,7 @@ public:
   Value* createInstruction(const unsigned opcode, Value* operand1,
                            Value* operand2, Type* destType, const Twine& Name);
 
-  Value* getOrCreate(const InstructionKey& key, unsigned opcode,
+  Value* getOrCreate(const InstructionKey& key, uint8_t opcode,
                      const Twine& Name);
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
                            Value* const op1);
