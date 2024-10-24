@@ -1,8 +1,13 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
-#include "includes.h"
+#include <Zydis/Register.h>
+#include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+// 8 << (arg.argtype.size - 1)
+enum ArgType { NONE = 0, I8 = 1, I16 = 2, I32 = 3, I64 = 4 };
 
 namespace funcsignatures {
 
