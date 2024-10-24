@@ -4003,8 +4003,6 @@ void lifterClass::lift_cdqe() {
 void lifterClass::liftInstructionSemantics() {
 
   switch (instruction.mnemonic) {
-    break;
-  }
   // movs
   // case ZYDIS_MNEMONIC_MOVAPS:
   // case ZYDIS_MNEMONIC_MOVUPS:
