@@ -82,7 +82,7 @@ void final_optpass(Function* clonedFuncx) {
   } while (changed);
 
   modulePassManager =
-      passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+      passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O2);
 
   modulePassManager.addPass(ResizeAllocatedStackPass());
   modulePassManager.addPass(PromotePseudoMemory());
