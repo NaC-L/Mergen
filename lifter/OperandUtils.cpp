@@ -395,12 +395,6 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
 
     return vsimplified;
   }
-  if (inst->getOpcode() == Instruction::Add) {
-    auto testsimp = (simplifyBinOp(inst->getOpcode(), inst->getOperand(0),
-                                   inst->getOperand(1), SQ));
-    if (testsimp)
-      printvalue(testsimp);
-  }
 
   return v;
 }
