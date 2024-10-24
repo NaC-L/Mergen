@@ -4,10 +4,16 @@
 #include "includes.h"
 #include "lifterClass.h"
 #include "utils.h"
+#include <Zydis/Mnemonic.h>
+#include <immintrin.h>
+#include <iostream>
+#include <llvm/IR/Constant.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InlineAsm.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/PatternMatch.h>
 #include <llvm/IR/Type.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
@@ -124,6 +130,7 @@ Value* lifterClass::callFunctionIR(const string& functionName,
   // fix calling
   vector<Value*> args = parseArgs(funcInfo);
   auto callresult = builder.CreateCall(externFunc, args);
+
   SetRegisterValue(ZYDIS_REGISTER_RAX,
                    callresult); // rax = externalfunc()
   // check if the function is exit or something similar to that

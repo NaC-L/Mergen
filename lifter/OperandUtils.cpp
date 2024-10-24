@@ -1,10 +1,18 @@
 #include "OperandUtils.h"
 #include "includes.h"
 #include "lifterClass.h"
+#include "utils.h"
+#include <Zydis/Mnemonic.h>
 #include <Zydis/Register.h>
+#include <Zydis/SharedTypes.h>
+#include <iostream>
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Analysis/ConstantFolding.h>
 #include <llvm/Analysis/DomConditionCache.h>
 #include <llvm/Analysis/InstructionSimplify.h>
 #include <llvm/Analysis/SimplifyQuery.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/ValueLattice.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Constants.h>
@@ -12,6 +20,8 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PatternMatch.h>
 #include <llvm/Support/KnownBits.h>
+#include <llvm/TargetParser/Triple.h>
+#include <optional>
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -318,6 +328,7 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 }
 
 KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
+
   if (auto v_inst = dyn_cast<Instruction>(value)) {
     // Use find() to check if v_inst exists in the map
     auto it = assumptions.find(v_inst);
@@ -540,6 +551,7 @@ Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
   auto inst = builder.CreateSelect(C, True, False, Name);
 
   auto RHSKBSELECT_C = analyzeValueKnownBits(C, dyn_cast<Instruction>(inst));
+
   printvalue2(RHSKBSELECT_C);
   if (!(RHSKBSELECT_C.isUnknown())) {
     auto constant_cond = RHSKBSELECT_C.getConstant();
@@ -847,6 +859,7 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
 
   return inst;
 }
+
 Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
                                     const Twine& Name) {
   GEPinfo key(Address, Type->getIntegerBitWidth(), Base == TEB);
@@ -1070,6 +1083,7 @@ Value* lifterClass::createZExtOrTruncFolder(Value* V, Type* DestTy,
 Value* lifterClass::createSExtFolder(Value* V, Type* DestTy,
                                      const Twine& Name) {
   auto result = createInstruction(Instruction::SExt, V, nullptr, DestTy, Name);
+
 #ifdef TESTFOLDER8
   if (auto ctxI = dyn_cast<Instruction>(result)) {
     KnownBits KnownRHS = analyzeValueKnownBits(result, ctxI);
