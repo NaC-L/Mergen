@@ -109,14 +109,21 @@ namespace debugging {
   template void printValue<int16_t>(const int16_t& v, const char* name);
   template void printValue<int8_t>(const int8_t& v, const char* name);
   template void printValue<bool>(const bool& v, const char* name);
-  template void printValue<ValueLatticeElement>(const ValueLatticeElement& v,
+  template void printValue<std::string>(const std::string& v, const char* name);
+  template void printValue<char*>(char* const& v, const char* name);
+  template void printValue<z3::expr>(const z3::expr& v, const char* name);
+  template void printValue<char[256]>(char const (&)[256], const char* name);
+  template void
+  printValue<llvm::FormattedNumber>(llvm::FormattedNumber const(&),
+                                    const char* name);
+  template void
+  printValue<llvm::ValueLatticeElement>(const llvm::ValueLatticeElement& v,
+                                        const char* name);
+  template void printValue<llvm::KnownBits>(const llvm::KnownBits& v,
+                                            const char* name);
+  template void printValue<llvm::APInt>(const llvm::APInt& v, const char* name);
+  template void printValue<llvm::ConstantRange>(const llvm::ConstantRange& v,
                                                 const char* name);
-  template void printValue<KnownBits>(const KnownBits& v, const char* name);
-  template void printValue<APInt>(const APInt& v, const char* name);
-  template void printValue<ROP_info>(const ROP_info& v, const char* name);
-  template void printValue<ConstantRange>(const ConstantRange& v,
-                                          const char* name);
-
 } // namespace debugging
 
 namespace argparser {
