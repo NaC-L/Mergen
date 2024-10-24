@@ -1128,7 +1128,6 @@ void lifterClass::Init_Flags() {
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
   auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
 
-  FlagList.resize(FLAGS_END);
   FlagList[FLAG_CF].set(zero);
   FlagList[FLAG_PF].set(zero);
   FlagList[FLAG_AF].set(zero);
@@ -1146,8 +1145,9 @@ void lifterClass::Init_Flags() {
 Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
   LLVMContext& context = builder.getContext();
   newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
-  printvalue2((int32_t)flag) printvalue(newValue);
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
+  // printvalue2((int32_t)flag) printvalue(newValue);
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
+      flag == FLAG_DF)
     return nullptr;
 
   FlagList[flag].set(newValue); // Set the new value directly
@@ -1157,7 +1157,8 @@ Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
 void lifterClass::setFlag(const Flag flag,
                           std::function<Value*()> calculation) {
   // If the flag is one of the reserved ones, do not modify
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
+      flag == FLAG_DF)
     return;
 
   // lazy calculation
