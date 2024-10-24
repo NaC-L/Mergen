@@ -552,8 +552,7 @@ Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
   return inst;
 }
 
-KnownBits computeKnownBitsFromOperation(const KnownBits& vv1,
-                                        const KnownBits& vv2,
+KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
                                         Instruction::BinaryOps opcode) {
   if (vv1.getBitWidth() > vv2.getBitWidth()) {
     vv2 = vv2.zext(vv1.getBitWidth());
@@ -1186,7 +1185,6 @@ void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
 
   LLVMContext& context = builder.getContext();
 
-  auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
   const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
 
   auto value =
