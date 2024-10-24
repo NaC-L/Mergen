@@ -369,6 +369,7 @@ void lifterClass::lift_movaps() {
       GetOperandValue(src, src.size, to_string(blockInfo.runtime_address));
   SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
 }
+*/
 void lifterClass::lift_mov() {
   LLVMContext& context = builder.getContext();
   auto dest = operands[0];
