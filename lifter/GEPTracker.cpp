@@ -55,7 +55,6 @@ namespace BinaryOperations {
 
     uint64_t mappedAddr = FileHelper::address_to_mapped_address(addr);
     uint64_t tempValue;
-
     if (mappedAddr > 0) {
       std::memcpy(&tempValue,
                   reinterpret_cast<const void*>(data_g + mappedAddr), byteSize);
@@ -685,7 +684,6 @@ Value* lifterClass::solveLoad(LoadInst* load) {
   auto loadPointer = loadPtrGEP->getPointerOperand();
   auto loadOffset = loadPtrGEP->getOperand(1);
   printvalue(loadOffset);
-
   // if we know all the stores, we can use our buffer
   // however, if we dont know all the stores
   // we have to if check each store overlaps with our load

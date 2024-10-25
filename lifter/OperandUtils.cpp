@@ -1279,7 +1279,6 @@ Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
   if (key == ZYDIS_REGISTER_RFLAGS || key == ZYDIS_REGISTER_EFLAGS) {
     return GetRFLAGSValue();
   }
-
   /*
   if (Registers.find(newKey) == Registers.end()) {
           UNREACHABLE("register not found"); exit(-1);
