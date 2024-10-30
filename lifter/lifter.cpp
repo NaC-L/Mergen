@@ -44,8 +44,8 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
 
     lifter->run = 1;
 
-    for (; lifter->run && !lifter->finished &&
-           lifter->blockInfo.runtime_address > 0;) {
+    while ((lifter->run && !lifter->finished)) {
+
       if (BinaryOperations::isWrittenTo(lifter->blockInfo.runtime_address)) {
         printvalueforce2(lifter->blockInfo.runtime_address);
         UNREACHABLE("Found Self Modifying Code! we dont support it");
