@@ -403,7 +403,7 @@ set<APInt, APIntComparator>
 lifterClass::getPossibleValues(const llvm::KnownBits& known,
                                unsigned max_unknown) {
 
-  if (max_unknown >= 4) {
+  if ((max_unknown == 0) || (max_unknown >= 4)) {
     debugging::doIfDebug([&]() {
       std::string Filename = "output_too_many_unk.ll";
       std::error_code EC;
