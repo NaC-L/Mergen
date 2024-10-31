@@ -411,7 +411,9 @@ lifterClass::getPossibleValues(const llvm::KnownBits& known,
       builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
     printvalueforce2(max_unknown);
-    UNREACHABLE("There is a very huge chance that this shouldnt happen");
+    UNREACHABLE(
+        "We cant solve the address because too many potential values! "
+        "This shouldn't happen, maybe calculate some kind of a range ?");
   }
   llvm::APInt base = known.One;
   llvm::APInt unknowns = ~(known.Zero | known.One);
