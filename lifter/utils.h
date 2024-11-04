@@ -78,4 +78,6 @@ namespace timer {
   void startTimer();
   double stopTimer();
   double getTimer();
+  void suspendTimer();
+  void resumeTimer();
 } // namespace timer

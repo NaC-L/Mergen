@@ -8,15 +8,17 @@
 #include "utils.h"
 #include <fstream>
 #include <iostream>
+#include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/IR/IRBuilderFolder.h>
 #include <llvm/Support/NativeFormatting.h>
 
-vector<lifterClass*> lifters;
+std::vector<lifterClass*> lifters;
 uint64_t original_address = 0;
 unsigned int pathNo = 0;
 // consider having this function in a class, later we can use multi-threading to
 // explore different paths
 unsigned int breaking = 0;
+
 void asm_to_zydis_to_lift(ZyanU8* data) {
 
   ZydisDecoder decoder;
@@ -29,18 +31,19 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
         lifter->blockInfo.runtime_address);
     debugging::doIfDebug([&]() {
       const auto printv =
-          "runtime_addr: " + to_string(lifter->blockInfo.runtime_address) +
-          " offset:" + to_string(offset) + " byte there: 0x" +
-          to_string((int)*(data + offset)) + "\n" +
-          "offset: " + to_string(offset) +
-          " file_base: " + to_string(original_address) +
-          " runtime: " + to_string(lifter->blockInfo.runtime_address) + "\n";
+          "runtime_addr: " + std::to_string(lifter->blockInfo.runtime_address) +
+          " offset:" + std::to_string(offset) + " byte there: 0x" +
+          std::to_string((int)*(data + offset)) + "\n" +
+          "offset: " + std::to_string(offset) +
+          " file_base: " + std::to_string(original_address) +
+          " runtime: " + std::to_string(lifter->blockInfo.runtime_address) +
+          "\n";
       printvalue2(printv);
     });
 
     lifter->builder.SetInsertPoint(lifter->blockInfo.block);
 
-    BinaryOperations::initBases(data); // sigh
+    BinaryOperations::initBases(data); // sigh ?
 
     lifter->run = 1;
 
@@ -76,19 +79,28 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
       });
 
       lifter->blockInfo.runtime_address += lifter->instruction.length;
+
+      // unicorn_execute(instruction)
       lifter->liftInstruction();
+
+      // unicorn_get(RAX) == lifter.get(RAX)
+      // etc.
+      // if unequal, there is a bug
       if (lifter->finished) {
 
         lifter->run = 0;
         lifters.pop_back();
 
         debugging::doIfDebug([&]() {
-          std::string Filename = "output_path_" + to_string(++pathNo) + ".ll";
+          std::string Filename =
+              "output_path_" + std::to_string(++pathNo) + ".ll";
           std::error_code EC;
           raw_fd_ostream OS(Filename, EC);
           lifter->fnc->getParent()->print(OS, nullptr);
         });
-        outs() << "next lifter instance\n";
+        auto nextlift = "next lifter instance\n";
+        printvalue2(nextlift);
+        printvalueforce2(nextlift);
 
         delete lifter;
         continue;
@@ -103,10 +115,10 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
                                        unsigned char* fileBase) {
 
   LLVMContext context;
-  string mod_name = "my_lifting_module";
+  std::string mod_name = "my_lifting_module";
   llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
 
-  vector<llvm::Type*> argTypes;
+  std::vector<llvm::Type*> argTypes;
   argTypes.push_back(llvm::Type::getInt64Ty(context));
   argTypes.push_back(llvm::Type::getInt64Ty(context));
   argTypes.push_back(llvm::Type::getInt64Ty(context));
@@ -129,13 +141,16 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
   auto functionType =
       llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 
-  const string function_name = "main";
+  const std::string function_name = "main";
   auto function =
       llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
                              function_name.c_str(), lifting_module);
-  const string block_name = "entry";
+  const std::string block_name = "entry";
   auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
-  llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
+
+  InstSimplifyFolder Folder(lifting_module.getDataLayout());
+  llvm::IRBuilder<InstSimplifyFolder> builder =
+      llvm::IRBuilder<InstSimplifyFolder>(bb, Folder);
 
   // auto RegisterList = InitRegisters(builder, function, runtime_address);
 
@@ -156,13 +171,14 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
   const uint64_t RVA = static_cast<uint64_t>(runtime_address - ADDRESS);
   const uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
   const uint8_t* dataAtAddress = fileBase + fileOffset;
-  cout << hex << "0x" << (int)*dataAtAddress << endl;
+  std::cout << std::hex << "0x" << (int)*dataAtAddress << std::endl;
   original_address = ADDRESS;
-  cout << "address: " << ADDRESS << " imageSize: " << imageSize
-       << " filebase: " << (uint64_t)fileBase << " fOffset: " << fileOffset
-       << " RVA: " << RVA << endl;
+  std::cout << "address: " << ADDRESS << " imageSize: " << imageSize
+            << " filebase: " << (uint64_t)fileBase << " fOffset: " << fileOffset
+            << " RVA: " << RVA << std::endl;
 
   main->markMemPaged(STACKP_VALUE - stackSize, STACKP_VALUE + stackSize);
+  printvalue2(stackSize);
   main->markMemPaged(ADDRESS, ADDRESS + imageSize);
 
   // blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
@@ -172,19 +188,19 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
 
   long long ms = timer::getTimer();
 
-  cout << "\nlifting complete, " << dec << ms << " milliseconds has past"
-       << endl;
-  const string Filename_noopt = "output_no_opts.ll";
-  error_code EC_noopt;
+  std::cout << "\nlifting complete, " << std::dec << ms
+            << " milliseconds has past" << std::endl;
+  const std::string Filename_noopt = "output_no_opts.ll";
+  std::error_code EC_noopt;
   llvm::raw_fd_ostream OS_noopt(Filename_noopt, EC_noopt);
 
   lifting_module.print(OS_noopt, nullptr);
 
-  cout << "\nwriting complete, " << dec << ms << " milliseconds has past"
-       << endl;
+  std::cout << "\nwriting complete, " << std::dec << ms
+            << " milliseconds has past" << std::endl;
   final_optpass(function);
-  const string Filename = "output.ll";
-  error_code EC;
+  const std::string Filename = "output.ll";
+  std::error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);
 
   lifting_module.print(OS, nullptr);
@@ -193,12 +209,12 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
 }
 
 int main(int argc, char* argv[]) {
-  vector<string> args(argv, argv + argc);
+  std::vector<std::string> args(argv, argv + argc);
   argparser::parseArguments(args);
   timer::startTimer();
   // use parser
   if (args.size() < 3) {
-    cerr << "Usage: " << args[0] << " <filename> <startAddr>" << endl;
+    std::cerr << "Usage: " << args[0] << " <filename> <startAddr>" << std::endl;
     return 1;
   }
 
@@ -207,18 +223,18 @@ int main(int argc, char* argv[]) {
   const char* filename = args[1].c_str();
   uint64_t startAddr = stoull(args[2], nullptr, 0);
 
-  ifstream ifs(filename, ios::binary);
+  std::ifstream ifs(filename, std::ios::binary);
   if (!ifs.is_open()) {
-    cout << "Failed to open the file." << endl;
+    std::cout << "Failed to open the file." << std::endl;
     return 1;
   }
 
-  ifs.seekg(0, ios::end);
-  vector<uint8_t> fileData(ifs.tellg());
-  ifs.seekg(0, ios::beg);
+  ifs.seekg(0, std::ios::end);
+  std::vector<uint8_t> fileData(ifs.tellg());
+  ifs.seekg(0, std::ios::beg);
 
   if (!ifs.read((char*)fileData.data(), fileData.size())) {
-    cout << "Failed to read the file." << endl;
+    std::cout << "Failed to read the file." << std::endl;
     return 1;
   }
   ifs.close();
@@ -233,11 +249,13 @@ int main(int argc, char* argv[]) {
     value.display();
   }
   long long ms = timer::getTimer();
-  cout << "\n" << dec << ms << " milliseconds has past" << endl;
+  std::cout << "\n" << std::dec << ms << " milliseconds has past" << std::endl;
 
   InitFunction_and_LiftInstructions(startAddr, fileBase);
   long long milliseconds = timer::stopTimer();
-  cout << "\n" << dec << milliseconds << " milliseconds has past" << endl;
-  cout << "Lifted and optimized " << debugging::increaseInstCounter() - 1
-       << " total insts";
+  std::cout << "\n"
+            << std::dec << milliseconds << " milliseconds has past"
+            << std::endl;
+  std::cout << "Lifted and optimized " << debugging::increaseInstCounter() - 1
+            << " total insts";
 }

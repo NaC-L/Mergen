@@ -135,6 +135,11 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
     uint8_t bytesize = v.end - v.start;
 
     APInt mem_value(1, 0);
+    printvalue2(v.isRef);
+    auto read_mem =
+        BinaryOperations::readMemory(v.memoryAddress, bytesize, mem_value);
+    printvalue2(read_mem);
+    printvalue2(mem_value);
     if (v.isRef) {
       byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
                                v.ref.byteOffset + bytesize);
@@ -143,6 +148,10 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
       byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
     } else if (!v.isRef) {
       // llvm_unreachable_internal("uh...");
+      /*
+      byteValue = ConstantInt::get(Type::getIntNTy(context, (bytesize) * 8), 0);
+      */
+      // TODO :
       byteValue = extractBytes(orgLoad, m, m + bytesize);
     }
     if (byteValue) {
@@ -270,9 +279,19 @@ void lifterClass::pagedCheck(Value* address, Instruction* ctxI) {
       raw_fd_ostream OS(Filename, EC);
       builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
+    /*
     UNREACHABLE("\nmemory is not paged, so we(more likely) or the program "
                 "probably do some incorrect stuff "
                 "we abort to avoid incorrect output\n");
+                */
+
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("exception", fnc->getReturnType())
+            .getCallee());
+    builder.CreateRet(builder.CreateCall(externFunc));
+    run = 0;
+    finished = 1;
     break;
   }
   case MEMORY_MIGHT_BE_PAGED: {
@@ -336,8 +355,8 @@ bool overlaps(uint64_t addr1, uint64_t size1, uint64_t addr2, uint64_t size2) {
 
 uint64_t createmask(uint64_t a1, uint64_t a2, uint64_t b1, uint64_t b2) {
 
-  auto start_overlap = max(a1, b1);
-  auto end_overlap = min(a2, b2);
+  auto start_overlap = std::max(a1, b1);
+  auto end_overlap = std::min(a2, b2);
   int64_t diffStart = a1 - b1;
 
   printvalue2(start_overlap) printvalue2(end_overlap);
@@ -367,16 +386,18 @@ uint64_t createmask(uint64_t a1, uint64_t a2, uint64_t b1, uint64_t b2) {
 struct PairHash {
   std::size_t operator()(const std::pair<llvm::Value*, int>& pair) const {
     // Combine the hashes of the two elements
-    return hash<llvm::Value*>{}(pair.first) ^ hash<int>{}(pair.second);
+    return std::hash<llvm::Value*>{}(pair.first) ^
+           std::hash<int>{}(pair.second);
   }
 };
 
-void removeDuplicateOffsets(vector<Instruction*>& vec) {
+void removeDuplicateOffsets(std::vector<Instruction*>& vec) {
   if (vec.empty())
     return;
 
-  unordered_map<pair<Value*, int>, Instruction*, PairHash> latestOffsets;
-  vector<Instruction*> uniqueInstructions;
+  std::unordered_map<std::pair<Value*, int>, Instruction*, PairHash>
+      latestOffsets;
+  std::vector<Instruction*> uniqueInstructions;
   uniqueInstructions.reserve(
       vec.size()); // reserve space assuming all could be unique
   latestOffsets.reserve(
@@ -389,7 +410,7 @@ void removeDuplicateOffsets(vector<Instruction*>& vec) {
     int size = valOp->getType()->getIntegerBitWidth();
     auto GEPInst = cast<GetElementPtrInst>(GEPval);
     auto offset = GEPInst->getOperand(1);
-    auto pair = make_pair(offset, size);
+    auto pair = std::make_pair(offset, size);
 
     if (latestOffsets.emplace(pair, *it).second) {
       uniqueInstructions.push_back(*it);
@@ -399,7 +420,7 @@ void removeDuplicateOffsets(vector<Instruction*>& vec) {
   vec.assign(uniqueInstructions.rbegin(), uniqueInstructions.rend());
 }
 
-set<APInt, APIntComparator>
+std::set<APInt, APIntComparator>
 lifterClass::getPossibleValues(const llvm::KnownBits& known,
                                unsigned max_unknown) {
 
@@ -411,15 +432,13 @@ lifterClass::getPossibleValues(const llvm::KnownBits& known,
       builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
     printvalueforce2(max_unknown);
-    UNREACHABLE(
-        "We cant solve the address because too many potential values! "
-        "This shouldn't happen, maybe calculate some kind of a range ?");
+    UNREACHABLE("There is a very huge chance that this shouldnt happen");
   }
   llvm::APInt base = known.One;
   llvm::APInt unknowns = ~(known.Zero | known.One);
   unsigned numBits = known.getBitWidth();
 
-  set<APInt, APIntComparator> values;
+  std::set<APInt, APIntComparator> values;
 
   llvm::APInt combo(unknowns.getBitWidth(), 0);
   for (uint64_t i = 0; i < (1ULL << max_unknown); ++i) {
@@ -566,8 +585,8 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
   return res;
 }
 
-set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V,
-                                                               uint8_t Depth) {
+std::set<APInt, APIntComparator>
+lifterClass::computePossibleValues(Value* V, uint8_t Depth) {
   printvalue2(Depth);
   if (Depth > 16) {
     debugging::doIfDebug([&]() {
@@ -578,7 +597,7 @@ set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V,
     });
     UNREACHABLE("Depth exceeded");
   }
-  set<APInt, APIntComparator> res;
+  std::set<APInt, APIntComparator> res;
   printvalue(V);
   if (auto v_ci = dyn_cast<ConstantInt>(V)) {
     res.insert(v_ci->getValue());
@@ -750,7 +769,7 @@ Value* lifterClass::solveLoad(LoadInst* load) {
   }
 
   // create a new vector with only leave what we care about
-  vector<Instruction*> clearedMemInfos;
+  std::vector<Instruction*> clearedMemInfos;
 
   clearedMemInfos = memInfos;
   removeDuplicateOffsets(clearedMemInfos);
@@ -869,7 +888,7 @@ Value* lifterClass::solveLoad(LoadInst* load) {
       auto retvalload = retval;
       printvalue(cleared_retval);
       printvalue(retvalload);
-      debugging::doIfDebug([&]() { cout << "-------------------\n"; });
+      debugging::doIfDebug([&]() { std::cout << "-------------------\n"; });
     }
   }
   return retval;

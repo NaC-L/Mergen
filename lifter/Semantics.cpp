@@ -50,7 +50,8 @@ FunctionType* lifterClass::parseArgsType(funcsignatures::functioninfo* funcInfo,
                                  false);
 }
 
-vector<Value*> lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
+std::vector<Value*>
+lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
   auto& context = builder.getContext();
 
   auto RspRegister = GetRegisterValue(ZYDIS_REGISTER_RSP);
@@ -104,7 +105,7 @@ vector<Value*> lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
 }
 
 // probably move this stuff somewhere else
-Value* lifterClass::callFunctionIR(const string& functionName,
+Value* lifterClass::callFunctionIR(const std::string& functionName,
                                    funcsignatures::functioninfo* funcInfo) {
   auto& context = builder.getContext();
 
@@ -128,7 +129,7 @@ Value* lifterClass::callFunctionIR(const string& functionName,
   Function* externFunc = cast<Function>(
       M->getOrInsertFunction(functionName, externFuncType).getCallee());
   // fix calling
-  vector<Value*> args = parseArgs(funcInfo);
+  std::vector<Value*> args = parseArgs(funcInfo);
   auto callresult = builder.CreateCall(externFunc, args);
 
   SetRegisterValue(ZYDIS_REGISTER_RAX,
@@ -235,7 +236,7 @@ Value* lifterClass::computeSignFlag(Value* value) { // x < 0 = sf
 // this function is used for jumps that are related to user, ex: vms using
 // different handlers, jmptables, etc.
 
-void lifterClass::branchHelper(Value* condition, const string& instname,
+void lifterClass::branchHelper(Value* condition, const std::string& instname,
                                int numbered, bool reverse) {
   // TODO:
   // save the current state of memory, registers etc.,
@@ -243,7 +244,7 @@ void lifterClass::branchHelper(Value* condition, const string& instname,
   // execution from the other branch
 
   auto block = builder.GetInsertBlock();
-  block->setName(instname + to_string(numbered));
+  block->setName(instname + std::to_string(numbered));
   auto function = block->getParent();
 
   auto dest = operands[0];
@@ -263,7 +264,7 @@ void lifterClass::branchHelper(Value* condition, const string& instname,
   uint64_t destination = 0;
   solvePath(function, destination, next_jump);
 
-  block->setName("previousjmp_block-" + to_string(destination) + "-");
+  block->setName("previousjmp_block-" + std::to_string(destination) + "-");
   // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
   // "\n";
 }
@@ -366,35 +367,52 @@ void lifterClass::lift_movaps() {
   auto src = operands[1];
 
   auto Rvalue =
-      GetOperandValue(src, src.size, to_string(blockInfo.runtime_address));
-  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+      GetOperandValue(src, src.size, std::to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 */
+
+void lifterClass::lift_movdqa() {
+  auto dest = operands[0]; // 128
+  auto src = operands[1];  // 128
+
+  // only legal:
+  // rr
+  // mr
+  // rm
+
+  auto Rvalue =
+      GetOperandValueFP(src, std::to_string(blockInfo.runtime_address));
+  printvalue(Rvalue.v1);
+  printvalue(Rvalue.v2);
+  SetOperandValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+}
+
 void lifterClass::lift_mov() {
   LLVMContext& context = builder.getContext();
   auto dest = operands[0];
   auto src = operands[1];
 
   auto Rvalue =
-      GetOperandValue(src, src.size, to_string(blockInfo.runtime_address));
+      GetOperandValue(src, src.size, std::to_string(blockInfo.runtime_address));
 
   switch (instruction.mnemonic) {
   case ZYDIS_MNEMONIC_MOVSX: {
-    Rvalue =
-        createSExtFolder(Rvalue, Type::getIntNTy(context, dest.size),
-                         "movsx-" + to_string(blockInfo.runtime_address) + "-");
+    Rvalue = createSExtFolder(
+        Rvalue, Type::getIntNTy(context, dest.size),
+        "movsx-" + std::to_string(blockInfo.runtime_address) + "-");
     break;
   }
   case ZYDIS_MNEMONIC_MOVZX: {
-    Rvalue =
-        createZExtFolder(Rvalue, Type::getIntNTy(context, dest.size),
-                         "movzx-" + to_string(blockInfo.runtime_address) + "-");
+    Rvalue = createZExtFolder(
+        Rvalue, Type::getIntNTy(context, dest.size),
+        "movzx-" + std::to_string(blockInfo.runtime_address) + "-");
     break;
   }
   case ZYDIS_MNEMONIC_MOVSXD: {
-    Rvalue = createSExtFolder(Rvalue, Type::getIntNTy(context, dest.size),
-                              "movsxd-" + to_string(blockInfo.runtime_address) +
-                                  "-");
+    Rvalue = createSExtFolder(
+        Rvalue, Type::getIntNTy(context, dest.size),
+        "movsxd-" + std::to_string(blockInfo.runtime_address) + "-");
     break;
   }
   default: {
@@ -408,7 +426,7 @@ void lifterClass::lift_mov() {
 
   printvalue(Rvalue);
 
-  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_cmovbz() {
@@ -445,7 +463,7 @@ void lifterClass::lift_cmovnbz() {
   Value* resultValue =
       createSelectFolder(nbeCondition, Rvalue, Lvalue, "cmovnbe");
 
-  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_cmovz() {
@@ -459,7 +477,7 @@ void lifterClass::lift_cmovz() {
 
   Value* resultValue = createSelectFolder(zf, Rvalue, Lvalue, "cmovz");
 
-  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_cmovnz() {
@@ -533,7 +551,7 @@ void lifterClass::lift_cmovnb() {
   Value* resultValue =
       createSelectFolder(createNotFolder(cf), Rvalue, Lvalue, "cmovnb");
 
-  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_cmovns() {
@@ -716,7 +734,7 @@ void lifterClass::lift_call() {
                                     8); // assuming its x64
   auto result = createSubFolder(RspValue, val, "pushing_newrsp");
 
-  string block_name = "jmp-call";
+  std::string block_name = "jmp-call";
 
   uint64_t jump_address = blockInfo.runtime_address;
   switch (src.type) {
@@ -731,7 +749,7 @@ void lifterClass::lift_call() {
 
       callFunctionIR(registerValue->getName().str() + "fnc_ptr", nullptr);
 
-      SetOperandValue(rsp, RspValue, to_string(blockInfo.runtime_address));
+      SetOperandValue(rsp, RspValue, std::to_string(blockInfo.runtime_address));
       break;
       // registerValue =
       //    ConstantInt::get(Type::getInt32Ty(context), 0x1337);
@@ -746,13 +764,13 @@ void lifterClass::lift_call() {
     break;
   }
 
-  SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
+  SetOperandValue(rsp, result, std::to_string(blockInfo.runtime_address));
   ; // sub rsp 8 last,
 
   auto push_into_rsp = GetRegisterValue(ZYDIS_REGISTER_RIP);
 
   SetOperandValue(rsp_memory, push_into_rsp,
-                  to_string(blockInfo.runtime_address));
+                  std::to_string(blockInfo.runtime_address));
   ; // sub rsp 8 last,
 
   auto bb = BasicBlock::Create(context, block_name.c_str(),
@@ -794,7 +812,7 @@ void lifterClass::lift_ret() {
   auto realval = GetOperandValue(rspaddr, rspaddr.size);
 
   auto block = builder.GetInsertBlock();
-  block->setName("ret_check" + to_string(ret_count));
+  block->setName("ret_check" + std::to_string(ret_count));
   auto function = block->getParent();
   auto lastinst = builder.CreateRet(realval);
 
@@ -831,9 +849,63 @@ void lifterClass::lift_ret() {
   if (rop_result == REAL_return) {
     lastinst->eraseFromParent();
     block->setName("real_ret");
+
     auto rax = GetRegisterValue(ZYDIS_REGISTER_RAX);
-    builder.CreateRet(
-        createZExtFolder(rax, Type::getInt64Ty(rax->getContext())));
+
+    std::vector<llvm::Type*> argTypes;
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    auto myStructType = StructType::create(context, argTypes, "returnStruct");
+
+    auto myStruct = UndefValue::get(myStructType);
+
+    // Use CreateInsertValue for structs
+    auto returnvalue = builder.CreateInsertValue(myStruct, rax, {0});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_RCX), {1});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_RDX), {2});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_RBX), {3});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_RSP), {4});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_RBP), {5});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_RSI), {6});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_RDI), {7});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_R8), {8});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_R9), {9});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_R10), {10});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_R11), {11});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_R12), {12});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_R13), {13});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_R14), {14});
+    returnvalue = builder.CreateInsertValue(
+        returnvalue, GetRegisterValue(ZYDIS_REGISTER_R15), {15});
+    builder.CreateRet(returnvalue);
     Function* originalFunc_finalnopt = builder.GetInsertBlock()->getParent();
 
     debugging::doIfDebug([&]() {
@@ -865,7 +937,7 @@ void lifterClass::lift_ret() {
                                     8); // assuming its x64
   auto rsp_result = createAddFolder(
       rspvalue, val,
-      "ret-new-rsp-" + to_string(blockInfo.runtime_address) + "-");
+      "ret-new-rsp-" + std::to_string(blockInfo.runtime_address) + "-");
 
   if (operands[0].type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
     rspaddr = operands[3];
@@ -887,7 +959,8 @@ void lifterClass::lift_jmp() {
   auto Value = GetOperandValue(dest, 64);
   auto ripval = GetRegisterValue(ZYDIS_REGISTER_RIP);
   auto newRip = createAddFolder(
-      Value, ripval, "jump-xd-" + to_string(blockInfo.runtime_address) + "-");
+      Value, ripval,
+      "jump-xd-" + std::to_string(blockInfo.runtime_address) + "-");
 
   jmpcount++;
   auto targetv = GetOperandValue(dest, 64);
@@ -1444,10 +1517,10 @@ void lifterClass::lift_not() {
   auto dest = operands[0];
 
   auto Rvalue = GetOperandValue(dest, dest.size);
-  Rvalue =
-      createXorFolder(Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
-                      "realnot-" + to_string(blockInfo.runtime_address) + "-");
-  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+  Rvalue = createXorFolder(Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
+                           "realnot-" +
+                               std::to_string(blockInfo.runtime_address) + "-");
+  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 
   printvalue(Rvalue);
   //  Flags Affected
@@ -1557,8 +1630,8 @@ void lifterClass::lift_sar() {
   auto dest = operands[0];
   auto count = operands[1];
 
-  Value* Lvalue =
-      GetOperandValue(dest, dest.size, to_string(blockInfo.runtime_address));
+  Value* Lvalue = GetOperandValue(dest, dest.size,
+                                  std::to_string(blockInfo.runtime_address));
   Value* countValue = GetOperandValue(count, dest.size);
 
   Value* zero = ConstantInt::get(countValue->getType(), 0);
@@ -1570,7 +1643,7 @@ void lifterClass::lift_sar() {
   // ashrfolder
   Value* result = createAShrFolder(
       Lvalue, clampedCount,
-      "sar-lshr-" + to_string(blockInfo.runtime_address) + "-");
+      "sar-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
 
   Value* isZeroed =
       createICMPFolder(CmpInst::ICMP_UGT, clampedCount,
@@ -1613,7 +1686,7 @@ void lifterClass::lift_sar() {
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
 
-  SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, result, std::to_string(blockInfo.runtime_address));
   ;
 }
 // TODO fix
@@ -1633,7 +1706,7 @@ void lifterClass::lift_shr() {
 
   Value* result = createLShrFolder(
       Lvalue, clampedCount,
-      "shr-lshr-" + to_string(blockInfo.runtime_address) + "-");
+      "shr-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
   Value* zero = ConstantInt::get(countValue->getType(), 0);
   Value* isZeroed =
       createICMPFolder(CmpInst::ICMP_UGT, clampedCount,
@@ -1675,9 +1748,9 @@ void lifterClass::lift_shr() {
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
 
-  printvalue(Lvalue) printvalue(clampedCount) printvalue(result)
-      printvalue(isNotZero) printvalue(oldcf) printvalue(cfValue)
-          SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
+  printvalue(Lvalue) printvalue(clampedCount) printvalue(result) printvalue(
+      isNotZero) printvalue(oldcf) printvalue(cfValue)
+      SetOperandValue(dest, result, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_shl() {
@@ -1685,8 +1758,8 @@ void lifterClass::lift_shl() {
   auto dest = operands[0];
   auto count = operands[1];
 
-  Value* Lvalue =
-      GetOperandValue(dest, dest.size, to_string(blockInfo.runtime_address));
+  Value* Lvalue = GetOperandValue(dest, dest.size,
+                                  std::to_string(blockInfo.runtime_address));
   Value* countValue = GetOperandValue(count, dest.size);
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
@@ -1773,7 +1846,7 @@ void lifterClass::lift_shl() {
     return createSelectFolder(countIsNotZero, computeParityFlag(result), oldpf);
   });
 
-  SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, result, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_bswap() {
@@ -1870,7 +1943,7 @@ void lifterClass::lift_xchg() {
 
   printvalue(Lvalue) printvalue(Rvalue);
 
-  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   ;
   SetOperandValue(src, Lvalue);
 }
@@ -1967,7 +2040,7 @@ void lifterClass::lift_shld() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_shrd() {
@@ -2025,7 +2098,7 @@ void lifterClass::lift_shrd() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_lea() {
@@ -2037,7 +2110,7 @@ void lifterClass::lift_lea() {
 
   printvalue(Rvalue)
 
-      SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+      SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   ;
 }
 
@@ -2053,9 +2126,9 @@ void lifterClass::lift_add_sub() {
 
   switch (instruction.mnemonic) {
   case ZYDIS_MNEMONIC_ADD: {
-    result = createAddFolder(Lvalue, Rvalue,
-                             "realadd-" + to_string(blockInfo.runtime_address) +
-                                 "-");
+    result = createAddFolder(
+        Lvalue, Rvalue,
+        "realadd-" + std::to_string(blockInfo.runtime_address) + "-");
 
     setFlag(FLAG_AF, [this, result, Lvalue, Rvalue]() {
       auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
@@ -2080,9 +2153,9 @@ void lifterClass::lift_add_sub() {
     break;
   }
   case ZYDIS_MNEMONIC_SUB: {
-    result = createSubFolder(Lvalue, Rvalue,
-                             "realsub-" + to_string(blockInfo.runtime_address) +
-                                 "-");
+    result = createSubFolder(
+        Lvalue, Rvalue,
+        "realsub-" + std::to_string(blockInfo.runtime_address) + "-");
 
     setFlag(FLAG_AF, [this, result, Lvalue, Rvalue]() {
       auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
@@ -2506,7 +2579,8 @@ void lifterClass::lift_xor() {
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto result = createXorFolder(
-      Lvalue, Rvalue, "realxor-" + to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue,
+      "realxor-" + std::to_string(blockInfo.runtime_address) + "-");
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
@@ -2533,7 +2607,8 @@ void lifterClass::lift_or() {
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto result = createOrFolder(
-      Lvalue, Rvalue, "realor-" + to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue,
+      "realor-" + std::to_string(blockInfo.runtime_address) + "-");
 
   printvalue(Lvalue);
   printvalue(Rvalue);
@@ -2564,7 +2639,8 @@ void lifterClass::lift_and() {
   auto Lvalue = GetOperandValue(dest, dest.size);
 
   auto result = createAndFolder(
-      Lvalue, Rvalue, "realand-" + to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue,
+      "realand-" + std::to_string(blockInfo.runtime_address) + "-");
 
   auto sf = computeSignFlag(result);
   auto zf = computeZeroFlag(result);
@@ -2581,7 +2657,8 @@ void lifterClass::lift_and() {
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-  SetOperandValue(dest, result, "and" + to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, result,
+                  "and" + std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_andn() {
@@ -2591,9 +2668,9 @@ void lifterClass::lift_andn() {
   auto Rvalue = GetOperandValue(src, dest.size);
   auto Lvalue = GetOperandValue(dest, dest.size);
 
-  auto result =
-      createAndFolder(createNotFolder(Lvalue), Rvalue,
-                      "realand-" + to_string(blockInfo.runtime_address) + "-");
+  auto result = createAndFolder(
+      createNotFolder(Lvalue), Rvalue,
+      "realand-" + std::to_string(blockInfo.runtime_address) + "-");
 
   auto sf = computeSignFlag(result);
   auto zf = computeZeroFlag(result);
@@ -2611,7 +2688,8 @@ void lifterClass::lift_andn() {
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-  SetOperandValue(dest, result, "and" + to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, result,
+                  "and" + std::to_string(blockInfo.runtime_address));
 }
 
 /*
@@ -2774,8 +2852,8 @@ void lifterClass::lift_inc() {
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
   // treat it as add r, 1 for flags
-  result = createAddFolder(Lvalue, one,
-                           "inc-" + to_string(blockInfo.runtime_address) + "-");
+  result = createAddFolder(
+      Lvalue, one, "inc-" + std::to_string(blockInfo.runtime_address) + "-");
   of = computeOverflowFlagAdd(Lvalue, one, result);
 
   printvalue(Lvalue) printvalue(result);
@@ -2804,8 +2882,8 @@ void lifterClass::lift_dec() {
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
   // treat it as sub r, 1 for flags
-  result = createSubFolder(Lvalue, one,
-                           "dec-" + to_string(blockInfo.runtime_address) + "-");
+  result = createSubFolder(
+      Lvalue, one, "dec-" + std::to_string(blockInfo.runtime_address) + "-");
   of = computeOverflowFlagSub(Lvalue, one, result);
 
   printvalue(Lvalue) printvalue(result);
@@ -2834,15 +2912,15 @@ void lifterClass::lift_push() {
   auto val = ConstantInt::getSigned(
       Type::getInt64Ty(context),
       dest.size / 8); // jokes on me apparently this is not a fixed value
-  auto result = createSubFolder(RspValue, val,
-                                "pushing_newrsp-" +
-                                    to_string(blockInfo.runtime_address) + "-");
+  auto result = createSubFolder(
+      RspValue, val,
+      "pushing_newrsp-" + std::to_string(blockInfo.runtime_address) + "-");
 
   printvalue(RspValue) printvalue(result)
-      SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
+      SetOperandValue(rsp, result, std::to_string(blockInfo.runtime_address));
   ; // sub rsp 8 first,
 
-  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   ; // then mov rsp, val
 }
 
@@ -2859,12 +2937,12 @@ void lifterClass::lift_pushfq() {
   auto val = ConstantInt::get(Type::getInt64Ty(context), src.size / 8);
   auto result = createSubFolder(RspValue, val);
 
-  SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
+  SetOperandValue(rsp, result, std::to_string(blockInfo.runtime_address));
   ; // sub rsp 8 first,
 
   // pushFlags( dest, Rvalue,
-  // to_string(blockInfo.runtime_address));;
-  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+  // std::to_string(blockInfo.runtime_address));;
+  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   ; // then mov rsp, val
 }
 
@@ -2874,24 +2952,24 @@ void lifterClass::lift_pop() {
   auto src = operands[2];
   auto rsp = operands[1];
 
-  auto Rvalue =
-      GetOperandValue(src, dest.size, to_string(blockInfo.runtime_address));
+  auto Rvalue = GetOperandValue(src, dest.size,
+                                std::to_string(blockInfo.runtime_address));
   ;
   auto RspValue =
-      GetOperandValue(rsp, rsp.size, to_string(blockInfo.runtime_address));
+      GetOperandValue(rsp, rsp.size, std::to_string(blockInfo.runtime_address));
   ;
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     dest.size / 8); // assuming its x64
-  auto result = createAddFolder(RspValue, val,
-                                "popping_new_rsp-" +
-                                    to_string(blockInfo.runtime_address) + "-");
+  auto result = createAddFolder(
+      RspValue, val,
+      "popping_new_rsp-" + std::to_string(blockInfo.runtime_address) + "-");
 
   printvalue(Rvalue) printvalue(RspValue) printvalue(result);
 
   SetOperandValue(rsp, result); // then add rsp 8
 
-  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   ; // mov val, rsp first
 }
 
@@ -2901,20 +2979,21 @@ void lifterClass::lift_popfq() {
   auto src = operands[1];  // [rsp]
   auto rsp = operands[0];  // rsp
 
-  auto Rvalue =
-      GetOperandValue(src, dest.size, to_string(blockInfo.runtime_address));
+  auto Rvalue = GetOperandValue(src, dest.size,
+                                std::to_string(blockInfo.runtime_address));
 
   auto RspValue =
-      GetOperandValue(rsp, rsp.size, to_string(blockInfo.runtime_address));
+      GetOperandValue(rsp, rsp.size, std::to_string(blockInfo.runtime_address));
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     dest.size / 8); // assuming its x64
   auto result = createAddFolder(
-      RspValue, val, "popfq-" + to_string(blockInfo.runtime_address) + "-");
+      RspValue, val,
+      "popfq-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(dest, Rvalue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   // mov val, rsp first
-  SetOperandValue(rsp, result, to_string(blockInfo.runtime_address));
+  SetOperandValue(rsp, result, std::to_string(blockInfo.runtime_address));
   // then add rsp 8
 }
 
@@ -2929,10 +3008,11 @@ void lifterClass::lift_adc() {
   cf = createZExtFolder(cf, Lvalue->getType());
 
   Value* tempResult = createAddFolder(
-      Lvalue, Rvalue, "adc-temp-" + to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue,
+      "adc-temp-" + std::to_string(blockInfo.runtime_address) + "-");
   Value* result = createAddFolder(
       tempResult, cf,
-      "adc-result-" + to_string(blockInfo.runtime_address) + "-");
+      "adc-result-" + std::to_string(blockInfo.runtime_address) + "-");
   // The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(tempResult)
@@ -2978,12 +3058,13 @@ void lifterClass::lift_xadd() {
   auto Rvalue = GetOperandValue(src, src.size);
 
   Value* sumValue = createAddFolder(
-      Lvalue, Rvalue, "xadd_sum-" + to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue,
+      "xadd_sum-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(dest, sumValue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, sumValue, std::to_string(blockInfo.runtime_address));
   ;
 
-  SetOperandValue(src, Lvalue, to_string(blockInfo.runtime_address));
+  SetOperandValue(src, Lvalue, std::to_string(blockInfo.runtime_address));
   ;
   /*
   TEMP := SRC + DEST;
@@ -3352,7 +3433,7 @@ void lifterClass::lift_setnp() {
   Value* resultValue =
       createZExtFolder(createNotFolder(pf), Type::getInt8Ty(context));
 
-  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
+  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_setb() {
@@ -3484,7 +3565,7 @@ void lifterClass::lift_bt() {
   // only in 64-bit mode). If the bit base operand specifies a memory
   // location, the operand represents the address of the byte in memory
   // that contains the bit base (bit 0 of the specified byte) of the bit
-  // string. The range of the bit position that can be referenced by the
+  // std::string. The range of the bit position that can be referenced by the
   // offset operand depends on the operand size. CF := Bit(BitBase,
   // BitOffset);
 
@@ -3527,9 +3608,9 @@ void lifterClass::lift_btr() {
 
   Value* baseVal = GetOperandValue(base, base.size);
 
-  Value* bit = createLShrFolder(baseVal, bitOffsetMasked,
-                                "btr-lshr-" +
-                                    to_string(blockInfo.runtime_address) + "-");
+  Value* bit = createLShrFolder(
+      baseVal, bitOffsetMasked,
+      "btr-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -3542,7 +3623,8 @@ void lifterClass::lift_btr() {
 
   mask = createNotFolder(mask); // invert mask
   baseVal = createAndFolder(
-      baseVal, mask, "btr-and-" + to_string(blockInfo.runtime_address) + "-");
+      baseVal, mask,
+      "btr-and-" + std::to_string(blockInfo.runtime_address) + "-");
 
   SetOperandValue(base, baseVal);
   printvalue(bitOffset);
@@ -3755,9 +3837,9 @@ void lifterClass::lift_btc() {
 
   Value* baseVal = GetOperandValue(base, base.size);
 
-  Value* bit = createLShrFolder(baseVal, bitOffsetMasked,
-                                "btc-lshr-" +
-                                    to_string(blockInfo.runtime_address) + "-");
+  Value* bit = createLShrFolder(
+      baseVal, bitOffsetMasked,
+      "btc-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -3769,7 +3851,8 @@ void lifterClass::lift_btc() {
                                 bitOffsetMasked, "btc-shl");
 
   baseVal = createXorFolder(
-      baseVal, mask, "btc-and-" + to_string(blockInfo.runtime_address) + "-");
+      baseVal, mask,
+      "btc-and-" + std::to_string(blockInfo.runtime_address) + "-");
 
   SetOperandValue(base, baseVal);
   printvalue(bitOffset);
@@ -3889,9 +3972,9 @@ void lifterClass::lift_bts() {
 
   Value* baseVal = GetOperandValue(base, base.size);
 
-  Value* bit = createLShrFolder(baseVal, bitOffsetMasked,
-                                "bts-lshr-" +
-                                    to_string(blockInfo.runtime_address) + "-");
+  Value* bit = createLShrFolder(
+      baseVal, bitOffsetMasked,
+      "bts-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -3902,8 +3985,9 @@ void lifterClass::lift_bts() {
   Value* mask = createShlFolder(ConstantInt::get(baseVal->getType(), 1),
                                 bitOffsetMasked, "bts-shl");
 
-  baseVal = createOrFolder(
-      baseVal, mask, "bts-or-" + to_string(blockInfo.runtime_address) + "-");
+  baseVal = createOrFolder(baseVal, mask,
+                           "bts-or-" +
+                               std::to_string(blockInfo.runtime_address) + "-");
 
   SetOperandValue(base, baseVal);
   printvalue(bitOffset);
@@ -4003,6 +4087,14 @@ void lifterClass::lift_cdqe() {
 void lifterClass::liftInstructionSemantics() {
 
   switch (instruction.mnemonic) {
+
+  case ZYDIS_MNEMONIC_MOVDQU:
+  case ZYDIS_MNEMONIC_MOVUPS:
+  case ZYDIS_MNEMONIC_MOVAPS:
+  case ZYDIS_MNEMONIC_MOVDQA: {
+    lift_movdqa();
+    break;
+  }
   // movs
   // case ZYDIS_MNEMONIC_MOVAPS:
   // case ZYDIS_MNEMONIC_MOVUPS:
@@ -4595,7 +4687,8 @@ void lifterClass::liftInstruction() {
     return;
   }
 
-  // if really an import, jump_address + imagebase should return a string (?)
+  // if really an import, jump_address + imagebase should return a std::string
+  // (?)
   uint64_t jump_address = blockInfo.runtime_address;
   APInt temp;
   bool isReadable = BinaryOperations::readMemory(jump_address, 1, temp);
@@ -4627,10 +4720,9 @@ void lifterClass::liftInstruction() {
     run = 0;
     return;
   }
+  // wt
+
   if (!isReadable && !isImport) {
-    printvalueforce2(jump_address);
-    printvalueforce2(isReadable);
-    printvalueforce2(isImport);
     // done something wrong;
     debugging::doIfDebug([&]() {
       std::string Filename = "output_external.ll";
