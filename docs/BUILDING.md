@@ -25,3 +25,8 @@ docker run --rm -v %cd%:/data mergen target.exe 0x123456789
 docker run --rm -v $PWD:/data mergen target.exe 0x123456789
 ```
 
+
+# Windows
+
+soon...
+
