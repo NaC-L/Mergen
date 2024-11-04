@@ -855,13 +855,22 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
     return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
                            computedBits.getConstant().getZExtValue());
   }
-
+  /*
+  if (auto try_z3 = evaluateLLVMExpression(inst)) {
+    if (try_z3.has_value()) {
+      printvalueforce(inst);
+      printvalueforce(try_z3.value());
+      return try_z3.value();
+    }
+  }
+  */
   return inst;
 }
 
 Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
                                     const Twine& Name) {
-  GEPinfo key(Address, Type->getIntegerBitWidth(), Base == TEB);
+  GEPinfo key = {Address, cast<uint8_t>(Type->getScalarSizeInBits()),
+                 Base == TEB};
   auto it = GEPcache.lookup(key);
   if (it) {
     return it;
@@ -979,14 +988,15 @@ std::optional<bool> foldKnownBits(CmpInst::Predicate P, const KnownBits& LHS,
   case CmpInst::ICMP_SLE:
     return KnownBits::sle(LHS, RHS);
   default:
-    return nullopt;
+    return std::nullopt;
   }
 
-  return nullopt;
+  return std::nullopt;
 }
 
-Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
-                          Value* LHS, Value* RHS, const Twine& Name) {
+Value* ICMPPatternMatcher(IRBuilder<InstSimplifyFolder>& builder,
+                          CmpInst::Predicate P, Value* LHS, Value* RHS,
+                          const Twine& Name) {
 
   if (auto SI = dyn_cast<SelectInst>(LHS)) {
     if (P == CmpInst::ICMP_EQ && RHS == SI->getTrueValue())
@@ -1167,6 +1177,7 @@ Value* memoryAlloc;
 Value* TEB;
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
+// ??
 
 void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
 
@@ -1212,6 +1223,11 @@ void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
   auto new_stack_pointer = createAddFolder(stackvalue, zero);
 
   Registers[ZYDIS_REGISTER_RSP] = new_stack_pointer;
+
+  for (auto& reg : RegistersFP.vec) {
+    reg.v1 = ConstantInt::get(Type::getInt64Ty(context), 0);
+    reg.v2 = ConstantInt::get(Type::getInt64Ty(context), 0);
+  }
 
   return;
 }
@@ -1278,6 +1294,10 @@ Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
 
   if (key == ZYDIS_REGISTER_RFLAGS || key == ZYDIS_REGISTER_EFLAGS) {
     return GetRFLAGSValue();
+  }
+  if (key == ZYDIS_REGISTER_GS) {
+    auto funcInfo = new funcsignatures::functioninfo("loadGS", {});
+    return callFunctionIR("loadGS", funcInfo);
   }
   /*
   if (Registers.find(newKey) == Registers.end()) {
@@ -1445,7 +1465,8 @@ Value* lifterClass::GetEffectiveAddress(const ZydisDecodedOperand& op,
                                  Type::getIntNTy(context, possiblesize));
 }
 
-Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress) {
+Value* ConvertIntToPTR(IRBuilder<InstSimplifyFolder>& builder,
+                       Value* effectiveAddress) {
 
   LLVMContext& context = builder.getContext();
   std::vector<Value*> indices;
@@ -1461,8 +1482,199 @@ Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress) {
   return pointer;
 }
 
+simpleFPV lifterClass::GetOperandValueFP(const ZydisDecodedOperand& op,
+                                         const std::string& address) {
+  LLVMContext& context = builder.getContext();
+
+  switch (op.type) {
+  case ZYDIS_OPERAND_TYPE_REGISTER: {
+    simpleFPV value = RegistersFP[op.reg.value];
+    return value;
+  }
+  case ZYDIS_OPERAND_TYPE_MEMORY: {
+
+    Value* effectiveAddress = nullptr;
+
+    Value* baseValue = nullptr;
+    if (op.mem.base != ZYDIS_REGISTER_NONE) {
+      baseValue = GetRegisterValue(op.mem.base);
+      baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
+      printvalue(baseValue);
+    }
+
+    Value* indexValue = nullptr;
+    if (op.mem.index != ZYDIS_REGISTER_NONE) {
+      indexValue = GetRegisterValue(op.mem.index);
+      indexValue = createZExtFolder(indexValue, Type::getInt64Ty(context));
+      printvalue(indexValue);
+      if (op.mem.scale > 1) {
+        Value* scaleValue =
+            ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
+        indexValue = createMulFolder(indexValue, scaleValue);
+      }
+    }
+
+    if (baseValue && indexValue) {
+      effectiveAddress =
+          createAddFolder(baseValue, indexValue, "bvalue_indexvalue");
+    } else if (baseValue) {
+      effectiveAddress = baseValue;
+    } else if (indexValue) {
+      effectiveAddress = indexValue;
+    } else {
+      effectiveAddress = ConstantInt::get(Type::getInt64Ty(context), 0);
+    }
+
+    if (op.mem.disp.has_displacement) {
+      Value* dispValue =
+          ConstantInt::get(Type::getInt64Ty(context), (int)(op.mem.disp.value));
+      effectiveAddress =
+          createAddFolder(effectiveAddress, dispValue, "memory_addr");
+    }
+    printvalue(effectiveAddress);
+
+    Type* loadType = Type::getIntNTy(context, 64);
+
+    Value* memoryOperand = memoryAlloc;
+    if (op.mem.segment == ZYDIS_REGISTER_GS)
+      memoryOperand = TEB;
+
+    Value* pointer =
+        createGEPFolder(Type::getInt8Ty(context), memoryOperand,
+                        effectiveAddress, "GEPLoadxd-" + address + "-");
+
+    auto zero = ConstantInt::get(Type::getInt64Ty(fnc->getContext()), 64);
+    simpleFPV return_value = {zero, zero};
+    // load retval2
+    auto retval =
+        builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
+    loadMemoryOp(retval);
+
+    Value* solvedLoad = solveLoad(retval);
+    if (solvedLoad) {
+      printvalue(solvedLoad);
+      return_value.v1 = solvedLoad;
+    }
+
+    Value* pointer2 = createGEPFolder(
+        Type::getInt8Ty(context), memoryOperand,
+        createAddFolder(effectiveAddress, ConstantInt::get(loadType, 8)),
+        "GEPLoadxd-" + address + "-");
+
+    auto retval2 =
+        builder.CreateLoad(loadType, pointer2, "Loadxd-" + address + "-");
+    loadMemoryOp(retval);
+
+    Value* solvedLoad2 = solveLoad(retval2);
+    if (solvedLoad2) {
+      printvalue(solvedLoad2);
+      return_value.v2 = solvedLoad2;
+    }
+
+    printvalue(retval);
+
+    return return_value;
+  }
+  default: {
+    UNREACHABLE("operand type not implemented");
+  }
+  }
+}
+
+simpleFPV lifterClass::SetOperandValueFP(const ZydisDecodedOperand& op,
+                                         simpleFPV value,
+                                         const std::string& address) {
+  LLVMContext& context = builder.getContext();
+
+  switch (op.type) {
+  case ZYDIS_OPERAND_TYPE_REGISTER: {
+    RegistersFP[op.reg.value] = value;
+    return value;
+    break;
+  }
+  case ZYDIS_OPERAND_TYPE_MEMORY: {
+
+    Value* effectiveAddress = nullptr;
+
+    Value* baseValue = nullptr;
+    if (op.mem.base != ZYDIS_REGISTER_NONE) {
+      baseValue = GetRegisterValue(op.mem.base);
+      baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
+      printvalue(baseValue);
+    }
+
+    Value* indexValue = nullptr;
+    if (op.mem.index != ZYDIS_REGISTER_NONE) {
+      indexValue = GetRegisterValue(op.mem.index);
+      indexValue = createZExtFolder(indexValue, Type::getInt64Ty(context));
+      printvalue(indexValue);
+      if (op.mem.scale > 1) {
+        Value* scaleValue =
+            ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
+        indexValue = createMulFolder(indexValue, scaleValue, "mul_ea");
+      }
+    }
+
+    if (baseValue && indexValue) {
+      effectiveAddress =
+          createAddFolder(baseValue, indexValue, "bvalue_indexvalue_set");
+    } else if (baseValue) {
+      effectiveAddress = baseValue;
+    } else if (indexValue) {
+      effectiveAddress = indexValue;
+    } else {
+      effectiveAddress = ConstantInt::get(Type::getInt64Ty(context), 0);
+    }
+
+    if (op.mem.disp.value) {
+      Value* dispValue =
+          ConstantInt::get(Type::getInt64Ty(context), op.mem.disp.value);
+      effectiveAddress =
+          createAddFolder(effectiveAddress, dispValue, "disp_set");
+    }
+
+    auto memoryOperand = memoryAlloc;
+    if (op.mem.segment == ZYDIS_REGISTER_GS)
+      memoryOperand = TEB;
+
+    Value* pointer =
+        createGEPFolder(Type::getInt8Ty(context), memoryOperand,
+                        effectiveAddress, "GEPSTORE-" + address + "-");
+
+    pointer = simplifyValue(
+        pointer,
+        builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+
+    Value* store = builder.CreateStore(value.v1, pointer);
+
+    Value* pointer2 = createGEPFolder(
+        Type::getInt8Ty(context), memoryOperand,
+        createAddFolder(effectiveAddress,
+                        ConstantInt::get(Type::getInt64Ty(context), 8)),
+        "GEPSTORE-" + address + "-");
+
+    Value* store2 = builder.CreateStore(value.v2, pointer2);
+
+    printvalue(effectiveAddress) printvalue(pointer);
+    // if effectiveAddress is not pointing at stack, its probably self
+    // modifying code if effectiveAddress and value is consant we can
+    // say its a self modifying code and modify the binary
+
+    insertMemoryOp(cast<StoreInst>(store));
+    insertMemoryOp(cast<StoreInst>(store2));
+    return value;
+  } break;
+
+  default: {
+    UNREACHABLE("operand type not implemented");
+    // return nullptr;
+  }
+  }
+}
+
 Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
-                                    int possiblesize, const string& address) {
+                                    int possiblesize,
+                                    const std::string& address) {
   LLVMContext& context = builder.getContext();
   auto type = Type::getIntNTy(context, possiblesize);
 
@@ -1526,6 +1738,10 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
       effectiveAddress =
           createAddFolder(effectiveAddress, dispValue, "memory_addr");
     }
+    /*
+    effectiveAddress =
+        evaluateLLVMExpression(effectiveAddress).value_or(effectiveAddress);
+    */
     printvalue(effectiveAddress);
     Type* loadType = Type::getIntNTy(context, possiblesize);
 
@@ -1562,7 +1778,7 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
 }
 
 Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
-                                    const string& address) {
+                                    const std::string& address) {
   LLVMContext& context = builder.getContext();
   value = simplifyValue(
       value,
@@ -1646,7 +1862,8 @@ Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
   }
 }
 
-Value* getMemoryFromValue(IRBuilder<>& builder, Value* value) {
+Value* getMemoryFromValue(IRBuilder<InstSimplifyFolder>& builder,
+                          Value* value) {
   LLVMContext& context = builder.getContext();
 
   std::vector<Value*> indices;
@@ -1658,16 +1875,16 @@ Value* getMemoryFromValue(IRBuilder<>& builder, Value* value) {
   return pointer;
 }
 
-vector<Value*> lifterClass::GetRFLAGS() {
-  vector<Value*> rflags;
+std::vector<Value*> lifterClass::GetRFLAGS() {
+  std::vector<Value*> rflags;
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
     rflags.push_back(getFlag((Flag)flag));
   }
   return rflags;
 }
 
-void lifterClass::pushFlags(const vector<Value*>& value,
-                            const string& address) {
+void lifterClass::pushFlags(const std::vector<Value*>& value,
+                            const std::string& address) {
   LLVMContext& context = builder.getContext();
 
   auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);

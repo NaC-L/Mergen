@@ -126,7 +126,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
   printvalue(simplifyValue);
   run = 0;
   auto pvset = computePossibleValues(simplifyValue);
-  vector<APInt> pv(pvset.begin(), pvset.end());
+  std::vector<APInt> pv(pvset.begin(), pvset.end());
   if (pv.size() == 1) {
     printvalue2(pv[0]);
     auto bb_solved = BasicBlock::Create(function->getContext(), "bb_false",
@@ -145,20 +145,20 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     auto secondcase = pv[1];
 
     static auto try_simplify = [&](APInt c1,
-                                   Value* simplifyv) -> optional<Value*> {
+                                   Value* simplifyv) -> std::optional<Value*> {
       if (auto si = dyn_cast<SelectInst>(simplifyv)) {
         auto firstcase_v = builder.getIntN(
             simplifyv->getType()->getIntegerBitWidth(), c1.getZExtValue());
         if (si->getTrueValue() == firstcase_v)
           return si->getCondition();
       }
-      return nullopt;
+      return std::nullopt;
     };
     Value* condition = nullptr;
     if (auto can_simplify = try_simplify(firstcase, simplifyValue))
       condition = can_simplify.value();
     else if (auto can_simplify2 = try_simplify(secondcase, simplifyValue)) {
-      swap(firstcase, secondcase);
+      std::swap(firstcase, secondcase);
       condition = can_simplify2.value();
     } else
       condition = createICMPFolder(
