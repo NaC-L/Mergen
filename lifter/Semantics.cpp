@@ -4574,9 +4574,17 @@ void lifterClass::liftInstruction() {
     outs().flush();
     auto next_jump = popStack();
 
-    // get [rsp], jump there
-    auto RIP_value = cast<ConstantInt>(next_jump);
-    auto jump_address = RIP_value->getZExtValue();
+      uint64_t jump_address = 0;
+      if (isa<ConstantInt>(next_jump)) {
+          //get [rsp], jump there
+          auto RIP_value = cast<ConstantInt>(next_jump);
+          jump_address = RIP_value->getZExtValue();
+      } else {
+          errs() << "Error: next_jump is not a ConstantInt. Type: ";
+          next_jump->getType()->print(errs());
+          errs() << "\n";
+          return;
+      }
 
     auto bb = BasicBlock::Create(context, "returnToOrgCF",
                                  builder.GetInsertBlock()->getParent());
