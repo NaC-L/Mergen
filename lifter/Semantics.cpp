@@ -2759,14 +2759,12 @@ void lifterClass::lift_inc() {
   Value* Lvalue = GetOperandValue(operand, operand.size);
 
   Value* one = ConstantInt::get(Lvalue->getType(), 1, true);
-  Value* result;
-  Value* of;
+  Value* result = createAddFolder(
+      Lvalue, one, "inc-" + std::to_string(blockInfo.runtime_address) + "-");
+  Value* of = computeOverflowFlagAdd(Lvalue, one, result);
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
   // treat it as add r, 1 for flags
-  result = createAddFolder(Lvalue, one,
-                           "inc-" + to_string(blockInfo.runtime_address) + "-");
-  of = computeOverflowFlagAdd(Lvalue, one, result);
 
   printvalue(Lvalue) printvalue(result);
 
@@ -2789,14 +2787,13 @@ void lifterClass::lift_dec() {
   Value* Lvalue = GetOperandValue(operand, operand.size);
 
   Value* one = ConstantInt::get(Lvalue->getType(), 1, true);
-  Value* result;
-  Value* of;
+  Value* result = createSubFolder(
+      Lvalue, one, "dec-" + std::to_string(blockInfo.runtime_address) + "-");
+  Value* of = computeOverflowFlagSub(Lvalue, one, result);
+
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
   // treat it as sub r, 1 for flags
-  result = createSubFolder(Lvalue, one,
-                           "dec-" + to_string(blockInfo.runtime_address) + "-");
-  of = computeOverflowFlagSub(Lvalue, one, result);
 
   printvalue(Lvalue) printvalue(result);
 
