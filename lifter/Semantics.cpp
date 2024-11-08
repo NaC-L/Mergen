@@ -2639,39 +2639,38 @@ void lifterClass::lift_rol() {
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto Rvalue = GetOperandValue(src, dest.size);
 
-  unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  unsigned maskc = bitWidth == 64 ? 0x3f : 0x1f;
-  Rvalue = createURemFolder(
-      createAndFolder(Rvalue, ConstantInt::get(Rvalue->getType(), maskc),
-                      "maskRvalue"),
-      ConstantInt::get(Rvalue->getType(), bitWidth + 1));
+  auto bitWidth = ConstantInt::get(Lvalue->getType(), dest.size);
+  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), dest.size + 1);
+  auto countmask =
+      ConstantInt::get(Lvalue->getType(), dest.size == 64 ? 0x3f : 0x1f);
+
+  auto one = ConstantInt::get(Lvalue->getType(), 1);
+  auto zero = ConstantInt::get(Lvalue->getType(), 0);
+
+  auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
+  Rvalue = createURemFolder(createAndFolder(Rvalue, countmask, "maskRvalue"),
+                            bitWidthplusone);
 
   Value* shiftedLeft = createShlFolder(Lvalue, Rvalue);
-  Value* shiftedRight = createLShrFolder(
-      Lvalue,
-      createSubFolder(ConstantInt::get(Rvalue->getType(), bitWidth), Rvalue),
-      "rol");
+  Value* shiftedRight =
+      createLShrFolder(Lvalue, createSubFolder(bitWidth, Rvalue), "rol");
   Value* result = createOrFolder(shiftedLeft, shiftedRight);
 
-  Value* lastBit = createAndFolder(
-      shiftedRight, ConstantInt::get(Lvalue->getType(), 1), "rollastbit");
-  Value* cf = createZExtOrTruncFolder(lastBit, Type::getInt1Ty(context));
+  Value* cf = createZExtOrTruncFolder(shiftedRight, Type::getInt1Ty(context));
 
-  Value* zero = ConstantInt::get(Rvalue->getType(), 0);
-  Value* isNotZero = createICMPFolder(CmpInst::ICMP_NE, Rvalue, zero);
+  Value* isZeroBitRotation = createICMPFolder(CmpInst::ICMP_EQ, Rvalue, zero);
   Value* oldcf = getFlag(FLAG_CF);
-  cf = createSelectFolder(isNotZero, cf, oldcf);
-  result = createSelectFolder(isNotZero, result, Lvalue);
+  cf = createSelectFolder(isZeroBitRotation, oldcf, cf);
+  result = createSelectFolder(isZeroBitRotation, Lvalue, result);
 
   // of = cf ^ MSB
-  Value* newMSB = createLShrFolder(result, bitWidth - 1, "rolmsb");
+  Value* newMSB = createLShrFolder(result, MSBpos, "rolmsb");
   Value* of = createXorFolder(
       cf, createZExtOrTruncFolder(newMSB, Type::getInt1Ty(context)));
 
   // Use Select to conditionally update OF based on whether the shift
   // amount is 1
-  Value* isOneBitRotation = createICMPFolder(
-      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), 1));
+  Value* isOneBitRotation = createICMPFolder(CmpInst::ICMP_EQ, Rvalue, one);
   Value* ofCurrent = getFlag(FLAG_OF);
 
   of = createSelectFolder(isOneBitRotation, of, ofCurrent);
@@ -2679,8 +2678,8 @@ void lifterClass::lift_rol() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
-      SetOperandValue(dest, result);
+  printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
+  SetOperandValue(dest, result);
 }
 
 /*
@@ -2709,41 +2708,35 @@ void lifterClass::lift_ror() {
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto Rvalue = GetOperandValue(src, dest.size);
 
-  auto bitWidth = ConstantInt::getSigned(
-      Lvalue->getType(), Lvalue->getType()->getIntegerBitWidth());
-  auto size = Lvalue->getType()->getIntegerBitWidth();
-  unsigned maskc = size == 64 ? 0x3f : 0x1f;
-  Rvalue = createURemFolder(
-      createAndFolder(Rvalue, ConstantInt::get(Rvalue->getType(), maskc),
-                      "maskRvalue"),
-      ConstantInt::get(Rvalue->getType(), size + 1));
+  auto bitWidth = ConstantInt::get(Lvalue->getType(), dest.size);
+  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), dest.size + 1);
+  auto countmask =
+      ConstantInt::get(Lvalue->getType(), dest.size == 64 ? 0x3f : 0x1f);
 
+  auto one = ConstantInt::get(Lvalue->getType(), 1);
+  auto zero = ConstantInt::get(Lvalue->getType(), 0);
+
+  auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
+  auto secondMSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 2);
+  Rvalue = createURemFolder(createAndFolder(Rvalue, countmask, "maskRvalue"),
+                            bitWidthplusone);
+
+  Value* rightshifted = createLShrFolder(Lvalue, Rvalue);
+  Value* leftshifted =
+      createShlFolder(Lvalue, createSubFolder(bitWidth, Rvalue));
   Value* result =
-      createOrFolder(createLShrFolder(Lvalue, Rvalue),
-                     createShlFolder(Lvalue, createSubFolder(bitWidth, Rvalue)),
+      createOrFolder(rightshifted, leftshifted,
                      "ror-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  Value* msb = createLShrFolder(
-      result,
-      createSubFolder(
-          bitWidth,
-          ConstantInt::get(context,
-                           APInt(Rvalue->getType()->getIntegerBitWidth(), 1))));
+  Value* msb = createLShrFolder(result, MSBpos);
   Value* cf = createZExtOrTruncFolder(msb, Type::getInt1Ty(context), "ror-cf");
 
-  Value* secondMsb = createLShrFolder(
-      result,
-      createSubFolder(
-          bitWidth,
-          ConstantInt::get(context,
-                           APInt(Rvalue->getType()->getIntegerBitWidth(), 2))),
-      "ror2ndmsb");
+  Value* secondMsb = createLShrFolder(result, secondMSBpos, "ror2ndmsb");
+
   auto ofDefined =
       createZExtOrTruncFolder(createXorFolder(msb, secondMsb), cf->getType());
-  auto isOneBitRotation = createICMPFolder(
-      CmpInst::ICMP_EQ, Rvalue,
-      ConstantInt::get(context,
-                       APInt(Rvalue->getType()->getIntegerBitWidth(), 1)));
+
+  auto isOneBitRotation = createICMPFolder(CmpInst::ICMP_EQ, Rvalue, one);
   Value* ofCurrent = getFlag(FLAG_OF);
   Value* of =
       createSelectFolder(isOneBitRotation, ofDefined, ofCurrent, "ror-of");
@@ -2751,16 +2744,13 @@ void lifterClass::lift_ror() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  auto isZeroBitRotation = createICMPFolder(
-      CmpInst::ICMP_EQ, Rvalue,
-      ConstantInt::get(context,
-                       APInt(Rvalue->getType()->getIntegerBitWidth(), 0)),
-      "iszerobit");
+  auto isZeroBitRotation =
+      createICMPFolder(CmpInst::ICMP_EQ, Rvalue, zero, "iszerobit");
   result = createSelectFolder(isZeroBitRotation, Lvalue, result, "ror-result");
 
-  printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
+  printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-      SetOperandValue(dest, result);
+  SetOperandValue(dest, result);
 }
 
 void lifterClass::lift_inc() {
