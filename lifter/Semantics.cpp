@@ -2778,6 +2778,14 @@ void lifterClass::lift_inc() {
   setFlag(FLAG_SF, sf);
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
+
+  auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
+  auto RvalueLowerNibble =
+      createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
+  auto op2LowerNibble = one;
+  auto af = createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble,
+                             op2LowerNibble, "sub_af");
+  setFlag(FLAG_AF, af);
   SetOperandValue(operand, result);
 }
 
@@ -2807,6 +2815,15 @@ void lifterClass::lift_dec() {
   setFlag(FLAG_SF, sf);
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
+
+  auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
+  auto destLowerNibble = createAndFolder(Lvalue, lowerNibbleMask, "adcdst");
+  auto srcLowerNibble = one;
+  auto sumLowerNibble = createAddFolder(destLowerNibble, srcLowerNibble);
+  auto af =
+      createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask);
+
+  setFlag(FLAG_AF, af);
   SetOperandValue(operand, result);
 }
 
