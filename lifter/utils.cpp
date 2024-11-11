@@ -35,9 +35,13 @@ namespace FileHelper {
       if (rva >= sectionHeader->virtual_address &&
           rva <
               (sectionHeader->virtual_address + sectionHeader->virtual_size)) {
-
-        return rva - sectionHeader->virtual_address +
-               sectionHeader->ptr_raw_data;
+        if (sectionHeader->characteristics.mem_execute ||
+            (sectionHeader->characteristics.mem_read &&
+             !sectionHeader->characteristics.mem_write)) // remove?
+          return rva - sectionHeader->virtual_address +
+                 sectionHeader->ptr_raw_data;
+        else
+          return 0;
       }
     }
     return 0;
@@ -138,7 +142,6 @@ namespace debugging {
   template void printValue<bool>(const bool& v, const char* name);
   template void printValue<std::string>(const std::string& v, const char* name);
   template void printValue<char*>(char* const& v, const char* name);
-  template void printValue<const char*>(const char* const& v, const char* name);
   template void printValue<char[256]>(char const (&)[256], const char* name);
   template void
   printValue<llvm::FormattedNumber>(llvm::FormattedNumber const(&),

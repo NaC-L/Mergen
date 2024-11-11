@@ -7,13 +7,13 @@
 #include "utils.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/DomConditionCache.h>
-#include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/Analysis/SimplifyQuery.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/Support/KnownBits.h>
 #include <set>
+
 #ifndef DEFINE_FUNCTION
 #define DEFINE_FUNCTION(name) void lift_##name()
 #endif
@@ -152,49 +152,6 @@ public:
   }
 };
 
-struct simpleFPV {
-  Value* v1;
-  Value* v2;
-};
-class RegisterManagerFP {
-public:
-  enum RegisterIndexFP {
-    XMM0_ = 0,
-    XMM1_,
-    XMM2_,
-    XMM3_,
-    XMM4_,
-    XMM5_,
-    XMM6_,
-    XMM7_,
-    XMM8_,
-    XMM9_,
-    XMM10_,
-    XMM11_,
-    XMM12_,
-    XMM13_,
-    XMM14_,
-    XMM15_,
-    REGISTER_COUNT // Total number of registers
-  };
-  std::array<simpleFPV, REGISTER_COUNT> vec;
-
-  RegisterManagerFP() {}
-  RegisterManagerFP(const RegisterManagerFP& other) : vec(other.vec) {}
-
-  // Overload the [] operator for getting register values
-
-  int getRegisterIndex(const ZydisRegister key) const {
-    return key - ZYDIS_REGISTER_XMM0;
-  }
-
-  simpleFPV& operator[](ZydisRegister key) {
-    int index = getRegisterIndex(key);
-    printvalue2(index);
-    return vec[index];
-  }
-};
-
 struct BBInfo {
   uint64_t runtime_address;
   llvm::BasicBlock* block;
@@ -239,7 +196,7 @@ public:
 
 class lifterClass {
 public:
-  llvm::IRBuilder<InstSimplifyFolder>& builder;
+  llvm::IRBuilder<>& builder;
   BBInfo blockInfo;
 
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
@@ -257,7 +214,6 @@ public:
 
   flagManager FlagList;
   RegisterManager Registers;
-  RegisterManagerFP RegistersFP;
 
   llvm::DomConditionCache* DC = new DomConditionCache();
 
@@ -308,7 +264,7 @@ public:
       static inline GEPinfo getEmptyKey() { return GEPinfo(nullptr, 0, 0); }
 
       static inline GEPinfo getTombstoneKey() {
-        return GEPinfo(nullptr, -1, -1);
+        return GEPinfo(nullptr, 255, 0);
       }
     };
   };
@@ -320,8 +276,7 @@ public:
   llvm::Value* TEB;
   llvm::Function* fnc;
 
-  lifterClass(llvm::IRBuilder<InstSimplifyFolder>& irbuilder)
-      : builder(irbuilder){};
+  lifterClass(llvm::IRBuilder<>& irbuilder) : builder(irbuilder){};
 
   lifterClass(const lifterClass& other)
       : builder(other.builder), // Reference copied directly
@@ -334,8 +289,6 @@ public:
         buffer(other.buffer),
         FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
                                   // constructor
-        RegistersFP(other.RegistersFP), // Assuming RegisterManager has a copy
-                                        // constructor
         Registers(other.Registers),     // Assuming RegisterManager has a copy
                                         // constructor
         DC(other.DC),                   // Deep copy of DC
@@ -363,8 +316,6 @@ public:
   void initDomTree(llvm::Function& F) { DT = new DominatorTree(F); }
   // end init
 
-  std::optional<llvm::Value*> evaluateLLVMExpression(llvm::Value* value);
-
   // getters-setters
   llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
   void setFlag(const Flag flag, std::function<llvm::Value*()> calculation);
@@ -386,11 +337,6 @@ public:
   void pushFlags(const std::vector<llvm::Value*>& value,
                  const std::string& address);
   std::vector<llvm::Value*> GetRFLAGS();
-
-  simpleFPV GetOperandValueFP(const ZydisDecodedOperand& op,
-                              const std::string& address = "");
-  simpleFPV SetOperandValueFP(const ZydisDecodedOperand& op, simpleFPV value,
-                              const std::string& address = "");
 
   llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
                                const int possiblesize,
@@ -459,8 +405,8 @@ public:
     return address >= it->first && address < it->second;
   }
 
-  std::set<APInt, APIntComparator>
-  getPossibleValues(const llvm::KnownBits& known, unsigned max_unknown);
+  set<APInt, APIntComparator> getPossibleValues(const llvm::KnownBits& known,
+                                                unsigned max_unknown);
 
   Value* retrieveCombinedValue(const uint64_t startAddress,
                                const uint8_t byteCount, Value* orgLoad);
@@ -474,8 +420,8 @@ public:
   void loadMemoryOp(LoadInst* inst);
 
   void insertMemoryOp(StoreInst* inst);
-  std::set<APInt, APIntComparator>
-  computePossibleValues(Value* V, const uint8_t Depth = 0);
+  set<APInt, APIntComparator> computePossibleValues(Value* V,
+                                                    const uint8_t Depth = 0);
 
   Value* extractBytes(Value* value, const uint8_t startOffset,
                       const uint8_t endOffset);
@@ -672,13 +618,9 @@ public:
   DEFINE_FUNCTION(cwde);
   DEFINE_FUNCTION(cdqe);
   DEFINE_FUNCTION(bextr);
-
-  // sse
-
-  DEFINE_FUNCTION(movdqa);
   // end semantics definition
 };
-extern std::vector<lifterClass*> lifters;
+extern vector<lifterClass*> lifters;
 
 #undef DEFINE_FUNCTION
 #endif // LIFTERCLASS_H
