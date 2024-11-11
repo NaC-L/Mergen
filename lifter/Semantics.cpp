@@ -4578,15 +4578,13 @@ void lifterClass::liftInstruction() {
     outs().flush();
     auto next_jump = popStack();
 
-      uint64_t jump_address = 0;
-      if (isa<ConstantInt>(next_jump)) {
-          //get [rsp], jump there
-          auto RIP_value = cast<ConstantInt>(next_jump);
-          jump_address = RIP_value->getZExtValue();
-      } else {
-          UNREACHABLE("next_jump is not a ConstantInt.");
-          return;
-      }
+    // get [rsp], jump there
+    if (!isa<ConstantInt>(next_jump)) {
+      UNREACHABLE("next_jump is not a ConstantInt.");
+      return;
+    }
+    auto RIP_value = cast<ConstantInt>(next_jump);
+    auto jump_address = RIP_value->getZExtValue();
 
     auto bb = BasicBlock::Create(context, "returnToOrgCF",
                                  builder.GetInsertBlock()->getParent());
