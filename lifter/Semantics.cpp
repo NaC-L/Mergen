@@ -4580,9 +4580,7 @@ void lifterClass::liftInstruction() {
           auto RIP_value = cast<ConstantInt>(next_jump);
           jump_address = RIP_value->getZExtValue();
       } else {
-          errs() << "Error: next_jump is not a ConstantInt. Type: ";
-          next_jump->getType()->print(errs());
-          errs() << "\n";
+          UNREACHABLE("next_jump is not a ConstantInt.")
           return;
       }
 
