@@ -358,7 +358,7 @@ public:
   llvm::Value* computeSignFlag(Value* value);
   llvm::Value* computeZeroFlag(Value* value);
   llvm::Value* computeParityFlag(Value* value);
-  llvm::Value* computeAuxFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf);
+  llvm::Value* computeAuxFlag(Value* Lvalue, Value* Rvalue, Value* result);
   llvm::Value* computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf,
                                       Value* sub);
 

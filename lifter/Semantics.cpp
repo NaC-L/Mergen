@@ -177,15 +177,13 @@ Value* lifterClass::computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue,
                           ConstantInt::get(ofAnd->getType(), 0), "ofsbb5");
 }
 
-Value* lifterClass::computeAuxFlagSbb(Value* Lvalue, Value* Rvalue, Value* cf) {
-  auto ci15 = ConstantInt::get(Lvalue->getType(), 15);
-  auto and0 = createAndFolder(Lvalue, ci15, "auxsbb1");
-  auto and1 = createAndFolder(Rvalue, ci15, "auxsbb2");
-  auto sub = createSubFolder(and0, and1, "auxsbb3");
-
-  auto cfc = createZExtOrTruncFolder(cf, sub->getType(), "auxsbb4");
-  auto add = createAddFolder(sub, cfc, "auxsbb5");
-  return createICMPFolder(CmpInst::ICMP_UGT, add, ci15, "auxsbb6");
+Value* lifterClass::computeAuxFlag(Value* Lvalue, Value* Rvalue,
+                                   Value* result) {
+  auto wtf = ConstantInt::get(result->getType(), 0x10);
+  auto fuckyou = createXorFolder(result, createXorFolder(Lvalue, Rvalue));
+  auto wtf2 = createAndFolder(wtf, fuckyou);
+  auto af = createICMPFolder(CmpInst::ICMP_EQ, wtf2, wtf);
+  return af;
 }
 
 /*
@@ -1203,7 +1201,7 @@ void lifterClass::lift_sbb() {
   Value* sf = computeSignFlag(result);
   Value* zf = computeZeroFlag(result);
   Value* pf = computeParityFlag(result);
-  Value* af = computeAuxFlagSbb(Lvalue, Rvalue, cf);
+  Value* af = computeAuxFlag(Lvalue, Rvalue, result);
 
   auto of = computeOverflowFlagSbb(Lvalue, Rvalue, cf, result);
 
@@ -2780,11 +2778,12 @@ void lifterClass::lift_inc() {
   setFlag(FLAG_PF, pf);
 
   auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-  auto RvalueLowerNibble =
-      createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
-  auto op2LowerNibble = one;
-  auto af = createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble,
-                             op2LowerNibble, "sub_af");
+  auto destLowerNibble = createAndFolder(Lvalue, lowerNibbleMask, "adcdst");
+  auto srcLowerNibble = one;
+  auto sumLowerNibble = createAddFolder(destLowerNibble, srcLowerNibble);
+  auto af =
+      createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask);
+
   setFlag(FLAG_AF, af);
   SetOperandValue(operand, result);
 }
@@ -2817,12 +2816,11 @@ void lifterClass::lift_dec() {
   setFlag(FLAG_PF, pf);
 
   auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-  auto destLowerNibble = createAndFolder(Lvalue, lowerNibbleMask, "adcdst");
-  auto srcLowerNibble = one;
-  auto sumLowerNibble = createAddFolder(destLowerNibble, srcLowerNibble);
-  auto af =
-      createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask);
-
+  auto RvalueLowerNibble =
+      createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
+  auto op2LowerNibble = one;
+  auto af = createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble,
+                             op2LowerNibble, "sub_af");
   setFlag(FLAG_AF, af);
   SetOperandValue(operand, result);
 }
@@ -2948,12 +2946,7 @@ void lifterClass::lift_adc() {
   auto cfFinal = createOrFolder(
       cfAfterFirstAdd, createICMPFolder(CmpInst::ICMP_ULT, result, cf));
 
-  auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
-  auto destLowerNibble = createAndFolder(Lvalue, lowerNibbleMask, "adcdst");
-  auto srcLowerNibble = createAndFolder(Rvalue, lowerNibbleMask, "adcsrc");
-  auto sumLowerNibble = createAddFolder(destLowerNibble, srcLowerNibble);
-  auto af =
-      createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask);
+  auto af = computeAuxFlag(Lvalue, Rvalue, result);
 
   // auto of = computeOverflowFlagAdc(Lvalue, Rvalue, cf, result);
 
@@ -2962,7 +2955,7 @@ void lifterClass::lift_adc() {
   // Value* pf = computeParityFlag(result);
 
   setFlag(FLAG_OF, [this, Lvalue, Rvalue, cf, result]() {
-    return computeOverflowFlagAdc(Lvalue, Rvalue, cf, result);
+    return computeOverflowFlagAdd(Lvalue, Rvalue, result);
   });
   setFlag(FLAG_AF, af);
   setFlag(FLAG_CF, cfFinal);
@@ -3097,6 +3090,16 @@ void lifterClass::lift_cmp() {
   setFlag(FLAG_SF, sf);
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
+
+  setFlag(FLAG_AF, [this, cmpResult, Lvalue, Rvalue]() {
+    auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
+    auto RvalueLowerNibble =
+        createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
+    auto op2LowerNibble =
+        createAndFolder(Rvalue, lowerNibbleMask, "rvalLowerNibble");
+    return createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble,
+                            op2LowerNibble, "sub_af");
+  });
 }
 
 void lifterClass::lift_rdtsc() {
