@@ -22,6 +22,9 @@ CMakeLists.txt.user
 /.cache
 /.vscode
 
+# clion
+.idea*/
+
 # output files
 output.ll
 output_finalnoopt.ll
