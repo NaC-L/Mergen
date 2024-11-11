@@ -26,6 +26,7 @@
 #include "llvm/IR/Instructions.h"
 #include <Zydis/Zydis.h>
 
+using namespace std;
 using namespace llvm;
 
 #if LLVM_VERSION_MAJOR < 17
@@ -36,7 +37,7 @@ inline llvm::raw_ostream& operator<<(llvm::raw_ostream& OS,
 }
 #endif
 
-#define STACKP_VALUE 0x000000000100000
+#define STACKP_VALUE 1376040
 // if this value changes, its only for debug purposes
 
 using ReverseRegisterMap = llvm::DenseMap<llvm::Value*, int>;
