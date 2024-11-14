@@ -516,9 +516,43 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
   return newInstruction;
 }
 
+static unsigned getComplexity(const Value* V) {
+
+  if (isa<ConstantInt>(V))
+    return isa<UndefValue>(V) ? 0 : 1;
+
+  if (isa<CastInst>(V) || match(V, m_Neg(PatternMatch::m_Value())) ||
+      match(V, m_Not(PatternMatch::m_Value())) ||
+      match(V, m_FNeg(PatternMatch::m_Value())))
+    return 2;
+
+  return 3;
+}
+
+static bool isCommutative(const unsigned Opcode) {
+  switch (Opcode) {
+  case Instruction::Add:
+  case Instruction::FAdd:
+  case Instruction::Mul:
+  case Instruction::FMul:
+  case Instruction::And:
+  case Instruction::Or:
+  case Instruction::Xor:
+    return true;
+  default:
+    return false;
+  }
+}
+
 Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
                                       Value* operand2, Type* destType,
                                       const Twine& Name) {
+  if (isCommutative(opcode)) {
+    if (getComplexity(operand1) < getComplexity(operand2)) {
+      // if operand1 is less complex, move it to RHS
+      std::swap(operand2, operand1);
+    }
+  }
 
   InstructionKey key;
   if (destType)
