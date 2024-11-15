@@ -149,21 +149,7 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
   if (*(unsigned short*)fileBase != 0x5a4d) {
     UNREACHABLE("Only PE files are supported");
   }
-
-  auto IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
-  auto IMAGE_NT_OPTIONAL_HDR64_MAGIC = 0x20b;
-
-  auto PEmagic = *(uint16_t*)(fileBase + dosHeader->e_lfanew);
-  auto x86_or_x64 = PEmagic != IMAGE_NT_OPTIONAL_HDR64_MAGIC;
-
-  auto ntHeaders = (win::nt_headers_t<true>*)(fileBase + dosHeader->e_lfanew);
-
-  if (PEmagic != IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
-    UNREACHABLE("Only 64-bit PE files are supported");
-  }
-
-  std::cout << "magic:" << ntHeaders->optional_header.magic << "\n";
-
+  auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
   auto ADDRESS = ntHeaders->optional_header.image_base;
   auto imageSize = ntHeaders->optional_header.size_image;
   auto stackSize = ntHeaders->optional_header.size_stack_reserve;
