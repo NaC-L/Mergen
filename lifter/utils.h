@@ -47,21 +47,6 @@
     outs().flush();                                                            \
   } while (0);
 
-namespace FileHelper {
-
-  win::section_header_t*
-  GetEnclosingSectionHeader(uint32_t rva, win::nt_headers_x64_t* pNTHeader);
-
-  uint64_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva);
-
-  uint64_t address_to_mapped_address(uint64_t rva);
-
-  uint64_t fileOffsetToRVA(uint64_t fileAddress);
-
-  void setFileBase(void* base);
-
-} // namespace FileHelper
-
 namespace debugging {
   int increaseInstCounter();
   void enableDebug();

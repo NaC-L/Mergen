@@ -23,24 +23,41 @@ namespace BinaryOperations {
 
   // wtf man
   ZyanU8* data_g;
+  arch_mode is64Bit;
 
-  void initBases(ZyanU8* data) { data_g = data; }
+  void initBases(ZyanU8* data, arch_mode is64) {
+    data_g = data;
+    is64Bit = is64;
+  }
 
+  int getBitness() { return is64Bit == X64 ? 64 : 32; }
   void getBases(ZyanU8** data) { *data = data_g; }
 
   const char* getName(uint64_t offset) {
     auto dosHeader = (win::dos_header_t*)data_g;
-    auto ntHeaders =
-        (win::nt_headers_x64_t*)((uint8_t*)data_g + dosHeader->e_lfanew);
-    auto rvaOffset = FileHelper::RvaToFileOffset(ntHeaders, offset);
+    auto ntHeaders = (const void*)((uint8_t*)data_g + dosHeader->e_lfanew);
+    auto rvaOffset = RvaToFileOffset(ntHeaders, offset);
     return (const char*)data_g + rvaOffset;
   }
+
   bool isImport(uint64_t addr) {
+    auto dosHeader = reinterpret_cast<const win::dos_header_t*>(data_g);
+    auto ntHeadersBase =
+        reinterpret_cast<const uint8_t*>(data_g) + dosHeader->e_lfanew;
+
+    uint64_t imageBase;
+    if (is64Bit == X64) {
+      auto ntHeaders =
+          reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase);
+      imageBase = ntHeaders->optional_header.image_base;
+    } else {
+      auto ntHeaders =
+          reinterpret_cast<const win::nt_headers_t<false>*>(ntHeadersBase);
+      imageBase = ntHeaders->optional_header.image_base;
+    }
+
     APInt tmp;
-    auto dosHeader = (win::dos_header_t*)data_g;
-    auto ntHeaders =
-        (win::nt_headers_x64_t*)((uint8_t*)data_g + dosHeader->e_lfanew);
-    return readMemory(ntHeaders->optional_header.image_base + addr, 1, tmp);
+    return readMemory(imageBase + addr, 1, tmp);
   }
 
   DenseSet<uint64_t> MemWrites;
@@ -53,7 +70,7 @@ namespace BinaryOperations {
   // sections
   bool readMemory(uint64_t addr, unsigned byteSize, APInt& value) {
 
-    uint64_t mappedAddr = FileHelper::address_to_mapped_address(addr);
+    uint64_t mappedAddr = address_to_mapped_address(addr);
     uint64_t tempValue;
     if (mappedAddr > 0) {
       std::memcpy(&tempValue,
@@ -72,6 +89,98 @@ namespace BinaryOperations {
   // address then do fancy stuff to figure out what we wrote so we know what
   // we will be executing
   void writeMemory();
+
+  uint64_t RvaToFileOffset(const void* ntHeadersBase, uint32_t rva) {
+    const auto* sectionHeader =
+        is64Bit == X64
+            ? reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase)
+                  ->get_sections()
+            : reinterpret_cast<const win::nt_headers_t<false>*>(ntHeadersBase)
+                  ->get_sections();
+
+    int numSections =
+        is64Bit == X64
+            ? reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase)
+                  ->file_header.num_sections
+            : reinterpret_cast<const win::nt_headers_t<false>*>(ntHeadersBase)
+                  ->file_header.num_sections;
+
+    for (int i = 0; i < numSections; i++, sectionHeader++) {
+      if (rva >= sectionHeader->virtual_address &&
+          rva <
+              (sectionHeader->virtual_address + sectionHeader->virtual_size)) {
+        return rva - sectionHeader->virtual_address +
+               sectionHeader->ptr_raw_data;
+      }
+    }
+    return 0;
+  }
+
+  uint64_t address_to_mapped_address(uint64_t rva) {
+    auto dosHeader = reinterpret_cast<const win::dos_header_t*>(data_g);
+    auto ntHeadersBase =
+        reinterpret_cast<const uint8_t*>(data_g) + dosHeader->e_lfanew;
+
+    uint64_t imageBase;
+    if (is64Bit == X64) {
+      auto ntHeaders =
+          reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase);
+      imageBase = ntHeaders->optional_header.image_base;
+    } else {
+      auto ntHeaders =
+          reinterpret_cast<const win::nt_headers_t<false>*>(ntHeadersBase);
+      imageBase = ntHeaders->optional_header.image_base;
+    }
+
+    uint64_t address = rva - imageBase;
+    return RvaToFileOffset(ntHeadersBase, address);
+  }
+
+  uint64_t fileOffsetToRVA(uint64_t offset) {
+    if (!data_g) {
+      return 0; // Ensure data is initialized
+    }
+
+    // Get DOS header
+    auto dosHeader = reinterpret_cast<const win::dos_header_t*>(data_g);
+    auto ntHeadersBase =
+        reinterpret_cast<const uint8_t*>(data_g) + dosHeader->e_lfanew;
+
+    // Determine NT headers based on architecture
+    uint64_t imageBase;
+    auto sectionHeader =
+        is64Bit == X64
+            ? reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase)
+                  ->get_sections()
+            : reinterpret_cast<const win::nt_headers_t<false>*>(ntHeadersBase)
+                  ->get_sections();
+
+    int numSections =
+        is64Bit == X64
+            ? reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase)
+                  ->file_header.num_sections
+            : reinterpret_cast<const win::nt_headers_t<false>*>(ntHeadersBase)
+                  ->file_header.num_sections;
+
+    imageBase =
+        is64Bit == X64
+            ? reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase)
+                  ->optional_header.image_base
+            : reinterpret_cast<const win::nt_headers_t<false>*>(ntHeadersBase)
+                  ->optional_header.image_base;
+
+    // Iterate over section headers to find matching section
+    for (int i = 0; i < numSections; i++, sectionHeader++) {
+      if (offset >= sectionHeader->ptr_raw_data &&
+          offset <
+              (sectionHeader->ptr_raw_data + sectionHeader->size_raw_data)) {
+        return imageBase + offset - sectionHeader->ptr_raw_data +
+               sectionHeader->virtual_address;
+      }
+    }
+
+    return 0; // Offset not found in any section
+  }
 
 }; // namespace BinaryOperations
 
