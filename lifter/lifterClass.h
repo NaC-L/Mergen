@@ -568,6 +568,9 @@ public:
   DEFINE_FUNCTION(pushfq);
   DEFINE_FUNCTION(pop);
   DEFINE_FUNCTION(popfq);
+
+  DEFINE_FUNCTION(leave);
+
   DEFINE_FUNCTION(adc);
   DEFINE_FUNCTION(xadd);
   DEFINE_FUNCTION(test);
