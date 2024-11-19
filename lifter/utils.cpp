@@ -6,15 +6,72 @@
 #include <llvm/Support/KnownBits.h>
 #include <map>
 
+/*
 
 
+float intBitsToFloat(int bits) {
+    // Extract components from the int using IEEE 754 single precision format
+    int sign = (bits >> 31) & 0x1;
+    int exponent = (bits >> 23) & 0xFF;
+    int mantissa = bits & 0x7FFFFF;
 
-
-
+    // Build float value according to IEEE 754 formula
+    float value = 0;
+    if (exponent == 0) {
+        if (mantissa == 0) {
+            value = sign ? -0.0f : 0.0f;
+        } else {
+            // Denormalized number
+            value = (sign ? -1.0f : 1.0f) * (mantissa / (float)(1 << 23)) *
+powf(2.0f, -126);
+        }
+    } else if (exponent == 0xFF) {
+        if (mantissa == 0) {
+            value = sign ? -INFINITY : INFINITY;
+        } else {
+            value = NAN;
+        }
+    } else {
+        // Normalized number
+        value = (sign ? -1.0f : 1.0f) * (1.0f + mantissa / (float)(1 << 23)) *
+powf(2.0f, exponent - 127);
     }
 
+    return value;
+}
+int floatBitsToInt(float f) {
+    if (f == 0.0f) {
+        return (std::signbit(f) ? 0x80000000 : 0);
+    }
 
+    if (std::isinf(f)) {
+        return (f < 0 ? 0xFF800000 : 0x7F800000);
+    }
 
+    if (std::isnan(f)) {
+        return 0x7FC00000;  // One common NaN pattern
+    }
+
+    int sign = std::signbit(f) ? 1 : 0;
+    float abs_f = std::fabs(f);
+
+    int exponent = std::ilogbf(abs_f) + 127;  // Get biased exponent
+
+    // Handle denormals
+    if (exponent <= 0) {
+        float mantissa_f = abs_f * powf(2.0f, 149);  // 126 + 23
+        int mantissa = (int)mantissa_f;
+        return (sign << 31) | mantissa;
+    }
+
+    // Extract mantissa (23 bits of precision)
+    float mantissa_f = (abs_f / powf(2.0f, std::ilogbf(abs_f)) - 1.0f) *
+(float)(1 << 23); int mantissa = (int)mantissa_f;
+
+    return (sign << 31) | (exponent << 23) | mantissa;
+}
+
+*/
 
 namespace debugging {
   int ic = 1;

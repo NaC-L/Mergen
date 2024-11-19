@@ -19,6 +19,7 @@ unsigned int pathNo = 0;
 unsigned int breaking = 0;
 arch_mode is64Bit;
 
+void asm_to_zydis_to_lift(ZyanU8* data) {
   ZydisDecoder decoder;
   ZydisDecoderInit(&decoder,
                    is64Bit ? ZYDIS_MACHINE_MODE_LONG_64
@@ -215,7 +216,7 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
 
   asm_to_zydis_to_lift(fileBase);
 
-  long long ms = timer::getTimer();
+  ms = timer::getTimer();
 
   cout << "\nlifting complete, " << dec << ms << " milliseconds has past"
        << endl;
