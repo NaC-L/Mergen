@@ -333,7 +333,7 @@ public:
   void SetRFLAGSValue(llvm::Value* value);
   PATH_info solvePath(llvm::Function* function, uint64_t& dest,
                       llvm::Value* simplifyValue);
-  llvm::Value* popStack();
+  llvm::Value* popStack(int size);
   void pushFlags(const std::vector<llvm::Value*>& value,
                  const std::string& address);
   std::vector<llvm::Value*> GetRFLAGS();
