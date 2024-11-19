@@ -17,15 +17,19 @@ unsigned int pathNo = 0;
 // consider having this function in a class, later we can use multi-threading to
 // explore different paths
 unsigned int breaking = 0;
-void asm_to_zydis_to_lift(ZyanU8* data) {
+arch_mode is64Bit;
 
   ZydisDecoder decoder;
-  ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64);
+  ZydisDecoderInit(&decoder,
+                   is64Bit ? ZYDIS_MACHINE_MODE_LONG_64
+                           : ZYDIS_MACHINE_MODE_LEGACY_32,
+                   is64Bit ? ZYDIS_STACK_WIDTH_64 : ZYDIS_STACK_WIDTH_32);
 
+  BinaryOperations::initBases(data, is64Bit); // sigh ?
   while (lifters.size() > 0) {
     lifterClass* lifter = lifters.back();
 
-    uint64_t offset = FileHelper::address_to_mapped_address(
+    uint64_t offset = BinaryOperations::address_to_mapped_address(
         lifter->blockInfo.runtime_address);
     debugging::doIfDebug([&]() {
       const auto printv =
@@ -39,8 +43,6 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
     });
 
     lifter->builder.SetInsertPoint(lifter->blockInfo.block);
-
-    BinaryOperations::initBases(data); // sigh
 
     lifter->run = 1;
 
@@ -100,8 +102,9 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
 }
 
 void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
-                                       unsigned char* fileBase) {
+                                       std::vector<uint8_t> fileData) {
 
+  auto fileBase = fileData.data();
   LLVMContext context;
   string mod_name = "my_lifting_module";
   llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
@@ -149,23 +152,65 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
   if (*(unsigned short*)fileBase != 0x5a4d) {
     UNREACHABLE("Only PE files are supported");
   }
-  auto ntHeaders = (win::nt_headers_x64_t*)(fileBase + dosHeader->e_lfanew);
-  auto ADDRESS = ntHeaders->optional_header.image_base;
-  auto imageSize = ntHeaders->optional_header.size_image;
-  auto stackSize = ntHeaders->optional_header.size_stack_reserve;
-  const uint64_t RVA = static_cast<uint64_t>(runtime_address - ADDRESS);
-  const uint64_t fileOffset = FileHelper::RvaToFileOffset(ntHeaders, RVA);
-  const uint8_t* dataAtAddress = fileBase + fileOffset;
-  cout << hex << "0x" << (int)*dataAtAddress << endl;
-  original_address = ADDRESS;
-  cout << "address: " << ADDRESS << " imageSize: " << imageSize
-       << " filebase: " << (uint64_t)fileBase << " fOffset: " << fileOffset
-       << " RVA: " << RVA << endl;
 
-  main->markMemPaged(STACKP_VALUE - stackSize, STACKP_VALUE + stackSize);
-  main->markMemPaged(ADDRESS, ADDRESS + imageSize);
+  auto IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
+  auto IMAGE_NT_OPTIONAL_HDR64_MAGIC = 0x20b;
 
-  // blockAddresses->push_back(make_tuple(runtime_address, bb, RegisterList));
+  auto ntHeaders = (win::nt_headers_t<true>*)(fileBase + dosHeader->e_lfanew);
+  auto PEmagic = ntHeaders->optional_header.magic;
+
+  is64Bit = (arch_mode)(PEmagic == IMAGE_NT_OPTIONAL_HDR64_MAGIC);
+
+  auto processHeaders = [fileBase, runtime_address,
+                         main](const void* ntHeadersBase) -> uint64_t {
+    uint64_t address, imageSize, stackSize;
+
+    if (is64Bit) {
+      auto ntHeaders =
+          reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase);
+      address = ntHeaders->optional_header.image_base;
+      imageSize = ntHeaders->optional_header.size_image;
+      stackSize = ntHeaders->optional_header.size_stack_reserve;
+    } else {
+      auto ntHeaders =
+          reinterpret_cast<const win::nt_headers_t<false>*>(ntHeadersBase);
+      address = ntHeaders->optional_header.image_base;
+      imageSize = ntHeaders->optional_header.size_image;
+      stackSize = ntHeaders->optional_header.size_stack_reserve;
+    }
+
+    const uint64_t RVA = static_cast<uint64_t>(runtime_address - address);
+    const uint64_t fileOffset =
+        BinaryOperations::RvaToFileOffset(ntHeadersBase, RVA);
+    const uint8_t* dataAtAddress =
+        reinterpret_cast<const uint8_t*>(fileBase) + fileOffset;
+
+    std::cout << std::hex << "0x" << static_cast<int>(*dataAtAddress)
+              << std::endl;
+
+    std::cout << "address: " << address << " imageSize: " << imageSize
+              << " filebase: " << reinterpret_cast<uint64_t>(fileBase)
+              << " fOffset: " << fileOffset << " RVA: " << RVA
+              << " stackSize: " << stackSize << std::endl;
+
+    main->markMemPaged(STACKP_VALUE - stackSize, STACKP_VALUE + stackSize);
+    printvalue2(stackSize);
+    main->markMemPaged(address, address + imageSize);
+    return address;
+  };
+
+  original_address = processHeaders(fileBase + dosHeader->e_lfanew);
+
+  funcsignatures::search_signatures(fileData);
+  funcsignatures::createOffsetMap(); // ?
+  for (const auto& [key, value] : funcsignatures::siglookup) {
+    value.display();
+  }
+  auto ms = timer::getTimer();
+  std::cout << "\n" << std::dec << ms << " milliseconds has past" << std::endl;
+
+  // blockAddresses->push_back(make_tuple(runtime_address, bb,
+  // RegisterList));
   lifters.push_back(main);
 
   asm_to_zydis_to_lift(fileBase);
@@ -213,9 +258,9 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  ifs.seekg(0, ios::end);
-  vector<uint8_t> fileData(ifs.tellg());
-  ifs.seekg(0, ios::beg);
+  ifs.seekg(0, std::ios::end);
+  std::vector<uint8_t> fileData(ifs.tellg());
+  ifs.seekg(0, std::ios::beg);
 
   if (!ifs.read((char*)fileData.data(), fileData.size())) {
     cout << "Failed to read the file." << endl;
@@ -223,21 +268,11 @@ int main(int argc, char* argv[]) {
   }
   ifs.close();
 
-  auto fileBase = fileData.data();
-
-  FileHelper::setFileBase(fileBase);
-
-  funcsignatures::search_signatures(fileData);
-  funcsignatures::createOffsetMap(); // ?
-  for (const auto& [key, value] : funcsignatures::siglookup) {
-    value.display();
-  }
-  long long ms = timer::getTimer();
-  cout << "\n" << dec << ms << " milliseconds has past" << endl;
-
-  InitFunction_and_LiftInstructions(startAddr, fileBase);
-  long long milliseconds = timer::stopTimer();
-  cout << "\n" << dec << milliseconds << " milliseconds has past" << endl;
-  cout << "Lifted and optimized " << debugging::increaseInstCounter() - 1
-       << " total insts";
+  InitFunction_and_LiftInstructions(startAddr, fileData);
+  auto milliseconds = timer::stopTimer();
+  std::cout << "\n"
+            << std::dec << milliseconds << " milliseconds has past"
+            << std::endl;
+  std::cout << "Lifted and optimized " << debugging::increaseInstCounter() - 1
+            << " total insts";
 }

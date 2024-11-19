@@ -711,7 +711,7 @@ void lifterClass::lift_call() {
   auto RspValue = GetOperandValue(rsp, rsp.size);
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    8); // assuming its x64
+                                    BinaryOperations::getBitness() / 8);
   auto result = createSubFolder(RspValue, val, "pushing_newrsp");
 
   string block_name = "jmp-call";
@@ -724,7 +724,7 @@ void lifterClass::lift_call() {
   }
   case ZYDIS_OPERAND_TYPE_MEMORY:
   case ZYDIS_OPERAND_TYPE_REGISTER: {
-    auto registerValue = GetOperandValue(src, 64);
+    auto registerValue = GetOperandValue(src, src.size);
     if (!isa<ConstantInt>(registerValue)) {
 
       callFunctionIR(registerValue->getName().str() + "fnc_ptr", nullptr);
@@ -860,7 +860,7 @@ void lifterClass::lift_ret() {
   block->setName("fake_ret");
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    8); // assuming its x64
+                                    BinaryOperations::getBitness() / 8);
   auto rsp_result = createAddFolder(
       rspvalue, val,
       "ret-new-rsp-" + to_string(blockInfo.runtime_address) + "-");
@@ -882,13 +882,13 @@ void lifterClass::lift_jmp() {
   LLVMContext& context = builder.getContext();
   auto dest = operands[0];
 
-  auto Value = GetOperandValue(dest, 64);
+  auto Value = GetOperandValue(dest, BinaryOperations::getBitness());
   auto ripval = GetRegisterValue(ZYDIS_REGISTER_RIP);
   auto newRip = createAddFolder(
       Value, ripval, "jump-xd-" + to_string(blockInfo.runtime_address) + "-");
 
   jmpcount++;
-  auto targetv = GetOperandValue(dest, 64);
+  auto targetv = GetOperandValue(dest, BinaryOperations::getBitness());
   auto trunc = createZExtOrTruncFolder(targetv, Type::getInt64Ty(context),
                                        "jmp-register");
   printvalue(ripval);
@@ -2897,6 +2897,27 @@ void lifterClass::lift_pop() {
   ; // mov val, rsp first
 }
 
+void lifterClass::lift_leave() {
+  LLVMContext& context = builder.getContext();
+  auto src2 = operands[0]; // [xsp]
+  auto src1 = operands[1]; // xbp
+  auto dest = operands[2]; // xsp
+  // first xbp to xsp
+  // then [xsp] to xbp
+
+  auto xbp = GetOperandValue(src1, dest.size,
+                             std::to_string(blockInfo.runtime_address));
+
+  SetOperandValue(dest, xbp,
+                  std::to_string(blockInfo.runtime_address)); // move xbp to xsp
+
+  auto popstack = popStack(dest.size / 8);
+
+  SetOperandValue(src1, popstack); // then add rsp 8
+
+  // mov val, rsp first
+}
+
 void lifterClass::lift_popfq() {
   LLVMContext& context = builder.getContext();
   auto dest = operands[2]; // value that we are pushing
@@ -2909,8 +2930,7 @@ void lifterClass::lift_popfq() {
   auto RspValue =
       GetOperandValue(rsp, rsp.size, to_string(blockInfo.runtime_address));
 
-  auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    dest.size / 8); // assuming its x64
+  auto val = ConstantInt::getSigned(Type::getInt64Ty(context), dest.size / 8);
   auto result = createAddFolder(
       RspValue, val, "popfq-" + to_string(blockInfo.runtime_address) + "-");
 
@@ -4579,7 +4599,7 @@ void lifterClass::liftInstruction() {
     callFunctionIR(funcInfo->name.c_str(), funcInfo);
     outs() << "calling: " << funcInfo->name.c_str() << "\n";
     outs().flush();
-    auto next_jump = popStack();
+    auto next_jump = popStack(BinaryOperations::getBitness() / 8);
 
     // get [rsp], jump there
     if (!isa<ConstantInt>(next_jump)) {
@@ -4618,7 +4638,7 @@ void lifterClass::liftInstruction() {
 
     callFunctionIR(functionName, nullptr);
 
-    auto next_jump = popStack();
+    auto next_jump = popStack(BinaryOperations::getBitness() / 8);
 
     // get [rsp], jump there
     auto RIP_value = cast<ConstantInt>(next_jump);

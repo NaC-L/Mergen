@@ -1727,7 +1727,7 @@ void lifterClass::pushFlags(const vector<Value*>& value,
 }
 
 // return [rsp], rsp+=8
-Value* lifterClass::popStack() {
+Value* lifterClass::popStack(int size) {
   LLVMContext& context = builder.getContext();
   auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
   // should we get a address calculator function, do we need that?
@@ -1738,7 +1738,7 @@ Value* lifterClass::popStack() {
   auto loadType = Type::getInt64Ty(context);
   auto returnValue = builder.CreateLoad(loadType, pointer, "PopStack-");
 
-  auto CI = ConstantInt::get(rsp->getType(), 8);
+  auto CI = ConstantInt::get(rsp->getType(), size);
   SetRegisterValue(ZYDIS_REGISTER_RSP, createAddFolder(rsp, CI));
 
   Value* solvedLoad = solveLoad(returnValue);
