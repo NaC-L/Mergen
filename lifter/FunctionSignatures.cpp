@@ -41,7 +41,7 @@ namespace funcsignatures {
   }
 
   void functioninfo::add_offset(uint64_t offset) {
-    offsets.push_back(FileHelper::fileOffsetToRVA(offset));
+    offsets.push_back(BinaryOperations::fileOffsetToRVA(offset));
   }
 
   void functioninfo::display() const {
