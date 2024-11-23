@@ -185,8 +185,8 @@ Value* lifterClass::extractBytes(Value* value, uint8_t startOffset,
   printvalue(value);
   printvalue(shiftedValue);
 
-  Value* truncatedValue =
-      createTruncFolder(shiftedValue, Type::getIntNTy(context, byteCount * 8));
+  Value* truncatedValue = createZExtOrTruncFolder(
+      shiftedValue, Type::getIntNTy(context, byteCount * 8));
   return truncatedValue;
 }
 
