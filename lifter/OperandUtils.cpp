@@ -328,6 +328,10 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 }
 
 KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
+  KnownBits knownBits(64);
+  knownBits.resetAll();
+  if (value->getType()->getIntegerBitWidth() > 64)
+    return knownBits;
 
   if (auto v_inst = dyn_cast<Instruction>(value)) {
     // Use find() to check if v_inst exists in the map
@@ -337,8 +341,7 @@ KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
       return KnownBits::makeConstant(a);
     }
   }
-  KnownBits knownBits(64);
-  knownBits.resetAll();
+
   if (value->getType() == Type::getInt128Ty(value->getContext()))
     return knownBits;
 
