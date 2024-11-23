@@ -319,10 +319,35 @@ void lifterClass::insertMemoryOp(StoreInst* inst) {
 
   pagedCheck(gepOffset, inst);
 
-  if (!isa<ConstantInt>(gepOffset)) // we also want to do operations with the
-                                    // memory when we can assume a range or
-                                    // writing to an unk location (ofc paged)
+  if (!isa<ConstantInt>(gepOffset)) {
+    printvalue(gepOffset);
+    if (auto conditional_offset = dyn_cast<SelectInst>(gepOffset)) {
+      printvalue(conditional_offset->getFalseValue());
+      printvalue(conditional_offset->getCondition());
+      if (auto truev =
+              dyn_cast<ConstantInt>(conditional_offset->getTrueValue())) {
+        auto newinst = createSelectFolder(
+            conditional_offset->getCondition(), inst->getValueOperand(),
+            retrieveCombinedValue(
+                truev->getZExtValue(),
+                inst->getValueOperand()->getType()->getIntegerBitWidth() / 8,
+                nullptr));
+        addValueReference(newinst, truev->getZExtValue());
+      }
+      if (auto falsev =
+              dyn_cast<ConstantInt>(conditional_offset->getFalseValue())) {
+        auto newinst = createSelectFolder(
+            conditional_offset->getCondition(),
+            retrieveCombinedValue(
+                falsev->getZExtValue(),
+                inst->getValueOperand()->getType()->getIntegerBitWidth() / 8,
+                nullptr),
+            inst->getValueOperand());
+        addValueReference(newinst, falsev->getZExtValue());
+      }
+    }
     return;
+  }
 
   auto gepOffsetCI = cast<ConstantInt>(gepOffset);
 
