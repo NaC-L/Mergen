@@ -189,8 +189,9 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto possible_condition = analyzeValueKnownBits(X_inst, X_inst);
         if (possible_condition.getMaxValue().isAllOnes() &&
             possible_condition.getMinValue().isZero()) {
-
-          return createSelectFolder(A, C, B, "selectEZ");
+          auto zero = ConstantInt::get(A->getType(), 0);
+          auto cond = createICMPFolder(CmpInst::ICMP_EQ, A, zero);
+          return createSelectFolder(cond, B, C, "selectEZ");
         }
       }
     }
