@@ -58,9 +58,21 @@ public:
             auto StackSize = APInt(64, STACKP_VALUE);
 
             auto SSKB = KnownBits::makeConstant(StackSize);
+            printvalue2(offsetKB);
+            printvalue2(SSKB);
             if (KnownBits::ult(offsetKB, SSKB)) {
               // minimum of offsetKB
               GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
+            } else if (auto select_inst = dyn_cast<SelectInst>(OffsetOperand)) {
+              if (isa<ConstantInt>(select_inst->getFalseValue()) &&
+                  isa<ConstantInt>(select_inst->getTrueValue())) {
+                if ((cast<ConstantInt>(select_inst->getTrueValue())
+                         ->getZExtValue() < STACKP_VALUE) &&
+                    (cast<ConstantInt>(select_inst->getFalseValue())
+                         ->getZExtValue() < STACKP_VALUE)) {
+                  GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
+                }
+              }
             }
             // endif
           }
