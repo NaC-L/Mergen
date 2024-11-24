@@ -1160,7 +1160,7 @@ void lifterClass::Init_Flags() {
   FlagList[FLAG_ZF].set(zero);
   FlagList[FLAG_SF].set(zero);
   FlagList[FLAG_TF].set(zero);
-  FlagList[FLAG_IF].set(zero);
+  FlagList[FLAG_IF].set(one);
   FlagList[FLAG_DF].set(zero);
   FlagList[FLAG_OF].set(zero);
 
