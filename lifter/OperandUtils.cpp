@@ -1407,16 +1407,7 @@ Value* lifterClass::SetValueToSubRegister_16b(const ZydisRegister reg,
 }
 
 void lifterClass::SetRegisterValue(const ZydisRegister key, Value* value) {
-  if ((key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
-       key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) {
-
-    value = SetValueToSubRegister_8b(key, value);
-  }
-
-  if (((key >= ZYDIS_REGISTER_R8B) && (key <= ZYDIS_REGISTER_R15B)) ||
-      ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_BL)) ||
-      ((key >= ZYDIS_REGISTER_SPL) && (key <= ZYDIS_REGISTER_DIL))) {
-
+  if ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_R15B)) {
     value = SetValueToSubRegister_8b(key, value);
   }
 
