@@ -1965,7 +1965,11 @@ void lifterClass::lift_shld() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
+  setFlag(FLAG_SF, computeSignFlag(resultValue));
+  setFlag(FLAG_ZF, computeZeroFlag(resultValue));
+  setFlag(FLAG_PF, computeParityFlag(resultValue));
+
+  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_shrd() {
@@ -2023,7 +2027,11 @@ void lifterClass::lift_shrd() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  SetOperandValue(dest, resultValue, to_string(blockInfo.runtime_address));
+  setFlag(FLAG_SF, computeSignFlag(resultValue));
+  setFlag(FLAG_ZF, computeZeroFlag(resultValue));
+  setFlag(FLAG_PF, computeParityFlag(resultValue));
+
+  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_lea() {
