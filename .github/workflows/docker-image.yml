@@ -1,8 +1,6 @@
 name: Docker Image CI
 
 on:
-  workflow_dispatch:
-  
   push:
     branches: [ "main" ]
   pull_request:
@@ -31,7 +29,8 @@ jobs:
         # Remove the container
         docker rm extract-container
 
-    - name: Verify extracted binary
-      run: |
-        ls -lh ./output
-        file ./output/lifter
+    - name: Upload the extracted binary as an artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: built-binary
+        path: ./output/lifter
