@@ -28,5 +28,6 @@ RUN mkdir -p /root/Mergen/build
 WORKDIR /root/Mergen/build
 RUN cmake .. && cmake --build . -j $(nproc)
 
-WORKDIR /data
-ENTRYPOINT ["/bin/sh", "-c", "/root/Mergen/build/lifter \"$1\" \"$2\" ", "--"]
+# Provide the built binary path as the default output for the container
+WORKDIR /root/Mergen/build
+CMD ["cp", "/root/Mergen/build/lifter", "/output/lifter"]
