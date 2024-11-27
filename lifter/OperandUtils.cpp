@@ -189,8 +189,9 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         auto possible_condition = analyzeValueKnownBits(X_inst, X_inst);
         if (possible_condition.getMaxValue().isAllOnes() &&
             possible_condition.getMinValue().isZero()) {
-
-          return createSelectFolder(A, C, B, "selectEZ");
+          auto zero = ConstantInt::get(A->getType(), 0);
+          auto cond = createICMPFolder(CmpInst::ICMP_EQ, A, zero);
+          return createSelectFolder(cond, B, C, "selectEZ");
         }
       }
     }
@@ -327,6 +328,10 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 }
 
 KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
+  KnownBits knownBits(64);
+  knownBits.resetAll();
+  if (value->getType()->getIntegerBitWidth() > 64)
+    return knownBits;
 
   if (auto v_inst = dyn_cast<Instruction>(value)) {
     // Use find() to check if v_inst exists in the map
@@ -336,8 +341,7 @@ KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
       return KnownBits::makeConstant(a);
     }
   }
-  KnownBits knownBits(64);
-  knownBits.resetAll();
+
   if (value->getType() == Type::getInt128Ty(value->getContext()))
     return knownBits;
 
@@ -516,9 +520,43 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
   return newInstruction;
 }
 
+static unsigned getComplexity(const Value* V) {
+
+  if (isa<ConstantInt>(V))
+    return isa<UndefValue>(V) ? 0 : 1;
+
+  if (isa<CastInst>(V) || match(V, m_Neg(PatternMatch::m_Value())) ||
+      match(V, m_Not(PatternMatch::m_Value())) ||
+      match(V, m_FNeg(PatternMatch::m_Value())))
+    return 2;
+
+  return 3;
+}
+
+static bool isCommutative(const unsigned Opcode) {
+  switch (Opcode) {
+  case Instruction::Add:
+  case Instruction::FAdd:
+  case Instruction::Mul:
+  case Instruction::FMul:
+  case Instruction::And:
+  case Instruction::Or:
+  case Instruction::Xor:
+    return true;
+  default:
+    return false;
+  }
+}
+
 Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
                                       Value* operand2, Type* destType,
                                       const Twine& Name) {
+  if (isCommutative(opcode)) {
+    if (getComplexity(operand1) < getComplexity(operand2)) {
+      // if operand1 is less complex, move it to RHS
+      std::swap(operand2, operand1);
+    }
+  }
 
   InstructionKey key;
   if (destType)
@@ -1122,7 +1160,7 @@ void lifterClass::Init_Flags() {
   FlagList[FLAG_ZF].set(zero);
   FlagList[FLAG_SF].set(zero);
   FlagList[FLAG_TF].set(zero);
-  FlagList[FLAG_IF].set(zero);
+  FlagList[FLAG_IF].set(one);
   FlagList[FLAG_DF].set(zero);
   FlagList[FLAG_OF].set(zero);
 
@@ -1369,16 +1407,7 @@ Value* lifterClass::SetValueToSubRegister_16b(const ZydisRegister reg,
 }
 
 void lifterClass::SetRegisterValue(const ZydisRegister key, Value* value) {
-  if ((key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
-       key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH)) {
-
-    value = SetValueToSubRegister_8b(key, value);
-  }
-
-  if (((key >= ZYDIS_REGISTER_R8B) && (key <= ZYDIS_REGISTER_R15B)) ||
-      ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_BL)) ||
-      ((key >= ZYDIS_REGISTER_SPL) && (key <= ZYDIS_REGISTER_DIL))) {
-
+  if ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_R15B)) {
     value = SetValueToSubRegister_8b(key, value);
   }
 

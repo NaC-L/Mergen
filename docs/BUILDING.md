@@ -98,7 +98,7 @@ To set up and build LLVM 18.1.0 from scratch on Windows, follow these steps. Thi
       cmake -G "Ninja" -S llvm -B build -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD="X86" -DCMAKE_INSTALL_PREFIX="C:\llvm_stuff" -DLLVM_HOST_TRIPLE=x86_64-pc-windows-msvc -DCMAKE_C_COMPILER="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.41.34120/bin/Hostx64/x64/cl.exe" -DCMAKE_CXX_COMPILER="C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.41.34120/bin/Hostx64/x64/cl.exe" -DCMAKE_RC_COMPILER="C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x64/rc.exe" -DCMAKE_MT="C:/Program Files (x86)/Windows Kits/10/bin/10.0.19041.0/x64/mt.exe"
       ```
 
-3**Install LLVM**
+3. **Install LLVM**
     - Once built, install LLVM to the specified installation directory:
       ```bash
       ninja -C build install
