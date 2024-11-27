@@ -32,5 +32,5 @@ jobs:
     - name: Upload the extracted binary as an artifact
       uses: actions/upload-artifact@v4
       with:
-        name: built-binary
+        name: Lifter
         path: ./output/lifter
