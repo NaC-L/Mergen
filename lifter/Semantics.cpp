@@ -179,10 +179,10 @@ Value* lifterClass::computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue,
 
 Value* lifterClass::computeAuxFlag(Value* Lvalue, Value* Rvalue,
                                    Value* result) {
-  auto wtf = ConstantInt::get(result->getType(), 0x10);
-  auto fuckyou = createXorFolder(result, createXorFolder(Lvalue, Rvalue));
-  auto wtf2 = createAndFolder(wtf, fuckyou);
-  auto af = createICMPFolder(CmpInst::ICMP_EQ, wtf2, wtf);
+  auto auxc = ConstantInt::get(result->getType(), 0x10);
+  auto aux1 = createXorFolder(result, createXorFolder(Lvalue, Rvalue));
+  auto aux2 = createAndFolder(auxc, aux1);
+  auto af = createICMPFolder(CmpInst::ICMP_EQ, aux2, auxc);
   return af;
 }
 
