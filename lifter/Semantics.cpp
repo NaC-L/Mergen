@@ -2928,6 +2928,37 @@ void lifterClass::lift_popfq() {
   // then add rsp 8
 }
 
+void lifterClass::lift_leave() {
+  LLVMContext& context = builder.getContext();
+
+  auto stack = operands[0]; // value that we are pushing (stack memory)
+  auto rbp = operands[1]; // rbp
+  auto rsp = operands[2]; // rsp
+
+  // mov rsp, rbp
+  auto RbpValue =
+      GetOperandValue(rbp, rbp.size, to_string(blockInfo.runtime_address));
+
+  printvalue(RbpValue);
+
+  // pop rbp
+  auto Rvalue =
+      GetOperandValue(stack, rbp.size, to_string(blockInfo.runtime_address));
+  ;
+
+  auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
+                                    rbp.size / 8); // assuming its x64
+  auto result = createAddFolder(RbpValue, val,
+                                "leaving_new_rsp-" +
+                                    to_string(blockInfo.runtime_address) + "-");
+
+  printvalue(Rvalue) printvalue(RbpValue) printvalue(result);
+
+  SetOperandValue(rsp, result); // then add rsp 8
+
+  SetOperandValue(rbp, Rvalue, to_string(blockInfo.runtime_address));
+}
+
 void lifterClass::lift_adc() {
   auto dest = operands[0];
   auto src = operands[1];
@@ -4341,6 +4372,10 @@ void lifterClass::liftInstructionSemantics() {
   case ZYDIS_MNEMONIC_POPF:
   case ZYDIS_MNEMONIC_POPFQ: {
     lift_popfq();
+    break;
+  }
+  case ZYDIS_MNEMONIC_LEAVE: {
+    lift_leave();
     break;
   }
   case ZYDIS_MNEMONIC_TEST: {

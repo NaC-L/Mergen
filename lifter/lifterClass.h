@@ -618,6 +618,7 @@ public:
   DEFINE_FUNCTION(cwde);
   DEFINE_FUNCTION(cdqe);
   DEFINE_FUNCTION(bextr);
+  DEFINE_FUNCTION(leave);
   // end semantics definition
 };
 extern vector<lifterClass*> lifters;
