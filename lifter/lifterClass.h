@@ -41,10 +41,7 @@ struct InstructionKey {
   struct InstructionKeyInfo {
     // Custom hash function
     static inline unsigned getHashValue(const InstructionKey& key) {
-
-      auto h2 = llvm::hash_value(key.operand1);
-      auto h3 = llvm::hash_value(key.destType);
-      return llvm::hash_combine(h2, h3);
+      return llvm::hash_combine(key.operand1, key.operand2);
     }
 
     // Equality function
@@ -70,25 +67,19 @@ public:
 
   void insert(uint8_t opcode, const InstructionKey& key, Value* value) {
     // Insert the key-value pair into the cache for the given opcode
-    opcodeCaches[opcode].insert({key, value});
+    opcodeCaches[opcode][key] = value;
   }
 
   Value* lookup(uint8_t opcode, const InstructionKey& key) const {
-    auto itOpcode = opcodeCaches.find(opcode);
-    if (itOpcode != opcodeCaches.end()) {
-      auto it = itOpcode->second.find(key);
-      if (it != itOpcode->second.end()) {
-        return it->second;
-      }
-    }
-    return nullptr; // Handle cache miss appropriately
+    const auto& cache = opcodeCaches[opcode];
+    auto it = cache.find(key);
+    return it != cache.end() ? it->second : nullptr;
   }
 
 private:
-  using CacheMap = llvm::DenseMap<InstructionKey, Value*,
-                                  InstructionKey::InstructionKeyInfo>;
-  std::unordered_map<uint8_t, CacheMap>
-      opcodeCaches; // Dynamic allocation of CacheMaps
+  using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
+                                       InstructionKey::InstructionKeyInfo>;
+  std::array<CacheMap, 256> opcodeCaches; // this should be faster
 };
 
 class floatingPointValue {
@@ -162,22 +153,24 @@ struct BBInfo {
       : runtime_address(runtime_address), block(block) {}
 };
 
-class LazyFlag {
+class LazyValue {
 public:
-  std::optional<llvm::Value*> value;
+  using ComputeFunc = std::function<llvm::Value*()>;
 
-  std::function<llvm::Value*()> calculation; // calculate value
+  mutable std::optional<llvm::Value*> value;
 
-  LazyFlag() : value(nullptr), calculation(nullptr) {}
-  LazyFlag(llvm::Value* val) : value(val), calculation(nullptr) {}
-  LazyFlag(std::function<llvm::Value*()> calc)
-      : calculation(calc), value(std::nullopt) {}
+  ComputeFunc computeFunc;
+
+  LazyValue() : value(nullptr) {}
+  LazyValue(llvm::Value* val) : value(val) {}
+  LazyValue(std::function<llvm::Value*()> calc)
+      : computeFunc(calc), value(std::nullopt) {}
 
   // get value, calculate if doesnt exist
-  llvm::Value* get() {
-    if (!value.has_value() && calculation) {
+  llvm::Value* get() const {
+    if (!value.has_value() && computeFunc) {
 
-      value = calculation();
+      value = (computeFunc)();
     }
 
     return value.value_or(nullptr);
@@ -186,10 +179,10 @@ public:
   // Set a new value directly, bypassing lazy evaluation
   void set(llvm::Value* newValue) {
     value = newValue;
-    calculation = nullptr; // Disable lazy evaluation when setting directly
+    computeFunc = nullptr;
   }
   void setCalculation(const std::function<llvm::Value*()> calc) {
-    calculation = calc;
+    computeFunc = calc;
     value = std::nullopt; // Reset the stored value
   }
 };
@@ -209,7 +202,7 @@ public:
   ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
   llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
   llvm::DenseMap<uint64_t, ValueByteReference> buffer;
-  using flagManager = std::array<LazyFlag, FLAGS_END>;
+  using flagManager = std::array<LazyValue, FLAGS_END>;
   // llvm::DenseMap<Value*, flagManager> flagbuffer;
 
   flagManager FlagList;
@@ -264,7 +257,7 @@ public:
       static inline GEPinfo getEmptyKey() { return GEPinfo(nullptr, 0, 0); }
 
       static inline GEPinfo getTombstoneKey() {
-        return GEPinfo(nullptr, 255, 0);
+        return GEPinfo(nullptr, -1, -1);
       }
     };
   };
@@ -319,6 +312,7 @@ public:
   // getters-setters
   llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
   void setFlag(const Flag flag, std::function<llvm::Value*()> calculation);
+  LazyValue getLazyFlag(const Flag flag);
   llvm::Value* getFlag(const Flag flag);
   void InitRegisters(llvm::Function* function, ZyanU64 rip);
   llvm::Value* GetValueFromHighByteRegister(const ZydisRegister reg);
@@ -370,7 +364,7 @@ public:
   // analysis
   llvm::KnownBits analyzeValueKnownBits(Value* value, Instruction* ctxI);
 
-  llvm::Value* solveLoad(LoadInst* load);
+  llvm::Value* solveLoad(LazyValue load, Value* ptr, uint8_t size);
 
   llvm::SimplifyQuery createSimplifyQuery(Instruction* Inst);
 
@@ -409,7 +403,7 @@ public:
                                                 unsigned max_unknown);
 
   Value* retrieveCombinedValue(const uint64_t startAddress,
-                               const uint8_t byteCount, Value* orgLoad);
+                               const uint8_t byteCount, LazyValue orgLoad);
 
   void addValueReference(Value* value, const uint64_t address);
 
@@ -417,7 +411,7 @@ public:
 
   void pagedCheck(Value* address, Instruction* ctxI);
 
-  void loadMemoryOp(LoadInst* inst);
+  void loadMemoryOp(Value* inst);
 
   void insertMemoryOp(StoreInst* inst);
   set<APInt, APIntComparator> computePossibleValues(Value* V,
