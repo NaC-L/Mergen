@@ -7,6 +7,8 @@
 
 enum Assumption { Real, Assumed }; // add None
 
+enum arch_mode { X86 = 0, X64 = 1 };
+
 enum isPaged { MEMORY_PAGED, MEMORY_MIGHT_BE_PAGED, MEMORY_NOT_PAGED };
 
 struct APIntComparator {
@@ -55,15 +57,23 @@ namespace BinaryOperations {
 
   const char* getName(const uint64_t offset);
 
-  void initBases(ZyanU8* data); // ?
+  int getBitness();
+
+  void initBases(ZyanU8* data, arch_mode is64); // ?
 
   void getBases(ZyanU8** data);
 
-  bool isImport(const uint64_t addr);
+  bool isImport(uint64_t addr);
 
   bool readMemory(const uint64_t addr, unsigned byteSize, llvm::APInt& value);
 
   bool isWrittenTo(const uint64_t addr);
+
+  uint64_t RvaToFileOffset(const void* ntHeadersBase, uint32_t rva);
+
+  uint64_t address_to_mapped_address(uint64_t rva);
+
+  uint64_t fileOffsetToRVA(uint64_t fileAddress);
 
 }; // namespace BinaryOperations
 

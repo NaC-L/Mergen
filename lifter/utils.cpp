@@ -1,6 +1,4 @@
 #include "utils.h"
-#include "coff/section_header.hpp"
-#include "nt/nt_headers.hpp"
 #include "llvm/IR/Value.h"
 #include <chrono>
 #include <iostream>
@@ -8,74 +6,72 @@
 #include <llvm/Support/KnownBits.h>
 #include <map>
 
-namespace FileHelper {
+/*
 
-  static void* fileBase = nullptr;
 
-  void setFileBase(void* base) { fileBase = base; }
+float intBitsToFloat(int bits) {
+    // Extract components from the int using IEEE 754 single precision format
+    int sign = (bits >> 31) & 0x1;
+    int exponent = (bits >> 23) & 0xFF;
+    int mantissa = bits & 0x7FFFFF;
 
-  win::section_header_t*
-  GetEnclosingSectionHeader(uint32_t rva, win::nt_headers_x64_t* pNTHeader) {
-    auto section = pNTHeader->get_sections();
-    for (unsigned i = 0; i < pNTHeader->file_header.num_sections;
-         i++, section++) {
-      if ((rva >= section->virtual_address) &&
-          (rva < (section->virtual_address + section->virtual_size))) {
-
-        return section;
-      }
+    // Build float value according to IEEE 754 formula
+    float value = 0;
+    if (exponent == 0) {
+        if (mantissa == 0) {
+            value = sign ? -0.0f : 0.0f;
+        } else {
+            // Denormalized number
+            value = (sign ? -1.0f : 1.0f) * (mantissa / (float)(1 << 23)) *
+powf(2.0f, -126);
+        }
+    } else if (exponent == 0xFF) {
+        if (mantissa == 0) {
+            value = sign ? -INFINITY : INFINITY;
+        } else {
+            value = NAN;
+        }
+    } else {
+        // Normalized number
+        value = (sign ? -1.0f : 1.0f) * (1.0f + mantissa / (float)(1 << 23)) *
+powf(2.0f, exponent - 127);
     }
-    return 0;
-  }
 
-  uint64_t RvaToFileOffset(win::nt_headers_x64_t* ntHeaders, uint32_t rva) {
-    auto sectionHeader = ntHeaders->get_sections();
-    for (int i = 0; i < ntHeaders->file_header.num_sections;
-         i++, sectionHeader++) {
-      if (rva >= sectionHeader->virtual_address &&
-          rva <
-              (sectionHeader->virtual_address + sectionHeader->virtual_size)) {
-        if (sectionHeader->characteristics.mem_execute ||
-            (sectionHeader->characteristics.mem_read &&
-             !sectionHeader->characteristics.mem_write)) // remove?
-          return rva - sectionHeader->virtual_address +
-                 sectionHeader->ptr_raw_data;
-        else
-          return 0;
-      }
+    return value;
+}
+int floatBitsToInt(float f) {
+    if (f == 0.0f) {
+        return (std::signbit(f) ? 0x80000000 : 0);
     }
-    return 0;
-  }
 
-  uint64_t address_to_mapped_address(uint64_t rva) {
-    auto dosHeader = (win::dos_header_t*)fileBase;
-    auto ntHeaders =
-        (win::nt_headers_x64_t*)((uint8_t*)fileBase + dosHeader->e_lfanew);
-    auto ADDRESS = rva - ntHeaders->optional_header.image_base;
-    return RvaToFileOffset(ntHeaders, ADDRESS);
-  }
-
-  uint64_t fileOffsetToRVA(uint64_t offset) {
-    if (!fileBase)
-      return 0;
-    auto dosHeader = (win::dos_header_t*)fileBase;
-    auto ntHeaders =
-        (win::nt_headers_x64_t*)((uint8_t*)fileBase + dosHeader->e_lfanew);
-
-    auto sectionHeader = ntHeaders->get_sections();
-    for (int i = 0; i < ntHeaders->file_header.num_sections;
-         i++, sectionHeader++) {
-      if (offset >= sectionHeader->ptr_raw_data &&
-          offset <
-              (sectionHeader->ptr_raw_data + sectionHeader->size_raw_data)) {
-        return ntHeaders->optional_header.image_base + offset -
-               sectionHeader->ptr_raw_data + sectionHeader->virtual_address;
-      }
+    if (std::isinf(f)) {
+        return (f < 0 ? 0xFF800000 : 0x7F800000);
     }
-    return 0;
-  }
 
-} // namespace FileHelper
+    if (std::isnan(f)) {
+        return 0x7FC00000;  // One common NaN pattern
+    }
+
+    int sign = std::signbit(f) ? 1 : 0;
+    float abs_f = std::fabs(f);
+
+    int exponent = std::ilogbf(abs_f) + 127;  // Get biased exponent
+
+    // Handle denormals
+    if (exponent <= 0) {
+        float mantissa_f = abs_f * powf(2.0f, 149);  // 126 + 23
+        int mantissa = (int)mantissa_f;
+        return (sign << 31) | mantissa;
+    }
+
+    // Extract mantissa (23 bits of precision)
+    float mantissa_f = (abs_f / powf(2.0f, std::ilogbf(abs_f)) - 1.0f) *
+(float)(1 << 23); int mantissa = (int)mantissa_f;
+
+    return (sign << 31) | (exponent << 23) | mantissa;
+}
+
+*/
 
 namespace debugging {
   int ic = 1;
