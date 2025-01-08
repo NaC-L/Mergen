@@ -4,10 +4,19 @@
 #include "GEPTracker.h"
 #include "OperandUtils.h"
 #include "includes.h"
+#include "utils.h"
 #include "llvm/IR/PassManager.h"
 #include <llvm/Analysis/ValueTracking.h>
+#include <llvm/IR/CFG.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/KnownBits.h>
+#include <llvm/Support/raw_ostream.h>
+
+#include <algorithm>
+#include <map>
+#include <string>
+
+using namespace llvm;
 
 class PromotePseudoStackPass
     : public llvm::PassInfoMixin<PromotePseudoStackPass> {
