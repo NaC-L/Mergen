@@ -609,7 +609,9 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
   if (vv2.getBitWidth() > vv1.getBitWidth()) {
     vv1 = vv1.zext(vv2.getBitWidth());
   }
-  if (opcode >= Instruction::Shl && opcode <= Instruction::AShr) {
+  if (opcode >= Instruction::Shl &&
+      opcode <= Instruction::LShr) { // AShr might not make it 0, it also could
+                                     // make it -1
     auto ugt_result = KnownBits::ugt(
         vv2,
         KnownBits::makeConstant(APInt(vv1.getBitWidth(), vv1.getBitWidth())));
@@ -792,14 +794,10 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   // this part will eliminate unneccesary operations
   switch (opcode) {
     // shifts also should return 0 if shift is bigger than x's bitwidth
-  case Instruction::Shl:    // x >> 0 = x , 0 >> x = 0
-  case Instruction::LShr:   // x << 0 = x , 0 << x = 0
-  case Instruction::AShr: { // x << 0 = x , 0 << x = 0
 
-    if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
-      if (LHSConst->isZero())
-        return LHS;
-    }
+  case Instruction::Shl:  // x >> 0 = x , 0 >> x = 0
+  case Instruction::LShr: // x << 0 = x , 0 << x = 0
+  {
 
     if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
       if (RHSConst->isZero())
@@ -808,7 +806,14 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
         return builder.getIntN(LHS->getType()->getIntegerBitWidth(), 0);
       }
     }
+    [[fallthrough]];
+  }
+  case Instruction::AShr: {
 
+    if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+      if (LHSConst->isZero())
+        return LHS;
+    }
     break;
   }
   case Instruction::Xor:   // x ^ 0 = x , 0 ^ x = 0
@@ -822,11 +827,6 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
     if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
       if (RHSConst->isZero())
         return LHS;
-
-      if (opcode >= Instruction::Shl && opcode <= Instruction::AShr &&
-          RHSConst->getZExtValue() > LHS->getType()->getIntegerBitWidth()) {
-        return builder.getIntN(LHS->getType()->getIntegerBitWidth(), 0);
-      }
     }
 
     break;
@@ -1305,7 +1305,9 @@ Value* lifterClass::GetRFLAGSValue() {
 Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
 
   if (key == ZYDIS_REGISTER_RIP) {
-    return ConstantInt::getSigned(Type::getInt64Ty(builder.getContext()),
+    return ConstantInt::getSigned(BinaryOperations::getBitness() == 64
+                                      ? Type::getInt64Ty(builder.getContext())
+                                      : Type::getInt32Ty(builder.getContext()),
                                   blockInfo.runtime_address);
   }
 
