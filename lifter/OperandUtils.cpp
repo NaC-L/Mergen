@@ -1191,6 +1191,11 @@ void lifterClass::setFlag(const Flag flag,
   FlagList[flag].setCalculation(calculation);
 }
 
+LazyValue lifterClass::getLazyFlag(const Flag flag) {
+  //
+  return FlagList[flag];
+}
+
 Value* lifterClass::getFlag(const Flag flag) {
   Value* result = FlagList[flag].get(); // Retrieve the value,
   if (result) // if its somehow nullptr, just return False as value
@@ -1566,12 +1571,15 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
         createGEPFolder(Type::getInt8Ty(context), memoryOperand,
                         effectiveAddress, "GEPLoadxd-" + address + "-");
 
-    auto retval =
-        builder.CreateLoad(loadType, pointer, "Loadxd-" + address + "-");
+    LazyValue retval([this, loadType, pointer]() {
+      return builder.CreateLoad(loadType,
+                                pointer /*, "Loadxd-" + address + "-"*/);
+    });
 
-    loadMemoryOp(retval);
+    loadMemoryOp(pointer);
 
-    Value* solvedLoad = solveLoad(retval);
+    Value* solvedLoad =
+        solveLoad(retval, pointer, loadType->getIntegerBitWidth());
     if (solvedLoad) {
       return solvedLoad;
     }
@@ -1580,9 +1588,9 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
         pointer,
         builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 
-    printvalue(retval);
+    printvalue(retval.get());
 
-    return retval;
+    return retval.get();
   }
   default: {
     UNREACHABLE("operand type not implemented");
@@ -1731,15 +1739,18 @@ Value* lifterClass::popStack(int size) {
                                    "GEPLoadPOPStack--");
 
   auto loadType = Type::getInt64Ty(context);
-  auto returnValue = builder.CreateLoad(loadType, pointer, "PopStack-");
+  LazyValue returnValue([this, loadType, pointer]() {
+    return builder.CreateLoad(loadType, pointer /*, "PopStack-"*/);
+  });
 
   auto CI = ConstantInt::get(rsp->getType(), size);
   SetRegisterValue(ZYDIS_REGISTER_RSP, createAddFolder(rsp, CI));
 
-  Value* solvedLoad = solveLoad(returnValue);
+  Value* solvedLoad =
+      solveLoad(returnValue, pointer, loadType->getIntegerBitWidth());
   if (solvedLoad) {
     return solvedLoad;
   }
 
-  return returnValue;
+  return returnValue.get();
 }
