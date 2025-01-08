@@ -41,10 +41,7 @@ struct InstructionKey {
   struct InstructionKeyInfo {
     // Custom hash function
     static inline unsigned getHashValue(const InstructionKey& key) {
-
-      auto h2 = llvm::hash_value(key.operand1);
-      auto h3 = llvm::hash_value(key.destType);
-      return llvm::hash_combine(h2, h3);
+      return llvm::hash_combine(key.operand1, key.operand2);
     }
 
     // Equality function
@@ -70,25 +67,19 @@ public:
 
   void insert(uint8_t opcode, const InstructionKey& key, Value* value) {
     // Insert the key-value pair into the cache for the given opcode
-    opcodeCaches[opcode].insert({key, value});
+    opcodeCaches[opcode][key] = value;
   }
 
   Value* lookup(uint8_t opcode, const InstructionKey& key) const {
-    auto itOpcode = opcodeCaches.find(opcode);
-    if (itOpcode != opcodeCaches.end()) {
-      auto it = itOpcode->second.find(key);
-      if (it != itOpcode->second.end()) {
-        return it->second;
-      }
-    }
-    return nullptr; // Handle cache miss appropriately
+    const auto& cache = opcodeCaches[opcode];
+    auto it = cache.find(key);
+    return it != cache.end() ? it->second : nullptr;
   }
 
 private:
-  using CacheMap = llvm::DenseMap<InstructionKey, Value*,
-                                  InstructionKey::InstructionKeyInfo>;
-  std::unordered_map<uint8_t, CacheMap>
-      opcodeCaches; // Dynamic allocation of CacheMaps
+  using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
+                                       InstructionKey::InstructionKeyInfo>;
+  std::array<CacheMap, 256> opcodeCaches; // this should be faster
 };
 
 class floatingPointValue {
