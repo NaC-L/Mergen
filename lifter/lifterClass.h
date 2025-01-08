@@ -411,7 +411,7 @@ public:
 
   void pagedCheck(Value* address, Instruction* ctxI);
 
-  void loadMemoryOp(LoadInst* inst);
+  void loadMemoryOp(Value* inst);
 
   void insertMemoryOp(StoreInst* inst);
   set<APInt, APIntComparator> computePossibleValues(Value* V,
