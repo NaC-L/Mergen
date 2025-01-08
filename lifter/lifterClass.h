@@ -257,7 +257,7 @@ public:
       static inline GEPinfo getEmptyKey() { return GEPinfo(nullptr, 0, 0); }
 
       static inline GEPinfo getTombstoneKey() {
-        return GEPinfo(nullptr, 255, 0);
+        return GEPinfo(nullptr, -1, -1);
       }
     };
   };
