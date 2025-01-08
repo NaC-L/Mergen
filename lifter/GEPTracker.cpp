@@ -197,7 +197,8 @@ void lifterClass::addValueReference(Value* value, uint64_t address) {
 }
 
 Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
-                                          uint8_t byteCount, Value* orgLoad) {
+                                          uint8_t byteCount,
+                                          LazyValue orgLoad) {
   LLVMContext& context = builder.getContext();
   if (byteCount == 0) {
     return nullptr;
@@ -252,7 +253,12 @@ Value* lifterClass::retrieveCombinedValue(uint64_t startAddress,
       byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
     } else if (!v.isRef) {
       // llvm_unreachable_internal("uh...");
-      byteValue = extractBytes(orgLoad, m, m + bytesize);
+	  /*
+      byteValue = ConstantInt::get(Type::getIntNTy(context, (bytesize) * 8),
+                                   v.memoryAddress);
+	  */
+      // TODO :
+      byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
     }
     if (byteValue) {
       printvalue(byteValue);
@@ -395,8 +401,7 @@ void lifterClass::pagedCheck(Value* address, Instruction* ctxI) {
   }
 }
 
-void lifterClass::loadMemoryOp(LoadInst* inst) {
-  auto ptr = inst->getPointerOperand();
+void lifterClass::loadMemoryOp(Value* ptr) {
   if (!isa<GetElementPtrInst>(ptr))
     return;
 
@@ -407,7 +412,7 @@ void lifterClass::loadMemoryOp(LoadInst* inst) {
 
   auto gepOffset = gepInst->getOperand(1);
 
-  pagedCheck(gepOffset, inst);
+  pagedCheck(gepOffset, dyn_cast<Instruction>(ptr));
   return;
 }
 
@@ -804,21 +809,15 @@ set<APInt, APIntComparator> lifterClass::computePossibleValues(Value* V,
   return res;
 }
 
-Value* lifterClass::solveLoad(LoadInst* load) {
-  printvalue(load);
+Value* lifterClass::solveLoad(LazyValue load, Value* ptr, uint8_t size) {
 
-  // replace this
-  auto LoadMemLoc = MemoryLocation::get(load);
+  const Value* loadPtr = ptr;
 
-  const Value* loadPtr = LoadMemLoc.Ptr;
-  LocationSize loadsize = LoadMemLoc.Size;
-
-  auto cloadsize = loadsize.getValue();
-
+  auto cloadsize = size / 8;
   auto loadPtrGEP = cast<GetElementPtrInst>(loadPtr);
-
   auto loadPointer = loadPtrGEP->getPointerOperand();
-  auto loadOffset = loadPtrGEP->getOperand(1);
+  Value* loadOffset = loadPtrGEP->getOperand(1);
+
   printvalue(loadOffset);
   // if we know all the stores, we can use our buffer
   // however, if we dont know all the stores
