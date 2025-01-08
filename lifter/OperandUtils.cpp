@@ -1305,7 +1305,9 @@ Value* lifterClass::GetRFLAGSValue() {
 Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
 
   if (key == ZYDIS_REGISTER_RIP) {
-    return ConstantInt::getSigned(Type::getInt64Ty(builder.getContext()),
+    return ConstantInt::getSigned(BinaryOperations::getBitness() == 64
+                                      ? Type::getInt64Ty(builder.getContext())
+                                      : Type::getInt32Ty(builder.getContext()),
                                   blockInfo.runtime_address);
   }
 
