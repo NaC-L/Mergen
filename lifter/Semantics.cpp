@@ -4564,7 +4564,16 @@ void lifterClass::liftInstructionSemantics() {
   case ZYDIS_MNEMONIC_NOP: {
     break;
   }
-
+  case ZYDIS_MNEMONIC_UD2: {
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("exception", fnc->getReturnType())
+            .getCallee()); // Just call exception and return
+    builder.CreateRet(builder.CreateCall(externFunc));
+    run = 0; // prettify this probably
+    finished = 1;
+    return;
+  }
   default: {
 
     ZydisFormatter formatter;
