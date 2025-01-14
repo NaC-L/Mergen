@@ -727,7 +727,13 @@ void lifterClass::lift_call() {
     auto registerValue = GetOperandValue(src, src.size);
     if (!isa<ConstantInt>(registerValue)) {
 
-      callFunctionIR(registerValue->getName().str() + "fnc_ptr", nullptr);
+      auto idltvm =
+          builder.CreateIntToPtr(registerValue, PointerType::get(context, 0));
+
+      builder.CreateCall(parseArgsType(nullptr, context), idltvm,
+                         parseArgs(nullptr));
+
+      // callFunctionIR(registerValue->getName().str() + "_call_fnc", nullptr);
 
       SetOperandValue(rsp, RspValue, to_string(blockInfo.runtime_address));
       break;
