@@ -727,7 +727,13 @@ void lifterClass::lift_call() {
     auto registerValue = GetOperandValue(src, src.size);
     if (!isa<ConstantInt>(registerValue)) {
 
-      callFunctionIR(registerValue->getName().str() + "fnc_ptr", nullptr);
+      auto idltvm =
+          builder.CreateIntToPtr(registerValue, PointerType::get(context, 0));
+
+      builder.CreateCall(parseArgsType(nullptr, context), idltvm,
+                         parseArgs(nullptr));
+
+      // callFunctionIR(registerValue->getName().str() + "_call_fnc", nullptr);
 
       SetOperandValue(rsp, RspValue, to_string(blockInfo.runtime_address));
       break;
@@ -1552,73 +1558,80 @@ FI;
 
 void lifterClass::lift_sar() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto count = operands[1];
+  auto dest = operands[0 + (instruction.mnemonic == ZYDIS_MNEMONIC_SARX)];
+  auto count = operands[1 + (instruction.mnemonic == ZYDIS_MNEMONIC_SARX)];
 
-  Value* Lvalue =
-      GetOperandValue(dest, dest.size, to_string(blockInfo.runtime_address));
+  Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* countValue = GetOperandValue(count, dest.size);
 
-  Value* zero = ConstantInt::get(countValue->getType(), 0);
-  uint8_t bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  uint8_t maskC = bitWidth == 64 ? 0x3f : 0x1f;
+  unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
+  unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
   Value* clampedCount = createAndFolder(
       countValue, ConstantInt::get(countValue->getType(), maskC), "sarclamp");
-  // ashrfolder
+
+  Value* zero = ConstantInt::get(clampedCount->getType(), 0);
+  Value* maxShift = ConstantInt::get(clampedCount->getType(), bitWidth - 1);
+
+  Value* isZeroed = createICMPFolder(CmpInst::ICMP_UGT, clampedCount, maxShift);
+
+  // Shift by bitWidth - 1 if clampedCount exceeds bitWidth - 1
+  clampedCount = createSelectFolder(isZeroed, maxShift, clampedCount);
   Value* result = createAShrFolder(
       Lvalue, clampedCount,
-      "sar-lshr-" + to_string(blockInfo.runtime_address) + "-");
+      "sar-ashr-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  Value* isZeroed =
-      createICMPFolder(CmpInst::ICMP_UGT, clampedCount,
-                       ConstantInt::get(clampedCount->getType(), bitWidth - 1));
-  result = createSelectFolder(isZeroed, zero, result);
+  auto last_shift = createAShrFolder(
+      Lvalue,
+      createSubFolder(clampedCount,
+                      ConstantInt::get(clampedCount->getType(), 1)),
+      "sarcf");
+  Value* cfValue = createTruncFolder(last_shift, builder.getInt1Ty());
 
-  auto cfRvalue = createSubFolder(clampedCount,
-                                  ConstantInt::get(clampedCount->getType(), 1));
-  auto cfShl =
-      createShlFolder(ConstantInt::get(cfRvalue->getType(), 1), cfRvalue);
-  auto cfAnd = createAndFolder(cfShl, Lvalue);
-  auto cfValue = createICMPFolder(CmpInst::ICMP_NE, cfAnd,
-                                  ConstantInt::get(cfAnd->getType(), 0));
-
-  Value* isCountOne =
+  Value* isCountZero =
       createICMPFolder(CmpInst::ICMP_EQ, clampedCount,
-                       ConstantInt::get(clampedCount->getType(), 1));
-  Value* of =
-      createSelectFolder(isCountOne, builder.getInt1(0), getFlag(FLAG_OF));
-
-  Value* isNotZero = createICMPFolder(CmpInst::ICMP_NE, clampedCount, zero);
+                       ConstantInt::get(clampedCount->getType(), 0));
   Value* oldcf = getFlag(FLAG_CF);
-  cfValue = createSelectFolder(isNotZero, cfValue, oldcf);
-  cfValue = createSelectFolder(
-      isZeroed, createTruncFolder(zero, Type::getInt1Ty(context)), cfValue);
+  printvalue(last_shift);
+  printvalue(isCountZero);
+  cfValue = createSelectFolder(isCountZero, oldcf, cfValue, "cfValue");
 
-  Value* sf =
-      createSelectFolder(isNotZero, computeSignFlag(result), getFlag(FLAG_SF));
-  Value* zf =
-      createSelectFolder(isNotZero, computeZeroFlag(result), getFlag(FLAG_ZF));
-  Value* pf = createSelectFolder(isNotZero, computeParityFlag(result),
-                                 getFlag(FLAG_PF));
+  // OF is cleared for SAR
+  Value* of = ConstantInt::get(Type::getInt1Ty(context), 0);
 
-  printvalue(Lvalue) printvalue2(bitWidth) printvalue(countValue);
-  printvalue(clampedCount) printvalue(result) printvalue(isNotZero);
-  printvalue(cfValue) printvalue(oldcf);
-  setFlag(FLAG_CF, cfValue);
-  setFlag(FLAG_OF, of);
-  setFlag(FLAG_SF, sf);
-  setFlag(FLAG_ZF, zf);
-  setFlag(FLAG_PF, pf);
+  // Update flags only when count is not zero
+  LazyValue isNotZero([this, clampedCount, zero]() {
+    return createICMPFolder(CmpInst::ICMP_NE, clampedCount, zero);
+  });
+  LazyValue oldsf = getLazyFlag(FLAG_SF);
+  LazyValue oldzf = getLazyFlag(FLAG_PF);
+  LazyValue oldpf = getLazyFlag(FLAG_ZF);
+  if (instruction.mnemonic != ZYDIS_MNEMONIC_SARX) {
+    setFlag(FLAG_SF, [this, isNotZero, oldsf, result]() {
+      return createSelectFolder(isNotZero.get(), computeSignFlag(result),
+                                oldsf.get());
+    });
+    setFlag(FLAG_ZF, [this, isNotZero, oldzf, result]() {
+      return createSelectFolder(isNotZero.get(), computeZeroFlag(result),
+                                oldzf.get());
+    });
+    setFlag(FLAG_PF, [this, isNotZero, oldpf, result]() {
+      return createSelectFolder(isNotZero.get(), computeParityFlag(result),
+                                oldpf.get());
+    });
 
-  SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
-  ;
+    setFlag(FLAG_CF, cfValue);
+    setFlag(FLAG_OF, of);
+  }
+
+  SetOperandValue(dest, result, std::to_string(blockInfo.runtime_address));
 }
+
 // TODO fix
 void lifterClass::lift_shr() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto count = operands[1];
+  auto dest = operands[0 + (instruction.mnemonic == ZYDIS_MNEMONIC_SHRX)];
+  auto count = operands[1 + (instruction.mnemonic == ZYDIS_MNEMONIC_SHRX)];
 
   Value* Lvalue = GetOperandValue(dest, dest.size);
   Value* countValue = GetOperandValue(count, dest.size);
@@ -1667,24 +1680,25 @@ void lifterClass::lift_shr() {
                                  getFlag(FLAG_PF));
   printvalue(sf);
   printvalue(result);
-  setFlag(FLAG_CF, cfValue);
-  setFlag(FLAG_OF, of);
-  setFlag(FLAG_SF, sf);
-  setFlag(FLAG_ZF, zf);
-  setFlag(FLAG_PF, pf);
 
-  printvalue(Lvalue) printvalue(clampedCount) printvalue(result)
-      printvalue(isNotZero) printvalue(oldcf) printvalue(cfValue)
-          SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
+  if (instruction.mnemonic != ZYDIS_MNEMONIC_SHRX) {
+    setFlag(FLAG_CF, cfValue);
+    setFlag(FLAG_OF, of);
+    setFlag(FLAG_SF, sf);
+    setFlag(FLAG_ZF, zf);
+    setFlag(FLAG_PF, pf);
+  }
+  printvalue(Lvalue) printvalue(clampedCount) printvalue(result) printvalue(
+      isNotZero) printvalue(oldcf) printvalue(cfValue)
+      SetOperandValue(dest, result, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_shl() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto count = operands[1];
-
-  Value* Lvalue =
-      GetOperandValue(dest, dest.size, to_string(blockInfo.runtime_address));
+  auto dest = operands[0 + (instruction.mnemonic == ZYDIS_MNEMONIC_SHLX)];
+  auto count = operands[1 + (instruction.mnemonic == ZYDIS_MNEMONIC_SHLX)];
+  Value* Lvalue = GetOperandValue(dest, dest.size,
+                                  std::to_string(blockInfo.runtime_address));
   Value* countValue = GetOperandValue(count, dest.size);
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
@@ -1750,28 +1764,33 @@ void lifterClass::lift_shl() {
   Value* ofValue = createSelectFolder(
       isCountOne, createXorFolder(resultMSB, cfAsMSB), getFlag(FLAG_OF));
 
-  setFlag(FLAG_CF, cfValue);
-  setFlag(FLAG_OF, ofValue);
+  if (instruction.mnemonic != ZYDIS_MNEMONIC_SHRX) {
+    setFlag(FLAG_CF, cfValue);
+    setFlag(FLAG_OF, ofValue);
 
-  Value* sf = createSelectFolder(countIsNotZero, computeSignFlag(result),
-                                 getFlag(FLAG_SF));
-  Value* zf = createSelectFolder(countIsNotZero, computeZeroFlag(result),
-                                 getFlag(FLAG_ZF));
-  Value* oldpf = getFlag(FLAG_PF);
-  printvalue(Lvalue);
-  printvalue(countValue);
-  printvalue(clampedCountValue);
-  printvalue(isCountOne);
-  printvalue(result);
-  printvalue(ofValue);
-  printvalue(cfValue);
-  setFlag(FLAG_SF, sf);
-  setFlag(FLAG_ZF, zf);
-  setFlag(FLAG_PF, [this, result, oldpf, countIsNotZero]() {
-    return createSelectFolder(countIsNotZero, computeParityFlag(result), oldpf);
-  });
+    Value* sf = createSelectFolder(countIsNotZero, computeSignFlag(result),
+                                   getFlag(FLAG_SF));
+    Value* oldpf = getFlag(FLAG_PF);
+    printvalue(Lvalue);
+    printvalue(countValue);
+    printvalue(clampedCountValue);
+    printvalue(isCountOne);
+    printvalue(result);
+    printvalue(ofValue);
+    printvalue(cfValue);
 
-  SetOperandValue(dest, result, to_string(blockInfo.runtime_address));
+    setFlag(FLAG_SF, sf);
+    auto oldZF = getLazyFlag(FLAG_ZF);
+    setFlag(FLAG_ZF, [this, countIsNotZero, result, oldZF]() mutable {
+      return createSelectFolder(countIsNotZero, computeZeroFlag(result),
+                                oldZF.get());
+    });
+    setFlag(FLAG_PF, [this, result, oldpf, countIsNotZero]() {
+      return createSelectFolder(countIsNotZero, computeParityFlag(result),
+                                oldpf);
+    });
+  }
+  SetOperandValue(dest, result, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_bswap() {
@@ -4234,11 +4253,12 @@ void lifterClass::liftInstructionSemantics() {
     lift_neg();
     break;
   }
+  case ZYDIS_MNEMONIC_SARX:
   case ZYDIS_MNEMONIC_SAR: {
     lift_sar();
     break;
   }
-
+  case ZYDIS_MNEMONIC_SHLX:
   case ZYDIS_MNEMONIC_SHL: {
     lift_shl();
     break;
@@ -4255,6 +4275,7 @@ void lifterClass::liftInstructionSemantics() {
     lift_shrd();
     break;
   }
+  case ZYDIS_MNEMONIC_SHRX:
   case ZYDIS_MNEMONIC_SHR: {
     lift_shr();
     break;
