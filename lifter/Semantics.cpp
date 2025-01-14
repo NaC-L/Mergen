@@ -813,6 +813,7 @@ void lifterClass::lift_ret() {
     int64_t rspval = constInt->getSExtValue();
     printvalue2(rspval);
     rop_result = rspval == STACKP_VALUE ? REAL_return : ROP_return;
+    /* Edge cases
     if (rspval > STACKP_VALUE) {
       // UNREACHABLE("missing context");
       Function* externFunc = cast<Function>(
@@ -824,6 +825,7 @@ void lifterClass::lift_ret() {
       finished = 1;
       return;
     }
+    */
   }
   printvalue2(rop_result);
   if (rop_result == REAL_return) {
