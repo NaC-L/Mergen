@@ -1482,15 +1482,13 @@ void lifterClass::lift_neg() {
       CmpInst::ICMP_NE, Rvalue, ConstantInt::get(Rvalue->getType(), 0), "zero");
 
   printvalue(Rvalue) printvalue(result) printvalue(sf);
-  // OF is not cleared?
+  // if of is not 0 and input and output is equal, of is set (input is just sign
+  // bit)
 
   Value* of;
-  if (dest.size > 32)
-    of = ConstantInt::getSigned(Rvalue->getType(), 0);
-  else {
-    of = createICMPFolder(CmpInst::ICMP_EQ, result, Rvalue);
-    of = createSelectFolder(isZero, of, ConstantInt::get(of->getType(), 0));
-  }
+
+  of = createICMPFolder(CmpInst::ICMP_EQ, result, Rvalue);
+  of = createSelectFolder(isZero, of, ConstantInt::get(of->getType(), 0));
 
   printvalue(of);
   // The CF flag set to 0 if the source operand is 0; otherwise it is set
