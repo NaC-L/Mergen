@@ -26,7 +26,7 @@ jobs:
         mkdir -p ./output
         docker cp extract-container:/root/Mergen/build/lifter ./output/lifter
 
-	./output/lifter        
+        ./output/lifter        
 
         # Remove the container
         docker rm extract-container
