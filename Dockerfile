@@ -37,5 +37,6 @@ RUN cmake .. ${TESTING:+-DMERGEN_TESTING=1} && cmake --build . -j $(nproc)
 # Provide the built binary path as the default output for the container
 WORKDIR /root/Mergen/build
 
+RUN ["/bin/bash", "-c", "if [ \"$TESTING\" == \"false\" ]; then cp /root/Mergen/build/lifter /output/lifter; fi"]
 # bash magic
-ENTRYPOINT ["/bin/bash", "-c", "if [ \"$TESTING\" == \"true\" ]; then /root/Mergen/build/lifter; else cp /root/Mergen/build/lifter /output/lifter; fi"]
+ENTRYPOINT ["/bin/bash", "-c", "if [ \"$TESTING\" == \"true\" ]; then /root/Mergen/build/lifter fi"]
