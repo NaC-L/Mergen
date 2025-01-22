@@ -238,10 +238,77 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
   return;
 }
 
+int testInit() {
+  llvm::LLVMContext context;
+  std::string mod_name = "my_lifting_module";
+  llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
+
+  std::vector<llvm::Type*> argTypes;
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::Type::getInt64Ty(context));
+  argTypes.push_back(llvm::PointerType::get(context, 0));
+  argTypes.push_back(llvm::PointerType::get(context, 0)); // temp fix TEB
+
+  auto functionType =
+      llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
+
+  const std::string function_name = "main";
+  auto function =
+      llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
+                             function_name.c_str(), lifting_module);
+  const std::string block_name = "entry";
+  auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
+
+  llvm::InstSimplifyFolder Folder(lifting_module.getDataLayout());
+  llvm::IRBuilder<llvm::InstSimplifyFolder> builder =
+      llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
+
+  // auto RegisterList = InitRegisters(builder, function, runtime_address);
+
+  lifterClass* main = new lifterClass(builder, 0x133700);
+  // main->InitRegisters(function, );
+  // main->blockInfo = BBInfo(0x133700, bb);
+
+  auto tester = Tester(main, true);
+  std::vector<uint8_t> bytes = {0x48, 0x01, 0xc8};
+  tester.setRegister(ZYDIS_REGISTER_RAX, 5);
+  tester.setRegister(ZYDIS_REGISTER_RCX, 5);
+  tester.disassembleBytesAndLift(bytes);
+  auto a = tester.getRegister(ZYDIS_REGISTER_RAX);
+  tester.getRegister(ZYDIS_REGISTER_RCX);
+
+  if (auto a_c = dyn_cast<ConstantInt>(a)) {
+    return !(a_c->equalsInt(10));
+  }
+  return 1;
+}
+
+// #define TEST
+
 int main(int argc, char* argv[]) {
   vector<string> args(argv, argv + argc);
   argparser::parseArguments(args);
   timer::startTimer();
+
+#ifdef MERGEN_TEST
+  if (1 == 1)
+    return testInit();
+#endif
+
   // use parser
   if (args.size() < 3) {
     cerr << "Usage: " << args[0] << " <filename> <startAddr>" << endl;
