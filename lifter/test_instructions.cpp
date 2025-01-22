@@ -42,7 +42,7 @@ int testInit() {
   const std::string block_name = "entry";
   auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
 
-  llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb, Folder);
+  llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
   lifterClass* main = new lifterClass(builder, 0x133700);
 
