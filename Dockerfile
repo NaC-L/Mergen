@@ -29,6 +29,7 @@ WORKDIR /root/Mergen/build
 
 # Default build argument for testing
 ARG TESTING=false
+ENV TESTING ${TESTING}
 
 # Run cmake with the option to enable testing if TESTING is true
 RUN cmake .. ${TESTING:+-DMERGEN_TESTING=1} && cmake --build . -j $(nproc)
