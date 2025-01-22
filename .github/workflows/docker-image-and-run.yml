@@ -24,7 +24,7 @@ jobs:
         
         # Copy the binary from the container
         mkdir -p ./output
-        docker exec extract-container /root/Mergen/build/lifter
+        docker run --rm -v $(pwd):/data my-image-name:latest
         
         # Remove the container
         docker rm extract-container
