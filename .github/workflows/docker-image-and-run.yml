@@ -23,7 +23,7 @@ jobs:
         docker create --name extract-container my-image-name:latest
         
         # Copy the binary from the container
-        mkdir -p ./output
+        mkdir -p /output
         ls
         ls output
         docker run --rm -v $(pwd):/data my-image-name:latest
