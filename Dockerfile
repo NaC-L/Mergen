@@ -29,11 +29,13 @@ WORKDIR /root/Mergen/build
 
 # Default build argument for testing
 ARG TESTING=false
+ENV TESTING ${TESTING}
 
 # Run cmake with the option to enable testing if TESTING is true
 RUN cmake .. ${TESTING:+-DMERGEN_TESTING=1} && cmake --build . -j $(nproc)
 
 # Provide the built binary path as the default output for the container
 WORKDIR /root/Mergen/build
-#ENTRYPOINT ["/root/Mergen/build/lifter"]
-CMD ["cp", "/root/Mergen/build/lifter", "/output/lifter"]
+
+# bash magic
+ENTRYPOINT ["/bin/bash", "-c", "if [ \"$TESTING\" == \"true\" ]; then /root/Mergen/build/lifter; else cp /root/Mergen/build/lifter /output/lifter; fi"]
