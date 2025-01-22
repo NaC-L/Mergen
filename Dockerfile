@@ -35,4 +35,4 @@ RUN cmake .. ${TESTING:+-DMERGEN_TESTING=1} && cmake --build . -j $(nproc)
 
 # Provide the built binary path as the default output for the container
 WORKDIR /root/Mergen/build
-CMD ["cp", "/root/Mergen/build/lifter", "/output/lifter"]
+CMD ["cp", "/root/Mergen/build/lifter", "./output/lifter"]
