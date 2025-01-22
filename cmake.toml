@@ -7,6 +7,8 @@ name = "Mergen"
 
 [conditions]
 windows = "WIN32"
+testmode = "DEFINED MERGEN_TEST"
+
 
 [variables]
 CMAKE_MODULE_PATH = "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
@@ -29,3 +31,4 @@ headers = ["lifter/*.h"]
 link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe"]
 windows.link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe", "Ws2_32"]
 compile-features = ["cxx_std_20"]
+testmode.compile-definitions = ["MERGEN_TEST"]
