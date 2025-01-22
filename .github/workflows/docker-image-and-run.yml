@@ -25,6 +25,7 @@ jobs:
         # Copy the binary from the container
         mkdir -p ./output
         ls
+        ls output
         docker run --rm -v $(pwd):/data my-image-name:latest
         
         # Remove the container
