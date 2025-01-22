@@ -24,8 +24,6 @@ jobs:
         
         # Copy the binary from the container
         mkdir -p ./output
-        echo "hello"
-        ls
         docker cp extract-container:/root/Mergen/build/lifter ./output/lifter
         
         # Remove the container
