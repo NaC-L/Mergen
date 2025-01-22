@@ -19,8 +19,6 @@ jobs:
 
     - name: Create a container and run the binary
       run: |
-        # Build the image
-        docker build . --file Dockerfile --tag my-image-name:latest
 
         # Run the container with volume mount
         docker run --rm -v ${{ github.workspace }}:/root/Mergen/build/lifter my-image-name:latest
