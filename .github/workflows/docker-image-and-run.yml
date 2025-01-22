@@ -19,6 +19,8 @@ jobs:
 
     - name: Create a container and run the binary
       run: |
+        mkdir -p ./output
+        
         # Create a container
         docker run --name extract-container my-image-name:latest
         
