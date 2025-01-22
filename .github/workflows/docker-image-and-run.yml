@@ -17,23 +17,15 @@ jobs:
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag my-image-name:latest
 
-    - name: Create a container and extract the binary
+    - name: Create a container and run the binary
       run: |
         # Create a container
         docker create --name extract-container my-image-name:latest
         
-        # Copy the binary from the container
-        mkdir -p ./output
         docker cp extract-container:/root/Mergen/build/lifter ./output/lifter
 
         # we install llvm into docker
-        docker run --rm -v $PWD:/data mergen
-        
+        docker run --rm -v ${{ github.workspace }}:/data mergen
+
         # Remove the container
         docker rm extract-container
-
-    - name: Upload the extracted binary as an artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Lifter
-        path: ./output/lifter
