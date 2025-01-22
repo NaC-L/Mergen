@@ -1,0 +1,27 @@
+name: run Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build the Docker image
+      run: docker build --build-arg TESTING=true . --file Dockerfile --tag my-image-name:latest
+
+    - name: Create a container and run the binary
+      run: |
+        # Create a container
+        docker create --name extract-container my-image-name:latest
+        
+        # Copy the binary from the container
+        docker run extract-container:/root/Mergen/build/lifter 
+        
