@@ -5,6 +5,7 @@
 #include "includes.h"
 #include "lifterClass.h"
 #include "nt/nt_headers.hpp"
+#include "test_instructions.hpp"
 #include "utils.h"
 #include <fstream>
 #include <iostream>
