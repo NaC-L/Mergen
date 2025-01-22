@@ -23,7 +23,7 @@ jobs:
         docker create --name extract-container my-image-name:latest
         
         # Copy the binary from the container
-        docker run --rm -v $PWD:/data my-image-name:latest a 50
+        docker run --rm -v $PWD:/data my-image-name:latest
         
         # Remove the container
         docker rm extract-container
