@@ -26,7 +26,12 @@ ENV CXX=/usr/bin/clang++
 
 RUN mkdir -p /root/Mergen/build
 WORKDIR /root/Mergen/build
-RUN cmake .. && cmake --build . -j $(nproc)
+
+# Default build argument for testing
+ARG TESTING=false
+
+# Run cmake with the option to enable testing if TESTING is true
+RUN cmake .. ${TESTING:+-DMERGEN_TESTING=1} && cmake --build . -j $(nproc)
 
 # Provide the built binary path as the default output for the container
 WORKDIR /root/Mergen/build

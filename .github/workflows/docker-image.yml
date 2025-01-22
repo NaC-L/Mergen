@@ -14,23 +14,55 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build the Docker image
+    # Build the Docker image in production mode
+    - name: Build the Docker image (production)
       run: docker build . --file Dockerfile --tag my-image-name:latest
 
-    - name: Create a container and extract the binary
+    # Build the Docker image in test mode
+    - name: Build the Docker image (test mode)
+      run: docker build --build-arg TESTING=true . --file Dockerfile --tag my-image-name:test
+
+    # Extract the binary from the production image
+    - name: Extract the binary (production)
       run: |
-        # Create a container
         docker create --name extract-container my-image-name:latest
-        
-        # Copy the binary from the container
         mkdir -p ./output
         docker cp extract-container:/root/Mergen/build/lifter ./output/lifter
-        
-        # Remove the container
         docker rm extract-container
 
-    - name: Upload the extracted binary as an artifact
+    # Extract the binary from the test image
+    - name: Extract the binary (test)
+      run: |
+        docker create --name extract-container-test my-image-name:test
+        mkdir -p ./output-test
+        docker cp extract-container-test:/root/Mergen/build/lifter ./output-test/lifter
+        docker rm extract-container-test
+
+    # Upload the production binary as an artifact
+    - name: Upload production binary
       uses: actions/upload-artifact@v4
       with:
-        name: Lifter
+        name: Lifter-Production
         path: ./output/lifter
+
+    # Upload the test binary as an artifact
+    - name: Upload test binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: Lifter-Test
+        path: ./output-test/lifter
+
+    # Run the test binary inside a container (Test Mode)
+    - name: Run the test binary in the container
+      run: |
+        # Create a container from the test image
+        docker create --name test-container my-image-name:test
+        
+        # Copy the binary into the container
+        docker cp ./output-test/lifter test-container:/root/lifter
+        
+        # Run the binary inside the container
+        docker start -i test-container /root/lifter
+        
+        # Clean up
+        docker rm test-container
