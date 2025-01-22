@@ -23,6 +23,7 @@ jobs:
         docker create --name extract-container my-image-name:latest
         
         # Copy the binary from the container
+        mkdir -p ./output
         docker cp extract-container:/root/Mergen/build/lifter ./output/lifter
         
         # Remove the container
