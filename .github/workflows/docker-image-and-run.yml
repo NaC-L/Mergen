@@ -19,10 +19,12 @@ jobs:
 
     - name: Create a container and run the binary
       run: |
-        # Create and start container
+        # Create a container
         docker create --name extract-container my-image-name:latest
-        docker start extract-container
         
-        # Run the binary inside the container
+        # Copy the binary from the container
+        mkdir -p ./output
         docker exec extract-container /root/Mergen/build/lifter
         
+        # Remove the container
+        docker rm extract-container
