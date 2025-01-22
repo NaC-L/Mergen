@@ -54,6 +54,5 @@ int testInit() {
   auto a = tester.getRegister(ZYDIS_REGISTER_RAX);
   tester.getRegister(ZYDIS_REGISTER_RCX);
 
-  tester.isRegisterEqualTo(ZYDIS_REGISTER_RAX, 10);
-  return 0;
+  return tester.isRegisterEqualTo(ZYDIS_REGISTER_RAX, 10);
 }
