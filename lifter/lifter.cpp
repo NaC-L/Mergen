@@ -273,9 +273,7 @@ int testInit() {
   const std::string block_name = "entry";
   auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
 
-  llvm::InstSimplifyFolder Folder(lifting_module.getDataLayout());
-  llvm::IRBuilder<llvm::InstSimplifyFolder> builder =
-      llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
+  llvm::IRBuilder<> builder = llvm::IRBuilder<>(bb);
 
   // auto RegisterList = InitRegisters(builder, function, runtime_address);
 
