@@ -291,9 +291,9 @@ int testInit() {
   tester.getRegister(ZYDIS_REGISTER_RCX);
 
   if (auto a_c = dyn_cast<ConstantInt>(a)) {
-    return !(a_c->equalsInt(10));
+    return (a_c->equalsInt(10));
   }
-  return 1;
+  return 0;
 }
 
 // #define TEST
@@ -305,7 +305,7 @@ int main(int argc, char* argv[]) {
 
 #ifdef MERGEN_TEST
   if (1 == 1)
-    return testInit();
+    return !(testInit());
 #endif
 
   // use parser
