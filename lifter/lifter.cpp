@@ -94,7 +94,7 @@ void asm_to_zydis_to_lift(ZyanU8* data) {
         outs() << "next lifter instance\n";
 
         delete lifter;
-        continue;
+        break;
       }
 
       offset += lifter->instruction.length;
