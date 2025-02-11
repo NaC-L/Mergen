@@ -102,5 +102,6 @@ int testInit() {
                   .couldBeUndefined = true};
 
   tester.addTest(tc);
+  tester.addTest(tc2);
   return tester.runAllTests();
 }
