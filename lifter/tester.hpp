@@ -38,9 +38,9 @@ struct TestCase {
     uint64_t value;
   };
 
-  struct FlagsState {
+  struct FlagsStatus {
     Flag flag;
-    FlagState state;
+    FlagState state = UNKNOWN; // to catch bugs
   };
 
   std::string name;
@@ -48,11 +48,12 @@ struct TestCase {
   // Inputs
   std::vector<uint8_t> instruction_bytes;
   std::vector<RegisterState> initial_registers;
-  std::vector<FlagsState> initial_flags;
+  std::vector<FlagsStatus> initial_flags;
 
   // Expected outputs
   std::vector<RegisterState> expected_registers;
-  std::vector<FlagsState> expected_flags;
+  std::vector<FlagsStatus> expected_flags;
+  bool couldBeUndefined = true;
 };
 
 class Tester {
@@ -71,6 +72,19 @@ public:
   void addTest(const TestCase& fn) {
     //
     testCases.emplace_back(fn);
+  }
+
+  std::vector<TestCase::FlagsStatus> parseFlagStates(uint64_t flagint) {
+    std::vector<TestCase::FlagsStatus> result;
+    result.resize(FLAGS_END);
+
+    for (size_t i = 0; i < FLAGS_END; i++) {
+      bool isSet = (flagint >> i) & 1;
+      result[i] = TestCase::FlagsStatus{
+          .flag = (Flag)i, .state = isSet ? FlagState::SET : FlagState::CLEAR};
+    }
+
+    return result;
   }
 
   bool execute_test_case(const TestCase& tc) {
@@ -92,7 +106,8 @@ public:
     // Verify registers
     for (const auto& expected : tc.expected_registers) {
       // registers usually shouldn't be undefined
-      if (!isRegisterEqualTo(expected.reg, expected.value, false)) {
+      if (!isRegisterEqualTo(expected.reg, expected.value,
+                             tc.couldBeUndefined)) {
 
         failureDetails << "Incorrect register:" << "\n Register: "
                        << ZydisRegisterGetString(expected.reg)
@@ -110,13 +125,21 @@ public:
       }
     }
 
+    const auto flagcompare = [](FlagState original, FlagState compare,
+                                bool couldBeUndefined = true) {
+      if (couldBeUndefined && original == FlagState::UNDEF)
+        return true;
+      return original == compare;
+    };
+
     for (const auto& flag : tc.expected_flags) {
       FlagState flagState = getFlagState(flag.flag);
-      if (flagState != flag.state) {
+      if (!flagcompare(flagState, flag.state, tc.couldBeUndefined)) {
+
         failureDetails << "Incorrect flag:" //
-                       << "\n Flag: " << flag.flag
-                       << "\n Expected: " << flag.state
-                       << "\n Actual: " << flagState;
+                       << "\n Flag: " << flag.flag << "(" << (int)flag.flag
+                       << ")" << "\n Expected: " << flag.state
+                       << "\n Actual: " << flagState << "\n";
 
         isSuccessfull = false;
       }
