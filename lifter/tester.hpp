@@ -139,12 +139,12 @@ public:
       bool result = testFn(this);
       std::cout << "[" << (result ? "  OK  " : " FAIL ") << "] " << name
                 << "\n";
-      failures += result;
+      failures += !result;
     }
 
     for (const auto& tc : testCases) {
       reset();
-      failures += execute_test_case(tc);
+      failures += !execute_test_case(tc);
     }
 
     return failures;
