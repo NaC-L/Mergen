@@ -1,4 +1,4 @@
-name: run Docker Image CI
+name: (tests) run Docker Image CI
 
 on:
   push:
