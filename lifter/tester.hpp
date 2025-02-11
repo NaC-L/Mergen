@@ -47,8 +47,8 @@ struct TestCase {
 
   // Inputs
   std::vector<uint8_t> instruction_bytes;
-  std::vector<FlagsState> initial_flags;
   std::vector<RegisterState> initial_registers;
+  std::vector<FlagsState> initial_flags;
 
   // Expected outputs
   std::vector<RegisterState> expected_registers;

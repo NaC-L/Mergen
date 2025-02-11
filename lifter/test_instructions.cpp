@@ -81,8 +81,10 @@ int testInit() {
   TestCase tc = {.name = "testcase",
                  .instruction_bytes = {0x90},
                  .initial_registers = {{ZYDIS_REGISTER_RAX, 1}},
-                 .expected_registers = {{ZYDIS_REGISTER_RAX, 2}},
-                 .expected_flags = {{FLAG_CF, FlagState::UNKNOWN}}};
+                 .initial_flags = {{FLAG_CF, FlagState::SET}},
+
+                 .expected_registers = {{ZYDIS_REGISTER_RAX, 1}},
+                 .expected_flags = {{FLAG_CF, FlagState::SET}}};
   tester.execute_test_case(tc);
   tester.addTest(tc);
   return tester.runAllTests();
