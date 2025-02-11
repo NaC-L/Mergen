@@ -84,8 +84,23 @@ int testInit() {
                  .initial_flags = {{FLAG_CF, FlagState::SET}},
 
                  .expected_registers = {{ZYDIS_REGISTER_RAX, 1}},
-                 .expected_flags = {{FLAG_CF, FlagState::SET}}};
-  tester.execute_test_case(tc);
+                 .expected_flags = {{FLAG_CF, FlagState::SET}},
+                 .couldBeUndefined = false};
+
+  /*
+  auto expectedFlags = tester.parseFlagStates(0b101);
+  for (auto [a, b] : expectedFlags) {
+    outs() << "a: " << a << " b:" << b << "\n";
+  }
+  */
+
+  TestCase tc2 = {.name = "testcase2",
+                  .instruction_bytes = {0x90},
+                  .initial_flags = tester.parseFlagStates(0b10110),
+
+                  .expected_flags = tester.parseFlagStates(0b10110),
+                  .couldBeUndefined = true};
+
   tester.addTest(tc);
   return tester.runAllTests();
 }
