@@ -7,6 +7,32 @@
 #include <Zydis/Register.h>
 #include <llvm/IR/Constants.h>
 
+// & all the tests, if test fail, it should return 0
+
+// make this so tests can be added seperately
+
+bool test1(Tester* tester) {
+
+  std::vector<uint8_t> bytes = {0x48, 0x01, 0xc8};
+  tester->setRegister(ZYDIS_REGISTER_RAX, 5);
+  tester->setRegister(ZYDIS_REGISTER_RCX, 5);
+  tester->disassembleBytesAndLift(bytes);
+
+  auto res1 = tester->isRegisterEqualTo(ZYDIS_REGISTER_RAX, 10);
+  return res1;
+}
+
+bool test2(Tester* tester) {
+
+  std::vector<uint8_t> bytes = {0x48, 0x01, 0xc8};
+  tester->setRegister(ZYDIS_REGISTER_RAX, 10);
+  tester->setRegister(ZYDIS_REGISTER_RCX, 10);
+  tester->disassembleBytesAndLift(bytes);
+
+  auto res1 = tester->isRegisterEqualTo(ZYDIS_REGISTER_RAX, 20);
+  return res1;
+}
+
 int testInit() {
   llvm::LLVMContext context;
   std::string mod_name = "my_lifting_module";
@@ -46,13 +72,18 @@ int testInit() {
 
   lifterClass* main = new lifterClass(builder, 0x133700);
 
-  auto tester = Tester(main, true);
-  std::vector<uint8_t> bytes = {0x48, 0x01, 0xc8};
-  tester.setRegister(ZYDIS_REGISTER_RAX, 5);
-  tester.setRegister(ZYDIS_REGISTER_RCX, 5);
-  tester.disassembleBytesAndLift(bytes);
-  auto a = tester.getRegister(ZYDIS_REGISTER_RAX);
-  tester.getRegister(ZYDIS_REGISTER_RCX);
+  // we will need a resetter, though im not sure if we need to only reset
+  // registers, flags and mem or llvm context?
 
-  return tester.isRegisterEqualTo(ZYDIS_REGISTER_RAX, 10);
+  auto tester = Tester(main, true);
+  tester.addTest(test1, "test");
+  tester.addTest(test2, "test2");
+  TestCase tc = {.name = "testcase",
+                 .instruction_bytes = {0x90},
+                 .initial_registers = {{ZYDIS_REGISTER_RAX, 1}},
+                 .expected_registers = {{ZYDIS_REGISTER_RAX, 2}},
+                 .expected_flags = {{FLAG_CF, FlagState::UNKNOWN}}};
+  tester.execute_test_case(tc);
+  tester.addTest(tc);
+  return tester.runAllTests();
 }

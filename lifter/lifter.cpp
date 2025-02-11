@@ -248,7 +248,7 @@ int main(int argc, char* argv[]) {
 
 #ifdef MERGEN_TEST
   if (1 == 1)
-    return !(testInit());
+    return testInit();
 #endif
 
   // use parser
