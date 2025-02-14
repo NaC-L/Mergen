@@ -2760,7 +2760,7 @@ void lifterClass::lift_ror() {
   auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
   auto secondMSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 2);
   Rvalue = createURemFolder(createAndFolder(Rvalue, countmask, "maskRvalue"),
-                            bitWidthplusone);
+                            bitWidth);
 
   Value* rightshifted = createLShrFolder(Lvalue, Rvalue);
   Value* leftshifted =
@@ -2778,15 +2778,16 @@ void lifterClass::lift_ror() {
       createZExtOrTruncFolder(createXorFolder(msb, secondMsb), cf->getType());
 
   auto isOneBitRotation = createICMPFolder(CmpInst::ICMP_EQ, Rvalue, one);
+
+  auto isZeroBitRotation = createICMPFolder(CmpInst::ICMP_EQ, Rvalue, zero);
   Value* ofCurrent = getFlag(FLAG_OF);
   Value* of =
       createSelectFolder(isOneBitRotation, ofDefined, ofCurrent, "ror-of");
 
+  cf = createSelectFolder(isZeroBitRotation, getFlag(FLAG_CF), cf);
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  auto isZeroBitRotation =
-      createICMPFolder(CmpInst::ICMP_EQ, Rvalue, zero, "iszerobit");
   result = createSelectFolder(isZeroBitRotation, Lvalue, result, "ror-result");
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
