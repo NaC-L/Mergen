@@ -2690,7 +2690,7 @@ void lifterClass::lift_rol() {
 
   auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
   Rvalue = createURemFolder(createAndFolder(Rvalue, countmask, "maskRvalue"),
-                            bitWidthplusone);
+                            bitWidth);
 
   Value* shiftedLeft = createShlFolder(Lvalue, Rvalue);
   Value* shiftedRight =
@@ -2700,25 +2700,25 @@ void lifterClass::lift_rol() {
   Value* cf = createZExtOrTruncFolder(shiftedRight, Type::getInt1Ty(context));
 
   Value* isZeroBitRotation = createICMPFolder(CmpInst::ICMP_EQ, Rvalue, zero);
-  Value* oldcf = getFlag(FLAG_CF);
-  cf = createSelectFolder(isZeroBitRotation, oldcf, cf);
-  result = createSelectFolder(isZeroBitRotation, Lvalue, result);
+  Value* oldcf = getFlag(FLAG_CF); // undefined
 
+  cf = createSelectFolder(isZeroBitRotation, oldcf, cf);
+
+  result = createSelectFolder(isZeroBitRotation, Lvalue, result);
   // of = cf ^ MSB
   Value* newMSB = createLShrFolder(result, MSBpos, "rolmsb");
-  Value* of = createXorFolder(
-      cf, createZExtOrTruncFolder(newMSB, Type::getInt1Ty(context)));
+  auto of1 = createZExtOrTruncFolder(newMSB, Type::getInt1Ty(context));
+
+  Value* of = createXorFolder(cf, of1);
+  // crash?
 
   // Use Select to conditionally update OF based on whether the shift
   // amount is 1
   Value* isOneBitRotation = createICMPFolder(CmpInst::ICMP_EQ, Rvalue, one);
   Value* ofCurrent = getFlag(FLAG_OF);
-
   of = createSelectFolder(isOneBitRotation, of, ofCurrent);
-
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
-
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
   SetOperandValue(dest, result);
 }
