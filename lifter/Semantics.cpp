@@ -1842,15 +1842,16 @@ void lifterClass::lift_cmpxchg() {
 
   auto sub = createSubFolder(accum, Lvalue);
 
-  auto of = computeOverflowFlagSub(Lvalue, Rvalue, sub);
+  // ???
+  auto of = computeOverflowFlagSub(accum, Lvalue, sub);
 
   auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
   auto RvalueLowerNibble =
-      createAndFolder(Lvalue, lowerNibbleMask, "lvalLowerNibble");
+      createAndFolder(accum, lowerNibbleMask, "lvalLowerNibble");
   auto op2LowerNibble =
-      createAndFolder(Rvalue, lowerNibbleMask, "rvalLowerNibble");
+      createAndFolder(Lvalue, lowerNibbleMask, "rvalLowerNibble");
 
-  auto cf = createICMPFolder(CmpInst::ICMP_UGT, Rvalue, Lvalue, "add_cf");
+  auto cf = createICMPFolder(CmpInst::ICMP_UGT, Lvalue, accum, "add_cf");
   auto af = createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble,
                              op2LowerNibble, "add_af");
 
@@ -1871,7 +1872,8 @@ void lifterClass::lift_cmpxchg() {
   auto zf = createICMPFolder(CmpInst::ICMP_EQ, accum, Lvalue);
   // if zf dest = src
   auto result = createSelectFolder(zf, Rvalue, Lvalue);
-
+  auto acc = createSelectFolder(zf, accum, Lvalue);
+  SetOperandValue(accop, acc);
   SetOperandValue(dest, result);
   setFlag(FLAG_OF, of);
   setFlag(FLAG_CF, cf);
