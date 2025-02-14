@@ -3123,35 +3123,42 @@ void lifterClass::lift_cmp() {
 
   Value* cmpResult = createSubFolder(Lvalue, Rvalue);
 
-  Value* signL = createICMPFolder(CmpInst::ICMP_SLT, Lvalue,
-                                  ConstantInt::get(Lvalue->getType(), 0));
-  Value* signR = createICMPFolder(CmpInst::ICMP_SLT, Rvalue,
-                                  ConstantInt::get(Rvalue->getType(), 0));
-  Value* signResult = createICMPFolder(
-      CmpInst::ICMP_SLT, cmpResult, ConstantInt::get(cmpResult->getType(), 0));
-
-  Value* of = createOrFolder(
-      createAndFolder(signL, createAndFolder(createNotFolder(signR),
-                                             createNotFolder(signResult),
-                                             "cmp-and1-")),
-      createAndFolder(createNotFolder(signL),
-                      createAndFolder(signR, signResult), "cmp-and2-"),
-      "cmp-OF-or");
-
-  Value* cf = createICMPFolder(CmpInst::ICMP_ULT, Lvalue, Rvalue);
+  // Value* cf = createICMPFolder(CmpInst::ICMP_ULT, Lvalue, Rvalue);
+  /*
   Value* zf = createICMPFolder(CmpInst::ICMP_EQ, cmpResult,
                                ConstantInt::get(cmpResult->getType(), 0));
   Value* sf = createICMPFolder(CmpInst::ICMP_SLT, cmpResult,
                                ConstantInt::get(cmpResult->getType(), 0));
-  Value* pf = computeParityFlag(cmpResult);
+  */
+  // Value* pf = computeParityFlag(cmpResult);
   printvalue(Lvalue);
   printvalue(Rvalue);
   printvalue(cmpResult);
-  setFlag(FLAG_OF, of);
-  setFlag(FLAG_CF, cf);
-  setFlag(FLAG_SF, sf);
-  setFlag(FLAG_ZF, zf);
-  setFlag(FLAG_PF, pf);
+  setFlag(FLAG_OF, [this, Lvalue, Rvalue, cmpResult]() {
+    Value* signL = createICMPFolder(CmpInst::ICMP_SLT, Lvalue,
+                                    ConstantInt::get(Lvalue->getType(), 0));
+    Value* signR = createICMPFolder(CmpInst::ICMP_SLT, Rvalue,
+                                    ConstantInt::get(Rvalue->getType(), 0));
+    Value* signResult =
+        createICMPFolder(CmpInst::ICMP_SLT, cmpResult,
+                         ConstantInt::get(cmpResult->getType(), 0));
+
+    Value* of = createOrFolder(
+        createAndFolder(signL, createAndFolder(createNotFolder(signR),
+                                               createNotFolder(signResult),
+                                               "cmp-and1-")),
+        createAndFolder(createNotFolder(signL),
+                        createAndFolder(signR, signResult), "cmp-and2-"),
+        "cmp-OF-or");
+    return of;
+  });
+  setFlag(FLAG_CF, [this, Lvalue, Rvalue]() {
+    return createICMPFolder(CmpInst::ICMP_ULT, Lvalue, Rvalue);
+  });
+  setFlag(FLAG_SF, [this, cmpResult]() { return computeSignFlag(cmpResult); });
+  setFlag(FLAG_ZF, [this, cmpResult]() { return computeZeroFlag(cmpResult); });
+  setFlag(FLAG_PF,
+          [this, cmpResult]() { return computeParityFlag(cmpResult); });
 
   setFlag(FLAG_AF, [this, cmpResult, Lvalue, Rvalue]() {
     auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
