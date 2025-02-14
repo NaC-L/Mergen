@@ -1944,8 +1944,9 @@ void lifterClass::lift_shld() {
   auto countValue = GetOperandValue(count, dest.size);
 
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
+  auto mask = bitWidth == 64 ? 64 : 32;
   auto effectiveCountValue = createURemFolder(
-      countValue, ConstantInt::get(countValue->getType(), bitWidth),
+      countValue, ConstantInt::get(countValue->getType(), mask),
       "effectiveShiftCount");
 
   auto shiftedDest =
@@ -1961,7 +1962,8 @@ void lifterClass::lift_shld() {
       createICMPFolder(CmpInst::ICMP_NE, effectiveCountValue,
                        ConstantInt::get(effectiveCountValue->getType(), 0));
   auto lastShiftedBitPosition = createSubFolder(
-      effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
+      ConstantInt::get(effectiveCountValue->getType(), bitWidth),
+      effectiveCountValue);
   auto lastShiftedBit =
       createAndFolder(createLShrFolder(Lvalue, lastShiftedBitPosition),
                       ConstantInt::get(Lvalue->getType(), 1), "shldresultmsb");
