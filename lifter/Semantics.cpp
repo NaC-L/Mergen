@@ -1570,6 +1570,8 @@ void lifterClass::lift_sar() {
 
   Value* isZeroed = createICMPFolder(CmpInst::ICMP_UGT, clampedCount, maxShift);
 
+  Value* actual_clampedCount = clampedCount;
+
   // Shift by bitWidth - 1 if clampedCount exceeds bitWidth - 1
   clampedCount = createSelectFolder(isZeroed, maxShift, clampedCount);
   Value* result = createAShrFolder(
@@ -1578,18 +1580,26 @@ void lifterClass::lift_sar() {
 
   auto last_shift = createAShrFolder(
       Lvalue,
-      createSubFolder(clampedCount,
+      createSubFolder(actual_clampedCount,
                       ConstantInt::get(clampedCount->getType(), 1)),
       "sarcf");
+
+  auto signbitPos = bitWidth - 1;
+
+  auto signBit =
+      createAShrFolder(Lvalue, builder.getIntN(bitWidth, signbitPos), "sarcf");
   Value* cfValue = createTruncFolder(last_shift, builder.getInt1Ty());
 
   Value* isCountZero =
       createICMPFolder(CmpInst::ICMP_EQ, clampedCount,
                        ConstantInt::get(clampedCount->getType(), 0));
+
   Value* oldcf = getFlag(FLAG_CF);
-  printvalue(last_shift);
-  printvalue(isCountZero);
+
   cfValue = createSelectFolder(isCountZero, oldcf, cfValue, "cfValue");
+  // if isZeroed and the source is -, return the sign bit
+
+  cfValue = createSelectFolder(isZeroed, signBit, cfValue);
 
   // OF is cleared for SAR
   Value* of = ConstantInt::get(Type::getInt1Ty(context), 0);
