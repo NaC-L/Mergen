@@ -1792,7 +1792,8 @@ void lifterClass::lift_shl() {
                                 oldpf);
     });
   }
-  SetOperandValue(dest, result, std::to_string(blockInfo.runtime_address));
+  SetOperandValue(operands[0], result,
+                  std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_bswap() {
