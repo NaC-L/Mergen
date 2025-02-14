@@ -1208,12 +1208,15 @@ void lifterClass::lift_sbb() {
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* cf = createZExtOrTruncFolder(getFlag(FLAG_CF), Rvalue->getType());
 
-  Value* tmpResult = createAddFolder(Rvalue, cf, "srcPlusCF");
-  Value* result = createSubFolder(Lvalue, tmpResult, "sbbTempResult");
+  Value* tmpResult = createSubFolder(Lvalue, Rvalue, "lhssubrhs");
+  Value* result = createSubFolder(tmpResult, cf, "sbbTempResult");
   SetOperandValue(dest, result);
 
-  Value* newCF =
-      createICMPFolder(CmpInst::ICMP_ULT, Lvalue, tmpResult, "newCF");
+  // 0, 0 (cf = 1), NEW CF = 1
+  Value* newCF = createOrFolder(
+      createICMPFolder(CmpInst::ICMP_ULT, Lvalue, Rvalue, "newCF"),
+      createICMPFolder(CmpInst::ICMP_ULT, tmpResult, cf, "newCF2"));
+
   Value* sf = computeSignFlag(result);
   Value* zf = computeZeroFlag(result);
   Value* pf = computeParityFlag(result);
