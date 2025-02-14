@@ -1674,9 +1674,7 @@ void lifterClass::lift_shr() {
   Value* isNotZero = createICMPFolder(CmpInst::ICMP_NE, clampedCount, zero);
   Value* oldcf = getFlag(FLAG_CF);
   cfValue = createSelectFolder(isNotZero, cfValue, oldcf, "cfValue1");
-  cfValue = createSelectFolder(
-      isZeroed, createTruncFolder(zero, Type::getInt1Ty(context)), cfValue,
-      "cfValue2");
+
   Value* sf =
       createSelectFolder(isNotZero, computeSignFlag(result), getFlag(FLAG_SF));
   Value* zf =
