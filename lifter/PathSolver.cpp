@@ -155,6 +155,14 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
       return nullopt;
     };
     Value* condition = nullptr;
+
+    // condition value is a kind of hack
+    // 1- if its a select, we can extract the condition
+    // 1a- if firstcase is in the select, extract the condition
+    // 1b- if secondcase is in the select, extract the condition and reverse
+    // values
+    // 2- create a hacky compare for condition == potentialvalue
+
     if (auto can_simplify = try_simplify(firstcase, simplifyValue))
       condition = can_simplify.value();
     else if (auto can_simplify2 = try_simplify(secondcase, simplifyValue)) {
@@ -166,13 +174,13 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
           builder.getIntN(simplifyValue->getType()->getIntegerBitWidth(),
                           firstcase.getZExtValue()));
     printvalue(condition);
-    auto BR = builder.CreateCondBr(condition, bb_false, bb_true);
+    auto BR = builder.CreateCondBr(condition, bb_true, bb_false);
 
     RegisterBranch(BR);
 
     printvalue2(firstcase);
     printvalue2(secondcase);
-    blockInfo = BBInfo(secondcase.getZExtValue(), bb_true);
+    blockInfo = BBInfo(secondcase.getZExtValue(), bb_false);
     // for [this], we can assume condition is true
     // we can simplify any value tied to is dependent on condition,
     // and try to simplify any value calculates condition
@@ -180,7 +188,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     lifterClass* newlifter = new lifterClass(*this);
 
     // for [newlifter], we can assume condition is false
-    newlifter->blockInfo = BBInfo(firstcase.getZExtValue(), bb_false);
+    newlifter->blockInfo = BBInfo(firstcase.getZExtValue(), bb_true);
     printvalue(condition);
     newlifter->assumptions[cast<Instruction>(condition)] = 1;
 
