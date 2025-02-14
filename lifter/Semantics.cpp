@@ -3050,7 +3050,6 @@ void lifterClass::lift_xadd() {
   SRC := DEST;
   DEST := TEMP;
   */
-  printvalue(Lvalue) printvalue(Rvalue) printvalue(sumValue)
 
   auto cf = createOrFolder(createICMPFolder(CmpInst::ICMP_ULT, TEMP, Lvalue),
                            createICMPFolder(CmpInst::ICMP_ULT, TEMP, Rvalue));
