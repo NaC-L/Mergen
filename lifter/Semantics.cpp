@@ -3038,14 +3038,13 @@ void lifterClass::lift_xadd() {
   auto Lvalue = GetOperandValue(dest, dest.size);
   auto Rvalue = GetOperandValue(src, src.size);
 
-  Value* sumValue = createAddFolder(
-      Lvalue, Rvalue, "xadd_sum-" + to_string(blockInfo.runtime_address) + "-");
+  Value* TEMP = createAddFolder(
+      Lvalue, Rvalue,
+      "xadd_sum-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(dest, sumValue, to_string(blockInfo.runtime_address));
-  ;
+  SetOperandValue(src, Lvalue, std::to_string(blockInfo.runtime_address));
 
-  SetOperandValue(src, Lvalue, to_string(blockInfo.runtime_address));
-  ;
+  SetOperandValue(dest, TEMP, std::to_string(blockInfo.runtime_address));
   /*
   TEMP := SRC + DEST;
   SRC := DEST;
@@ -3053,9 +3052,8 @@ void lifterClass::lift_xadd() {
   */
   printvalue(Lvalue) printvalue(Rvalue) printvalue(sumValue)
 
-      auto cf =
-          createOrFolder(createICMPFolder(CmpInst::ICMP_ULT, sumValue, Lvalue),
-                         createICMPFolder(CmpInst::ICMP_ULT, sumValue, Rvalue));
+  auto cf = createOrFolder(createICMPFolder(CmpInst::ICMP_ULT, TEMP, Lvalue),
+                           createICMPFolder(CmpInst::ICMP_ULT, TEMP, Rvalue));
 
   auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
   auto destLowerNibble = createAndFolder(Lvalue, lowerNibbleMask, "xadddst");
@@ -3064,7 +3062,7 @@ void lifterClass::lift_xadd() {
   auto af =
       createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask);
 
-  auto resultSign = createICMPFolder(CmpInst::ICMP_SLT, sumValue,
+  auto resultSign = createICMPFolder(CmpInst::ICMP_SLT, TEMP,
                                      ConstantInt::get(Lvalue->getType(), 0));
   auto destSign = createICMPFolder(CmpInst::ICMP_SLT, Lvalue,
                                    ConstantInt::get(Lvalue->getType(), 0));
@@ -3075,9 +3073,9 @@ void lifterClass::lift_xadd() {
       inputSameSign, createICMPFolder(CmpInst::ICMP_NE, destSign, resultSign),
       "xaddof");
 
-  Value* sf = computeSignFlag(sumValue);
-  Value* zf = computeZeroFlag(sumValue);
-  Value* pf = computeParityFlag(sumValue);
+  Value* sf = computeSignFlag(TEMP);
+  Value* zf = computeZeroFlag(TEMP);
+  Value* pf = computeParityFlag(TEMP);
 
   setFlag(FLAG_OF, of);
   setFlag(FLAG_AF, af);
