@@ -1740,9 +1740,6 @@ void lifterClass::lift_shl() {
   cfValue = createSelectFolder(
       countIsNotZero, createZExtOrTruncFolder(cfLow, Type::getInt1Ty(context)),
       getFlag(FLAG_CF));
-  cfValue = createSelectFolder(
-      isZeroed, createZExtOrTruncFolder(zero, Type::getInt1Ty(context)),
-      cfValue);
 
   Value* isCountOne =
       createICMPFolder(CmpInst::ICMP_EQ, clampedCountValue,
