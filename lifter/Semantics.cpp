@@ -1374,68 +1374,63 @@ void lifterClass::lift_rcr() {
   auto countValue = GetOperandValue(count, dest.size);
   auto carryFlag = getFlag(FLAG_CF);
 
-  unsigned long bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
+  // Create count mask based on operand size
+  auto countmask =
+      ConstantInt::get(countValue->getType(), dest.size == 64 ? 0x3f : 0x1f);
+  auto actualCount = createAndFolder(countValue, countmask, "maskCount");
 
-  auto actualCount = createAndFolder(
-      countValue, ConstantInt::get(countValue->getType(), maskC),
-      "actualCount");
+  // Create constants
+  auto bitWidth = ConstantInt::get(Lvalue->getType(), dest.size);
+  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), dest.size + 1);
+  auto bitWidthminone = ConstantInt::get(Lvalue->getType(), dest.size - 1);
+  auto one = ConstantInt::get(Lvalue->getType(), 1);
+  auto zero = ConstantInt::get(Lvalue->getType(), 0);
 
-  actualCount = bitWidth <= 16
-                    ? createURemFolder(
-                          actualCount,
-                          ConstantInt::get(countValue->getType(), bitWidth + 1),
-                          "actualCount2")
-                    : actualCount;
-  printvalue(Lvalue);
-  printvalue(countValue);
-  printvalue(carryFlag);
-  printvalue(actualCount);
-  // Create a double-width value with CF as the highest bit
+  // Normalize count to be within valid range
+  actualCount = createURemFolder(actualCount, bitWidthplusone);
+
+  // Create a double-width value to handle CF rotation
   auto wideType = Type::getIntNTy(context, dest.size * 2);
   auto wideLvalue = createZExtFolder(Lvalue, wideType);
+  auto wideCF = createZExtFolder(carryFlag, wideType);
+
+  // Position CF at the highest bit of the original value size
   auto shiftedCF =
-      createShlFolder(createZExtFolder(carryFlag, wideType), bitWidth);
-  actualCount = createZExtFolder(actualCount, wideLvalue->getType());
-  // Perform the rotation
-  auto rightShifted = createLShrFolder(wideLvalue, actualCount);
-  auto leftshift_max = ConstantInt::get(actualCount->getType(), bitWidth);
-  auto leftshiftct = createSubFolder(leftshift_max, actualCount);
-  auto leftShifted = createShlFolder(wideLvalue, leftshiftct);
+      createShlFolder(wideCF, ConstantInt::get(wideType, dest.size));
+  auto combinedValue = createOrFolder(wideLvalue, shiftedCF);
+
+  // Perform rotation
+  auto rightShifted =
+      createLShrFolder(combinedValue, createZExtFolder(actualCount, wideType));
+  auto leftShifted = createShlFolder(
+      combinedValue,
+      createSubFolder(createZExtFolder(bitWidthplusone, wideType),
+                      createZExtFolder(actualCount, wideType)));
   auto rotated = createOrFolder(rightShifted, leftShifted);
-  auto one = ConstantInt::get(rotated->getType(), 1);
-  rotated = createShlFolder(rotated, one);
-  rotated = createLShrFolder(rotated, one);
-  rotated = createOrFolder(rotated, shiftedCF);
-  printvalue(shiftedCF);
-  printvalue(wideLvalue);
-  printvalue(leftshift_max);
-  printvalue(leftshiftct);
-  printvalue(rightShifted);
-  printvalue(leftShifted);
-  printvalue(rotated);
+
   // Extract result and new CF
   auto result = createTruncFolder(rotated, Lvalue->getType());
+  auto newCF = createTruncFolder(
+      createLShrFolder(rotated, ConstantInt::get(wideType, dest.size)),
+      Type::getInt1Ty(context));
 
-  auto newCF = createTruncFolder(createLShrFolder(rotated, bitWidth),
-                                 Type::getInt1Ty(context));
+  // Calculate OF (XOR of two most significant bits) when count is 1
+  auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
+  auto secondMSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 2);
 
-  // Calculate new OF (XOR of two most significant bits after rotate when count
-  // is 1)
-  auto msbAfterRotate = createTruncFolder(createLShrFolder(result, bitWidth),
-                                          Type::getInt1Ty(context));
-  auto newOF = createXorFolder(newCF, msbAfterRotate);
+  auto msb = createZExtOrTruncFolder(createLShrFolder(result, MSBpos),
+                                     Type::getInt1Ty(context));
+  auto secondMsb = createZExtOrTruncFolder(
+      createLShrFolder(result, secondMSBpos), Type::getInt1Ty(context));
+  auto ofDefined = createZExtOrTruncFolder(createXorFolder(msb, secondMsb),
+                                           Type::getInt1Ty(context));
 
-  // OF is only valid when count is 1, otherwise it's unchanged
-  auto isCountOne =
-      createICMPFolder(CmpInst::ICMP_EQ, actualCount,
-                       ConstantInt::get(actualCount->getType(), 1));
-  newOF = createSelectFolder(isCountOne, newOF, getFlag(FLAG_OF));
+  // OF is only valid when count is 1
+  auto isCountOne = createICMPFolder(CmpInst::ICMP_EQ, actualCount, one);
+  auto newOF = createSelectFolder(isCountOne, ofDefined, getFlag(FLAG_OF));
 
   // If count is 0, keep original value and flags
-  auto isCountZero =
-      createICMPFolder(CmpInst::ICMP_EQ, actualCount,
-                       ConstantInt::get(actualCount->getType(), 0));
+  auto isCountZero = createICMPFolder(CmpInst::ICMP_EQ, actualCount, zero);
   result = createSelectFolder(isCountZero, Lvalue, result);
   newCF = createSelectFolder(isCountZero, carryFlag, newCF);
   newOF = createSelectFolder(isCountZero, getFlag(FLAG_OF), newOF);
