@@ -1691,9 +1691,11 @@ void lifterClass::lift_shr() {
     setFlag(FLAG_ZF, zf);
     setFlag(FLAG_PF, pf);
   }
-  printvalue(Lvalue) printvalue(clampedCount) printvalue(result) printvalue(
-      isNotZero) printvalue(oldcf) printvalue(cfValue)
-      SetOperandValue(dest, result, std::to_string(blockInfo.runtime_address));
+  printvalue(Lvalue) printvalue(clampedCount) printvalue(result);
+  printvalue(isNotZero) printvalue(oldcf) printvalue(cfValue);
+
+  SetOperandValue(operands[0], result,
+                  std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_shl() {
