@@ -330,7 +330,7 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
 KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
   KnownBits knownBits(64);
   knownBits.resetAll();
-  if (value->getType()->getIntegerBitWidth() > 64)
+  if (value->getType()->getIntegerBitWidth() > 64 || isa<UndefValue>(value))
     return knownBits;
 
   if (auto v_inst = dyn_cast<Instruction>(value)) {
