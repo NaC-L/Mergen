@@ -168,13 +168,21 @@ Value* lifterClass::computeOverflowFlagSub(Value* Lvalue, Value* Rvalue,
 
 Value* lifterClass::computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue,
                                            Value* cf, Value* sub) {
-  auto cfc = createZExtOrTruncFolder(cf, sub->getType(), "ofsbb");
-  auto ofSub = createSubFolder(sub, cfc, "ofsbb1");
-  auto xor0 = createXorFolder(Lvalue, Rvalue, "ofsbb2");
-  auto xor1 = createXorFolder(Lvalue, ofSub, "ofsbb3");
-  auto ofAnd = createAndFolder(xor0, xor1, "ofsbb4");
-  return createICMPFolder(CmpInst::ICMP_SLT, ofAnd,
-                          ConstantInt::get(ofAnd->getType(), 0), "ofsbb5");
+
+  auto bitWidth = Lvalue->getType()->getIntegerBitWidth();
+  auto signBit = builder.getIntN(bitWidth, bitWidth - 1);
+
+  auto lhsSign = createLShrFolder(Lvalue, signBit);
+  auto rhsSign = createLShrFolder(Rvalue, signBit);
+  auto resultSign = createLShrFolder(sub, signBit);
+
+  auto result_idk = createXorFolder(lhsSign, rhsSign);
+  auto result_idk2 = createXorFolder(lhsSign, resultSign);
+  auto result_idk3 = createAddFolder(result_idk, result_idk2);
+
+  return createICMPFolder(CmpInst::ICMP_EQ, result_idk3,
+                          ConstantInt::get(result_idk3->getType(), 2),
+                          "ofsbb5");
 }
 
 Value* lifterClass::computeAuxFlag(Value* Lvalue, Value* Rvalue,
