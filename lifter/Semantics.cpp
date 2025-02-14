@@ -2009,10 +2009,12 @@ void lifterClass::lift_shrd() {
   auto countValue = GetOperandValue(count, dest.size);
 
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
+  auto mask = bitWidth == 64 ? 64 : 32;
   auto effectiveCountValue = createURemFolder(
-      countValue, ConstantInt::get(countValue->getType(), bitWidth),
+      countValue, ConstantInt::get(countValue->getType(), mask),
       "effectiveShiftCount");
-
+  // 16 bit is usually undefined?
+  //
   auto shiftedDest =
       createLShrFolder(Lvalue, effectiveCountValue, "shiftedDest");
   auto complementCount =
@@ -2023,6 +2025,11 @@ void lifterClass::lift_shrd() {
   auto resultValue = createOrFolder(shiftedDest, shiftedSource, "shrdResult");
 
   // Calculate CF
+  // x >> 1
+  // msb of x would be cf
+  // so x >> 0
+  // conclusion:
+  // x >> (count - 1) = cf
   auto cfBitPosition = createSubFolder(
       effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
   Value* cf = createLShrFolder(Lvalue, cfBitPosition);
@@ -2047,7 +2054,9 @@ void lifterClass::lift_shrd() {
   Value* of =
       createXorFolder(mostSignificantBitOfDest, mostSignificantBitOfResult);
   of = createZExtOrTruncFolder(of, Type::getInt1Ty(context));
-  of = createSelectFolder(isCountOne, of, ConstantInt::getFalse(context));
+
+  // TODO: wrapper for undef behaviour?
+  of = createSelectFolder(isCountOne, of, UndefValue::get(builder.getInt1Ty()));
   of = createZExtFolder(of, Type::getInt1Ty(context));
 
   setFlag(FLAG_CF, cf);
