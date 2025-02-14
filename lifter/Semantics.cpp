@@ -3722,7 +3722,9 @@ void lifterClass::lift_bzhi() {
   auto src2 = operands[2];
 
   Value* source = GetOperandValue(src, src.size);
-  Value* source2 = GetOperandValue(src, 8);
+
+  Value* source2 = createAndFolder(
+      source, builder.getIntN(source->getType()->getIntegerBitWidth(), 7));
   auto one = ConstantInt::get(source2->getType(), 1);
   auto bitmask = createAShrFolder(createShlFolder(one, source2), source2);
   auto result = createAndFolder(source, bitmask);
