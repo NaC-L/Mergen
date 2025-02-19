@@ -269,7 +269,10 @@ public:
   llvm::Value* TEB;
   llvm::Function* fnc;
 
-  lifterClass(llvm::IRBuilder<>& irbuilder) : builder(irbuilder){};
+  lifterClass(llvm::IRBuilder<>& irbuilder, uint64_t runtime_addr = 0)
+      : builder(irbuilder) {
+    InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
+  };
 
   lifterClass(const lifterClass& other)
       : builder(other.builder), // Reference copied directly

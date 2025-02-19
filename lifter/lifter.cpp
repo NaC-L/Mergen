@@ -5,6 +5,7 @@
 #include "includes.h"
 #include "lifterClass.h"
 #include "nt/nt_headers.hpp"
+#include "test_instructions.h"
 #include "utils.h"
 #include <fstream>
 #include <iostream>
@@ -238,10 +239,18 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
   return;
 }
 
+// #define TEST
+
 int main(int argc, char* argv[]) {
   vector<string> args(argv, argv + argc);
   argparser::parseArguments(args);
   timer::startTimer();
+
+#ifdef MERGEN_TEST
+  if (1 == 1)
+    return testInit();
+#endif
+
   // use parser
   if (args.size() < 3) {
     cerr << "Usage: " << args[0] << " <filename> <startAddr>" << endl;
