@@ -500,12 +500,12 @@ void lifterClass::lift_mov() {
   auto dest = operands[0];
   auto src = operands[1];
 
-  auto Rvalue2 =
-      GetOperandValue(src, src.size, std::to_string(blockInfo.runtime_address));
+  //  auto Rvalue2 =      GetOperandValue(src, src.size,
+  //  std::to_string(blockInfo.runtime_address));
   auto Rvalue = GetIndexValue(1);
 
   printvalue(Rvalue);
-  printvalue(Rvalue2);
+
   switch (instruction.mnemonic) {
   case Mnemonic::MOVSX: {
     Rvalue = createSExtFolder(
@@ -531,151 +531,8 @@ void lifterClass::lift_mov() {
   }
   printvalue(Rvalue);
 
-  if (src.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
-    Rvalue = GetOperandValue(src, dest.size);
-  }
-
-  printvalue(Rvalue);
-
-  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
-}
-
-void lifterClass::lift_cmovbz() {
-
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* zf = getFlag(FLAG_ZF);
-  Value* cf = getFlag(FLAG_CF);
-
-  Value* condition = createOrFolder(zf, cf, "cmovbz-or");
-
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-
-  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-
-  SetOperandValue(dest, result);
-}
-
-void lifterClass::lift_cmovnbz() {
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-  Value* Rvalue = GetOperandValue(src, src.size);
-
-  Value* cf = getFlag(FLAG_CF);
-  Value* zf = getFlag(FLAG_ZF);
-
-  Value* nbeCondition =
-      createAndFolder(createNotFolder(cf), createNotFolder(zf), "nbeCondition");
-
-  Value* resultValue =
-      createSelectFolder(nbeCondition, Rvalue, Lvalue, "cmovnbe");
-
-  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
-}
-
-void lifterClass::lift_cmovz() {
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-  Value* Rvalue = GetOperandValue(src, src.size);
-
-  Value* zf = getFlag(FLAG_ZF);
-
-  Value* resultValue = createSelectFolder(zf, Rvalue, Lvalue, "cmovz");
-
-  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
-}
-
-void lifterClass::lift_cmovnz() {
-  LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* zf = getFlag(FLAG_ZF);
-  Value* condition = createNotFolder(zf);
-
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-
-  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-
-  SetOperandValue(dest, result);
-}
-void lifterClass::lift_cmovl() {
-
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* sf = getFlag(FLAG_SF);
-  Value* of = getFlag(FLAG_OF);
-
-  Value* condition = createICMPFolder(CmpInst::ICMP_NE, sf, of);
-
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-
-  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-  printvalue(sf);
-  printvalue(sf);
-  printvalue(Rvalue);
-  printvalue(Lvalue);
-  printvalue(result);
-  SetOperandValue(dest, result);
-}
-
-void lifterClass::lift_cmovb() {
-  LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* cf = getFlag(FLAG_CF);
-
-  Value* condition = createICMPFolder(
-      CmpInst::ICMP_EQ, cf, ConstantInt::get(Type::getInt1Ty(context), 1));
-
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-
-  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-  printvalue(condition);
-  printvalue(Lvalue);
-  printvalue(Rvalue);
-  printvalue(result);
-  SetOperandValue(dest, result);
-}
-
-void lifterClass::lift_cmovnb() {
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-  Value* Rvalue = GetOperandValue(src, src.size);
-
-  Value* cf = getFlag(FLAG_CF);
-
-  Value* resultValue =
-      createSelectFolder(createNotFolder(cf), Rvalue, Lvalue, "cmovnb");
-
-  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
-}
-
-void lifterClass::lift_cmovns() {
-  LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* sf = getFlag(FLAG_SF);
-
-  Value* condition = createICMPFolder(
-      CmpInst::ICMP_EQ, sf, ConstantInt::get(Type::getInt1Ty(context), 0));
-
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
+  /*
+  todo: see if we have to:
 
   replace: Sign Extend if its imm
 

@@ -574,6 +574,9 @@ public:
   DEFINE_FUNCTION(movs_X);
   DEFINE_FUNCTION(movaps);
   DEFINE_FUNCTION(mov);
+
+  DEFINE_FUNCTION(cmovcc);
+  /*
   DEFINE_FUNCTION(cmovbz);
   DEFINE_FUNCTION(cmovnbz);
   DEFINE_FUNCTION(cmovz);
@@ -590,6 +593,7 @@ public:
   DEFINE_FUNCTION(cmovno);
   DEFINE_FUNCTION(cmovp);
   DEFINE_FUNCTION(cmovnp);
+  */
   DEFINE_FUNCTION(popcnt);
   //
   DEFINE_FUNCTION(call);
