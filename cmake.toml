@@ -20,12 +20,16 @@ tag = "be6d1f6"
 git = "https://github.com/zyantific/zydis"
 tag = "v4.1.0"
 
+[fetch-content.magic_enum]
+git = "https://github.com/Neargye/magic_enum"
+tag = "a413fcc"
+
 [find-package.LLVM-Wrapper]
 
 [target.lifter]
 type = "executable"
 sources = ["lifter/*.cpp","lifter/*.hpp"]
 headers = ["lifter/*.h"]
-link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe"]
+link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe", "magic_enum"]
 windows.link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe", "Ws2_32"]
 compile-features = ["cxx_std_20"]
