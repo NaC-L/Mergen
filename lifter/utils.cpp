@@ -5,6 +5,7 @@
 #include <llvm/Analysis/ValueLattice.h>
 #include <llvm/Support/KnownBits.h>
 #include <map>
+// #include <z3++.h>
 
 /*
 
@@ -98,7 +99,6 @@ namespace debugging {
     }
     llvm::outs() << "Debugging enabled\n";
   }
-
   void printLLVMValue(llvm::Value* v, const char* name) {
     if (!shouldDebug || !debugStream)
       return;
@@ -110,53 +110,22 @@ namespace debugging {
 
   // Other functions remain the same, but use debugStream instead of
   // llvm::outs() For example:
-  template <typename T> void printValue(const T& v, const char* name) {
-    if (!shouldDebug || !debugStream)
-      return;
-    if constexpr (std::is_same_v<T, uint8_t> || std::is_same_v<T, int8_t>) {
-      *debugStream << " " << name << " : " << static_cast<int>(v) << "\n";
-      debugStream->flush();
-      return;
-    } else
-      *debugStream << " " << name << " : " << v << "\n";
-    debugStream->flush();
-  }
 
   void doIfDebug(const std::function<void(void)>& dothis) {
     if (!shouldDebug)
       return;
     (dothis)();
   }
-  template void printValue<uint64_t>(const uint64_t& v, const char* name);
-  template void printValue<uint32_t>(const uint32_t& v, const char* name);
-  template void printValue<uint16_t>(const uint16_t& v, const char* name);
-  template void printValue<uint8_t>(const uint8_t& v, const char* name);
-  template void printValue<int64_t>(const int64_t& v, const char* name);
-  template void printValue<int32_t>(const int32_t& v, const char* name);
-  template void printValue<int16_t>(const int16_t& v, const char* name);
-  template void printValue<int8_t>(const int8_t& v, const char* name);
-  template void printValue<bool>(const bool& v, const char* name);
-  template void printValue<std::string>(const std::string& v, const char* name);
-  template void printValue<char*>(char* const& v, const char* name);
-  template void printValue<char[256]>(char const (&)[256], const char* name);
-  template void
-  printValue<llvm::FormattedNumber>(llvm::FormattedNumber const(&),
-                                    const char* name);
-  template void
-  printValue<llvm::ValueLatticeElement>(const llvm::ValueLatticeElement& v,
-                                        const char* name);
-  template void printValue<llvm::KnownBits>(const llvm::KnownBits& v,
-                                            const char* name);
-  template void printValue<llvm::APInt>(const llvm::APInt& v, const char* name);
-  template void printValue<llvm::ConstantRange>(const llvm::ConstantRange& v,
-                                                const char* name);
+
 } // namespace debugging
 
 namespace argparser {
   void printHelp() {
     std::cerr << "Options:\n"
-              << "  -d, --enable-debug   Enable debugging mode\n"
-              << "  -h                   Display this help message\n";
+              << "  -d, --enable-debug        Enable debugging mode\n"
+              << "  -h                        Display this help message\n"
+              << "  --concretize-unsafe-reads Concretizes potentially unsafe "
+                 "reads to writable sections \n";
   }
 
   std::map<std::string, std::function<void()>> options = {

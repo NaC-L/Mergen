@@ -1,9 +1,12 @@
 #include "OperandUtils.h"
+#include "CommonRegisters.h"
+#include "ZydisDisassembler.hpp"
 #include "lifterClass.h"
 #include "utils.h"
 #include <Zydis/Mnemonic.h>
 #include <Zydis/Register.h>
 #include <Zydis/SharedTypes.h>
+#include <cstdio>
 #include <iostream>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/StringRef.h>
@@ -20,7 +23,10 @@
 #include <llvm/IR/PatternMatch.h>
 #include <llvm/Support/KnownBits.h>
 #include <llvm/TargetParser/Triple.h>
+#include <magic_enum/magic_enum.hpp>
 #include <optional>
+
+using namespace llvm;
 
 #ifndef TESTFOLDER
 #define TESTFOLDER
@@ -54,13 +60,13 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
     }
   };
 
-  ICmpInst::Predicate Pred;
+  llvm::ICmpInst::Predicate Pred;
   Value* A;
 
   if (match(Cond, m_ICmp(Pred, m_Value(A), m_Constant()))) {
     AddAffected(A);
 
-    if (ICmpInst::isEquality(Pred)) {
+    if (llvm::ICmpInst::isEquality(Pred)) {
       Value* X;
       // (X & C) or (X | C) or (X ^ C).
       // (X << C) or (X >>_s C) or (X >>_u C).
@@ -75,21 +81,21 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
     }
   }
 }
-SimplifyQuery lifterClass::createSimplifyQuery(Instruction* Inst) {
+llvm::SimplifyQuery lifterClass::createSimplifyQuery(Instruction* Inst) {
   // updateDomTree(*fnc);
   // auto DT = getDomTree();
   auto DL = fnc->getParent()->getDataLayout();
   static llvm::TargetLibraryInfoImpl TLIImpl(
-      Triple(fnc->getParent()->getTargetTriple()));
+      llvm::Triple(fnc->getParent()->getTargetTriple()));
   static llvm::TargetLibraryInfo TLI(TLIImpl);
 
-  SimplifyQuery SQ(DL, &TLI, DT, nullptr, Inst, true, true, nullptr);
+  llvm::SimplifyQuery SQ(DL, &TLI, DT, nullptr, Inst, true, true, nullptr);
 
   return SQ;
 }
 
 // returns if a comes before b
-bool comesBefore(Instruction* a, Instruction* b, DominatorTree& DT) {
+bool comesBefore(Instruction* a, Instruction* b, llvm::DominatorTree& DT) {
 
   bool sameBlock =
       a->getParent() == b->getParent(); // if same block, use ->comesBefore,
@@ -190,7 +196,7 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
         if (possible_condition.getMaxValue().isAllOnes() &&
             possible_condition.getMinValue().isZero()) {
           auto zero = ConstantInt::get(A->getType(), 0);
-          auto cond = createICMPFolder(CmpInst::ICMP_EQ, A, zero);
+          auto cond = createICMPFolder(llvm::CmpInst::ICMP_EQ, A, zero);
           return createSelectFolder(cond, B, C, "selectEZ");
         }
       }
@@ -356,7 +362,8 @@ KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
 }
 
 Value* simplifyValue(Value* v, const DataLayout& DL) {
-
+  if (1 == 1)
+    return v;
   if (!isa<Instruction>(v))
     return v;
 
@@ -367,20 +374,23 @@ Value* simplifyValue(Value* v, const DataLayout& DL) {
   where cl is bigger than 8, it just clears the al
   */
 
-  SimplifyQuery SQ(DL, inst);
+  llvm::SimplifyQuery SQ(DL, inst);
   if (auto vconstant = ConstantFoldInstruction(inst, DL)) {
-    if (isa<PoisonValue>(vconstant)) // if poison it should be 0 for shifts,
-                                     // can other operations generate poison
-                                     // without a poison value anyways?
+    if (isa<llvm::PoisonValue>(
+            vconstant)) // if poison it should be 0 for shifts,
+                        // can other operations generate poison
+                        // without a poison value anyways?
       return ConstantInt::get(v->getType(), 0);
     return vconstant;
   }
 
   if (auto vsimplified = simplifyInstruction(inst, SQ)) {
 
-    if (isa<PoisonValue>(vsimplified)) // if poison it should be 0 for shifts,
-                                       // can other operations generate poison
-                                       // without a poison value anyways?
+    if (isa<llvm::PoisonValue>(
+            vsimplified)) // if poison it should be 0 for shifts,
+                          // can other operations generate poison
+                          // without a poison value anyways?
+
       return ConstantInt::get(v->getType(), 0);
 
     return vsimplified;
@@ -404,7 +414,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
 
   if (isCast(opcode) == 0) {
     // Binary instruction
-    if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
+    if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand1)) {
       printvalue2(
           analyzeValueKnownBits(select_inst->getCondition(), select_inst));
       if (isa<ConstantInt>(key.operand2))
@@ -417,7 +427,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
             "lola-");
     }
 
-    if (auto select_inst = dyn_cast<SelectInst>(key.operand2)) {
+    if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand2)) {
       printvalue2(
           analyzeValueKnownBits(select_inst->getCondition(), select_inst));
       if (isa<ConstantInt>(key.operand1))
@@ -432,7 +442,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
     Value *cnd1, *lhs1, *rhs1;
     if (match(key.operand1, m_TruncOrSelf(m_Select(m_Value(cnd1), m_Value(lhs1),
                                                    m_Value(rhs1))))) {
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand2))
+      if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand2))
         if (select_inst && cnd1 == select_inst->getCondition()) // also check
                                                                 // if inversed
           return createSelectFolder(
@@ -447,7 +457,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
     else if (match(key.operand1,
                    m_ZExtOrSExtOrSelf(m_Select(m_Value(cnd1), m_Value(lhs1),
                                                m_Value(rhs1))))) {
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand2))
+      if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand2))
         if (select_inst && cnd1 == select_inst->getCondition()) // also check
                                                                 // if inversed
           return createSelectFolder(
@@ -462,7 +472,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
     Value *cnd, *lhs, *rhs;
     if (match(key.operand2, m_TruncOrSelf(m_Select(m_Value(cnd), m_Value(lhs),
                                                    m_Value(rhs))))) {
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand1))
+      if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand1))
         if (select_inst && cnd == select_inst->getCondition()) // also check
                                                                // if inversed
           return createSelectFolder(
@@ -475,7 +485,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
     } else if (match(key.operand2,
                      m_ZExtOrSExtOrSelf(
                          m_Select(m_Value(cnd), m_Value(lhs), m_Value(rhs))))) {
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand1))
+      if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand1))
         if (select_inst && cnd == select_inst->getCondition()) // also check
                                                                // if inversed
           return createSelectFolder(
@@ -496,7 +506,7 @@ Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
     case Instruction::Trunc:
     case Instruction::ZExt:
     case Instruction::SExt:
-      if (auto select_inst = dyn_cast<SelectInst>(key.operand1)) {
+      if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand1)) {
         return createSelectFolder(
             select_inst->getCondition(),
             builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
@@ -692,7 +702,7 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
      kb.setAllZero();
      kb.One ^= 1;
      kb.Zero ^= 1;
-     switch (cast<ICmpInst>(inst)->getPredicate()) {
+     switch (cast<llvm::ICmpInst>(inst)->getPredicate()) {
      case llvm::CmpInst::ICMP_EQ: {
        auto idk = KnownBits::eq(vv1, vv2);
        if (idk.has_value()) {
@@ -774,7 +784,7 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
        break;
      }
      default: {
-       outs() << "\n : " << cast<ICmpInst>(inst)->getPredicate();
+       outs() << "\n : " << cast<llvm::ICmpInst>(inst)->getPredicate();
        outs().flush();
        llvm_unreachable_internal(
            "Unsupported operation in calculatePossibleValues ICMP.\n");
@@ -876,6 +886,7 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
   // this part analyses if we can simplify the instruction
   Value* inst;
   inst = doPatternMatching(opcode, LHS, RHS);
+
   if (!inst)
     inst = createInstruction(opcode, LHS, RHS, nullptr, Name);
 
@@ -893,13 +904,308 @@ Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
     return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
                            computedBits.getConstant().getZExtValue());
   }
-
+  /*
+  if (auto try_z3 = evaluateLLVMExpression(inst)) {
+    if (try_z3.has_value()) {
+      printvalueforce(inst);
+      printvalueforce(try_z3.value());
+      return try_z3.value();
+    }
+  }
+  */
   return inst;
 }
+/*
+#include <z3++.h>
 
+z3::expr llvmToZ3Expr(Value* val, z3::context& c) {
+  static llvm::DenseMap<Value*, z3::expr*> cache;
+  static int counter = 0;
+  if (cache.find(val) != cache.end()) {
+    return *cache[val];
+  }
+  if (ConstantInt* constInt = dyn_cast<ConstantInt>(val)) {
+    z3::expr e = c.bv_val(constInt->getValue().getSExtValue(),
+                          constInt->getType()->getIntegerBitWidth());
+    cache[val] = new z3::expr(e);
+    return e;
+  } else if (Argument* arg = dyn_cast<Argument>(val)) {
+    z3::expr e = c.bv_const(arg->getName().str().c_str(), 64);
+    cache[val] = new z3::expr(e);
+    return e;
+  } else if (CallInst* arg = dyn_cast<CallInst>(val)) {
+    z3::expr e = c.bv_const((std::string("callinst") + std::to_string(counter) +
+                             (arg->getName().str().c_str()))
+                                .c_str(),
+                            arg->getType()->getIntegerBitWidth());
+    counter++;
+    cache[val] = new z3::expr(e);
+
+    return e;
+  } else if (Instruction* inst = dyn_cast<Instruction>(val)) {
+    switch (inst->getOpcode()) {
+    case Instruction::Add: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = lhs + rhs;
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::And: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = lhs & rhs;
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::Or: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = lhs | rhs;
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::AShr: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+
+      z3::expr result = z3::ashr(lhs, rhs);
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::LShr: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+
+      z3::expr result = z3::lshr(lhs, rhs);
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::Shl: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = z3::shl(lhs, rhs);
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::Mul: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = lhs * rhs;
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+
+    case Instruction::UDiv: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = z3::udiv(lhs, rhs);
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::SDiv: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = lhs / rhs;
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::URem: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = z3::urem(lhs, rhs);
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::SRem: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = z3::srem(lhs, rhs);
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::Xor: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = lhs ^ rhs;
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::Sub: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr result = lhs - rhs;
+      cache[val] = new z3::expr(result);
+      return result;
+    }
+    case Instruction::Load: {
+      z3::expr e = c.bv_const(inst->getName().str().c_str(), 64);
+      cache[val] = new z3::expr(e);
+      return e;
+    }
+    case Instruction::Trunc: {
+      Value* srcValue = inst->getOperand(0);
+      z3::expr srcExpr = llvmToZ3Expr(srcValue, c);
+      unsigned targetBitWidth = inst->getType()->getIntegerBitWidth();
+
+      z3::expr truncatedExpr = srcExpr.extract(targetBitWidth - 1, 0);
+      cache[val] = new z3::expr(truncatedExpr);
+      return truncatedExpr;
+    }
+    case Instruction::Select: {
+      z3::expr condition = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(1), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(2), c);
+
+      z3::expr is_true = condition != 0;
+      z3::expr select_expr = z3::ite(is_true, lhs, rhs);
+      cache[val] = new z3::expr(select_expr);
+      return select_expr;
+    }
+    case Instruction::ICmp: {
+      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
+      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
+
+      z3::expr bool_result = lhs;
+      switch (cast<llvm::ICmpInst>(inst)->getPredicate()) {
+      case llvm::CmpInst::ICMP_EQ:
+        bool_result = (lhs == rhs);
+        break;
+      case llvm::CmpInst::ICMP_NE:
+        bool_result = (lhs != rhs);
+        break;
+      case llvm::CmpInst::ICMP_SLE:
+        bool_result = z3::sle(lhs, rhs);
+        break;
+      case llvm::CmpInst::ICMP_SLT:
+        bool_result = z3::slt(lhs, rhs);
+        break;
+      case llvm::CmpInst::ICMP_ULE:
+        bool_result = z3::ule(lhs, rhs);
+        break;
+      case llvm::CmpInst::ICMP_ULT:
+        bool_result = z3::ult(lhs, rhs);
+        break;
+      case llvm::CmpInst::ICMP_SGE:
+        bool_result = z3::sge(lhs, rhs);
+        break;
+      case llvm::CmpInst::ICMP_SGT:
+        bool_result = z3::sgt(lhs, rhs);
+        break;
+      case llvm::CmpInst::ICMP_UGE:
+        bool_result = z3::uge(lhs, rhs);
+        break;
+      case llvm::CmpInst::ICMP_UGT:
+        bool_result = z3::ugt(lhs, rhs);
+        break;
+      default:
+        UNREACHABLE("Unsupported comparison predicate !");
+        return c.bv_val(-1, 32);
+      }
+
+      z3::expr int_result =
+          z3::ite(bool_result, c.bv_val(1, 1), c.bv_val(0, 1));
+      cache[val] = new z3::expr(int_result);
+      return int_result;
+    }
+    case Instruction::ZExt:
+    case Instruction::SExt: {
+      Value* srcValue = inst->getOperand(0);
+      z3::expr srcExpr = llvmToZ3Expr(srcValue, c);
+      unsigned srcBitWidth = srcExpr.get_sort().bv_size();
+      unsigned targetBitWidth = inst->getType()->getIntegerBitWidth();
+      z3::expr extendedExpr =
+          inst->getOpcode() == Instruction::ZExt
+              ? z3::zext(srcExpr, targetBitWidth - srcBitWidth)
+              : z3::sext(srcExpr, targetBitWidth - srcBitWidth);
+
+      cache[val] = new z3::expr(extendedExpr);
+      return extendedExpr;
+    }
+    default:
+      std::cerr << "Unsupported instruction : " << inst->getOpcodeName() << " !"
+                << std::endl;
+      UNREACHABLE("Unsupported instruction !");
+      return c.bv_val(0, 64);
+    }
+  }
+
+  UNREACHABLE("Unsupported!");
+  return c.bv_val(0, 64);
+}
+
+std::optional<Value*> lifterClass::evaluateLLVMExpression(Value* value) {
+  static z3::context c;
+
+  printvalue(value);
+
+  z3::expr expr = llvmToZ3Expr(value, c);
+
+  if (auto inst = dyn_cast<Instruction>(value)) {
+
+  } else
+    return std::nullopt;
+  printvalue2(expr);
+  z3::expr simplified_expr = expr.simplify();
+  printvalue2(simplified_expr);
+  if (simplified_expr.get_sort().bv_size() != 64) {
+    return std::nullopt;
+  }
+  if (simplified_expr.is_numeral()) {
+    return ConstantInt::get(value->getType(),
+                            simplified_expr.get_numeral_uint64());
+  }
+
+  static z3::solver s =
+      (z3::tactic(c, "solve-eqs") & z3::tactic(c, "propagate-values") &
+       z3::tactic(c, "bit-blast") & z3::tactic(c, "elim-uncnstr") &
+       z3::tactic(c, "qe-light") & z3::tactic(c, "elim-uncnstr") &
+       z3::tactic(c, "reduce-args") & z3::tactic(c, "qe-light") &
+       z3::tactic(c, "smt"))
+          .mk_solver();
+  Z3_global_param_set("timeout", "1000");
+  s.reset();
+
+  const auto lowstack = c.bv_val(STACKP_VALUE - 0x10000, 64);
+  const auto higstack = c.bv_val(STACKP_VALUE + 0x10000, 64);
+  const auto low_bin = c.bv_val(0x140000000, 64);
+  const auto high_bin = c.bv_val(0x140000000 + 0x144f000, 64);
+
+  auto bound_stack =
+      ((simplified_expr >= lowstack) && (simplified_expr <= higstack));
+
+  auto bound_bin_0 = (simplified_expr >= low_bin);
+  auto bound_bin_1 = (simplified_expr <= high_bin);
+  auto bound_bin = bound_bin_0 && bound_bin_1;
+  s.add(bound_stack || bound_bin);
+  for (const auto& it : assumptions) {
+    auto cnd = llvmToZ3Expr(it.first, c);
+    auto v = llvmToZ3Expr(ConstantInt::get(it.first->getType(), it.second), c);
+    s.add(cnd == v);
+  }
+  auto status = s.check();
+  if (status == z3::sat) {
+
+    z3::model m = s.get_model();
+
+    z3::expr value_expr = m.eval(simplified_expr, true);
+
+    printvalue2(value_expr);
+
+    s.add((simplified_expr != value_expr));
+
+    if (s.check() != z3::sat) {
+      return ConstantInt::get(value->getType(),
+                              value_expr.get_numeral_uint64());
+    }
+  }
+
+  return std::nullopt;
+}
+*/
 Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
                                     const Twine& Name) {
-  GEPinfo key(Address, Type->getIntegerBitWidth(), Base == TEB);
+  GEPinfo key = {Address, (uint8_t)(Type->getScalarSizeInBits()), Base == TEB};
   auto it = GEPcache.lookup(key);
   if (it) {
     return it;
@@ -1017,20 +1323,19 @@ std::optional<bool> foldKnownBits(CmpInst::Predicate P, const KnownBits& LHS,
   case CmpInst::ICMP_SLE:
     return KnownBits::sle(LHS, RHS);
   default:
-    return nullopt;
+    return std::nullopt;
   }
 
-  return nullopt;
+  return std::nullopt;
 }
 
-Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
-                          Value* LHS, Value* RHS, const Twine& Name) {
-
+Value* ICMPPatternMatcher(IRBuilder<llvm::InstSimplifyFolder>& builder,
+                          CmpInst::Predicate P, Value* LHS, Value* RHS,
+                          const Twine& Name) {
   if (auto SI = dyn_cast<SelectInst>(LHS)) {
     if (P == CmpInst::ICMP_EQ && RHS == SI->getTrueValue())
       return SI->getCondition();
   }
-
   // c = add a, b
   // cmp x, c, 0
   // =>
@@ -1043,7 +1348,6 @@ Value* ICMPPatternMatcher(IRBuilder<>& builder, CmpInst::Predicate P,
 
 Value* lifterClass::createICMPFolder(CmpInst::Predicate P, Value* LHS,
                                      Value* RHS, const Twine& Name) {
-
   if (auto patternCheck = ICMPPatternMatcher(builder, P, LHS, RHS, Name)) {
     printvalue(patternCheck);
     return patternCheck;
@@ -1165,15 +1469,14 @@ void lifterClass::Init_Flags() {
   FlagList[FLAG_OF].set(zero);
 
   FlagList[FLAG_RESERVED1].set(one);
-  Registers[ZYDIS_REGISTER_RFLAGS] = two;
+  Registers[Register::RFLAGS] = two;
 }
 
 Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
   LLVMContext& context = builder.getContext();
   newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
   // printvalue2((int32_t)flag) printvalue(newValue);
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
-      flag == FLAG_DF)
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
     return nullptr;
 
   FlagList[flag].set(newValue); // Set the new value directly
@@ -1183,8 +1486,7 @@ Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
 void lifterClass::setFlag(const Flag flag,
                           std::function<Value*()> calculation) {
   // If the flag is one of the reserved ones, do not modify
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF ||
-      flag == FLAG_DF)
+  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
     return;
 
   // lazy calculation
@@ -1199,7 +1501,7 @@ LazyValue lifterClass::getLazyFlag(const Flag flag) {
 Value* lifterClass::getFlag(const Flag flag) {
   Value* result = FlagList[flag].get(); // Retrieve the value,
   if (result) // if its somehow nullptr, just return False as value
-    return result;
+    return createTruncFolder(result, builder.getInt1Ty());
 
   LLVMContext& context = builder.getContext();
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
@@ -1210,20 +1512,20 @@ Value* memoryAlloc;
 Value* TEB;
 void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
 Value* getMemory() { return memoryAlloc; }
+// ??
 
 void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
 
   // rsp
   // rsp_unaligned = %rsp % 16
   // rsp_aligned_to16 = rsp - rsp_unaligned
-  int zydisRegister =
-      ZYDIS_REGISTER_RAX; // int because we cant increment ZydisRegister
+  auto reg = Register::RAX;
 
   auto argEnd = function->arg_end();
   for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
 
     Argument* arg = &*argIt;
-    arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
+    arg->setName(magic_enum::enum_name(reg));
 
     if (std::next(argIt) == argEnd) {
       arg->setName("memory");
@@ -1232,37 +1534,71 @@ void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
       arg->setName("TEB");
       TEB = arg;
     } else {
-      arg->setName(ZydisRegisterGetString((ZydisRegister)zydisRegister));
-      Registers[(ZydisRegister)zydisRegister] = arg;
-      zydisRegister++;
+      // arg->setName(ZydisRegisterGetString(zydisRegister));
+      Registers[reg] = arg;
+      reg = static_cast<Register>(static_cast<Register>(reg) + 1);
     }
   }
   Init_Flags();
 
   LLVMContext& context = builder.getContext();
 
+  const auto filebase =
+      ConstantInt::getSigned(Type::getInt64Ty(context), 0x140001000);
+  const auto filesize =
+      ConstantInt::getSigned(Type::getInt64Ty(context), 0x391000);
   const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
+  const auto magic = ConstantInt::getSigned(Type::getInt64Ty(context), 0x13370);
+  const auto magicpluseight =
+      ConstantInt::getSigned(Type::getInt64Ty(context), 0x13370 + 8);
+  const auto magicplusten =
+      ConstantInt::getSigned(Type::getInt64Ty(context), 0x13370 + 0x10);
+
+  /*
+    Registers[Register::RBP] = zero;
+
+    Registers[Register::RCX] = magic;
+
+    Registers[Register::RAX] = filebase;
+    Registers[Register::RDX] = filesize;
+    Registers[Register::RBX] = filebase;
+
+    Registers[Register::RSI] = zero;
+    Registers[Register::RDI] = zero;
+    Registers[Register::R8] = filesize;
+    Registers[Register::R9] = filebase;
+    Registers[Register::R10] = zero;
+    Registers[Register::R11] = zero;
+    Registers[Register::R12] = zero;
+    Registers[Register::R13] = zero;
+    Registers[Register::R14] = zero;
+    Registers[Register::R15] = zero;
+  */
 
   auto value =
       cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
 
   auto new_rip = createAddFolder(zero, value);
 
-  Registers[ZYDIS_REGISTER_RIP] = new_rip;
+  Registers[Register::RIP] = new_rip;
 
   auto stackvalue = cast<Value>(
       ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));
   auto new_stack_pointer = createAddFolder(stackvalue, zero);
 
-  Registers[ZYDIS_REGISTER_RSP] = new_stack_pointer;
-
+  Registers[Register::RSP] = new_stack_pointer;
+  /*
+  for (auto& reg : RegistersFP.vec) {
+    reg.v1 = ConstantInt::get(Type::getInt64Ty(context), 0);
+    reg.v2 = ConstantInt::get(Type::getInt64Ty(context), 0);
+  }
+  */
   return;
 }
 
-Value* lifterClass::GetValueFromHighByteRegister(const ZydisRegister reg) {
+Value* lifterClass::GetValueFromHighByteRegister(const Register reg) {
 
-  Value* fullRegisterValue = Registers[ZydisRegisterGetLargestEnclosing(
-      ZYDIS_MACHINE_MODE_LONG_64, reg)];
+  Value* fullRegisterValue = Registers[getBiggestEncoding(reg)];
 
   Value* shiftedValue = createLShrFolder(fullRegisterValue, 8, "highreg");
 
@@ -1302,27 +1638,32 @@ Value* lifterClass::GetRFLAGSValue() {
   return rflags;
 }
 
-Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
+Value* lifterClass::GetRegisterValue(const Register key) {
+  // printvalue2(magic_enum::enum_name(key));
 
-  if (key == ZYDIS_REGISTER_RIP) {
+  if (key == Register::RIP) {
     return ConstantInt::getSigned(BinaryOperations::getBitness() == 64
                                       ? Type::getInt64Ty(builder.getContext())
                                       : Type::getInt32Ty(builder.getContext()),
                                   blockInfo.runtime_address);
   }
 
-  if (key == ZYDIS_REGISTER_AH || key == ZYDIS_REGISTER_CH ||
-      key == ZYDIS_REGISTER_DH || key == ZYDIS_REGISTER_BH) {
+  if (key == Register::AH || key == Register::CH || key == Register::DH ||
+      key == Register::BH) {
     return GetValueFromHighByteRegister(key);
   }
 
-  ZydisRegister newKey =
-      (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
-          ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, key)
-          : key;
-
-  if (key == ZYDIS_REGISTER_RFLAGS || key == ZYDIS_REGISTER_EFLAGS) {
+  if (key == Register::RFLAGS || key == Register::EFLAGS) {
     return GetRFLAGSValue();
+  }
+
+  if (key == Register::GS) {
+    auto funcInfo = new funcsignatures::functioninfo("loadGS", {});
+    return callFunctionIR("loadGS", funcInfo);
+  }
+  if (key == Register::DS) {
+    auto funcInfo = new funcsignatures::functioninfo("loadDS", {});
+    return callFunctionIR("loadDS", funcInfo);
   }
   /*
   if (Registers.find(newKey) == Registers.end()) {
@@ -1330,16 +1671,17 @@ Value* lifterClass::GetRegisterValue(const ZydisRegister key) {
   }
   */
 
-  return Registers[newKey];
+  Register largestKey = getBiggestEncoding(key);
+  uint8_t size = getRegisterSize(key);
+  return createTruncFolder(Registers[largestKey], builder.getIntNTy(size));
 }
 
-Value* lifterClass::SetValueToHighByteRegister(const ZydisRegister reg,
+Value* lifterClass::SetValueToHighByteRegister(const Register reg,
                                                Value* value) {
   LLVMContext& context = builder.getContext();
   int shiftValue = 8;
 
-  ZydisRegister fullRegKey =
-      ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, reg);
+  Register fullRegKey = getBiggestEncoding(reg);
   Value* fullRegisterValue = Registers[fullRegKey];
 
   Value* eightBitValue = createAndFolder(
@@ -1360,11 +1702,9 @@ Value* lifterClass::SetValueToHighByteRegister(const ZydisRegister reg,
   return newRegisterValue;
 }
 
-Value* lifterClass::SetValueToSubRegister_8b(const ZydisRegister reg,
-                                             Value* value) {
+Value* lifterClass::SetValueToSubRegister_8b(const Register reg, Value* value) {
   LLVMContext& context = builder.getContext();
-  ZydisRegister fullRegKey = ZydisRegisterGetLargestEnclosing(
-      ZYDIS_MACHINE_MODE_LONG_64, static_cast<ZydisRegister>(reg));
+  Register fullRegKey = getBiggestEncoding(reg);
   Value* fullRegisterValue = Registers[fullRegKey];
   fullRegisterValue =
       createZExtOrTruncFolder(fullRegisterValue, Type::getInt64Ty(context));
@@ -1372,8 +1712,8 @@ Value* lifterClass::SetValueToSubRegister_8b(const ZydisRegister reg,
   Value* extendedValue =
       createZExtFolder(value, Type::getInt64Ty(context), "extendedValue");
 
-  bool isHighByteReg = (reg == ZYDIS_REGISTER_AH || reg == ZYDIS_REGISTER_CH ||
-                        reg == ZYDIS_REGISTER_DH || reg == ZYDIS_REGISTER_BH);
+  bool isHighByteReg = (reg == Register::AH || reg == Register::CH ||
+                        reg == Register::DH || reg == Register::BH);
 
   uint64_t mask = isHighByteReg ? 0xFFFFFFFFFFFF00FFULL : 0xFFFFFFFFFFFFFF00ULL;
 
@@ -1395,11 +1735,10 @@ Value* lifterClass::SetValueToSubRegister_8b(const ZydisRegister reg,
   return updatedReg;
 }
 
-Value* lifterClass::SetValueToSubRegister_16b(const ZydisRegister reg,
+Value* lifterClass::SetValueToSubRegister_16b(const Register reg,
                                               Value* value) {
 
-  ZydisRegister fullRegKey = ZydisRegisterGetLargestEnclosing(
-      ZYDIS_MACHINE_MODE_LONG_64, (ZydisRegister)reg);
+  Register fullRegKey = getBiggestEncoding(reg);
   Value* fullRegisterValue = Registers[fullRegKey];
 
   Value* last4cleared =
@@ -1413,51 +1752,46 @@ Value* lifterClass::SetValueToSubRegister_16b(const ZydisRegister reg,
   return updatedReg;
 }
 
-void lifterClass::SetRegisterValue(const ZydisRegister key, Value* value) {
-  if ((key >= ZYDIS_REGISTER_AL) && (key <= ZYDIS_REGISTER_R15B)) {
+void lifterClass::SetRegisterValue(const Register key, Value* value) {
+  if ((key >= Register::AL) && (key <= Register::R15B)) {
     value = SetValueToSubRegister_8b(key, value);
   }
 
-  if (((key >= ZYDIS_REGISTER_AX) && (key <= ZYDIS_REGISTER_R15W))) {
+  if (((key >= Register::AX) && (key <= Register::R15W))) {
     value = SetValueToSubRegister_16b(key, value);
   }
 
-  if (key == ZYDIS_REGISTER_RFLAGS) {
+  if (key == Register::RFLAGS) {
     SetRFLAGSValue(value);
     return;
   }
 
-  ZydisRegister newKey =
-      (key != ZYDIS_REGISTER_RFLAGS) && (key != ZYDIS_REGISTER_RIP)
-          ? ZydisRegisterGetLargestEnclosing(ZYDIS_MACHINE_MODE_LONG_64, key)
-          : key;
+  Register newKey = getBiggestEncoding(key);
   Registers[newKey] = value;
 }
 
-Value* lifterClass::GetEffectiveAddress(const ZydisDecodedOperand& op,
-                                        int possiblesize) {
+Value* lifterClass::GetEffectiveAddress() {
   LLVMContext& context = builder.getContext();
 
   Value* effectiveAddress = nullptr;
 
   Value* baseValue = nullptr;
-  if (op.mem.base != ZYDIS_REGISTER_NONE) {
-    baseValue = GetRegisterValue(op.mem.base);
+
+  if (instruction.mem_base != Register::None) {
+    baseValue = GetRegisterValue(instruction.mem_base);
     baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
-    printvalue(baseValue);
   }
 
   Value* indexValue = nullptr;
-  if (op.mem.index != ZYDIS_REGISTER_NONE) {
-    indexValue = GetRegisterValue(op.mem.index);
+
+  if (instruction.mem_index != Register::None) {
+    indexValue = GetRegisterValue(instruction.mem_index);
 
     indexValue = createZExtFolder(indexValue, Type::getInt64Ty(context));
     printvalue(indexValue);
-    if (op.mem.scale > 1) {
-      Value* scaleValue =
-          ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-      indexValue = createMulFolder(indexValue, scaleValue, "mul_ea");
-    }
+    Value* scaleValue =
+        ConstantInt::get(Type::getInt64Ty(context), instruction.mem_scale);
+    indexValue = createMulFolder(indexValue, scaleValue, "mul_ea");
   }
 
   if (baseValue && indexValue) {
@@ -1471,25 +1805,24 @@ Value* lifterClass::GetEffectiveAddress(const ZydisDecodedOperand& op,
     effectiveAddress = ConstantInt::get(Type::getInt64Ty(context), 0);
   }
 
-  if (op.mem.disp.value) {
+  if (instruction.mem_disp) {
     Value* dispValue =
-        ConstantInt::get(Type::getInt64Ty(context), op.mem.disp.value);
+        ConstantInt::get(Type::getInt64Ty(context), instruction.mem_disp);
     effectiveAddress = createAddFolder(effectiveAddress, dispValue, "disp_set");
   }
   printvalue(effectiveAddress);
-  return createZExtOrTruncFolder(effectiveAddress,
-                                 Type::getIntNTy(context, possiblesize));
+  return effectiveAddress;
 }
 
-Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress) {
+Value* lifterClass::getPointer(Value* address) {
 
   LLVMContext& context = builder.getContext();
   std::vector<Value*> indices;
-  indices.push_back(effectiveAddress);
+  indices.push_back(address);
 
   auto memoryOperand = memoryAlloc;
   //
-  // if (segment == ZYDIS_REGISTER_GS)
+  // if (segment == Register::GS)
   //     memoryOperand = TEB;
 
   Value* pointer =
@@ -1497,20 +1830,128 @@ Value* ConvertIntToPTR(IRBuilder<>& builder, Value* effectiveAddress) {
   return pointer;
 }
 
+// takes address, not pointers
+Value* lifterClass::GetMemoryValue(Value* address, uint8_t size) {
+
+  // convert to pointer first
+  auto pointer = getPointer(address);
+
+  LazyValue retval([this, pointer, size]() {
+    return builder.CreateLoad(builder.getIntNTy(size),
+                              pointer /*, "Loadxd-" + address + "-"*/);
+  });
+
+  loadMemoryOp(pointer);
+
+  if (Value* solvedLoad = solveLoad(retval, pointer, size)) {
+    // if can solve, return
+    // todo: use optional instead
+    return solvedLoad;
+  }
+
+  return retval.get();
+}
+
+// takes address, not pointers
+void lifterClass::SetMemoryValue(llvm::Value* address, llvm::Value* value) {
+
+  auto pointer = getPointer(address);
+
+  auto store = builder.CreateStore(value, pointer);
+
+  insertMemoryOp(cast<StoreInst>(store));
+}
+
+Value* lifterClass::GetIndexValue(uint8_t index) {
+  auto type = instruction.types[index];
+  switch (type) {
+  case OperandType::Register: {
+    auto reg = instruction.regs[index];
+
+    return GetRegisterValue(reg);
+  }
+
+  case OperandType::Immediate8:
+  case OperandType::Immediate16:
+  case OperandType::Immediate32:
+  case OperandType::Immediate64: {
+    int size = 0;
+
+    switch (type) {
+    case OperandType::Immediate8:
+      size = 8;
+      break;
+    case OperandType::Immediate16:
+      size = 16;
+      break;
+    case OperandType::Immediate32:
+      size = 32;
+      break;
+    case OperandType::Immediate64:
+      size = 64;
+      break;
+    default:
+      UNREACHABLE("??");
+    }
+
+    return builder.getIntN(size, instruction.immediate);
+  }
+
+  case OperandType::Immediate8_2nd: {
+    return builder.getIntN(8, instruction.immediate2);
+  }
+
+  case OperandType::Memory8:
+  case OperandType::Memory16:
+  case OperandType::Memory32:
+  case OperandType::Memory64: {
+    int size = 0;
+
+    switch (type) {
+
+    case OperandType::Memory8:
+      size = 8;
+      break;
+    case OperandType::Memory16:
+      size = 16;
+      break;
+    case OperandType::Memory32:
+      size = 32;
+      break;
+    case OperandType::Memory64:
+      size = 64;
+      break;
+
+    default:
+      UNREACHABLE("??");
+    }
+    auto addr = GetEffectiveAddress();
+    return GetMemoryValue(addr, size);
+  }
+  default: {
+    UNREACHABLE("idk");
+  }
+  }
+}
+
 Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
-                                    int possiblesize, const string& address) {
+                                    int possiblesize,
+                                    const std::string& address) {
   LLVMContext& context = builder.getContext();
   auto type = Type::getIntNTy(context, possiblesize);
 
   switch (op.type) {
   case ZYDIS_OPERAND_TYPE_REGISTER: {
-    Value* value = GetRegisterValue(op.reg.value);
+    Value* value =
+        GetRegisterValue(zydisRegisterToMergenRegister(op.reg.value));
     auto vtype = value->getType();
+
     if (isa<IntegerType>(vtype)) {
       auto typeBitWidth = dyn_cast<IntegerType>(vtype)->getBitWidth();
       if (typeBitWidth < 128)
         value = createZExtOrTruncFolder(value, type, "trunc");
     }
+
     return value;
   }
   case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
@@ -1523,76 +1964,17 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
     return val;
   }
   case ZYDIS_OPERAND_TYPE_MEMORY: {
-
-    Value* effectiveAddress = nullptr;
-
-    Value* baseValue = nullptr;
-    if (op.mem.base != ZYDIS_REGISTER_NONE) {
-      baseValue = GetRegisterValue(op.mem.base);
-      baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
-      printvalue(baseValue);
-    }
-
-    Value* indexValue = nullptr;
-    if (op.mem.index != ZYDIS_REGISTER_NONE) {
-      indexValue = GetRegisterValue(op.mem.index);
-      indexValue = createZExtFolder(indexValue, Type::getInt64Ty(context));
-      printvalue(indexValue);
-      if (op.mem.scale > 1) {
-        Value* scaleValue =
-            ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-        indexValue = createMulFolder(indexValue, scaleValue);
-      }
-    }
-
-    if (baseValue && indexValue) {
-      effectiveAddress =
-          createAddFolder(baseValue, indexValue, "bvalue_indexvalue");
-    } else if (baseValue) {
-      effectiveAddress = baseValue;
-    } else if (indexValue) {
-      effectiveAddress = indexValue;
-    } else {
-      effectiveAddress = ConstantInt::get(Type::getInt64Ty(context), 0);
-    }
-
-    if (op.mem.disp.has_displacement) {
-      Value* dispValue =
-          ConstantInt::get(Type::getInt64Ty(context), (int)(op.mem.disp.value));
-      effectiveAddress =
-          createAddFolder(effectiveAddress, dispValue, "memory_addr");
-    }
+    auto effectiveAddress = GetEffectiveAddress();
     printvalue(effectiveAddress);
     Type* loadType = Type::getIntNTy(context, possiblesize);
 
     Value* memoryOperand = memoryAlloc;
-    if (op.mem.segment == ZYDIS_REGISTER_GS)
+
+    /*
+    if (zydisRegisterToMergenRegister(op.mem.segment) == Register::GS)
       memoryOperand = TEB;
-
-    Value* pointer =
-        createGEPFolder(Type::getInt8Ty(context), memoryOperand,
-                        effectiveAddress, "GEPLoadxd-" + address + "-");
-
-    LazyValue retval([this, loadType, pointer]() {
-      return builder.CreateLoad(loadType,
-                                pointer /*, "Loadxd-" + address + "-"*/);
-    });
-
-    loadMemoryOp(pointer);
-
-    Value* solvedLoad =
-        solveLoad(retval, pointer, loadType->getIntegerBitWidth());
-    if (solvedLoad) {
-      return solvedLoad;
-    }
-
-    pointer = simplifyValue(
-        pointer,
-        builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
-
-    printvalue(retval.get());
-
-    return retval.get();
+    */
+    return GetMemoryValue(effectiveAddress, possiblesize);
   }
   default: {
     UNREACHABLE("operand type not implemented");
@@ -1601,7 +1983,7 @@ Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
 }
 
 Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
-                                    const string& address) {
+                                    const std::string& address) {
   LLVMContext& context = builder.getContext();
   value = simplifyValue(
       value,
@@ -1609,54 +1991,20 @@ Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
 
   switch (op.type) {
   case ZYDIS_OPERAND_TYPE_REGISTER: {
-    SetRegisterValue(op.reg.value, value);
+    SetRegisterValue(zydisRegisterToMergenRegister(op.reg.value), value);
     return value;
     break;
   }
   case ZYDIS_OPERAND_TYPE_MEMORY: {
 
-    Value* effectiveAddress = nullptr;
-
-    Value* baseValue = nullptr;
-    if (op.mem.base != ZYDIS_REGISTER_NONE) {
-      baseValue = GetRegisterValue(op.mem.base);
-      baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
-      printvalue(baseValue);
-    }
-
-    Value* indexValue = nullptr;
-    if (op.mem.index != ZYDIS_REGISTER_NONE) {
-      indexValue = GetRegisterValue(op.mem.index);
-      indexValue = createZExtFolder(indexValue, Type::getInt64Ty(context));
-      printvalue(indexValue);
-      if (op.mem.scale > 1) {
-        Value* scaleValue =
-            ConstantInt::get(Type::getInt64Ty(context), op.mem.scale);
-        indexValue = createMulFolder(indexValue, scaleValue, "mul_ea");
-      }
-    }
-
-    if (baseValue && indexValue) {
-      effectiveAddress =
-          createAddFolder(baseValue, indexValue, "bvalue_indexvalue_set");
-    } else if (baseValue) {
-      effectiveAddress = baseValue;
-    } else if (indexValue) {
-      effectiveAddress = indexValue;
-    } else {
-      effectiveAddress = ConstantInt::get(Type::getInt64Ty(context), 0);
-    }
-
-    if (op.mem.disp.value) {
-      Value* dispValue =
-          ConstantInt::get(Type::getInt64Ty(context), op.mem.disp.value);
-      effectiveAddress =
-          createAddFolder(effectiveAddress, dispValue, "disp_set");
-    }
+    auto effectiveAddress = GetEffectiveAddress();
 
     auto memoryOperand = memoryAlloc;
-    if (op.mem.segment == ZYDIS_REGISTER_GS)
+
+    /*
+    if (zydisRegisterToMergenRegister(op.mem.segment) == Register::GS)
       memoryOperand = TEB;
+    */
 
     Value* pointer =
         createGEPFolder(Type::getInt8Ty(context), memoryOperand,
@@ -1685,7 +2033,8 @@ Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
   }
 }
 
-Value* getMemoryFromValue(IRBuilder<>& builder, Value* value) {
+Value* getMemoryFromValue(IRBuilder<llvm::InstSimplifyFolder>& builder,
+                          Value* value) {
   LLVMContext& context = builder.getContext();
 
   std::vector<Value*> indices;
@@ -1697,19 +2046,19 @@ Value* getMemoryFromValue(IRBuilder<>& builder, Value* value) {
   return pointer;
 }
 
-vector<Value*> lifterClass::GetRFLAGS() {
-  vector<Value*> rflags;
+std::vector<Value*> lifterClass::GetRFLAGS() {
+  std::vector<Value*> rflags;
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
     rflags.push_back(getFlag((Flag)flag));
   }
   return rflags;
 }
 
-void lifterClass::pushFlags(const vector<Value*>& value,
-                            const string& address) {
+void lifterClass::pushFlags(const std::vector<Value*>& value,
+                            const std::string& address) {
   LLVMContext& context = builder.getContext();
 
-  auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
+  auto rsp = GetRegisterValue(Register::RSP);
 
   for (size_t i = 0; i < value.size(); i += 8) {
     Value* byteVal = ConstantInt::get(Type::getInt8Ty(context), 0);
@@ -1734,7 +2083,7 @@ void lifterClass::pushFlags(const vector<Value*>& value,
 // return [rsp], rsp+=8
 Value* lifterClass::popStack(int size) {
   LLVMContext& context = builder.getContext();
-  auto rsp = GetRegisterValue(ZYDIS_REGISTER_RSP);
+  auto rsp = GetRegisterValue(Register::RSP);
   // should we get a address calculator function, do we need that?
 
   Value* pointer = createGEPFolder(Type::getInt8Ty(context), memoryAlloc, rsp,
@@ -1746,7 +2095,7 @@ Value* lifterClass::popStack(int size) {
   });
 
   auto CI = ConstantInt::get(rsp->getType(), size);
-  SetRegisterValue(ZYDIS_REGISTER_RSP, createAddFolder(rsp, CI));
+  SetRegisterValue(Register::RSP, createAddFolder(rsp, CI));
 
   Value* solvedLoad =
       solveLoad(returnValue, pointer, loadType->getIntegerBitWidth());
