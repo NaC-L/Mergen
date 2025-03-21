@@ -12,6 +12,8 @@
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/Casting.h>
 
+using namespace llvm;
+
 // simplify Users with BFS
 // because =>
 // x = add a, b
@@ -40,7 +42,7 @@ PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
   return result;
 }
 
-void final_optpass(Function* clonedFuncx) {
+void final_optpass(llvm::Function* clonedFuncx) {
   llvm::PassBuilder passBuilder;
 
   llvm::LoopAnalysisManager loopAnalysisManager;
@@ -56,10 +58,14 @@ void final_optpass(Function* clonedFuncx) {
                                    cGSCCAnalysisManager, moduleAnalysisManager);
 
   llvm::ModulePassManager modulePassManager =
-      passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O0);
+      passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O0);
 
   llvm::Module* module = clonedFuncx->getParent();
+  /*
+  modulePassManager.addPass(BasicBlockDotGraphPass());
 
+  modulePassManager.run(*module, moduleAnalysisManager);
+  */
   bool changed = 0;
   do {
     changed = false;
@@ -67,7 +73,7 @@ void final_optpass(Function* clonedFuncx) {
     const size_t beforeSize = module->getInstructionCount();
 
     modulePassManager =
-        passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O1);
+        passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1);
 
     modulePassManager.addPass(GEPLoadPass());
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
@@ -82,7 +88,7 @@ void final_optpass(Function* clonedFuncx) {
   } while (changed);
 
   modulePassManager =
-      passBuilder.buildPerModuleDefaultPipeline(OptimizationLevel::O2);
+      passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
 
   modulePassManager.addPass(ResizeAllocatedStackPass());
   modulePassManager.addPass(PromotePseudoMemory());
@@ -90,7 +96,7 @@ void final_optpass(Function* clonedFuncx) {
   modulePassManager.run(*module, moduleAnalysisManager);
 }
 
-PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
+PATH_info lifterClass::solvePath(llvm::Function* function, uint64_t& dest,
                                  Value* simplifyValue) {
 
   PATH_info result = PATH_unsolved;
@@ -99,8 +105,9 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     dest = constInt->getZExtValue();
     result = PATH_solved;
     run = 0;
-    auto bb_solved = BasicBlock::Create(function->getContext(), "bb_constraint",
-                                        builder.GetInsertBlock()->getParent());
+    auto bb_solved = BasicBlock::Create(
+        function->getContext(), "bb_constraint-" + std::to_string(dest) + "-",
+        builder.GetInsertBlock()->getParent());
 
     builder.CreateBr(bb_solved);
     blockInfo = BBInfo(dest, bb_solved);
@@ -112,9 +119,9 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
       run = 0;
       std::cout << "Solved the constraint and moving to next path\n"
                 << std::flush;
-      auto bb_solved =
-          BasicBlock::Create(function->getContext(), "bb_constraint",
-                             builder.GetInsertBlock()->getParent());
+      auto bb_solved = BasicBlock::Create(
+          function->getContext(), "bb_constraint-" + std::to_string(dest) + "-",
+          builder.GetInsertBlock()->getParent());
 
       builder.CreateBr(bb_solved);
       blockInfo = BBInfo(dest, bb_solved);
@@ -126,7 +133,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
   printvalue(simplifyValue);
   run = 0;
   auto pvset = computePossibleValues(simplifyValue);
-  vector<APInt> pv(pvset.begin(), pvset.end());
+  std::vector<APInt> pv(pvset.begin(), pvset.end());
   if (pv.size() == 1) {
     printvalue2(pv[0]);
     auto bb_solved = BasicBlock::Create(function->getContext(), "bb_false",
@@ -145,15 +152,16 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     auto secondcase = pv[1];
 
     static auto try_simplify = [&](APInt c1,
-                                   Value* simplifyv) -> optional<Value*> {
+                                   Value* simplifyv) -> std::optional<Value*> {
       if (auto si = dyn_cast<SelectInst>(simplifyv)) {
         auto firstcase_v = builder.getIntN(
             simplifyv->getType()->getIntegerBitWidth(), c1.getZExtValue());
         if (si->getTrueValue() == firstcase_v)
           return si->getCondition();
       }
-      return nullopt;
+      return std::nullopt;
     };
+
     Value* condition = nullptr;
 
     // condition value is a kind of hack
@@ -166,11 +174,11 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     if (auto can_simplify = try_simplify(firstcase, simplifyValue))
       condition = can_simplify.value();
     else if (auto can_simplify2 = try_simplify(secondcase, simplifyValue)) {
-      swap(firstcase, secondcase);
+      std::swap(firstcase, secondcase);
       condition = can_simplify2.value();
     } else
       condition = createICMPFolder(
-          CmpInst::ICMP_EQ, simplifyValue,
+          llvm::CmpInst::ICMP_EQ, simplifyValue,
           builder.getIntN(simplifyValue->getType()->getIntegerBitWidth(),
                           firstcase.getZExtValue()));
     printvalue(condition);
@@ -199,7 +207,7 @@ PATH_info lifterClass::solvePath(Function* function, uint64_t& dest,
     debugging::doIfDebug([&]() {
       std::string Filename = "output_newpath.ll";
       std::error_code EC;
-      raw_fd_ostream OS(Filename, EC);
+      llvm::raw_fd_ostream OS(Filename, EC);
       function->getParent()->print(OS, nullptr);
     });
     std::cout << "created a new path\n" << std::flush;

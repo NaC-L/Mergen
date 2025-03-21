@@ -1,9 +1,7 @@
 #pragma once
-#include "coff/section_header.hpp"
-#include "nt/nt_headers.hpp"
 #include "llvm/IR/Value.h"
-#include <cstdint>
 #include <linuxpe>
+#include <llvm/Support/raw_ostream.h>
 
 // #define _NODEV why?
 
@@ -13,7 +11,7 @@
                                                                                \
     llvm::outs().flush();                                                      \
     std::cout.flush();                                                         \
-    llvm_unreachable_internal(msg, __FILE__, __LINE__);                        \
+    llvm::llvm_unreachable_internal(msg, __FILE__, __LINE__);                  \
   } while (0)
 #endif
 
@@ -43,16 +41,38 @@
 
 #define printvalueforce2(x)                                                    \
   do {                                                                         \
-    outs() << " " #x " : " << x << "\n";                                       \
-    outs().flush();                                                            \
+    llvm::outs() << " " #x " : " << x << "\n";                                 \
+    llvm::outs().flush();                                                      \
   } while (0);
 
 namespace debugging {
   int increaseInstCounter();
-  void enableDebug();
+  void enableDebug(const std::string& filename);
   void printLLVMValue(llvm::Value* v, const char* name);
   void doIfDebug(const std::function<void(void)>& dothis);
-  template <typename T> void printValue(const T& v, const char* name);
+
+  extern bool shouldDebug;
+  extern llvm::raw_ostream* debugStream;
+
+  template <typename T> void printValue(const T& v, const char* name) {
+    if (!shouldDebug || !debugStream)
+      return;
+    if constexpr (std::is_same_v<T, uint8_t> || std::is_same_v<T, int8_t>) {
+      *debugStream << " " << name << " : " << static_cast<int>(v) << "\n";
+      debugStream->flush();
+      return;
+    } /*
+    if constexpr (std::is_same_v<T, z3::expr>) {
+      *debugStream << " " << name << " : "
+                   << static_cast<z3::expr>(v).to_string() << "\n";
+      debugStream->flush();
+      return;
+    }*/
+    else
+      *debugStream << " " << name << " : " << v << "\n";
+    debugStream->flush();
+  }
+
 } // namespace debugging
 
 namespace argparser {
@@ -63,4 +83,6 @@ namespace timer {
   void startTimer();
   double stopTimer();
   double getTimer();
+  void suspendTimer();
+  void resumeTimer();
 } // namespace timer

@@ -11,10 +11,10 @@ namespace funcsignatures {
   std::unordered_map<std::string, functioninfo> functionsByName{
       {"MessageBoxW", functioninfo("MessageBoxW",
                                    {
-                                       funcArgInfo(ZYDIS_REGISTER_RCX, I64, 0),
-                                       funcArgInfo(ZYDIS_REGISTER_RDX, I64, 1),
-                                       funcArgInfo(ZYDIS_REGISTER_R8, I64, 1),
-                                       funcArgInfo(ZYDIS_REGISTER_R9, I64, 0),
+                                       funcArgInfo(Register::RCX, I64, 0),
+                                       funcArgInfo(Register::RDX, I64, 1),
+                                       funcArgInfo(Register::R8, I64, 1),
+                                       funcArgInfo(Register::R9, I64, 0),
                                    })},
       {"GetTickCount64", functioninfo("GetTickCount64", {})},
   };
@@ -61,13 +61,12 @@ namespace funcsignatures {
 
           {{0x4C, 0x8B, 0xDC, 0x4D, 0x89, 0x43, 0x18, 0x4D, 0x89, 0x4B, 0x20,
             0x48, 0x83, 0xEC, 0x38},
-           functioninfo("swprintf_s",
-                        {
-                            funcArgInfo(ZYDIS_REGISTER_RCX, I64, 1),
-                            funcArgInfo(ZYDIS_REGISTER_RDX, I64, 0),
-                            funcArgInfo(ZYDIS_REGISTER_R8, I64, 1),
-                            funcArgInfo(ZYDIS_REGISTER_R9, I64, 0),
-                        })}};
+           functioninfo("swprintf_s", {
+                                          funcArgInfo(Register::RCX, I64, 1),
+                                          funcArgInfo(Register::RDX, I64, 0),
+                                          funcArgInfo(Register::R8, I64, 1),
+                                          funcArgInfo(Register::R9, I64, 0),
+                                      })}};
 
   AhoCorasick::AhoCorasick(
       const std::unordered_map<std::vector<unsigned char>, functioninfo,

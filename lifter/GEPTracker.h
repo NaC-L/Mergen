@@ -5,6 +5,8 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/IR/Value.h>
 
+using namespace llvm;
+
 enum Assumption { Real, Assumed }; // add None
 
 enum arch_mode { X86 = 0, X64 = 1 };
@@ -54,7 +56,7 @@ public:
 };
 
 namespace BinaryOperations {
-
+  extern bool concretize_unsafe_reads;
   const char* getName(const uint64_t offset);
 
   int getBitness();

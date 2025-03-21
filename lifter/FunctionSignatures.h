@@ -1,5 +1,6 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
+#include "CommonRegisters.h"
 #include <Zydis/Register.h>
 #include <map>
 #include <string>
@@ -12,7 +13,7 @@ enum ArgType { NONE = 0, I8 = 1, I16 = 2, I32 = 3, I64 = 4 };
 namespace funcsignatures {
 
   struct funcArgInfo {
-    ZydisRegister reg;
+    Register reg;
 
     struct argTypeInfo {
       uint8_t size : 4; // 4 bits for size
@@ -21,7 +22,7 @@ namespace funcsignatures {
       argTypeInfo(ArgType type, bool isPtr)
           : size(static_cast<uint8_t>(type)), isPtr(isPtr ? 1 : 0), pad(0) {}
     } argtype;
-    funcArgInfo(ZydisRegister Reg, ArgType type, bool isPtr)
+    funcArgInfo(Register Reg, ArgType type, bool isPtr)
         : reg(Reg), argtype(type, isPtr){};
   };
 
@@ -38,23 +39,16 @@ namespace funcsignatures {
         : name(Name), args(Args), bytes(Bytes) {}
     std::string name;
     //
-    funcArgInfos args = {funcArgInfo(ZYDIS_REGISTER_RAX, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_RCX, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_RDX, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_RBX, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_RSP, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_RBP, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_RSI, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_RDI, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_R8, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_R9, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_R10, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_R11, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_R12, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_R13, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_R14, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_R15, I64, 0),
-                         funcArgInfo(ZYDIS_REGISTER_DS, I64, 1)};
+    funcArgInfos args = {
+        funcArgInfo(Register::RAX, I64, 0), funcArgInfo(Register::RCX, I64, 0),
+        funcArgInfo(Register::RDX, I64, 0), funcArgInfo(Register::RBX, I64, 0),
+        funcArgInfo(Register::RSP, I64, 0), funcArgInfo(Register::RBP, I64, 0),
+        funcArgInfo(Register::RSI, I64, 0), funcArgInfo(Register::RDI, I64, 0),
+        funcArgInfo(Register::R8, I64, 0),  funcArgInfo(Register::R9, I64, 0),
+        funcArgInfo(Register::R10, I64, 0), funcArgInfo(Register::R11, I64, 0),
+        funcArgInfo(Register::R12, I64, 0), funcArgInfo(Register::R13, I64, 0),
+        funcArgInfo(Register::R14, I64, 0), funcArgInfo(Register::R15, I64, 0),
+        funcArgInfo(Register::DS, I64, 1)};
 
     std::vector<unsigned char> bytes;
     // DS represents memory
