@@ -549,19 +549,6 @@ void lifterClass::lift_mov() {
 
 void lifterClass::lift_cmovcc() {
 
-  /*
-
-
-
-  CMOVNO,
-  CMOVNP,
-  CMOVNS,
-
-  CMOVO,
-  CMOVP,
-  CMOVS,
-  */
-
   auto getCondition = [&] {
     switch (instruction.mnemonic) {
 
@@ -634,9 +621,9 @@ void lifterClass::lift_cmovcc() {
     }
   };
 
-  auto dest = GetIndexValue(1);
+  auto dest = GetIndexValue(0);
 
-  auto src = GetIndexValue(0);
+  auto src = GetIndexValue(1);
 
   auto result = createSelectFolder(getCondition(), src, dest);
 
