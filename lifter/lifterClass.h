@@ -403,7 +403,8 @@ public:
                               const std::string& address = "");
   */
   llvm::Value* GetIndexValue(uint8_t index);
-  llvm::Value* SetIndexValue(uint8_t index);
+
+  void SetIndexValue(uint8_t index, Value* value);
 
   llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
                                const int possiblesize,

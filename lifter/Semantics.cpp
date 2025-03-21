@@ -677,154 +677,113 @@ void lifterClass::lift_cmovns() {
   Value* Rvalue = GetOperandValue(src, dest.size);
   Value* Lvalue = GetOperandValue(dest, dest.size);
 
-  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
+  replace: Sign Extend if its imm
 
-  SetOperandValue(dest, result);
-}
-// cmovnl = cmovge
-void lifterClass::lift_cmovnl() {
-  auto dest = operands[0];
-  auto src = operands[1];
+  if (src.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+    Rvalue = GetOperandValue(src, dest.size);
 
-  Value* sf = getFlag(FLAG_SF);
-  Value* of = getFlag(FLAG_OF);
-  Value* condition = createICMPFolder(CmpInst::ICMP_EQ, sf, of);
+  }
+  */
 
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-  printvalue(sf);
-  printvalue(of);
-  printvalue(condition);
-  printvalue(Lvalue);
   printvalue(Rvalue);
 
-  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-
-  SetOperandValue(dest, result);
-}
-void lifterClass::lift_cmovs() {
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* sf = getFlag(FLAG_SF);
-
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-
-  Value* result = createSelectFolder(sf, Rvalue, Lvalue);
-
-  SetOperandValue(dest, result);
+  SetIndexValue(0, Rvalue);
 }
 
-void lifterClass::lift_cmovnle() {
+void lifterClass::lift_cmovcc() {
 
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*
 
-  Value* zf = getFlag(FLAG_ZF);
-  Value* sf = getFlag(FLAG_SF);
-  Value* of = getFlag(FLAG_OF);
 
-  Value* condition = createAndFolder(
-      createNotFolder(zf, "notZF"),
-      createICMPFolder(CmpInst::ICMP_EQ, sf, of, "sf_eq_of"), "cmovnle_cond");
 
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
+  CMOVNO,
+  CMOVNP,
+  CMOVNS,
 
-  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
+  CMOVO,
+  CMOVP,
+  CMOVS,
+  */
 
-  SetOperandValue(dest, result);
-}
+  auto getCondition = [&] {
+    switch (instruction.mnemonic) {
 
-void lifterClass::lift_cmovle() {
-  auto dest = operands[0];
-  auto src = operands[1];
+    case Mnemonic::CMOVZ: {
+      return getFlag(FLAG_ZF);
+    }
 
-  Value* zf = getFlag(FLAG_ZF);
-  Value* sf = getFlag(FLAG_SF);
-  Value* of = getFlag(FLAG_OF);
+    case Mnemonic::CMOVNZ: {
+      return createNotFolder(getFlag(FLAG_ZF));
+    }
 
-  Value* sf_neq_of = createICMPFolder(CmpInst::ICMP_NE, sf, of);
-  Value* condition = createOrFolder(zf, sf_neq_of, "cmovle-or");
+    case Mnemonic::CMOVB: {
+      return getFlag(FLAG_CF);
+    }
+    case Mnemonic::CMOVNB: {
+      return createNotFolder(getFlag(FLAG_CF));
+    }
 
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
+    case Mnemonic::CMOVBE: {
+      return createAndFolder(getFlag(FLAG_CF), getFlag(FLAG_ZF));
+    }
+    case Mnemonic::CMOVNBE: {
+      return createNotFolder(
+          createOrFolder(getFlag(FLAG_CF), getFlag(FLAG_ZF)));
+    }
 
-  Value* result = createSelectFolder(condition, Rvalue, Lvalue);
-  printvalue(zf);
-  printvalue(sf);
-  printvalue(of);
-  printvalue(sf_neq_of);
-  printvalue(condition);
-  printvalue(Rvalue);
-  printvalue(Lvalue);
-  printvalue(result);
-  SetOperandValue(dest, result);
-}
+    case Mnemonic::CMOVL: {
+      return createXorFolder(getFlag(FLAG_SF), getFlag(FLAG_OF));
+    }
+    case Mnemonic::CMOVNL: {
+      // equal
+      return createNotFolder(
+          createXorFolder(getFlag(FLAG_SF), getFlag(FLAG_OF)));
+    }
 
-void lifterClass::lift_cmovo() {
-  auto dest = operands[0];
-  auto src = operands[1];
+    case Mnemonic::CMOVLE: {
+      return createOrFolder(createXorFolder(getFlag(FLAG_SF), getFlag(FLAG_OF)),
+                            getFlag(FLAG_ZF));
+    }
+    case Mnemonic::CMOVNLE: {
+      return createAndFolder(
+          createNotFolder(createXorFolder(getFlag(FLAG_SF), getFlag(FLAG_OF))),
+          createNotFolder(getFlag(FLAG_ZF)));
+    }
 
-  Value* of = getFlag(FLAG_OF);
+    case Mnemonic::CMOVO: {
+      return getFlag(FLAG_OF);
+    }
+    case Mnemonic::CMOVNO: {
+      return createNotFolder(getFlag(FLAG_OF));
+    }
 
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
+    case Mnemonic::CMOVS: {
+      return getFlag(FLAG_SF);
+    }
+    case Mnemonic::CMOVNS: {
+      return createNotFolder(getFlag(FLAG_SF));
+    }
 
-  Value* result = createSelectFolder(of, Rvalue, Lvalue);
-  printvalue(Lvalue);
-  printvalue(Rvalue);
-  printvalue(of);
-  printvalue(result);
-  SetOperandValue(dest, result);
-}
-void lifterClass::lift_cmovno() {
-  auto dest = operands[0];
-  auto src = operands[1];
+    case Mnemonic::CMOVP: {
+      return getFlag(FLAG_PF);
+    }
+    case Mnemonic::CMOVNP: {
+      return createNotFolder(getFlag(FLAG_PF));
+    }
 
-  Value* of = getFlag(FLAG_OF);
+    default: {
+      return static_cast<Value*>(nullptr);
+    }
+    }
+  };
 
-  printvalue(of) of = createNotFolder(of, "negateOF");
+  auto dest = GetIndexValue(1);
 
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
+  auto src = GetIndexValue(0);
 
-  Value* result = createSelectFolder(of, Rvalue, Lvalue);
+  auto result = createSelectFolder(getCondition(), src, dest);
 
-  printvalue(Lvalue) printvalue(Rvalue) printvalue(result)
-      SetOperandValue(dest, result);
-}
-
-void lifterClass::lift_cmovp() {
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* pf = getFlag(FLAG_PF);
-
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-  printvalue(pf) printvalue(Lvalue) printvalue(Rvalue)
-
-      Value* result = createSelectFolder(pf, Rvalue, Lvalue);
-
-  SetOperandValue(dest, result);
-}
-
-void lifterClass::lift_cmovnp() {
-  auto dest = operands[0];
-  auto src = operands[1];
-
-  Value* pf = getFlag(FLAG_PF);
-
-  pf = createNotFolder(pf, "negatePF");
-
-  Value* Rvalue = GetOperandValue(src, dest.size);
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-
-  Value* result = createSelectFolder(pf, Rvalue, Lvalue);
-
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 // for now assume every call is fake
@@ -4447,70 +4406,24 @@ void lifterClass::liftInstructionSemantics() {
     break;
   }
     // cmov
-  case Mnemonic::CMOVZ: {
-    lift_cmovz();
-    break;
-  }
-  case Mnemonic::CMOVNZ: {
-    lift_cmovnz();
-    break;
-  }
-  case Mnemonic::CMOVL: {
-    lift_cmovl();
-    break;
-  }
-  case Mnemonic::CMOVB: {
-    lift_cmovb();
-    break;
-  }
-  case Mnemonic::CMOVNB: {
-    lift_cmovnb();
-    break;
-  }
-  case Mnemonic::CMOVNS: {
-    lift_cmovns();
-    break;
-  }
 
-  case Mnemonic::CMOVBE: {
-    lift_cmovbz();
-    break;
-  }
-  case Mnemonic::CMOVNBE: {
-    lift_cmovnbz();
-    break;
-  }
-  case Mnemonic::CMOVNL: {
-    lift_cmovnl();
-    break;
-  }
-  case Mnemonic::CMOVS: {
-    lift_cmovs();
-    break;
-  }
-  case Mnemonic::CMOVNLE: {
-    lift_cmovnle();
-    break;
-  }
-  case Mnemonic::CMOVLE: {
-    lift_cmovle();
-    break;
-  }
-
-  case Mnemonic::CMOVO: {
-    lift_cmovo();
-    break;
-  }
-  case Mnemonic::CMOVNO: {
-    lift_cmovno();
-    break;
-  }
-  case Mnemonic::CMOVP: {
-    lift_cmovp();
-    break;
-  }
+  case Mnemonic::CMOVZ:
+  case Mnemonic::CMOVNZ:
+  case Mnemonic::CMOVL:
+  case Mnemonic::CMOVB:
+  case Mnemonic::CMOVNB:
+  case Mnemonic::CMOVNS:
+  case Mnemonic::CMOVBE:
+  case Mnemonic::CMOVNBE:
+  case Mnemonic::CMOVNL:
+  case Mnemonic::CMOVS:
+  case Mnemonic::CMOVNLE:
+  case Mnemonic::CMOVLE:
+  case Mnemonic::CMOVO:
+  case Mnemonic::CMOVNO:
+  case Mnemonic::CMOVP:
   case Mnemonic::CMOVNP: {
-    lift_cmovnp();
+    lift_cmovcc();
     break;
   }
     // branches

@@ -1934,6 +1934,68 @@ Value* lifterClass::GetIndexValue(uint8_t index) {
   }
 }
 
+void lifterClass::SetIndexValue(uint8_t index, Value* value) {
+
+  auto type = instruction.types[index];
+
+  switch (type) {
+
+  case OperandType::Register: {
+    auto reg = instruction.regs[index];
+
+    // TODO: do we need to remove this sext from here?
+    value =
+        createSExtOrTruncFolder(value, builder.getIntNTy(getRegisterSize(reg)));
+
+    SetRegisterValue(reg, value);
+    return;
+  }
+
+  case OperandType::Immediate8:
+  case OperandType::Immediate16:
+  case OperandType::Immediate32:
+  case OperandType::Immediate64: {
+    UNREACHABLE("Cant set imm operands");
+  }
+
+  case OperandType::Memory8:
+  case OperandType::Memory16:
+  case OperandType::Memory32:
+  case OperandType::Memory64: {
+    int size = 0;
+
+    switch (type) {
+
+    case OperandType::Memory8:
+      size = 8;
+      break;
+    case OperandType::Memory16:
+      size = 16;
+      break;
+    case OperandType::Memory32:
+      size = 32;
+      break;
+    case OperandType::Memory64:
+      size = 64;
+      break;
+
+    default:
+      UNREACHABLE("??");
+    }
+
+    // TODO: do we need to remove this sext from here?
+    value = createSExtOrTruncFolder(value, builder.getIntNTy(size));
+    auto addr = GetEffectiveAddress();
+    SetMemoryValue(addr, value);
+
+    return;
+  }
+  default: {
+    UNREACHABLE("idk");
+  }
+  }
+}
+
 Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
                                     int possiblesize,
                                     const std::string& address) {
