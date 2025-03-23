@@ -633,10 +633,12 @@ void lifterClass::lift_cmovcc() {
 // for now assume every call is fake
 void lifterClass::lift_call() {
   LLVMContext& context = builder.getContext();
+
   // 0 = function
   // 1 = rip
   // 2 = register rsp
   // 3 = [rsp]
+
   auto src = operands[0];        // value that we are pushing
   auto rsp = operands[2];        // value that we are pushing
   auto rsp_memory = operands[3]; // value that we are pushing
@@ -652,14 +654,27 @@ void lifterClass::lift_call() {
 
   std::string block_name = "jmp_call-" + std::to_string(jump_address) + "-";
 
-  switch (src.type) {
-  case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
-    jump_address += src.imm.value.s;
+  switch (instruction.types[0]) {
+  case OperandType::Immediate8:
+  case OperandType::Immediate16: // todo : pretty sure this 8 and 16 will cause
+                                 // troubles later
+  case OperandType::Immediate32:
+  case OperandType::Immediate64: {
+
+    if (auto imm = dyn_cast<ConstantInt>(GetIndexValue(0))) {
+      jump_address += imm->getSExtValue();
+      break;
+    }
+    UNREACHABLE("wont reach");
     break;
   }
-  case ZYDIS_OPERAND_TYPE_MEMORY:
-  case ZYDIS_OPERAND_TYPE_REGISTER: {
-    auto registerValue = GetOperandValue(src, src.size);
+  case OperandType::Memory8:
+  case OperandType::Memory16: // todo : pretty sure this 8 and 16 will cause
+                              // troubles later
+  case OperandType::Memory32:
+  case OperandType::Memory64:
+  case OperandType::Register: {
+    auto registerValue = GetIndexValue(0);
     if (!isa<ConstantInt>(registerValue)) {
 
       std::cout << "did call";
@@ -671,21 +686,14 @@ void lifterClass::lift_call() {
       builder.CreateCall(parseArgsType(nullptr, context), idltvm,
                          parseArgs(nullptr));
 
-      // callFunctionIR(registerValue->getName().str() + "_call_fnc", nullptr);
-
-      // SetRegisterValue(Register::RSP, result); dont modify rsp
       break;
-
-      // registerValue =
-      //    ConstantInt::get(Type::getInt32Ty(context), 0x1337);
-
-      // throw("trying to call an unknown value");
     }
     auto registerCValue = cast<ConstantInt>(registerValue);
     jump_address = registerCValue->getZExtValue();
     break;
   }
   default:
+    UNREACHABLE("unreachable in call");
     break;
   }
 
@@ -864,25 +872,36 @@ void lifterClass::lift_jmp() {
   LLVMContext& context = builder.getContext();
   auto dest = operands[0];
 
-  auto Value = GetOperandValue(dest, BinaryOperations::getBitness());
+  auto Value = GetIndexValue(0);
+
   auto ripval = GetRegisterValue(Register::RIP);
+
   auto newRip = createAddFolder(
       Value, ripval,
       "jump-xd-" + std::to_string(blockInfo.runtime_address) + "-");
 
   jmpcount++;
-  auto targetv = GetOperandValue(dest, BinaryOperations::getBitness());
-  auto trunc = createZExtOrTruncFolder(targetv, Type::getInt64Ty(context),
+  auto targetv = Value;
+
+  auto trunc = createSExtOrTruncFolder(targetv, Type::getInt64Ty(context),
                                        "jmp-register");
   printvalue(ripval);
   printvalue(trunc);
   uint64_t destination = 0;
   auto function = builder.GetInsertBlock()->getParent();
-  if (dest.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
 
+  switch (instruction.types[0]) {
+  case OperandType::Immediate8:
+  case OperandType::Immediate16: // todo: test 8 and 16
+  case OperandType::Immediate32:
+  case OperandType::Immediate64: {
     trunc = createAddFolder(trunc, ripval);
     printvalue(trunc);
   }
+  default:
+    break;
+  }
+
   solvePath(function, destination, trunc);
   printvalue2(destination);
   printvalue(newRip);
@@ -1171,14 +1190,15 @@ void lifterClass::lift_sbb() {
   auto dest = operands[0];
   auto src = operands[1];
 
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-  Value* Rvalue = GetOperandValue(src, dest.size);
+  Value* Lvalue = GetIndexValue(0);
+
+  Value* Rvalue = GetIndexValue(1);
+
   Value* cf = createZExtOrTruncFolder(getFlag(FLAG_CF), Rvalue->getType());
 
   Value* tmpResult = createSubFolder(Lvalue, Rvalue, "lhssubrhs");
   Value* result = createSubFolder(tmpResult, cf, "sbbTempResult");
-  SetOperandValue(dest, result);
-
+  SetIndexValue(0, result);
   // 0, 0 (cf = 1), NEW CF = 1
   Value* newCF = createOrFolder(
       createICMPFolder(CmpInst::ICMP_ULT, Lvalue, Rvalue, "newCF"),

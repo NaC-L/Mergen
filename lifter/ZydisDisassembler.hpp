@@ -3,8 +3,10 @@
 
 #include "CommonDisassembler.hpp"
 #include "CommonRegisters.h"
+#include "utils.h"
 #include <Zydis/Register.h>
 #include <Zydis/SharedTypes.h>
+#include <magic_enum/magic_enum.hpp>
 
 // todo, fix names
 // instead of mnemonic, do MergenMnemonic ?
@@ -4382,17 +4384,25 @@ public:
         .operand_count_visible = instruction.operand_count_visible,
     };
     bool secondimm = false;
+
     for (int i = 0; i < 4; i++) {
+
       auto op = operands[i];
+      // printvalue2(magic_enum::enum_name(operands[i].type));
+      // printvalue2(magic_enum::enum_name(operands[i].visibility));
 
       // skip implicit operands
+      /*
       if (operands[i].visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
         continue;
-
+      */
       convertedInstruction.types[i] =
           zydisTypeToMergenType(op.type, op.size, secondimm);
 
       if (op.type == ZYDIS_OPERAND_TYPE_REGISTER) {
+
+        printvalue2(op.reg.value);
+        printvalue2(magic_enum::enum_name(op.reg.value));
 
         convertedInstruction.regs[i] =
             zydisRegisterToMergenRegister(op.reg.value);
