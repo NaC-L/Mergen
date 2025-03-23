@@ -1765,7 +1765,8 @@ void lifterClass::SetRegisterValue(const Register key, Value* value) {
     SetRFLAGSValue(value);
     return;
   }
-
+  printvalue2(magic_enum::enum_name(key));
+  printvalue(value);
   Register newKey = getBiggestEncoding(key);
   Registers[newKey] = value;
 }
@@ -1863,7 +1864,11 @@ void lifterClass::SetMemoryValue(llvm::Value* address, llvm::Value* value) {
 }
 
 Value* lifterClass::GetIndexValue(uint8_t index) {
+
   auto type = instruction.types[index];
+
+  // printvalue2(magic_enum::enum_name(type));
+
   switch (type) {
   case OperandType::Register: {
     auto reg = instruction.regs[index];
