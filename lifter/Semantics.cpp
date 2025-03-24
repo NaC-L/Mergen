@@ -1260,11 +1260,15 @@ FI;
 */
 void lifterClass::lift_rcl() {
   LLVMContext& context = builder.getContext();
+
   auto dest = operands[0];
   auto count = operands[1];
 
-  auto Lvalue = GetOperandValue(dest, dest.size);
-  auto countValue = GetOperandValue(count, dest.size);
+  auto Lvalue = GetIndexValue(0);
+  auto countValue = GetIndexValue(1);
+
+  countValue = createZExtFolder(countValue, Lvalue->getType());
+
   auto carryFlag = getFlag(FLAG_CF);
 
   // Create count mask based on operand size
@@ -1324,7 +1328,7 @@ void lifterClass::lift_rcl() {
   newOF = createSelectFolder(isCountZero, getFlag(FLAG_OF), newOF);
 
   // Set final results
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
   setFlag(FLAG_CF, newCF);
   setFlag(FLAG_OF, newOF);
 }
@@ -1362,8 +1366,11 @@ void lifterClass::lift_rcr() {
   auto dest = operands[0];
   auto count = operands[1];
 
-  auto Lvalue = GetOperandValue(dest, dest.size);
-  auto countValue = GetOperandValue(count, dest.size);
+  auto Lvalue = GetIndexValue(0);
+  auto countValue = GetIndexValue(1);
+
+  countValue = createZExtFolder(countValue, Lvalue->getType());
+
   auto carryFlag = getFlag(FLAG_CF);
 
   // Create count mask based on operand size
@@ -1440,7 +1447,7 @@ void lifterClass::lift_rcr() {
   printvalue(result);
   printvalue(newCF);
   // Set final results
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
   setFlag(FLAG_CF, newCF);
   setFlag(FLAG_OF, newOF);
 }
@@ -1449,11 +1456,11 @@ void lifterClass::lift_not() {
 
   auto dest = operands[0];
 
-  auto Rvalue = GetOperandValue(dest, dest.size);
+  auto Rvalue = GetIndexValue(0);
   Rvalue = createXorFolder(Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
                            "realnot-" +
                                std::to_string(blockInfo.runtime_address) + "-");
-  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValue(0, Rvalue);
 
   printvalue(Rvalue);
   //  Flags Affected
@@ -1463,14 +1470,14 @@ void lifterClass::lift_not() {
 void lifterClass::lift_neg() {
 
   auto dest = operands[0];
-  auto Rvalue = GetOperandValue(dest, dest.size);
+  auto Rvalue = GetIndexValue(0);
 
   auto cf = createICMPFolder(CmpInst::ICMP_NE, Rvalue,
                              ConstantInt::get(Rvalue->getType(), 0), "cf");
   auto result = createSubFolder(
       builder.getIntN(Rvalue->getType()->getIntegerBitWidth(), 0), Rvalue,
       "neg");
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 
   auto sf = computeSignFlag(result);
   auto zf = computeZeroFlag(result);
@@ -1557,11 +1564,13 @@ FI;
 
 void lifterClass::lift_sar() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0 + (instruction.mnemonic == Mnemonic::SARX)];
-  auto count = operands[1 + (instruction.mnemonic == Mnemonic::SARX)];
-
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-  Value* countValue = GetOperandValue(count, dest.size);
+  // auto dest = operands[0 + (instruction.mnemonic == Mnemonic::SARX)];
+  // auto count = operands[1 + (instruction.mnemonic == Mnemonic::SARX)];
+  auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
+  auto count = 1 + (instruction.mnemonic == Mnemonic::SARX);
+  Value* Lvalue = GetIndexValue(dest);
+  Value* countValue = GetIndexValue(count);
+  countValue = createZExtFolder(countValue, Lvalue->getType());
 
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
@@ -1636,18 +1645,19 @@ void lifterClass::lift_sar() {
     setFlag(FLAG_OF, of);
   }
 
-  SetOperandValue(operands[0], result,
-                  std::to_string(blockInfo.runtime_address));
+  SetIndexValue(0, result);
 }
 
 // TODO fix
 void lifterClass::lift_shr() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0 + (instruction.mnemonic == Mnemonic::SHRX)];
-  auto count = operands[1 + (instruction.mnemonic == Mnemonic::SHRX)];
 
-  Value* Lvalue = GetOperandValue(dest, dest.size);
-  Value* countValue = GetOperandValue(count, dest.size);
+  auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
+  auto count = 1 + (instruction.mnemonic == Mnemonic::SARX);
+
+  Value* Lvalue = GetIndexValue(dest);
+  Value* countValue = GetIndexValue(count);
+  countValue = createZExtFolder(countValue, Lvalue->getType());
 
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
@@ -1716,17 +1726,18 @@ void lifterClass::lift_shr() {
   printvalue(Lvalue) printvalue(clampedCount) printvalue(result);
   printvalue(isNotZero) printvalue(oldcf) printvalue(cfValue);
 
-  SetOperandValue(operands[0], result,
-                  std::to_string(blockInfo.runtime_address));
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_shl() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0 + (instruction.mnemonic == Mnemonic::SHLX)];
-  auto count = operands[1 + (instruction.mnemonic == Mnemonic::SHLX)];
-  Value* Lvalue = GetOperandValue(dest, dest.size,
-                                  std::to_string(blockInfo.runtime_address));
-  Value* countValue = GetOperandValue(count, dest.size);
+
+  auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
+  auto count = 1 + (instruction.mnemonic == Mnemonic::SARX);
+  Value* Lvalue = GetIndexValue(dest);
+  Value* countValue = GetIndexValue(count);
+  countValue = createZExtFolder(countValue, Lvalue->getType());
+
   unsigned bitWidth = Lvalue->getType()->getIntegerBitWidth();
   unsigned maskC = bitWidth == 64 ? 0x3f : 0x1f;
 
@@ -1814,8 +1825,7 @@ void lifterClass::lift_shl() {
                                 oldpf);
     });
   }
-  SetOperandValue(operands[0], result,
-                  std::to_string(blockInfo.runtime_address));
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_bswap() {
