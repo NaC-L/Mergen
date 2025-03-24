@@ -1194,11 +1194,15 @@ void lifterClass::lift_sbb() {
 
   Value* Rvalue = GetIndexValue(1);
 
+  Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
+
   Value* cf = createZExtOrTruncFolder(getFlag(FLAG_CF), Rvalue->getType());
 
   Value* tmpResult = createSubFolder(Lvalue, Rvalue, "lhssubrhs");
   Value* result = createSubFolder(tmpResult, cf, "sbbTempResult");
+
   SetIndexValue(0, result);
+
   // 0, 0 (cf = 1), NEW CF = 1
   Value* newCF = createOrFolder(
       createICMPFolder(CmpInst::ICMP_ULT, Lvalue, Rvalue, "newCF"),
