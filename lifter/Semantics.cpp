@@ -1831,26 +1831,20 @@ void lifterClass::lift_shl() {
 void lifterClass::lift_bswap() {
   auto dest = operands[0];
 
-  auto Lvalue = GetOperandValue(dest, dest.size);
+  auto Lvalue = GetIndexValue(0);
   // if 16bit, 0 it
   if (dest.size == 16) {
     Value* zero = ConstantInt::get(Lvalue->getType(), 0);
-    SetOperandValue(dest, zero);
+    SetIndexValue(0, zero);
     return;
   }
   Value* newswappedvalue = ConstantInt::get(Lvalue->getType(), 0);
   Value* mask = ConstantInt::get(Lvalue->getType(), 0xff);
+
+  // use intrinsic?
+
   for (unsigned i = 0; i < Lvalue->getType()->getIntegerBitWidth() / 8; i++) {
-    // 0xff
-    // b = a & 0xff >> 0
-    // b = 0x78
-    // nb |=  b << 24
-    // nb |= 0x78000000
-    // 0xff00
-    // b = a & 0xff00 >> 8
-    // b = 0x56
-    // nb |= b << 16
-    // nb = 0x78560000
+
     auto byte =
         createLShrFolder(createAndFolder(Lvalue, mask), i * 8, "shlresultmsb");
     auto shiftby = Lvalue->getType()->getIntegerBitWidth() - (i + 1) * 8;
@@ -1859,7 +1853,7 @@ void lifterClass::lift_bswap() {
     mask = createShlFolder(mask, 8);
   }
 
-  SetOperandValue(dest, newswappedvalue);
+  SetIndexValue(0, newswappedvalue);
 }
 
 void lifterClass::lift_cmpxchg() {
