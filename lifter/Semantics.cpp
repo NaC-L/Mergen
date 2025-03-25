@@ -568,7 +568,7 @@ void lifterClass::lift_cmovcc() {
     }
 
     case Mnemonic::CMOVBE: {
-      return createAndFolder(getFlag(FLAG_CF), getFlag(FLAG_ZF));
+      return createOrFolder(getFlag(FLAG_CF), getFlag(FLAG_ZF));
     }
     case Mnemonic::CMOVNBE: {
       return createNotFolder(
