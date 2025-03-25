@@ -1862,11 +1862,11 @@ void lifterClass::lift_cmpxchg() {
   auto src = operands[1];
   auto accop = operands[2];
 
-  auto Rvalue = GetOperandValue(src, src.size);
+  auto Rvalue = GetIndexValue(0);
 
-  auto Lvalue = GetOperandValue(dest, dest.size);
+  auto Lvalue = GetIndexValue(1);
 
-  auto accum = GetOperandValue(accop, dest.size);
+  auto accum = GetIndexValue(1);
 
   auto sub = createSubFolder(accum, Lvalue);
 
@@ -1901,8 +1901,8 @@ void lifterClass::lift_cmpxchg() {
   // if zf dest = src
   auto result = createSelectFolder(zf, Rvalue, Lvalue);
   auto acc = createSelectFolder(zf, accum, Lvalue);
-  SetOperandValue(accop, acc);
-  SetOperandValue(dest, result);
+  SetIndexValue(2, acc);
+  SetIndexValue(0, result);
   setFlag(FLAG_OF, of);
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_AF, af);
@@ -1915,14 +1915,13 @@ void lifterClass::lift_xchg() {
   auto dest = operands[0];
   auto src = operands[1];
 
-  auto Rvalue = GetOperandValue(src, src.size);
-  auto Lvalue = GetOperandValue(dest, dest.size);
+  auto Rvalue = GetIndexValue(1);
+  auto Lvalue = GetIndexValue(0);
 
   printvalue(Lvalue) printvalue(Rvalue);
 
-  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
-  ;
-  SetOperandValue(src, Lvalue);
+  SetIndexValue(0, Rvalue);
+  SetIndexValue(1, Lvalue);
 }
 
 void lifterClass::lift_popcnt() {
@@ -1966,7 +1965,7 @@ void lifterClass::lift_popcnt() {
 
   setFlag(FLAG_PF, builder.getInt1(0));
 
-  SetOperandValue(dest, destV);
+  SetIndexValue(0, destV);
 }
 
 void lifterClass::lift_shld() {
