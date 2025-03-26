@@ -54,8 +54,10 @@ struct MergenDisassembledInstruction {
     uint64_t mem_disp;
     uint64_t immediate2;
   };
-  // rewrite this to also fit immediate
 
+  uint8_t stack_growth;
+
+  // TODO : 32 bit
   uint64_t immediate; //
 
   Register regs[4];
