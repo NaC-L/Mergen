@@ -1933,7 +1933,7 @@ void lifterClass::lift_popcnt() {
 
   auto destsize = builder.getIntN(dest.size, dest.size + 1);
 
-  auto srcV = GetOperandValue(src, src.size);
+  auto srcV = GetIndexValue(1);
   printvalue(srcV); // if src is 0, count 0
 
   // create intrinsic for popct
