@@ -799,6 +799,13 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
 
 Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
                                  Instruction::BinaryOps opcode) {
+
+  if (LHS->getType() != RHS->getType()) {
+    printvalue(LHS);
+    printvalue(RHS);
+    printvalueforce2(this->counter);
+  }
+
   // ideally we go cheaper to more expensive
 
   // this part will eliminate unneccesary operations
@@ -1605,7 +1612,7 @@ Value* lifterClass::GetValueFromHighByteRegister(const Register reg) {
   Value* FF = ConstantInt::get(shiftedValue->getType(), 0xff);
   Value* highByteValue = createAndFolder(shiftedValue, FF, "highByte");
 
-  return highByteValue;
+  return createTruncFolder(highByteValue, builder.getIntNTy(8));
 }
 
 void lifterClass::SetRFLAGSValue(Value* value) {
@@ -1781,6 +1788,7 @@ Value* lifterClass::GetEffectiveAddress() {
   if (instruction.mem_base != Register::None) {
     baseValue = GetRegisterValue(instruction.mem_base);
     baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
+    printvalue(baseValue);
   }
 
   Value* indexValue = nullptr;
@@ -1949,8 +1957,9 @@ void lifterClass::SetIndexValue(uint8_t index, Value* value) {
     auto reg = instruction.regs[index];
 
     // TODO: do we need to remove this sext from here?
-    value =
-        createSExtOrTruncFolder(value, builder.getIntNTy(getRegisterSize(reg)));
+    // value =
+    //    createSExtOrTruncFolder(value,
+    //    builder.getIntNTy(getRegisterSize(reg)));
 
     SetRegisterValue(reg, value);
     return;
