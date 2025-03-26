@@ -4432,6 +4432,18 @@ public:
         continue;
       }
     }
+    switch (instruction.mnemonic) {
+    case ZYDIS_MNEMONIC_PUSH: {
+      convertedInstruction.stack_growth = operands[2].size;
+      break;
+    }
+    case ZYDIS_MNEMONIC_POP: {
+      convertedInstruction.stack_growth = operands[2].size;
+      break;
+    }
+    default:
+      break;
+    };
 
     return convertedInstruction;
   };
