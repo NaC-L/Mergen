@@ -294,17 +294,17 @@ void lifterClass::lift_bextr() {
   auto source2 =
       createAndFolder(source, createZExtFolder(bitmask, source->getType()));
 
-  SetOperandValue(dst, source2);
+  SetIndexValue(0, source2);
   setFlag(FLAG_ZF, createICMPFolder(CmpInst::ICMP_EQ, source2,
                                     ConstantInt::get(source->getType(), 0)));
 }
 
 void lifterClass::lift_movs_X() {
   LLVMContext& context = builder.getContext();
-  // replace rep logic with memcopy
 
+  // replace rep logic with memcopy
   Value* DSTptrvalue = GetIndexValue(1);
-  SetOperandValue(operands[0], DSTptrvalue);
+  SetIndexValue(0, DSTptrvalue);
 
   bool isREP = (instruction.attributes & ZYDIS_ATTRIB_HAS_REP) != 0;
 
@@ -358,7 +358,7 @@ void lifterClass::lift_movs_X() {
 
       for (int i = looptime; i > 0; i--) {
         DSTptrvalue = GetIndexValue(1);
-        SetOperandValue(operands[0], DSTptrvalue);
+        SetIndexValue(0, DSTptrvalue);
 
         UpdateSRCvalue = createAddFolder(UpdateSRCvalue, Direction);
         UpdateDSTvalue = createAddFolder(UpdateDSTvalue, Direction);
@@ -390,7 +390,7 @@ void lifterClass::lift_movaps() {
 
   auto Rvalue =
       GetIndexValue(src, src.size, std::to_string(blockInfo.runtime_address));
-  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 */
 /*
@@ -414,7 +414,7 @@ void lifterClass::lift_xorps() {
   auto dest2 = createXorFolder(Rvalue.v2, Lvalue.v2);
   Rvalue.v1 = dest1;
   Rvalue.v2 = dest2;
-  SetOperandValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_movdqa() {
@@ -430,7 +430,7 @@ void lifterClass::lift_movdqa() {
       GetIndexValueFP(src, std::to_string(blockInfo.runtime_address));
   printvalue(Rvalue.v1);
   printvalue(Rvalue.v2);
-  SetOperandValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_pand() {
@@ -452,7 +452,7 @@ void lifterClass::lift_pand() {
   printvalue(Lvalue.v2);
   Rvalue.v1 = createAndFolder(Rvalue.v1, Lvalue.v1);
   Rvalue.v2 = createAndFolder(Rvalue.v2, Lvalue.v2);
-  SetOperandValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 
 void lifterClass::lift_por() {
@@ -474,7 +474,7 @@ void lifterClass::lift_por() {
   printvalue(Lvalue.v2);
   Rvalue.v1 = createOrFolder(Rvalue.v1, Lvalue.v1);
   Rvalue.v2 = createOrFolder(Rvalue.v2, Lvalue.v2);
-  SetOperandValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 void lifterClass::lift_pxor() {
   auto dest = operands[0]; // 128
@@ -495,7 +495,7 @@ void lifterClass::lift_pxor() {
   printvalue(Lvalue.v2);
   Rvalue.v1 = createXorFolder(Rvalue.v1, Lvalue.v1);
   Rvalue.v2 = createXorFolder(Rvalue.v2, Lvalue.v2);
-  SetOperandValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 */
 
@@ -540,8 +540,7 @@ void lifterClass::lift_mov() {
   case OperandType::Immediate8:
   case OperandType::Immediate16:
   case OperandType::Immediate32: {
-    Rvalue =
-        createSExtFolder(Rvalue, builder.getIntNTy(instruction.stack_growth));
+    Rvalue = createSExtFolder(Rvalue, builder.getIntNTy(operands[0].size));
     break;
   }
   default:
@@ -2357,11 +2356,11 @@ void lifterClass::lift_imul() {
     printvalue(SEsplitResult);
 
     if (initialSize == 8) {
-      SetOperandValue(operands[1], result);
+      SetIndexValue(1, result);
     } else {
 
-      SetOperandValue(operands[1], splitResult);
-      SetOperandValue(operands[2], highPartTruncated);
+      SetIndexValue(1, splitResult);
+      SetIndexValue(2, highPartTruncated);
     }
   }
 
@@ -2436,8 +2435,8 @@ void lifterClass::lift_mul() {
       result, Type::getIntNTy(context, initialSize), "splitResult");
   // if not byte operation, result goes into ?dx:?ax
 
-  SetOperandValue(dest1, splitResult);
-  SetOperandValue(dest2, highPartTruncated);
+  SetIndexValue(1, splitResult);
+  SetIndexValue(2, highPartTruncated);
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result) printvalue(highPart);
   printvalue(highPartTruncated) printvalue(splitResult) printvalue(of);
@@ -2513,11 +2512,9 @@ void lifterClass::lift_div() {
       remainder = createURemFolder(dividend, ZExtdivisor);
     }
 
-    SetOperandValue(dividendLowop,
-                    createZExtOrTruncFolder(quotient, divisor->getType()));
+    SetIndexValue(1, createZExtOrTruncFolder(quotient, divisor->getType()));
 
-    SetOperandValue(dividendHighop,
-                    createZExtOrTruncFolder(remainder, divisor->getType()));
+    SetIndexValue(2, createZExtOrTruncFolder(remainder, divisor->getType()));
   }
 
   printvalue(divisor) printvalue(dividend) printvalue(remainder)
@@ -2592,11 +2589,9 @@ void lifterClass::lift_idiv() {
     quotient = createSDivFolder(dividend, divide);
     remainder = createSRemFolder(dividend, divide);
   }
-  SetOperandValue(dividendLowop,
-                  createZExtOrTruncFolder(quotient, Rvalue->getType()));
+  SetIndexValue(1, createZExtOrTruncFolder(quotient, Rvalue->getType()));
 
-  SetOperandValue(dividendHighop,
-                  createZExtOrTruncFolder(remainder, Rvalue->getType()));
+  SetIndexValue(2, createZExtOrTruncFolder(remainder, Rvalue->getType()));
 
   printvalue(Rvalue) printvalue(dividend) printvalue(remainder)
       printvalue(quotient)
@@ -2631,7 +2626,7 @@ void lifterClass::lift_xor() {
     return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
   });
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_or() {
@@ -2666,7 +2661,7 @@ void lifterClass::lift_or() {
     return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
   });
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_and() {
@@ -2701,8 +2696,7 @@ void lifterClass::lift_and() {
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-  SetOperandValue(dest, result,
-                  "and" + std::to_string(blockInfo.runtime_address));
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_andn() {
@@ -2734,8 +2728,7 @@ void lifterClass::lift_andn() {
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-  SetOperandValue(dest, result,
-                  "and" + std::to_string(blockInfo.runtime_address));
+  SetIndexValue(0, result);
 }
 
 /*
@@ -2808,7 +2801,7 @@ void lifterClass::lift_rol() {
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 /*
@@ -2897,7 +2890,7 @@ void lifterClass::lift_ror() {
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_inc() {
@@ -2934,7 +2927,7 @@ void lifterClass::lift_inc() {
     auto sumLowerNibble = createAddFolder(destLowerNibble, srcLowerNibble);
     return createICMPFolder(CmpInst::ICMP_UGT, sumLowerNibble, lowerNibbleMask);
   });
-  SetOperandValue(operand, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_dec() {
@@ -2971,7 +2964,7 @@ void lifterClass::lift_dec() {
   auto af = createICMPFolder(CmpInst::ICMP_ULT, RvalueLowerNibble,
                              op2LowerNibble, "sub_af");
   setFlag(FLAG_AF, af);
-  SetOperandValue(operand, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_push() {
@@ -2997,7 +2990,7 @@ void lifterClass::lift_push() {
   printvalue(result);
 
   SetRegisterValue(Register::RSP, result);
-  // SetOperandValue(rsp, result, std::to_string(blockInfo.runtime_address));
+  // SetIndexValue(rsp, result, std::to_string(blockInfo.runtime_address));
   //  sub rsp 8 first,
 
   // sign extend
@@ -3015,7 +3008,7 @@ void lifterClass::lift_push() {
   }
 
   SetMemoryValue(getSPaddress(), Rvalue);
-  // SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  // SetIndexValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   // then mov rsp, val
 }
 
@@ -3033,14 +3026,14 @@ void lifterClass::lift_pushfq() {
   auto result = createSubFolder(RspValue, val);
 
   SetRegisterValue(Register::RSP, result);
-  // SetOperandValue(rsp, result, std::to_string(blockInfo.runtime_address));
+  // SetIndexValue(rsp, result, std::to_string(blockInfo.runtime_address));
   //  sub rsp 8 first,
 
   // pushFlags( dest, Rvalue,
   // std::to_string(blockInfo.runtime_address));;
 
   SetMemoryValue(getSPaddress(), Rvalue);
-  // SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  // SetIndexValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   // then mov rsp, val
 }
 
@@ -3061,8 +3054,7 @@ void lifterClass::lift_pop() {
 
   printvalue(Rvalue) printvalue(RspValue) printvalue(result);
 
-  SetOperandValue(dest, Rvalue,
-                  std::to_string(blockInfo.runtime_address)); // op
+  SetIndexValue(0, Rvalue); // op
   // mov val, rsp first
 
   Rvalue =
@@ -3080,12 +3072,11 @@ void lifterClass::lift_leave() {
 
   auto xbp = GetIndexValue(1);
 
-  SetOperandValue(dest, xbp,
-                  std::to_string(blockInfo.runtime_address)); // move xbp to xsp
+  SetIndexValue(2, xbp); // move xbp to xsp
 
   auto popstack = popStack(dest.size / 8);
 
-  SetOperandValue(src1, popstack); // then add rsp 8
+  SetIndexValue(1, popstack); // then add rsp 8
 
   // mov val, rsp first
 }
@@ -3105,7 +3096,7 @@ void lifterClass::lift_popfq() {
       RspValue, val,
       "popfq-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValue(2, Rvalue);
   // mov val, rsp first
   SetRegisterValue(Register::RSP, result); // then add rsp 8
   // then add rsp 8
@@ -3158,7 +3149,7 @@ void lifterClass::lift_adc() {
 
   setFlag(FLAG_PF, [this, result]() { return computeParityFlag(result); });
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_xadd() {
@@ -3172,9 +3163,9 @@ void lifterClass::lift_xadd() {
       Lvalue, Rvalue,
       "xadd_sum-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(src, Lvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValue(1, Lvalue);
 
-  SetOperandValue(dest, TEMP, std::to_string(blockInfo.runtime_address));
+  SetIndexValue(0, TEMP);
   /*
   TEMP := SRC + DEST;
   SRC := DEST;
@@ -3383,10 +3374,10 @@ void lifterClass::lift_cpuid() {
   Value* ecx = builder.CreateExtractValue(cpuidCall, 2, "ecx");
   Value* edx = builder.CreateExtractValue(cpuidCall, 3, "edx");
 
-  SetOperandValue(operands[0], eaxv);
-  SetOperandValue(operands[1], ebx);
-  SetOperandValue(operands[2], ecx);
-  SetOperandValue(operands[3], edx);
+  SetIndexValue(0, eaxv);
+  SetIndexValue(1, ebx);
+  SetIndexValue(2, ecx);
+  SetIndexValue(3, edx);
 }
 
 uint64_t alternative_pext(uint64_t source, uint64_t mask) {
@@ -3418,7 +3409,7 @@ void lifterClass::lift_pext() {
     printvalue(src1_c);
     printvalue(src2_c);
     printvalue2(res);
-    SetOperandValue(dest, ConstantInt::get(src1v->getType(), res));
+    SetIndexValue(0, ConstantInt::get(src1v->getType(), res));
   } else {
     Function* fakyu = cast<Function>(
         fnc->getParent()
@@ -3426,10 +3417,9 @@ void lifterClass::lift_pext() {
                                   Type::getIntNTy(fnc->getContext(), dest.size))
             .getCallee());
     auto rs = builder.CreateCall(fakyu, {src1v, src2v});
-    SetOperandValue(
-        dest,
-        createAndFolder(
-            rs, ConstantInt::get(rs->getType(),
+    SetIndexValue(0, createAndFolder(
+                         rs, ConstantInt::get(
+                                 rs->getType(),
                                  rs->getType()->getIntegerBitWidth() * 2 - 1)));
     // UNREACHABLE("lazy mf");
   }
@@ -3445,7 +3435,7 @@ void lifterClass::lift_setnz() {
   Value* result =
       createZExtFolder(createNotFolder(zf), Type::getInt8Ty(context));
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 void lifterClass::lift_seto() {
   LLVMContext& context = builder.getContext();
@@ -3456,7 +3446,7 @@ void lifterClass::lift_seto() {
 
   Value* result = createZExtFolder(of, Type::getInt8Ty(context));
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 void lifterClass::lift_setno() {
   LLVMContext& context = builder.getContext();
@@ -3469,7 +3459,7 @@ void lifterClass::lift_setno() {
 
   Value* result = createZExtFolder(notOf, Type::getInt8Ty(context));
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setnb() {
@@ -3484,7 +3474,7 @@ void lifterClass::lift_setnb() {
 
   Value* byteResult = createZExtFolder(result, Type::getInt8Ty(context));
 
-  SetOperandValue(dest, byteResult);
+  SetIndexValue(0, byteResult);
 }
 
 void lifterClass::lift_setbe() {
@@ -3498,7 +3488,7 @@ void lifterClass::lift_setbe() {
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = operands[0];
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setnbe() {
@@ -3513,7 +3503,7 @@ void lifterClass::lift_setnbe() {
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = operands[0];
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setns() {
@@ -3528,7 +3518,7 @@ void lifterClass::lift_setns() {
 
   Value* byteResult = createZExtFolder(result, Type::getInt8Ty(context));
 
-  SetOperandValue(dest, byteResult);
+  SetIndexValue(0, byteResult);
 }
 
 void lifterClass::lift_setp() {
@@ -3540,7 +3530,7 @@ void lifterClass::lift_setp() {
 
   auto dest = operands[0];
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setnp() {
@@ -3552,7 +3542,7 @@ void lifterClass::lift_setnp() {
   Value* resultValue =
       createZExtFolder(createNotFolder(pf), Type::getInt8Ty(context));
 
-  SetOperandValue(dest, resultValue, std::to_string(blockInfo.runtime_address));
+  SetIndexValue(0, resultValue);
 }
 
 void lifterClass::lift_setb() {
@@ -3564,7 +3554,7 @@ void lifterClass::lift_setb() {
 
   Value* result = createZExtFolder(cf, Type::getInt8Ty(context));
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_sets() {
@@ -3574,7 +3564,7 @@ void lifterClass::lift_sets() {
   Value* result = createZExtFolder(sf, Type::getInt8Ty(context));
 
   auto dest = operands[0];
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_stosx() {
@@ -3593,7 +3583,7 @@ void lifterClass::lift_stosx() {
   Value* result = createAddFolder(
       destValue, createMulFolder(
                      Direction, ConstantInt::get(DF->getType(), destbitwidth)));
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setz() {
@@ -3605,7 +3595,7 @@ void lifterClass::lift_setz() {
   Value* extendedZF =
       createZExtFolder(zf, Type::getInt8Ty(context), "setz_extend");
 
-  SetOperandValue(dest, extendedZF);
+  SetIndexValue(0, extendedZF);
 }
 
 void lifterClass::lift_setnle() {
@@ -3629,7 +3619,7 @@ void lifterClass::lift_setnle() {
   Value* byteResult =
       createZExtFolder(combinedCondition, Type::getInt8Ty(context));
 
-  SetOperandValue(dest, byteResult);
+  SetIndexValue(0, byteResult);
 }
 
 void lifterClass::lift_setle() {
@@ -3644,7 +3634,7 @@ void lifterClass::lift_setle() {
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = operands[0];
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setnl() {
@@ -3657,7 +3647,7 @@ void lifterClass::lift_setnl() {
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = operands[0];
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setl() {
@@ -3670,7 +3660,7 @@ void lifterClass::lift_setl() {
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
   auto dest = operands[0];
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_bt() {
@@ -3745,7 +3735,7 @@ void lifterClass::lift_btr() {
       baseVal, mask,
       "btr-and-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(base, baseVal);
+  SetIndexValue(0, baseVal);
   printvalue(bitOffset);
   printvalue(baseVal);
   printvalue(mask);
@@ -3788,7 +3778,7 @@ void lifterClass::lift_lzcnt() {
     index = createSubFolder(index, oneVal);
   }
 
-  SetOperandValue(dest, bitPosition);
+  SetIndexValue(0, bitPosition);
 }
 
 void lifterClass::lift_bsr() {
@@ -3825,7 +3815,7 @@ void lifterClass::lift_bsr() {
     index = createSubFolder(index, oneVal);
   }
 
-  SetOperandValue(dest, bitPosition);
+  SetIndexValue(0, bitPosition);
 }
 
 void lifterClass::lift_pdep() {
@@ -3874,7 +3864,7 @@ void lifterClass::lift_pdep() {
   printvalue(result);
 
   // Assign the result to the destination operand
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_blsi() {
@@ -3885,7 +3875,7 @@ void lifterClass::lift_blsi() {
   auto zero = ConstantInt::get(source->getType(), 0);
   auto temp = createAndFolder(createSubFolder(zero, source), source);
 
-  SetOperandValue(tmp, temp);
+  SetIndexValue(0, temp);
   setFlag(FLAG_ZF, computeZeroFlag(temp));
   setFlag(FLAG_SF, computeSignFlag(temp));
 }
@@ -3898,7 +3888,7 @@ void lifterClass::lift_blsr() {
   auto one = ConstantInt::get(source->getType(), 1);
   auto temp = createAndFolder(createSubFolder(source, one), source);
 
-  SetOperandValue(tmp, temp);
+  SetIndexValue(0, temp);
   setFlag(FLAG_ZF, computeZeroFlag(temp));
   setFlag(FLAG_SF, computeSignFlag(temp));
 }
@@ -3912,7 +3902,7 @@ void lifterClass::lift_blsmsk() {
   auto zero = ConstantInt::get(source->getType(), 0);
   auto temp = createXorFolder(createSubFolder(source, one), source);
 
-  SetOperandValue(tmp, temp);
+  SetIndexValue(0, temp);
   setFlag(FLAG_ZF, zero);
   setFlag(FLAG_SF, computeSignFlag(temp));
   setFlag(FLAG_CF, createICMPFolder(llvm::CmpInst::ICMP_EQ, source, zero));
@@ -3930,7 +3920,7 @@ void lifterClass::lift_bzhi() {
   auto one = ConstantInt::get(source2->getType(), 1);
   auto bitmask = createAShrFolder(createShlFolder(one, source2), source2);
   auto result = createAndFolder(source, bitmask);
-  SetOperandValue(dst, result);
+  SetIndexValue(0, result);
   setFlag(FLAG_ZF, computeZeroFlag(result));
   setFlag(FLAG_SF, computeSignFlag(result));
   setFlag(FLAG_OF, ConstantInt::get(source->getType(), 0));
@@ -3976,7 +3966,7 @@ void lifterClass::lift_bsf() {
         "updateResultOnFirstNonZeroBit"); // cond ift res(64) , i
   }
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_tzcnt() {
@@ -4018,7 +4008,7 @@ void lifterClass::lift_tzcnt() {
                                 "updateResultOnFirstNonZeroBit");
   }
 
-  SetOperandValue(dest, result);
+  SetIndexValue(0, result);
 }
 
 void lifterClass::lift_btc() {
@@ -4052,7 +4042,7 @@ void lifterClass::lift_btc() {
       baseVal, mask,
       "btc-and-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(base, baseVal);
+  SetIndexValue(0, baseVal);
   printvalue(bitOffset);
   printvalue(baseVal);
   printvalue(mask);
@@ -4187,7 +4177,7 @@ void lifterClass::lift_bts() {
                            "bts-or-" +
                                std::to_string(blockInfo.runtime_address) + "-");
 
-  SetOperandValue(base, baseVal);
+  SetIndexValue(0, baseVal);
   printvalue(bitOffset);
   printvalue(baseVal);
   printvalue(mask);
@@ -4207,7 +4197,7 @@ void lifterClass::lift_cwd() {
       ConstantInt::get(Type::getInt16Ty(context), 0),
       ConstantInt::get(Type::getInt16Ty(context), 0xFFFF), "setDX");
 
-  SetOperandValue(operands[0], dx);
+  SetIndexValue(0, dx);
 }
 
 void lifterClass::lift_cdq() {
@@ -4224,7 +4214,7 @@ void lifterClass::lift_cdq() {
       ConstantInt::get(Type::getInt32Ty(context), 0),
       ConstantInt::get(Type::getInt32Ty(context), 0xFFFFFFFF), "setEDX");
 
-  SetOperandValue(operands[0], edx);
+  SetIndexValue(0, edx);
 }
 
 void lifterClass::lift_cqo() {
@@ -4242,8 +4232,7 @@ void lifterClass::lift_cqo() {
       ConstantInt::get(Type::getInt64Ty(context), 0),
       ConstantInt::get(Type::getInt64Ty(context), 0xFFFFFFFFFFFFFFFF),
       "setRDX");
-  printvalue(rax) printvalue(signBit) printvalue(rdx)
-      SetOperandValue(operands[0], rdx);
+  printvalue(rax) printvalue(signBit) printvalue(rdx) SetIndexValue(0, rdx);
 }
 
 void lifterClass::lift_cbw() {
@@ -4253,7 +4242,7 @@ void lifterClass::lift_cbw() {
 
   Value* ax = createSExtFolder(al, Type::getInt16Ty(context), "cbw");
 
-  SetOperandValue(operands[0], ax);
+  SetIndexValue(0, ax);
 }
 
 void lifterClass::lift_cwde() {
@@ -4263,7 +4252,7 @@ void lifterClass::lift_cwde() {
   printvalue(ax);
   Value* eax = createSExtFolder(ax, Type::getInt32Ty(context), "cwde");
   printvalue(eax);
-  SetOperandValue(operands[0], eax);
+  SetIndexValue(0, eax);
 }
 
 void lifterClass::lift_cdqe() {
@@ -4274,7 +4263,7 @@ void lifterClass::lift_cdqe() {
 
   Value* rax = createSExtFolder(eax, Type::getInt64Ty(context), "cdqe");
 
-  SetOperandValue(operands[0], rax);
+  SetIndexValue(0, rax);
 }
 
 void lifterClass::liftInstructionSemantics() {
