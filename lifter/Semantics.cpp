@@ -254,10 +254,11 @@ void lifterClass::branchHelper(Value* condition, const std::string& instname,
   block->setName(instname + std::to_string(numbered));
   auto function = block->getParent();
 
-  auto dest = operands[0];
-  auto true_jump_addr = dest.imm.value.s + blockInfo.runtime_address;
+  auto true_jump_addr = instruction.immediate + blockInfo.runtime_address;
+
   Value* true_jump =
       ConstantInt::get(function->getReturnType(), true_jump_addr);
+
   auto false_jump_addr = blockInfo.runtime_address;
   Value* false_jump =
       ConstantInt::get(function->getReturnType(), false_jump_addr);
@@ -277,9 +278,12 @@ void lifterClass::branchHelper(Value* condition, const std::string& instname,
 }
 
 void lifterClass::lift_bextr() {
+  /*
   auto src2 = operands[2];
   auto src1 = operands[1];
   auto dst = operands[0];
+
+  */
   auto info = GetIndexValue(2);
   auto source = GetIndexValue(1);
 
@@ -501,8 +505,6 @@ void lifterClass::lift_pxor() {
 
 void lifterClass::lift_mov() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
 
   //  auto Rvalue2 =      GetIndexValue(src, src.size,
   //  std::to_string(blockInfo.runtime_address));
@@ -513,19 +515,19 @@ void lifterClass::lift_mov() {
   switch (instruction.mnemonic) {
   case Mnemonic::MOVSX: {
     Rvalue = createSExtFolder(
-        Rvalue, Type::getIntNTy(context, dest.size),
+        Rvalue, Type::getIntNTy(context, GetTypeSize(instruction.types[0])),
         "movsx-" + std::to_string(blockInfo.runtime_address) + "-");
     break;
   }
   case Mnemonic::MOVZX: {
     Rvalue = createZExtFolder(
-        Rvalue, Type::getIntNTy(context, dest.size),
+        Rvalue, Type::getIntNTy(context, GetTypeSize(instruction.types[0])),
         "movzx-" + std::to_string(blockInfo.runtime_address) + "-");
     break;
   }
   case Mnemonic::MOVSXD: {
     Rvalue = createSExtFolder(
-        Rvalue, Type::getIntNTy(context, dest.size),
+        Rvalue, Type::getIntNTy(context, GetTypeSize(instruction.types[0])),
         "movsxd-" + std::to_string(blockInfo.runtime_address) + "-");
     break;
   }
@@ -540,7 +542,8 @@ void lifterClass::lift_mov() {
   case OperandType::Immediate8:
   case OperandType::Immediate16:
   case OperandType::Immediate32: {
-    Rvalue = createSExtFolder(Rvalue, builder.getIntNTy(operands[0].size));
+    Rvalue = createSExtFolder(
+        Rvalue, Type::getIntNTy(context, GetTypeSize(instruction.types[0])));
     break;
   }
   default:
@@ -643,11 +646,11 @@ void lifterClass::lift_call() {
   // 1 = rip
   // 2 = register rsp
   // 3 = [rsp]
-
+  /*
   auto src = operands[0];        // value that we are pushing
   auto rsp = operands[2];        // value that we are pushing
   auto rsp_memory = operands[3]; // value that we are pushing
-
+  */
   auto RspValue = GetRegisterValue(Register::RSP);
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
@@ -678,7 +681,10 @@ void lifterClass::lift_call() {
                               // troubles later
   case OperandType::Memory32:
   case OperandType::Memory64:
-  case OperandType::Register: {
+  case OperandType::Register8:
+  case OperandType::Register16:
+  case OperandType::Register32:
+  case OperandType::Register64: {
     auto registerValue = GetIndexValue(0);
     if (!isa<ConstantInt>(registerValue)) {
 
@@ -875,7 +881,7 @@ void lifterClass::lift_ret() { // fix
 int jmpcount = 0;
 void lifterClass::lift_jmp() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   auto Value = GetIndexValue(0);
 
@@ -1196,10 +1202,10 @@ void lifterClass::lift_jnp() {
 }
 
 void lifterClass::lift_sbb() {
-
+  /*
   auto dest = operands[0];
   auto src = operands[1];
-
+*/
   Value* Lvalue = GetIndexValue(0);
 
   Value* Rvalue = GetIndexValue(1);
@@ -1270,9 +1276,10 @@ FI;
 */
 void lifterClass::lift_rcl() {
   LLVMContext& context = builder.getContext();
-
+  /*
   auto dest = operands[0];
   auto count = operands[1];
+  */
 
   auto Lvalue = GetIndexValue(0);
   auto countValue = GetIndexValue(1);
@@ -1280,15 +1287,15 @@ void lifterClass::lift_rcl() {
   countValue = createZExtFolder(countValue, Lvalue->getType());
 
   auto carryFlag = getFlag(FLAG_CF);
-
+  auto destsize = GetTypeSize(instruction.types[0]);
   // Create count mask based on operand size
   auto countmask =
-      ConstantInt::get(countValue->getType(), dest.size == 64 ? 0x3f : 0x1f);
+      ConstantInt::get(countValue->getType(), destsize == 64 ? 0x3f : 0x1f);
   auto actualCount = createAndFolder(countValue, countmask, "maskCount");
 
   // Create constants
-  auto bitWidth = ConstantInt::get(Lvalue->getType(), dest.size);
-  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), dest.size + 1);
+  auto bitWidth = ConstantInt::get(Lvalue->getType(), destsize);
+  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), destsize + 1);
   auto one = ConstantInt::get(Lvalue->getType(), 1);
   auto zero = ConstantInt::get(Lvalue->getType(), 0);
 
@@ -1296,7 +1303,7 @@ void lifterClass::lift_rcl() {
   actualCount = createURemFolder(actualCount, bitWidthplusone);
 
   // Create a double-width value to handle CF rotation
-  auto wideType = Type::getIntNTy(context, dest.size * 2);
+  auto wideType = Type::getIntNTy(context, destsize * 2);
   auto wideLvalue = createZExtFolder(Lvalue, wideType);
   auto wideCF = createZExtFolder(carryFlag, wideType);
 
@@ -1321,7 +1328,7 @@ void lifterClass::lift_rcl() {
   auto newCF = createTruncFolder(rotated, Type::getInt1Ty(context));
 
   // Calculate OF (XOR of MSB and new CF) when count is 1
-  auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
+  auto MSBpos = ConstantInt::get(Lvalue->getType(), destsize - 1);
   auto msb = createZExtOrTruncFolder(createLShrFolder(result, MSBpos),
                                      Type::getInt1Ty(context));
   auto ofDefined = createZExtOrTruncFolder(createXorFolder(msb, newCF),
@@ -1373,9 +1380,10 @@ ELIHW;
 */
 void lifterClass::lift_rcr() {
   LLVMContext& context = builder.getContext();
+  /*
   auto dest = operands[0];
   auto count = operands[1];
-
+ */
   auto Lvalue = GetIndexValue(0);
   auto countValue = GetIndexValue(1);
 
@@ -1383,15 +1391,17 @@ void lifterClass::lift_rcr() {
 
   auto carryFlag = getFlag(FLAG_CF);
 
+  auto destsize = GetTypeSize(instruction.types[0]);
+
   // Create count mask based on operand size
   auto countmask =
-      ConstantInt::get(countValue->getType(), dest.size == 64 ? 0x3f : 0x1f);
+      ConstantInt::get(countValue->getType(), destsize == 64 ? 0x3f : 0x1f);
   auto actualCount = createAndFolder(countValue, countmask, "maskCount");
 
   // Create constants
-  auto bitWidth = ConstantInt::get(Lvalue->getType(), dest.size);
-  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), dest.size + 1);
-  auto bitWidthminone = ConstantInt::get(Lvalue->getType(), dest.size - 1);
+  auto bitWidth = ConstantInt::get(Lvalue->getType(), destsize);
+  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), destsize + 1);
+  auto bitWidthminone = ConstantInt::get(Lvalue->getType(), destsize - 1);
   auto one = ConstantInt::get(Lvalue->getType(), 1);
   auto zero = ConstantInt::get(Lvalue->getType(), 0);
 
@@ -1399,13 +1409,13 @@ void lifterClass::lift_rcr() {
   actualCount = createURemFolder(actualCount, bitWidthplusone);
 
   // Create a double-width value to handle CF rotation
-  auto wideType = Type::getIntNTy(context, dest.size * 2);
+  auto wideType = Type::getIntNTy(context, destsize * 2);
   auto wideLvalue = createZExtFolder(Lvalue, wideType);
   auto wideCF = createZExtFolder(carryFlag, wideType);
 
   // Position CF at the highest bit of the original value size
   auto shiftedCF =
-      createShlFolder(wideCF, ConstantInt::get(wideType, dest.size));
+      createShlFolder(wideCF, ConstantInt::get(wideType, destsize));
   auto combinedValue = createOrFolder(wideLvalue, shiftedCF);
 
   // Perform rotation
@@ -1420,12 +1430,12 @@ void lifterClass::lift_rcr() {
   // Extract result and new CF
   auto result = createTruncFolder(rotated, Lvalue->getType());
   auto newCF = createTruncFolder(
-      createLShrFolder(rotated, ConstantInt::get(wideType, dest.size)),
+      createLShrFolder(rotated, ConstantInt::get(wideType, destsize)),
       Type::getInt1Ty(context));
 
   // Calculate OF (XOR of two most significant bits) when count is 1
-  auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
-  auto secondMSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 2);
+  auto MSBpos = ConstantInt::get(Lvalue->getType(), destsize - 1);
+  auto secondMSBpos = ConstantInt::get(Lvalue->getType(), destsize - 2);
 
   auto msb = createZExtOrTruncFolder(createLShrFolder(result, MSBpos),
                                      Type::getInt1Ty(context));
@@ -1464,7 +1474,7 @@ void lifterClass::lift_rcr() {
 
 void lifterClass::lift_not() {
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   auto Rvalue = GetIndexValue(0);
   Rvalue = createXorFolder(Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
@@ -1479,7 +1489,7 @@ void lifterClass::lift_not() {
 
 void lifterClass::lift_neg() {
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
   auto Rvalue = GetIndexValue(0);
 
   auto cf = createICMPFolder(CmpInst::ICMP_NE, Rvalue,
@@ -1839,13 +1849,15 @@ void lifterClass::lift_shl() {
 }
 
 void lifterClass::lift_bswap() {
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   auto Lvalue = GetIndexValue(0);
   // if 16bit, 0 it
 
+  auto destsize = GetTypeSize(instruction.types[0]);
+
   // smarter check for size
-  if (dest.size == 16) {
+  if (destsize == 16) {
     Value* zero = ConstantInt::get(Lvalue->getType(), 0);
     SetIndexValue(0, zero);
     return;
@@ -1870,11 +1882,11 @@ void lifterClass::lift_bswap() {
 }
 
 void lifterClass::lift_cmpxchg() {
-
-  auto dest = operands[0];
-  auto src = operands[1];
-  auto accop = operands[2];
-
+  /*
+    auto dest = operands[0];
+    auto src = operands[1];
+    auto accop = operands[2];
+   */
   auto Rvalue = GetIndexValue(0);
 
   auto Lvalue = GetIndexValue(1);
@@ -1924,9 +1936,10 @@ void lifterClass::lift_cmpxchg() {
 }
 
 void lifterClass::lift_xchg() {
-
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*
+    auto dest = operands[0];
+    auto src = operands[1];
+  */
 
   auto Rvalue = GetIndexValue(1);
   auto Lvalue = GetIndexValue(0);
@@ -1938,13 +1951,17 @@ void lifterClass::lift_xchg() {
 }
 
 void lifterClass::lift_popcnt() {
+  /*
   auto dest = operands[0]; // count
   auto src = operands[1];  // src
+   */
 
-  auto zero = builder.getIntN(dest.size, 0);
-  auto one = builder.getIntN(dest.size, 1);
+  auto destsizec = GetTypeSize(instruction.types[0]);
 
-  auto destsize = builder.getIntN(dest.size, dest.size + 1);
+  auto zero = builder.getIntN(destsizec, 0);
+  auto one = builder.getIntN(destsizec, 1);
+
+  auto destsize = builder.getIntN(destsizec, destsizec + 1);
 
   auto srcV = GetIndexValue(1);
   printvalue(srcV); // if src is 0, count 0
@@ -1983,10 +2000,12 @@ void lifterClass::lift_popcnt() {
 
 void lifterClass::lift_shld() {
   LLVMContext& context = builder.getContext();
+
+  /*
   auto dest = operands[0];
   auto source = operands[1];
   auto count = operands[2];
-
+  */
   auto Lvalue = GetIndexValue(0);
   auto sourceValue = GetIndexValue(1);
 
@@ -2052,9 +2071,10 @@ void lifterClass::lift_shld() {
 
 void lifterClass::lift_shrd() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto source = operands[1];
-  auto count = operands[2];
+
+  /*  auto dest = operands[0];
+   auto source = operands[1];
+   auto count = operands[2]; */
 
   auto Lvalue = GetIndexValue(0);
   auto sourceValue = GetIndexValue(1);
@@ -2124,12 +2144,14 @@ void lifterClass::lift_shrd() {
 }
 
 void lifterClass::lift_lea() {
+  /*
+    auto dest = operands[0];
+    auto src = operands[1]; */
 
-  auto dest = operands[0];
-  auto src = operands[1];
+  auto destsize = GetTypeSize(instruction.types[0]);
 
   auto Rvalue = createZExtOrTruncFolder(GetEffectiveAddress(),
-                                        builder.getIntNTy(dest.size));
+                                        builder.getIntNTy(destsize));
 
   printvalue(Rvalue);
 
@@ -2138,8 +2160,8 @@ void lifterClass::lift_lea() {
 
 // extract sub from this function, this is convoluted for no reason
 void lifterClass::lift_add_sub() {
-  auto dest = operands[0];
-  auto src = operands[1];
+  /* auto dest = operands[0];
+  auto src = operands[1]; */
 
   auto Lvalue = GetIndexValue(0);
   auto Rvalue = GetIndexValue(1);
@@ -2224,33 +2246,35 @@ void lifterClass::lift_add_sub() {
 
 void lifterClass::lift_imul2(bool isSigned) {
   LLVMContext& context = builder.getContext();
-  auto src = operands[0];
+  // auto src = operands[0];
   auto Rvalue = GetRegisterValue(Register::AL);
+
+  auto srcsize = GetTypeSize(instruction.types[0]);
 
   Value* Lvalue = GetIndexValue(0);
 
   if (isSigned) { // do this in a prettier way
-    Lvalue = createSExtFolder(Lvalue, Type::getIntNTy(context, src.size * 2));
+    Lvalue = createSExtFolder(Lvalue, Type::getIntNTy(context, srcsize * 2));
 
     Rvalue = createSExtOrTruncFolder(
         Rvalue, Type::getIntNTy(context,
-                                src.size)); // make sure the size is correct,
-                                            // 1 byte, GetRegisterValue doesnt
-                                            // ensure we have the correct size
+                                srcsize)); // make sure the size is correct,
+                                           // 1 byte, GetRegisterValue doesnt
+                                           // ensure we have the correct size
     Rvalue = createSExtOrTruncFolder(Rvalue, Lvalue->getType());
   } else {
-    Lvalue = createZExtFolder(Lvalue, Type::getIntNTy(context, src.size * 2));
+    Lvalue = createZExtFolder(Lvalue, Type::getIntNTy(context, srcsize * 2));
 
     Rvalue = createZExtOrTruncFolder(
         Rvalue, Type::getIntNTy(context,
-                                src.size)); // make sure the size is correct, 1
-                                            // byte, GetRegisterValue doesnt
-                                            // ensure we have the correct size
+                                srcsize)); // make sure the size is correct, 1
+                                           // byte, GetRegisterValue doesnt
+                                           // ensure we have the correct size
     Rvalue = createZExtOrTruncFolder(Rvalue, Lvalue->getType());
   }
   Value* result = createMulFolder(Rvalue, Lvalue);
   Value* lowerresult = createTruncFolder(
-      result, Type::getIntNTy(context, src.size), "lowerResult");
+      result, Type::getIntNTy(context, srcsize), "lowerResult");
   Value* of;
   Value* cf;
   if (isSigned) {
@@ -2258,9 +2282,9 @@ void lifterClass::lift_imul2(bool isSigned) {
                           createSExtFolder(lowerresult, result->getType()));
     cf = of;
   } else {
-    Value* highPart = createLShrFolder(result, src.size, "highPart");
+    Value* highPart = createLShrFolder(result, srcsize, "highPart");
     Value* highPartTruncated = createTruncFolder(
-        highPart, Type::getIntNTy(context, src.size), "truncatedHighPart");
+        highPart, Type::getIntNTy(context, srcsize), "truncatedHighPart");
     cf = createICMPFolder(CmpInst::ICMP_NE, highPartTruncated,
                           ConstantInt::get(result->getType(), 0), "cf");
     of = cf;
@@ -2282,9 +2306,11 @@ void lifterClass::lift_imul2(bool isSigned) {
 void lifterClass::lift_imul() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = 0; // dest ?
+  auto dest = 0; // dest ? ?????
 
-  if (operands[0].size == 8 && instruction.operand_count_visible == 1) {
+  auto destsize = GetTypeSize(instruction.types[0]);
+
+  if (destsize == 8 && instruction.operand_count_visible == 1) {
     lift_imul2(1);
     return;
   }
@@ -2298,7 +2324,8 @@ void lifterClass::lift_imul() {
 
   Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
 
-  uint8_t initialSize = operands[1].size;
+  auto srcsize = GetTypeSize(instruction.types[0]);
+  uint8_t initialSize = srcsize;
   printvalue2(initialSize);
   printvalue(Rvalue);
   printvalue(Lvalue);
@@ -2395,14 +2422,17 @@ void lifterClass::lift_mul() {
   */
 
   LLVMContext& context = builder.getContext();
-  auto src = operands[0];
+  // auto src = operands[0];
 
-  if (src.size == 8 && instruction.operand_count_visible == 1) {
+  auto srcsize = GetTypeSize(instruction.types[0]);
+
+  if (srcsize == 8 && instruction.operand_count_visible == 1) {
     lift_imul2(0);
     return;
   }
+  /*
   auto dest1 = operands[1]; // ax
-  auto dest2 = operands[2];
+  auto dest2 = operands[2]; */
 
   Value* Rvalue = GetIndexValue(1);
   Value* Lvalue = GetIndexValue(2);
@@ -2446,16 +2476,17 @@ void lifterClass::lift_mul() {
 void lifterClass::lift_div() {
 
   LLVMContext& context = builder.getContext();
-  auto src = operands[0];
+  // auto src = operands[0];
 
   Value *divisor, *dividend, *quotient, *remainder;
 
+  auto srcsize = GetTypeSize(instruction.types[0]);
   // When operand size is 8 bit
-  if (src.size == 8) {
+  if (srcsize == 8) {
     dividend = GetRegisterValue(Register::AX);
     divisor = GetIndexValue(0);
 
-    divisor = createZExtFolder(divisor, Type::getIntNTy(context, src.size * 2));
+    divisor = createZExtFolder(divisor, Type::getIntNTy(context, srcsize * 2));
     dividend = createZExtOrTruncFolder(dividend, divisor->getType());
 
     remainder = createURemFolder(dividend, divisor);
@@ -2463,14 +2494,14 @@ void lifterClass::lift_div() {
 
     SetRegisterValue(
         Register::AL,
-        createZExtOrTruncFolder(quotient, Type::getIntNTy(context, src.size)));
+        createZExtOrTruncFolder(quotient, Type::getIntNTy(context, srcsize)));
 
     SetRegisterValue(
         Register::AH,
-        createZExtOrTruncFolder(remainder, Type::getIntNTy(context, src.size)));
-  } else {
-    auto dividendLowop = operands[1];  // eax
-    auto dividendHighop = operands[2]; // edx
+        createZExtOrTruncFolder(remainder, Type::getIntNTy(context, srcsize)));
+  } else { /*
+     auto dividendLowop = operands[1];  // eax
+     auto dividendHighop = operands[2]; // edx */
 
     divisor = GetIndexValue(0);
 
@@ -2478,9 +2509,9 @@ void lifterClass::lift_div() {
     Value* dividendHigh = GetIndexValue(2);
 
     dividendLow =
-        createZExtFolder(dividendLow, Type::getIntNTy(context, src.size * 2));
+        createZExtFolder(dividendLow, Type::getIntNTy(context, srcsize * 2));
     dividendHigh = createZExtFolder(dividendHigh, dividendLow->getType());
-    uint8_t bitWidth = src.size;
+    uint8_t bitWidth = srcsize;
 
     dividendHigh = createShlFolder(dividendHigh, bitWidth);
 
@@ -2523,23 +2554,26 @@ void lifterClass::lift_div() {
 
 void lifterClass::lift_idiv() {
   LLVMContext& context = builder.getContext();
-  auto src = operands[0];
-  if (src.size == 8) {
+  // auto src = operands[0];
+
+  auto srcsize = GetTypeSize(instruction.types[0]);
+
+  if (srcsize == 8) {
     auto dividend = GetRegisterValue(Register::AX);
 
     Value* divisor = GetIndexValue(0);
-    divisor = createSExtFolder(divisor, Type::getIntNTy(context, src.size * 2));
+    divisor = createSExtFolder(divisor, Type::getIntNTy(context, srcsize * 2));
     dividend = createSExtOrTruncFolder(dividend, divisor->getType());
     Value* remainder = createSRemFolder(dividend, divisor);
     Value* quotient = createSDivFolder(dividend, divisor);
 
     SetRegisterValue(
         Register::AL,
-        createZExtOrTruncFolder(quotient, Type::getIntNTy(context, src.size)));
+        createZExtOrTruncFolder(quotient, Type::getIntNTy(context, srcsize)));
 
     SetRegisterValue(
         Register::AH,
-        createZExtOrTruncFolder(remainder, Type::getIntNTy(context, src.size)));
+        createZExtOrTruncFolder(remainder, Type::getIntNTy(context, srcsize)));
 
     printvalue(remainder);
     printvalue(quotient);
@@ -2547,8 +2581,8 @@ void lifterClass::lift_idiv() {
     printvalue(dividend);
     return;
   }
-  auto dividendLowop = operands[1];  // eax
-  auto dividendHighop = operands[2]; // edx
+  /*  auto dividendLowop = operands[1];  // eax
+   auto dividendHighop = operands[2]; // edx */
 
   auto Rvalue = GetIndexValue(0);
 
@@ -2558,9 +2592,9 @@ void lifterClass::lift_idiv() {
   dividendHigh = GetIndexValue(2);
 
   dividendLow =
-      createZExtFolder(dividendLow, Type::getIntNTy(context, src.size * 2));
+      createZExtFolder(dividendLow, Type::getIntNTy(context, srcsize * 2));
   dividendHigh = createZExtFolder(dividendHigh, dividendLow->getType());
-  uint8_t bitWidth = src.size;
+  uint8_t bitWidth = srcsize;
 
   dividendHigh = createShlFolder(dividendHigh, bitWidth);
   printvalue2(bitWidth);
@@ -2598,8 +2632,8 @@ void lifterClass::lift_idiv() {
 }
 
 void lifterClass::lift_xor() {
-  auto dest = operands[0];
-  auto src = operands[1];
+  /* auto dest = operands[0];
+  auto src = operands[1]; */
   auto Lvalue = GetIndexValue(0);
   auto Rvalue = GetIndexValue(1);
 
@@ -2631,8 +2665,8 @@ void lifterClass::lift_xor() {
 
 void lifterClass::lift_or() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*   auto dest = operands[0];
+    auto src = operands[1]; */
 
   auto Lvalue = GetIndexValue(0);
   auto Rvalue = GetIndexValue(1);
@@ -2666,8 +2700,8 @@ void lifterClass::lift_or() {
 
 void lifterClass::lift_and() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*  auto dest = operands[0];
+   auto src = operands[1]; */
 
   auto Lvalue = GetIndexValue(0);
   auto Rvalue = GetIndexValue(1);
@@ -2701,8 +2735,8 @@ void lifterClass::lift_and() {
 
 void lifterClass::lift_andn() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*   auto dest = operands[0];
+    auto src = operands[1]; */
   auto Lvalue = GetIndexValue(0);
   auto Rvalue = GetIndexValue(1);
 
@@ -2751,23 +2785,25 @@ FI
 */
 void lifterClass::lift_rol() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*   auto dest = operands[0];
+    auto src = operands[1]; */
+
+  auto destsize = GetTypeSize(instruction.types[0]);
 
   auto Lvalue = GetIndexValue(0);
   auto Rvalue = GetIndexValue(1);
 
   Rvalue = createZExtFolder(Rvalue, Lvalue->getType());
 
-  auto bitWidth = ConstantInt::get(Lvalue->getType(), dest.size);
-  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), dest.size + 1);
+  auto bitWidth = ConstantInt::get(Lvalue->getType(), destsize);
+  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), destsize + 1);
   auto countmask =
-      ConstantInt::get(Lvalue->getType(), dest.size == 64 ? 0x3f : 0x1f);
+      ConstantInt::get(Lvalue->getType(), destsize == 64 ? 0x3f : 0x1f);
 
   auto one = ConstantInt::get(Lvalue->getType(), 1);
   auto zero = ConstantInt::get(Lvalue->getType(), 0);
 
-  auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
+  auto MSBpos = ConstantInt::get(Lvalue->getType(), destsize - 1);
   Rvalue = createURemFolder(createAndFolder(Rvalue, countmask, "maskRvalue"),
                             bitWidth);
 
@@ -2827,10 +2863,12 @@ FI
 void lifterClass::lift_ror() {
 
   LLVMContext& context = builder.getContext();
+  /*
+    auto dest = operands[0];
 
-  auto dest = operands[0];
+    auto src = operands[1]; */
 
-  auto src = operands[1];
+  auto destsize = GetTypeSize(instruction.types[0]);
 
   auto Lvalue = GetIndexValue(0);
 
@@ -2838,20 +2876,20 @@ void lifterClass::lift_ror() {
 
   Rvalue = createZExtFolder(Rvalue, Lvalue->getType());
 
-  auto bitWidth = ConstantInt::get(Lvalue->getType(), dest.size);
+  auto bitWidth = ConstantInt::get(Lvalue->getType(), destsize);
 
-  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), dest.size + 1);
+  auto bitWidthplusone = ConstantInt::get(Lvalue->getType(), destsize + 1);
 
   auto countmask =
-      ConstantInt::get(Lvalue->getType(), dest.size == 64 ? 0x3f : 0x1f);
+      ConstantInt::get(Lvalue->getType(), destsize == 64 ? 0x3f : 0x1f);
 
   auto one = ConstantInt::get(Lvalue->getType(), 1);
 
   auto zero = ConstantInt::get(Lvalue->getType(), 0);
 
-  auto MSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 1);
+  auto MSBpos = ConstantInt::get(Lvalue->getType(), destsize - 1);
 
-  auto secondMSBpos = ConstantInt::get(Lvalue->getType(), dest.size - 2);
+  auto secondMSBpos = ConstantInt::get(Lvalue->getType(), destsize - 2);
 
   printvalue(Rvalue);
 
@@ -2894,7 +2932,7 @@ void lifterClass::lift_ror() {
 }
 
 void lifterClass::lift_inc() {
-  auto operand = operands[0];
+  // auto operand = operands[0];
 
   Value* Lvalue = GetIndexValue(0);
 
@@ -2931,7 +2969,7 @@ void lifterClass::lift_inc() {
 }
 
 void lifterClass::lift_dec() {
-  auto operand = operands[0];
+  // auto operand = operands[0];
 
   Value* Lvalue = GetIndexValue(0);
 
@@ -2969,17 +3007,19 @@ void lifterClass::lift_dec() {
 
 void lifterClass::lift_push() {
   LLVMContext& context = builder.getContext();
-  auto src = operands[0]; // value that we are pushing
+  /* auto src = operands[0]; // value that we are pushing
   auto dest = operands[2];
-  auto rsp = operands[1];
+  auto rsp = operands[1]; */
 
   auto Rvalue = GetIndexValue(0);
 
   auto RspValue = GetRegisterValue(Register::RSP);
 
+  auto destsize = instruction.stack_growth;
+
   auto val = ConstantInt::getSigned(
       Type::getInt64Ty(context),
-      dest.size / 8); // jokes on me apparently this is not a fixed value
+      destsize / 8); // jokes on me apparently this is not a fixed value
 
   auto result = createSubFolder(
       RspValue, val,
@@ -3014,15 +3054,17 @@ void lifterClass::lift_push() {
 
 void lifterClass::lift_pushfq() {
   LLVMContext& context = builder.getContext();
-  auto src = operands[2];  // value that we are pushing rflags
+  /* auto src = operands[2];  // value that we are pushing rflags
   auto dest = operands[1]; // [rsp]
-  auto rsp = operands[0];  // rsp
+  auto rsp = operands[0];  // rsp */
 
   auto Rvalue = GetIndexValue(0);
   // auto Rvalue = GetRFLAGS(builder);
   auto RspValue = GetRegisterValue(Register::RSP);
 
-  auto val = ConstantInt::get(Type::getInt64Ty(context), src.size / 8);
+  auto srcsize = 64; // based on bitness  ---
+
+  auto val = ConstantInt::get(Type::getInt64Ty(context), srcsize / 8);
   auto result = createSubFolder(RspValue, val);
 
   SetRegisterValue(Register::RSP, result);
@@ -3039,15 +3081,17 @@ void lifterClass::lift_pushfq() {
 
 void lifterClass::lift_pop() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0]; // value that we are pushing
+  /* auto dest = operands[0]; // value that we are pushing
   auto src = operands[2];
-  auto rsp = operands[1];
+  auto rsp = operands[1]; */
 
-  auto Rvalue = GetMemoryValue(getSPaddress(), dest.size); // [rsp]
+  auto destsize = instruction.stack_growth;
+
+  auto Rvalue = GetMemoryValue(getSPaddress(), destsize); // [rsp]
 
   auto RspValue = GetRegisterValue(Register::RSP);
 
-  auto val = ConstantInt::getSigned(Type::getInt64Ty(context), dest.size / 8);
+  auto val = ConstantInt::getSigned(Type::getInt64Ty(context), destsize / 8);
   auto result = createAddFolder(
       RspValue, val,
       "popping_new_rsp-" + std::to_string(blockInfo.runtime_address) + "-");
@@ -3056,17 +3100,18 @@ void lifterClass::lift_pop() {
 
   SetIndexValue(0, Rvalue); // op
   // mov val, rsp first
-
-  Rvalue =
-      createZExtFolder(Rvalue, builder.getIntNTy(instruction.stack_growth));
+  /* ???
+    Rvalue =
+        createZExtFolder(Rvalue, builder.getIntNTy(instruction.stack_growth));
+        */
   SetRegisterValue(Register::RSP, result); // then add rsp 8
 }
 
 void lifterClass::lift_leave() {
   LLVMContext& context = builder.getContext();
-  auto src2 = operands[0]; // [xsp]
-  auto src1 = operands[1]; // xbp
-  auto dest = operands[2]; // xsp
+  /*   auto src2 = operands[0]; // [xsp]
+    auto src1 = operands[1]; // xbp
+    auto dest = operands[2]; // xsp */
   // first xbp to xsp
   // then [xsp] to xbp
 
@@ -3074,7 +3119,9 @@ void lifterClass::lift_leave() {
 
   SetIndexValue(2, xbp); // move xbp to xsp
 
-  auto popstack = popStack(dest.size / 8);
+  auto destsize = GetTypeSize(instruction.types[0]);
+
+  auto popstack = popStack(destsize / 8);
 
   SetIndexValue(1, popstack); // then add rsp 8
 
@@ -3083,15 +3130,17 @@ void lifterClass::lift_leave() {
 
 void lifterClass::lift_popfq() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[2]; // value that we are pushing
-  auto src = operands[1];  // [rsp]
-  auto rsp = operands[0];  // rsp
+  /*  auto dest = operands[2]; // value that we are pushing
+   auto src = operands[1];  // [rsp]
+   auto rsp = operands[0];  // rsp */
 
-  auto Rvalue = GetMemoryValue(getSPaddress(), dest.size); // [rsp]
+  auto destsize = 64; // GetTypeSize(instruction.types[0]);
+
+  auto Rvalue = GetMemoryValue(getSPaddress(), destsize); // [rsp]
 
   auto RspValue = GetRegisterValue(Register::RSP);
 
-  auto val = ConstantInt::getSigned(Type::getInt64Ty(context), dest.size / 8);
+  auto val = ConstantInt::getSigned(Type::getInt64Ty(context), destsize / 8);
   auto result = createAddFolder(
       RspValue, val,
       "popfq-" + std::to_string(blockInfo.runtime_address) + "-");
@@ -3103,8 +3152,8 @@ void lifterClass::lift_popfq() {
 }
 
 void lifterClass::lift_adc() {
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*  auto dest = operands[0];
+   auto src = operands[1]; */
 
   Value* Lvalue = GetIndexValue(0);
   Value* Rvalue = GetIndexValue(1);
@@ -3153,8 +3202,8 @@ void lifterClass::lift_adc() {
 }
 
 void lifterClass::lift_xadd() {
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*   auto dest = operands[0];
+    auto src = operands[1]; */
 
   auto Lvalue = GetIndexValue(0);
   auto Rvalue = GetIndexValue(1);
@@ -3395,9 +3444,11 @@ uint64_t alternative_pext(uint64_t source, uint64_t mask) {
 }
 
 void lifterClass::lift_pext() {
-  const auto dest = operands[0];
-  const auto src1 = operands[1];
-  const auto src2 = operands[2];
+  /*
+   const auto dest = operands[0];
+   const auto src1 = operands[1];
+   const auto src2 = operands[2];
+   */
 
   const auto src1v = GetIndexValue(1);
   const auto src2v = GetIndexValue(2);
@@ -3411,10 +3462,12 @@ void lifterClass::lift_pext() {
     printvalue2(res);
     SetIndexValue(0, ConstantInt::get(src1v->getType(), res));
   } else {
+
+    auto destsize = GetTypeSize(instruction.types[0]);
     Function* fakyu = cast<Function>(
         fnc->getParent()
             ->getOrInsertFunction("pext",
-                                  Type::getIntNTy(fnc->getContext(), dest.size))
+                                  Type::getIntNTy(fnc->getContext(), destsize))
             .getCallee());
     auto rs = builder.CreateCall(fakyu, {src1v, src2v});
     SetIndexValue(0, createAndFolder(
@@ -3428,7 +3481,7 @@ void lifterClass::lift_pext() {
 void lifterClass::lift_setnz() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
 
@@ -3440,7 +3493,7 @@ void lifterClass::lift_setnz() {
 void lifterClass::lift_seto() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* of = getFlag(FLAG_OF);
 
@@ -3451,7 +3504,7 @@ void lifterClass::lift_seto() {
 void lifterClass::lift_setno() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* of = getFlag(FLAG_OF);
 
@@ -3465,7 +3518,7 @@ void lifterClass::lift_setno() {
 void lifterClass::lift_setnb() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* cf = getFlag(FLAG_CF);
 
@@ -3487,7 +3540,7 @@ void lifterClass::lift_setbe() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
   SetIndexValue(0, result);
 }
 
@@ -3502,14 +3555,14 @@ void lifterClass::lift_setnbe() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
   SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setns() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* sf = getFlag(FLAG_SF);
 
@@ -3528,14 +3581,14 @@ void lifterClass::lift_setp() {
 
   Value* result = createZExtFolder(pf, Type::getInt8Ty(context));
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   SetIndexValue(0, result);
 }
 
 void lifterClass::lift_setnp() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* pf = getFlag(FLAG_PF);
 
@@ -3548,7 +3601,7 @@ void lifterClass::lift_setnp() {
 void lifterClass::lift_setb() {
   LLVMContext& context = builder.getContext();
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* cf = getFlag(FLAG_CF);
 
@@ -3563,18 +3616,19 @@ void lifterClass::lift_sets() {
 
   Value* result = createZExtFolder(sf, Type::getInt8Ty(context));
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
   SetIndexValue(0, result);
 }
 
 void lifterClass::lift_stosx() {
 
-  auto dest = operands[0]; // xdi
+  // auto dest = operands[0]; // xdi
   Value* destValue = GetIndexValue(0);
   Value* DF = getFlag(FLAG_DF);
   // if df is 1, +
   // else -
-  auto destbitwidth = dest.size;
+  auto destsize = GetTypeSize(instruction.types[0]);
+  auto destbitwidth = destsize;
 
   auto one = ConstantInt::get(DF->getType(), 1);
   Value* Direction =
@@ -3588,7 +3642,7 @@ void lifterClass::lift_stosx() {
 
 void lifterClass::lift_setz() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
   printvalue(zf);
@@ -3600,7 +3654,7 @@ void lifterClass::lift_setz() {
 
 void lifterClass::lift_setnle() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
+  // auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
   Value* sf = getFlag(FLAG_SF);
@@ -3633,7 +3687,7 @@ void lifterClass::lift_setle() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
   SetIndexValue(0, result);
 }
 
@@ -3646,7 +3700,7 @@ void lifterClass::lift_setnl() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
   SetIndexValue(0, result);
 }
 
@@ -3659,15 +3713,15 @@ void lifterClass::lift_setl() {
 
   Value* result = createZExtFolder(condition, Type::getInt8Ty(context));
 
-  auto dest = operands[0];
+  // auto dest = operands[0];
   SetIndexValue(0, result);
 }
 
 void lifterClass::lift_bt() {
-
-  auto dest = operands[0];
-  auto bitIndex = operands[1];
-
+  /*
+    auto dest = operands[0];
+    auto bitIndex = operands[1];
+   */
   // If the bit base operand specifies a register, the instruction takes
   // the modulo 16, 32, or 64 of the bit offset operand (modulo size
   // depends on the mode and register size; 64-bit operands are available
@@ -3704,10 +3758,11 @@ void lifterClass::lift_bt() {
 }
 
 void lifterClass::lift_btr() {
-  auto base = operands[0];
-  auto offset = operands[1];
+  /*   auto base = operands[0];
+    auto offset = operands[1]; */
 
-  unsigned baseBitWidth = base.size;
+  auto basesize = GetTypeSize(instruction.types[0]);
+  unsigned baseBitWidth = basesize;
 
   Value* bitOffset = GetIndexValue(1);
 
@@ -3743,14 +3798,17 @@ void lifterClass::lift_btr() {
 
 void lifterClass::lift_lzcnt() {
   // check
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*   auto dest = operands[0];
+    auto src = operands[1]; */
 
   Value* Rvalue = GetIndexValue(1);
   Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
                                    ConstantInt::get(Rvalue->getType(), 0));
+
+  auto destsize = GetTypeSize(instruction.types[0]);
+
   Value* isOperandSize = createICMPFolder(
-      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), dest.size));
+      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), destsize));
   setFlag(FLAG_ZF, isZero);
   setFlag(FLAG_CF, isOperandSize);
 
@@ -3783,8 +3841,10 @@ void lifterClass::lift_lzcnt() {
 
 void lifterClass::lift_bsr() {
   // check
+  /*
   auto dest = operands[0];
   auto src = operands[1];
+  */
 
   Value* Rvalue = GetIndexValue(1);
   Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
@@ -3819,11 +3879,13 @@ void lifterClass::lift_bsr() {
 }
 
 void lifterClass::lift_pdep() {
-  auto dest = operands[0]; // destination
-  auto src = operands[1];  // source
-  auto mask = operands[2]; // mask
+  /*  auto dest = operands[0]; // destination
+   auto src = operands[1];  // source
+   auto mask = operands[2]; // mask */
 
-  unsigned operandSize = dest.size; // assuming size in bits
+  auto destsize = GetTypeSize(instruction.types[0]);
+
+  unsigned operandSize = destsize; // assuming size in bits
   Value* destV = builder.getIntN(operandSize, 0);
   auto zero = builder.getIntN(operandSize, 0);
   auto one = builder.getIntN(operandSize, 1);
@@ -3868,8 +3930,8 @@ void lifterClass::lift_pdep() {
 }
 
 void lifterClass::lift_blsi() {
-  auto tmp = operands[0];
-  auto src = operands[1];
+  /*  auto tmp = operands[0];
+   auto src = operands[1]; */
 
   Value* source = GetIndexValue(1);
   auto zero = ConstantInt::get(source->getType(), 0);
@@ -3881,8 +3943,8 @@ void lifterClass::lift_blsi() {
 }
 
 void lifterClass::lift_blsr() {
-  auto tmp = operands[0];
-  auto src = operands[1];
+  /* auto tmp = operands[0];
+  auto src = operands[1]; */
 
   Value* source = GetIndexValue(1);
   auto one = ConstantInt::get(source->getType(), 1);
@@ -3894,8 +3956,8 @@ void lifterClass::lift_blsr() {
 }
 
 void lifterClass::lift_blsmsk() {
-  auto tmp = operands[0];
-  auto src = operands[1];
+  /* auto tmp = operands[0];
+  auto src = operands[1]; */
 
   Value* source = GetIndexValue(1);
   auto one = ConstantInt::get(source->getType(), 1);
@@ -3909,9 +3971,10 @@ void lifterClass::lift_blsmsk() {
 }
 
 void lifterClass::lift_bzhi() {
+  /*
   auto dst = operands[0];
   auto src = operands[1];
-  auto src2 = operands[2]; // TOFIX: this isnt used?
+  auto src2 = operands[2]; // TOFIX: this isnt used? */
 
   Value* source = GetIndexValue(1);
 
@@ -3924,16 +3987,17 @@ void lifterClass::lift_bzhi() {
   setFlag(FLAG_ZF, computeZeroFlag(result));
   setFlag(FLAG_SF, computeSignFlag(result));
   setFlag(FLAG_OF, ConstantInt::get(source->getType(), 0));
+  auto dstsize = GetTypeSize(instruction.types[0]);
   auto CF = createICMPFolder(CmpInst::ICMP_SGE, source2,
-                             ConstantInt::get(source->getType(), dst.size - 1));
+                             ConstantInt::get(source->getType(), dstsize - 1));
   setFlag(FLAG_CF, CF);
 }
 
 void lifterClass::lift_bsf() {
   // TODOs
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*   auto dest = operands[0];
+    auto src = operands[1]; */
 
   Value* Rvalue = GetIndexValue(1);
 
@@ -3971,8 +4035,8 @@ void lifterClass::lift_bsf() {
 
 void lifterClass::lift_tzcnt() {
   LLVMContext& context = builder.getContext();
-  auto dest = operands[0];
-  auto src = operands[1];
+  /*   auto dest = operands[0];
+    auto src = operands[1]; */
 
   Value* Rvalue = GetIndexValue(1);
 
@@ -3980,8 +4044,10 @@ void lifterClass::lift_tzcnt() {
                                    ConstantInt::get(Rvalue->getType(), 0));
   setFlag(FLAG_ZF, isZero);
 
+  auto srcsize = GetTypeSize(instruction.types[1]);
+
   Value* isEq2OperandSize = createICMPFolder(
-      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), src.size));
+      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), srcsize));
 
   setFlag(FLAG_CF, isEq2OperandSize);
 
@@ -4012,10 +4078,11 @@ void lifterClass::lift_tzcnt() {
 }
 
 void lifterClass::lift_btc() {
-  auto base = operands[0];
-  auto offset = operands[1];
+  /*   auto base = operands[0];
+    auto offset = operands[1]; */
 
-  unsigned baseBitWidth = base.size;
+  auto basesize = GetTypeSize(instruction.types[0]);
+  unsigned baseBitWidth = basesize;
 
   Value* bitOffset = GetIndexValue(1);
 
@@ -4147,10 +4214,11 @@ void lifterClass::lift_cli() {
 }
 
 void lifterClass::lift_bts() {
-  auto base = operands[0];
-  auto offset = operands[1];
+  /*   auto base = operands[0];
+    auto offset = operands[1]; */
 
-  unsigned baseBitWidth = base.size;
+  auto basesize = GetTypeSize(instruction.types[0]);
+  unsigned baseBitWidth = basesize;
 
   Value* bitOffset = GetIndexValue(1);
 
