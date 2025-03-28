@@ -75,9 +75,9 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
         printvalueforce2(lifter->blockInfo.runtime_address);
         UNREACHABLE("Found Self Modifying Code! we dont support it");
       }
-
+      ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
       ZydisDecoderDecodeFull(&decoder, data + offset, 15, &(instruction),
-                             lifter->operands);
+                             operands);
 
       DominatorTreeBase<BasicBlock, false> a;
       ++(lifter->counter);
@@ -90,7 +90,7 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
         char buffer[256];
         ZyanU64 runtime_address = 0;
         ZydisFormatterFormatInstruction(
-            &formatter, &(instruction), lifter->operands,
+            &formatter, &(instruction), operands,
             lifter->instruction.operand_count_visible, &buffer[0],
             sizeof(buffer), runtime_address, ZYAN_NULL);
         const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));

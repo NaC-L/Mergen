@@ -1790,7 +1790,6 @@ Value* lifterClass::GetEffectiveAddress() {
     baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
     printvalue(baseValue);
   }
-
   Value* indexValue = nullptr;
 
   if (instruction.mem_index != Register::None) {
@@ -1815,8 +1814,10 @@ Value* lifterClass::GetEffectiveAddress() {
   }
 
   if (instruction.mem_disp) {
+
     Value* dispValue =
         ConstantInt::get(Type::getInt64Ty(context), instruction.mem_disp);
+
     effectiveAddress = createAddFolder(effectiveAddress, dispValue, "disp_set");
   }
   printvalue(effectiveAddress);
@@ -1878,7 +1879,10 @@ Value* lifterClass::GetIndexValue(uint8_t index) {
   // printvalue2(magic_enum::enum_name(type));
 
   switch (type) {
-  case OperandType::Register: {
+  case OperandType::Register8:
+  case OperandType::Register16:
+  case OperandType::Register32:
+  case OperandType::Register64: {
     auto reg = instruction.regs[index];
 
     return GetRegisterValue(reg);
@@ -1952,8 +1956,10 @@ void lifterClass::SetIndexValue(uint8_t index, Value* value) {
   auto type = instruction.types[index];
 
   switch (type) {
-
-  case OperandType::Register: {
+  case OperandType::Register8:
+  case OperandType::Register16:
+  case OperandType::Register32:
+  case OperandType::Register64: {
     auto reg = instruction.regs[index];
 
     // TODO: do we need to remove this sext from here?

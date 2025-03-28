@@ -30,8 +30,18 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
       return OperandType::Immediate64;
     }
 
-  case ZYDIS_OPERAND_TYPE_REGISTER:
-    return OperandType::Register;
+  case ZYDIS_OPERAND_TYPE_REGISTER: {
+    switch (size) {
+    case 8:
+      return OperandType::Register8;
+    case 16:
+      return OperandType::Register16;
+    case 32:
+      return OperandType::Register32;
+    case 64:
+      return OperandType::Register64;
+    }
+  }
 
   case ZYDIS_OPERAND_TYPE_MEMORY:
 
