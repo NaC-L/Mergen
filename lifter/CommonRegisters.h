@@ -1,8 +1,9 @@
 #ifndef COMMON_REGISTERS_H
 #define COMMON_REGISTERS_H
 
+#include "CommonMnemonics.h"
 #include <cstdint>
-enum RegisterInternal : uint8_t {
+enum class RegisterInternal : uint8_t {
   None = 0,
   AL,
   CL,
@@ -260,7 +261,6 @@ enum RegisterInternal : uint8_t {
   END = TMM7
 };
 
-using Register = RegisterInternal; // We ~~can~~ will have alternative enums for
-                                   // getting rid of dynamic translation
+// using Register = RegisterInternal;
 
 #endif // COMMON_REGISTERS_H

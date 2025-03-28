@@ -3,6 +3,8 @@
 
 #include "CommonMnemonics.h"
 #include "CommonRegisters.h"
+#include "ZydisDisassembler_mnemonics.h"
+#include "ZydisDisassembler_registers.h"
 #include "utils.h"
 #include <Zydis/Decoder.h>
 #include <Zydis/DecoderTypes.h>
@@ -56,7 +58,7 @@ inline uint8_t GetTypeSize(OperandType op) {
     return 64;
   }
   default: {
-    UNREACHABLE("invalid size");
+    // UNREACHABLE("invalid size");
   }
   }
   return 0;
@@ -73,7 +75,9 @@ enum class InstructionPrefix : uint8_t {
 
 // This unified structure is meant to capture common disassembly information
 // In the future, we might need to extend this
-struct MergenDisassembledInstruction {
+
+template <typename Mnemonic = Mnemonic, typename Register = Register>
+struct MergenDisassembledInstruction_base {
   // instruction mnemonic
   Mnemonic mnemonic;
 
@@ -106,6 +110,8 @@ struct MergenDisassembledInstruction {
   // std::string text;
 };
 
+using MergenDisassembledInstruction = MergenDisassembledInstruction_base<>;
+
 template <typename T>
 concept Disassembler = requires(T d, void* buffer, size_t size) {
   {
@@ -118,5 +124,4 @@ inline MergenDisassembledInstruction runDisassembler(T& dis, void* buffer,
                                                      size_t size = 15) {
   return dis.disassemble(buffer, size);
 }
-
 #endif // COMMON_DISASSEMBLER_H

@@ -1,6 +1,6 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
-#include "CommonRegisters.h"
+#include "ZydisDisassembler.hpp"
 #include <Zydis/Register.h>
 #include <map>
 #include <string>
