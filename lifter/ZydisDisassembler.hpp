@@ -2,7 +2,6 @@
 #define ZYDIS_DISASSEMBLER_H
 
 #include "CommonDisassembler.hpp"
-#include "CommonRegisters.h"
 #include "utils.h"
 #include <Zydis/Register.h>
 #include <Zydis/SharedTypes.h>
@@ -62,7 +61,7 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
   }
 }
 
-inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
+inline Mnemonic ConvertZydisToMergen2(ZydisMnemonic mnemonic) {
   switch (mnemonic) {
   case ZYDIS_MNEMONIC_AAA:
     return Mnemonic::AAA;
@@ -3653,6 +3652,13 @@ inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
   };
 };
 
+inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
+  if constexpr (std::is_same_v<Mnemonic, ZydisMnemonic>) {
+    return static_cast<Mnemonic>(mnemonic);
+  }
+  return ConvertZydisToMergen2(mnemonic);
+}
+
 inline Register getBiggestEncoding(Register reg) {
 
   switch (reg) {
@@ -3858,7 +3864,7 @@ inline uint8_t getRegisterSize(Register reg) {
   }
 }
 
-inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
+inline Register zydisRegisterToMergenRegister2(ZydisRegister reg) {
 
   switch (reg) {
   case ZYDIS_REGISTER_AL:
@@ -4366,6 +4372,13 @@ inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
   default:
     return Register::None;
   }
+}
+
+inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
+  if constexpr (std::is_same_v<Mnemonic, ZydisMnemonic>) {
+    return static_cast<Register>(reg);
+  }
+  return zydisRegisterToMergenRegister2(reg);
 }
 
 class ZydisDisassembler {

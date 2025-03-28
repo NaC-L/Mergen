@@ -2,7 +2,7 @@
 #define COMMON_MNEMONICS_H
 
 #include <cstdint>
-enum class Mnemonic : uint16_t {
+enum class MnemonicInternal : uint16_t {
   Invalid = 0,
   AAA,
   AAD,
@@ -1800,5 +1800,7 @@ enum class Mnemonic : uint16_t {
   MNEMONIC_END = XTEST,
 
 };
+
+// using Mnemonic = MnemonicInternal;
 
 #endif // COMMON_MNEMONICS_H

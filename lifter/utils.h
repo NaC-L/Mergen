@@ -9,8 +9,8 @@
 #define UNREACHABLE(msg)                                                       \
   do {                                                                         \
                                                                                \
-    llvm::outs().flush();                                                      \
-    std::cout.flush();                                                         \
+    /*llvm::outs().flush();*/                                                  \
+    /*std::cout.flush();*/                                                     \
     llvm::llvm_unreachable_internal(msg, __FILE__, __LINE__);                  \
   } while (0)
 #endif

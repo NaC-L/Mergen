@@ -138,7 +138,7 @@ public:
       assert(key >= Register::RAX && key <= Register::R15 &&
              "Key must be between RAX and R15");
 
-      return key - Register::RAX;
+      return (static_cast<int>(key) - static_cast<int>(Register::RAX));
     }
     }
   }

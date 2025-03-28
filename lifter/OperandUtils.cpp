@@ -1543,7 +1543,7 @@ void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
     } else {
       // arg->setName(ZydisRegisterGetString(zydisRegister));
       Registers[reg] = arg;
-      reg = static_cast<Register>(static_cast<Register>(reg) + 1);
+      reg = static_cast<Register>(static_cast<int>(reg) + 1);
     }
   }
   Init_Flags();
@@ -2018,102 +2018,10 @@ void lifterClass::SetIndexValue(uint8_t index, Value* value) {
 
 Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
                                     int possiblesize,
-                                    const std::string& address) {
-  LLVMContext& context = builder.getContext();
-  auto type = Type::getIntNTy(context, possiblesize);
-
-  switch (op.type) {
-  case ZYDIS_OPERAND_TYPE_REGISTER: {
-    Value* value =
-        GetRegisterValue(zydisRegisterToMergenRegister(op.reg.value));
-    auto vtype = value->getType();
-
-    if (isa<IntegerType>(vtype)) {
-      auto typeBitWidth = dyn_cast<IntegerType>(vtype)->getBitWidth();
-      if (typeBitWidth < 128)
-        value = createZExtOrTruncFolder(value, type, "trunc");
-    }
-
-    return value;
-  }
-  case ZYDIS_OPERAND_TYPE_IMMEDIATE: {
-    ConstantInt* val;
-    if (op.imm.is_signed) {
-      val = ConstantInt::getSigned(type, op.imm.value.s);
-    } else {
-      val = ConstantInt::get(context, APInt(possiblesize, op.imm.value.u)); // ?
-    }
-    return val;
-  }
-  case ZYDIS_OPERAND_TYPE_MEMORY: {
-    auto effectiveAddress = GetEffectiveAddress();
-    printvalue(effectiveAddress);
-    Type* loadType = Type::getIntNTy(context, possiblesize);
-
-    Value* memoryOperand = memoryAlloc;
-
-    /*
-    if (zydisRegisterToMergenRegister(op.mem.segment) == Register::GS)
-      memoryOperand = TEB;
-    */
-    return GetMemoryValue(effectiveAddress, possiblesize);
-  }
-  default: {
-    UNREACHABLE("operand type not implemented");
-  }
-  }
-}
+                                    const std::string& address) {}
 
 Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
-                                    const std::string& address) {
-  LLVMContext& context = builder.getContext();
-  value = simplifyValue(
-      value,
-      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
-
-  switch (op.type) {
-  case ZYDIS_OPERAND_TYPE_REGISTER: {
-    SetRegisterValue(zydisRegisterToMergenRegister(op.reg.value), value);
-    return value;
-    break;
-  }
-  case ZYDIS_OPERAND_TYPE_MEMORY: {
-
-    auto effectiveAddress = GetEffectiveAddress();
-
-    auto memoryOperand = memoryAlloc;
-
-    /*
-    if (zydisRegisterToMergenRegister(op.mem.segment) == Register::GS)
-      memoryOperand = TEB;
-    */
-
-    Value* pointer =
-        createGEPFolder(Type::getInt8Ty(context), memoryOperand,
-                        effectiveAddress, "GEPSTORE-" + address + "-");
-
-    pointer = simplifyValue(
-        pointer,
-        builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
-
-    Value* store = builder.CreateStore(value, pointer);
-
-    printvalue(effectiveAddress) printvalue(pointer);
-    // if effectiveAddress is not pointing at stack, its probably self
-    // modifying code if effectiveAddress and value is consant we can
-    // say its a self modifying code and modify the binary
-
-    insertMemoryOp(cast<StoreInst>(store));
-
-    return store;
-  } break;
-
-  default: {
-    UNREACHABLE("operand type not implemented");
-    // return nullptr;
-  }
-  }
-}
+                                    const std::string& address) {}
 
 Value* getMemoryFromValue(IRBuilder<llvm::InstSimplifyFolder>& builder,
                           Value* value) {
