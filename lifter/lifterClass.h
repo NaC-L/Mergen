@@ -250,7 +250,8 @@ public:
   // unique
 
   MergenDisassembledInstruction instruction;
-  ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+
+  // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
   llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
   llvm::DenseMap<uint64_t, ValueByteReference> buffer;
   using flagManager = std::array<LazyValue, FLAGS_END>;

@@ -3,18 +3,23 @@
 
 #include "CommonMnemonics.h"
 #include "CommonRegisters.h"
+#include "utils.h"
 #include <Zydis/Decoder.h>
 #include <Zydis/DecoderTypes.h>
 #include <Zydis/Mnemonic.h>
 #include <Zydis/SharedTypes.h>
 #include <concepts>
 #include <cstdint>
+#include <iostream>
 
 // #include <string>
 
 enum class OperandType : uint8_t {
   Invalid,
-  Register,
+  Register8,
+  Register16,
+  Register32,
+  Register64,
   Memory8,
   Memory16,
   Memory32,
@@ -26,6 +31,36 @@ enum class OperandType : uint8_t {
   Immediate64,
   End = Immediate64
 };
+
+inline uint8_t GetTypeSize(OperandType op) {
+  switch (op) {
+  case OperandType::Register8:
+  case OperandType::Memory8:
+  case OperandType::Immediate8:
+  case OperandType::Immediate8_2nd: {
+    return 8;
+  }
+  case OperandType::Register16:
+  case OperandType::Memory16:
+  case OperandType::Immediate16: {
+    return 16;
+  }
+  case OperandType::Register32:
+  case OperandType::Memory32:
+  case OperandType::Immediate32: {
+    return 32;
+  }
+  case OperandType::Register64:
+  case OperandType::Memory64:
+  case OperandType::Immediate64: {
+    return 64;
+  }
+  default: {
+    UNREACHABLE("invalid size");
+  }
+  }
+  return 0;
+}
 
 enum class InstructionPrefix : uint8_t {
   None = 0,
