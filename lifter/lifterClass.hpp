@@ -1,7 +1,7 @@
 #ifndef LIFTERCLASS_H
 #define LIFTERCLASS_H
 #include "CommonDisassembler.hpp"
-#include "FunctionSignatures.h"
+#include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
@@ -93,7 +93,7 @@ public:
   Value* v2;
 };
 
-class RegisterManager {
+template <typename Register> class RegisterManager {
 public:
   enum RegisterIndex {
     RAX_ = 0,
@@ -238,8 +238,24 @@ public:
   }
 };
 
+// This tanks compile time. Proper way to do it would be extracting functions
+// that dont rely on templates to a seperate class. However, to do that, we
+// would need to create a simplistic IR to translate so functions would have a
+// "generic" value to return. Considering we want to be able to lift into
+// different IR's in the future, it will be a future problem.
+//
+
+// Also, concepts are not properly utilized...
+
+// Core lifter
+
+template <typename Mnemonic = MnemonicZydis, typename Register = RegisterZydis,
+          template <typename, typename> class DisassemblerBase =
+              ZydisDisassembler>
 class lifterClass {
 public:
+  using Disassembler = DisassemblerBase<Mnemonic, Register>;
+
   llvm::IRBuilder<llvm::InstSimplifyFolder>& builder;
   BBInfo blockInfo;
   uint64_t runtime_address_prev;
@@ -249,7 +265,14 @@ public:
   uint32_t counter = 0;
   // unique
 
-  MergenDisassembledInstruction instruction;
+  funcsignatures<Register> signatures;
+  MergenDisassembledInstruction_base<Mnemonic, Register> instruction;
+
+  Disassembler dis;
+
+  void runDisassembler(void* buffer, size_t size = 15) {
+    instruction = dis.disassemble(buffer, size);
+  }
 
   // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
   llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
@@ -258,7 +281,7 @@ public:
   // llvm::DenseMap<Value*, flagManager> flagbuffer;
 
   flagManager FlagList;
-  RegisterManager Registers;
+  RegisterManager<Register> Registers;
   // RegisterManagerFP RegistersFP;
 
   llvm::DomConditionCache* DC = new llvm::DomConditionCache();
@@ -312,17 +335,17 @@ public:
       }
     };
   };
-  llvm::DenseMap<GEPinfo, Value*, GEPinfo::GEPinfoKeyInfo> GEPcache;
+  llvm::DenseMap<GEPinfo, Value*, typename GEPinfo::GEPinfoKeyInfo> GEPcache;
   std::vector<llvm::Instruction*> memInfos;
 
   // global
-  llvm::Value* memory;
-  llvm::Value* TEB;
+  llvm::Value* memoryAlloc;
   llvm::Function* fnc;
 
   lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>& irbuilder,
               uint64_t runtime_addr = 0)
       : builder(irbuilder) {
+
     InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
   };
 
@@ -350,11 +373,9 @@ public:
         BIlist(other.BIlist), // Deep copy handled by vector's copy constructor
         cache(other.cache), // Deep copy handled by DenseMap's copy constructor
         memInfos(
-            other.memInfos),  // Deep copy handled by vector's copy constructor
-        memory(other.memory), // Shallow copy of the pointer
-        TEB(other.TEB),       // Shallow copy of the pointer
-        fnc(other.fnc)        // Shallow copy of the pointer
-  {}
+            other.memInfos), // Deep copy handled by vector's copy constructor
+        memoryAlloc(other.memoryAlloc), // Shallow copy of the pointer
+        fnc(other.fnc) {}
 
   void liftInstruction();
   void liftInstructionSemantics();
@@ -387,6 +408,11 @@ public:
   llvm::Value* SetValueToSubRegister_8b(const Register reg, llvm::Value* value);
   llvm::Value* SetValueToSubRegister_16b(const Register reg,
                                          llvm::Value* value);
+
+  // this actually might be a good reason for static polymorphism, since
+  // current implementation cant be encapsulated in a class very efficently
+  void createMemcpy(llvm::Value* src, llvm::Value* dest, llvm::Value* size);
+
   void SetRegisterValue(const Register key, llvm::Value* value);
   void SetMemoryValue(llvm::Value* address, llvm::Value* value);
   void SetRFLAGSValue(llvm::Value* value);
@@ -420,13 +446,15 @@ public:
   // end getters-setters
   // misc
   llvm::Value* callFunctionIR(const std::string& functionName,
-                              funcsignatures::functioninfo* funcInfo);
+                              funcsignatures<Register>::functioninfo* funcInfo);
   llvm::Value* GetEffectiveAddress();
   llvm::Value* getPointer(llvm::Value* value);
 
-  std::vector<llvm::Value*> parseArgs(funcsignatures::functioninfo* funcInfo);
-  llvm::FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
-                                    llvm::LLVMContext& context);
+  std::vector<llvm::Value*>
+  parseArgs(funcsignatures<Register>::functioninfo* funcInfo);
+  llvm::FunctionType*
+  parseArgsType(funcsignatures<Register>::functioninfo* funcInfo,
+                llvm::LLVMContext& context);
 
   llvm::Value* computeSignFlag(Value* value);
   llvm::Value* computeZeroFlag(Value* value);
@@ -718,7 +746,7 @@ public:
   */
   // end semantics definition
 };
-extern std::vector<lifterClass*> lifters;
+extern std::vector<lifterClass<>*> lifters;
 
 #undef DEFINE_FUNCTION
 #endif // LIFTERCLASS_H

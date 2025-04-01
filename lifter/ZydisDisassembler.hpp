@@ -2,9 +2,14 @@
 #define ZYDIS_DISASSEMBLER_H
 
 #include "CommonDisassembler.hpp"
+#include "CommonMnemonics.h"
+#include "CommonRegisters.h"
+#include "ZydisDisassembler_mnemonics.h"
 #include "utils.h"
 #include <Zydis/Register.h>
 #include <Zydis/SharedTypes.h>
+#include <Zydis/Zydis.h>
+
 #include <magic_enum/magic_enum.hpp>
 
 // todo, fix names
@@ -60,7 +65,7 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
     return OperandType::Invalid;
   }
 }
-
+template <typename Mnemonic>
 inline Mnemonic ConvertZydisToMergen2(ZydisMnemonic mnemonic) {
   switch (mnemonic) {
   case ZYDIS_MNEMONIC_AAA:
@@ -3652,14 +3657,15 @@ inline Mnemonic ConvertZydisToMergen2(ZydisMnemonic mnemonic) {
   };
 };
 
+template <typename Mnemonic>
 inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
-  if constexpr (std::is_same_v<Mnemonic, ZydisMnemonic>) {
+  if constexpr (std::is_same_v<Mnemonic, MnemonicZydis>) {
     return static_cast<Mnemonic>(mnemonic);
   }
-  return ConvertZydisToMergen2(mnemonic);
+  return ConvertZydisToMergen2<Mnemonic>(mnemonic);
 }
 
-inline Register getBiggestEncoding(Register reg) {
+template <typename Register> inline Register getBiggestEncoding(Register reg) {
 
   switch (reg) {
 
@@ -3776,7 +3782,7 @@ inline Register getBiggestEncoding(Register reg) {
   }
 }
 
-inline uint8_t getRegisterSize(Register reg) {
+template <typename Register> inline uint8_t getRegisterSize(Register reg) {
 
   switch (reg) {
 
@@ -3864,6 +3870,7 @@ inline uint8_t getRegisterSize(Register reg) {
   }
 }
 
+template <typename Register>
 inline Register zydisRegisterToMergenRegister2(ZydisRegister reg) {
 
   switch (reg) {
@@ -4374,38 +4381,53 @@ inline Register zydisRegisterToMergenRegister2(ZydisRegister reg) {
   }
 }
 
+template <typename Register>
 inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
-  if constexpr (std::is_same_v<Mnemonic, ZydisMnemonic>) {
-    return static_cast<Register>(reg);
+  if constexpr (std::is_same_v<Register, RegisterZydis>) {
+
+    return static_cast<RegisterZydis>(reg);
   }
-  return zydisRegisterToMergenRegister2(reg);
+  return zydisRegisterToMergenRegister2<Register>(reg);
 }
 
-class ZydisDisassembler {
+struct a {
+  ZydisDecoder decoder;
+};
+
+template <typename Mnemonic, typename Register> class ZydisDisassembler {
 private:
   ZydisDecoder decoder;
 
 public:
+  ZydisDisassembler() {
+
+    ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64,
+                     ZYDIS_STACK_WIDTH_64);
+  };
+
   ZydisDisassembler(bool is64Bit) {
+
     ZydisDecoderInit(&decoder,
                      is64Bit ? ZYDIS_MACHINE_MODE_LONG_64
                              : ZYDIS_MACHINE_MODE_LEGACY_32,
                      is64Bit ? ZYDIS_STACK_WIDTH_64 : ZYDIS_STACK_WIDTH_32);
   };
 
-  MergenDisassembledInstruction disassemble(void* buffer, size_t size = 15) {
+  MergenDisassembledInstruction_base<Mnemonic, Register>
+  disassemble(void* buffer, size_t size = 15) {
     ZydisDecodedInstruction instruction;
 
     ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 
     ZydisDecoderDecodeFull(&decoder, buffer, size, &instruction, operands);
 
-    auto convertedInstruction = MergenDisassembledInstruction{
-        .mnemonic = ConvertZydisToMergen(instruction.mnemonic),
-        .attributes = instruction.attributes,
-        .length = instruction.length,
-        .operand_count_visible = instruction.operand_count_visible,
-    };
+    auto convertedInstruction =
+        MergenDisassembledInstruction_base<Mnemonic, Register>{
+            .mnemonic = ConvertZydisToMergen<Mnemonic>(instruction.mnemonic),
+            .attributes = instruction.attributes,
+            .length = instruction.length,
+            .operand_count_visible = instruction.operand_count_visible,
+        };
     bool secondimm = false;
 
     for (int i = 0; i < 4; i++) {
@@ -4419,16 +4441,19 @@ public:
       if (operands[i].visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
         continue;
       */
+      // printvalue2(i);
       convertedInstruction.types[i] =
           zydisTypeToMergenType(op.type, op.size, secondimm);
 
+      // printvalue2(magic_enum::enum_name(op.type));
+
       if (op.type == ZYDIS_OPERAND_TYPE_REGISTER) {
 
-        printvalue2(op.reg.value);
-        printvalue2(magic_enum::enum_name(op.reg.value));
+        // printvalue2(op.reg.value);
+        // printvalue2(magic_enum::enum_name(op.reg.value));
 
         convertedInstruction.regs[i] =
-            zydisRegisterToMergenRegister(op.reg.value);
+            zydisRegisterToMergenRegister<Register>(op.reg.value);
 
         continue;
       }
@@ -4442,12 +4467,23 @@ public:
 
       if (op.type == ZYDIS_OPERAND_TYPE_MEMORY) {
 
+        // with push, pop, implicit/hidden rsp fucks this up.
+        // skip all implicit memory operands.
+        // printvalue2(magic_enum::enum_name(op.visibility));
+        if (op.visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
+          continue;
+
         convertedInstruction.mem_base =
-            zydisRegisterToMergenRegister(op.mem.base);
+            zydisRegisterToMergenRegister<Register>(op.mem.base);
 
         convertedInstruction.mem_index =
-            zydisRegisterToMergenRegister(op.mem.index);
+            zydisRegisterToMergenRegister<Register>(op.mem.index);
 
+        // printvalue2(op.mem.base);
+
+        // printvalue2(op.mem.index);
+
+        // printvalue2(op.mem.disp.value);
         convertedInstruction.mem_disp = op.mem.disp.value;
 
         convertedInstruction.mem_scale = op.mem.scale;
@@ -4467,6 +4503,24 @@ public:
     default:
       break;
     };
+
+#ifndef _NODEV
+    debugging::doIfDebug([&]() {
+      ZydisFormatter formatter;
+
+      ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+      char buffer[256];
+
+      ZyanU64 runtime_address = 0;
+
+      ZydisFormatterFormatInstruction(&formatter, &(instruction), operands,
+                                      instruction.operand_count_visible,
+                                      &buffer[0], sizeof(buffer),
+                                      runtime_address, ZYAN_NULL);
+
+      convertedInstruction.text = std::string(buffer);
+    });
+#endif
 
     return convertedInstruction;
   };

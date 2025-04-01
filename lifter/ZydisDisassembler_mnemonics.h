@@ -1802,6 +1802,6 @@ enum class MnemonicZydis : uint16_t {
   MNEMONIC_END = XTEST
 };
 
-using Mnemonic = MnemonicZydis;
+// using Mnemonic = MnemonicZydis;
 
 #endif // MNEMONICS_ZYDIS_H

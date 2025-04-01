@@ -1,7 +1,6 @@
 #ifndef COMMON_REGISTERS_H
 #define COMMON_REGISTERS_H
 
-#include "CommonMnemonics.h"
 #include <cstdint>
 enum class RegisterInternal : uint8_t {
   None = 0,
@@ -261,6 +260,6 @@ enum class RegisterInternal : uint8_t {
   END = TMM7
 };
 
-// using Register = RegisterInternal;
+// using RegisterPlaceholder = RegisterInternal;
 
 #endif // COMMON_REGISTERS_H

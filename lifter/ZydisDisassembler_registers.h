@@ -260,6 +260,6 @@ enum class RegisterZydis : uint16_t {
 
 };
 
-using Register = RegisterZydis;
+using RegisterPlaceholder = RegisterZydis;
 
 #endif // REGISTERS_ZYDIS_H

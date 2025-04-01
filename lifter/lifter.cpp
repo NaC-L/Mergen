@@ -1,11 +1,12 @@
 
+#include "CommonMnemonics.h"
 #include "CommonRegisters.h"
-#include "FunctionSignatures.h"
+#include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
 #include "includes.h"
-#include "lifterClass.h"
+#include "lifterClass.hpp"
 #include "nt/nt_headers.hpp"
 // #include "test_instructions.h"
 #include "utils.h"
@@ -18,12 +19,16 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/Analysis/LazyCallGraph.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/IRBuilderFolder.h>
 #include <llvm/Support/NativeFormatting.h>
 #include <magic_enum/magic_enum.hpp>
 
+#include "OperandUtils.ipp"
+#include "Semantics.ipp"
+
 // #define TEST
-std::vector<lifterClass*> lifters;
+std::vector<lifterClass<>*> lifters;
 uint64_t original_address = 0;
 unsigned int pathNo = 0;
 // consider having this function in a class, later we can use multi-threading to
@@ -44,7 +49,7 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
                    is64Bit ? ZYDIS_STACK_WIDTH_64 : ZYDIS_STACK_WIDTH_32);
   auto addr = 0;
 
-  ZydisDisassembler disas(true);
+  ZydisDisassembler<MnemonicZydis, RegisterZydis> disas(true);
 
   // Initialize the context structure
 
@@ -69,39 +74,56 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
     lifter->run = 1;
     while ((lifter->run && !lifter->finished)) {
 
-      ZydisDecodedInstruction instruction;
+      // ZydisDecodedInstruction instruction;
 
       if (BinaryOperations::isWrittenTo(lifter->blockInfo.runtime_address)) {
         printvalueforce2(lifter->blockInfo.runtime_address);
         UNREACHABLE("Found Self Modifying Code! we dont support it");
       }
-      ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-      ZydisDecoderDecodeFull(&decoder, data + offset, 15, &(instruction),
-                             operands);
-
-      DominatorTreeBase<BasicBlock, false> a;
       ++(lifter->counter);
       auto counter = debugging::increaseInstCounter() - 1;
+      /*
+      ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+       ZydisDecoderDecodeFull(&decoder, data + offset, 15, &(instruction),
+                              operands);
 
-      debugging::doIfDebug([&]() {
-        ZydisFormatter formatter;
 
-        ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
-        char buffer[256];
-        ZyanU64 runtime_address = 0;
-        ZydisFormatterFormatInstruction(
-            &formatter, &(instruction), operands,
-            lifter->instruction.operand_count_visible, &buffer[0],
-            sizeof(buffer), runtime_address, ZYAN_NULL);
-        const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));
-        printvalue2(ct);
-        const auto inst = buffer;
-        printvalue2(inst);
-        const auto runtime = lifter->blockInfo.runtime_address;
-        printvalue2(runtime);
-      });
 
-      lifter->instruction = runDisassembler(disas, data + offset);
+       debugging::doIfDebug([&]() {
+         ZydisFormatter formatter;
+
+         ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+         char buffer[256];
+         ZyanU64 runtime_address = 0;
+         ZydisFormatterFormatInstruction(
+             &formatter, &(instruction), operands,
+             lifter->instruction.operand_count_visible, &buffer[0],
+             sizeof(buffer), runtime_address, ZYAN_NULL);
+         const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));
+         printvalue2(ct);
+         const auto inst = buffer;
+         printvalue2(inst);
+         const auto runtime = lifter->blockInfo.runtime_address;
+         printvalue2(runtime);
+       });
+       */
+
+      lifter->runDisassembler(data + offset);
+
+      const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));
+      const auto runtime_address =
+          (llvm::format_hex_no_prefix(lifter->blockInfo.runtime_address, 0));
+
+      printvalue2(ct);
+      printvalue2(runtime_address);
+
+#ifndef _NODEV
+      debugging::doIfDebug([&]() { printvalue2(lifter->instruction.text); });
+#endif
+
+      // printvalue2(lifter->instruction.text);
+
+      // lifter->instruction = runDisassembler(disas, data + offset);
 
       lifter->blockInfo.runtime_address += lifter->instruction.length;
 
@@ -131,7 +153,7 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
         break;
       }
 
-      offset += instruction.length;
+      offset += lifter->instruction.length;
     }
   }
 }
@@ -239,9 +261,9 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
 
   original_address = processHeaders(fileBase + dosHeader->e_lfanew);
 
-  funcsignatures::search_signatures(fileData);
-  funcsignatures::createOffsetMap(); // ?
-  for (const auto& [key, value] : funcsignatures::siglookup) {
+  main->signatures.search_signatures(fileData);
+  main->signatures.createOffsetMap(); // ?
+  for (const auto& [key, value] : main->signatures.siglookup) {
     value.display();
   }
   auto ms = timer::getTimer();

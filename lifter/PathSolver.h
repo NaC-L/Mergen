@@ -7,6 +7,9 @@ enum PATH_info {
   PATH_solved = 1,
 };
 
+PATH_info getConstraintVal(llvm::Function* function, llvm::Value* constraint,
+                           uint64_t& dest);
+
 void final_optpass(llvm::Function* clonedFuncx);
 
 PATH_info solvePath(llvm::Function* function, uint64_t& dest,
