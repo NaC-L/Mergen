@@ -76,7 +76,8 @@ enum class InstructionPrefix : uint8_t {
 // This unified structure is meant to capture common disassembly information
 // In the future, we might need to extend this
 
-template <typename Mnemonic = Mnemonic, typename Register = Register>
+template <typename Mnemonic = MnemonicInternal,
+          typename Register = RegisterInternal>
 struct MergenDisassembledInstruction_base {
   // instruction mnemonic
   Mnemonic mnemonic;
@@ -107,21 +108,27 @@ struct MergenDisassembledInstruction_base {
 
   uint8_t length;
   uint8_t operand_count_visible;
-  // std::string text;
+
+#ifndef _NODEV
+  std::string text;
+#endif
 };
 
-using MergenDisassembledInstruction = MergenDisassembledInstruction_base<>;
+// using MergenDisassembledInstruction = MergenDisassembledInstruction_base<>;
 
-template <typename T>
+template <typename T, typename T2, typename T3>
 concept Disassembler = requires(T d, void* buffer, size_t size) {
   {
     d.disassemble(buffer, size)
-  } -> std::same_as<MergenDisassembledInstruction>;
+  } -> std::same_as<MergenDisassembledInstruction_base<T2, T3>>;
 };
 
-template <Disassembler T>
-inline MergenDisassembledInstruction runDisassembler(T& dis, void* buffer,
-                                                     size_t size = 15) {
+template <typename T, typename T2 = MnemonicInternal,
+          typename T3 = RegisterInternal>
+  requires Disassembler<T, T2, T3>
+inline MergenDisassembledInstruction_base<T2, T3>
+runDisassembler(T& dis, void* buffer, size_t size = 15) {
   return dis.disassemble(buffer, size);
 }
+
 #endif // COMMON_DISASSEMBLER_H

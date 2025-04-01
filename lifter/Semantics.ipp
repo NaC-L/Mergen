@@ -1,12 +1,13 @@
 ﻿#include "CommonDisassembler.hpp"
 #include "CommonMnemonics.h"
-#include "FunctionSignatures.h"
+#include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
-#include "OperandUtils.h"
+#include "OperandUtils.ipp"
 #include "includes.h"
-#include "lifterClass.h"
+#include "lifterClass.hpp"
 #include "utils.h"
 #include <Zycore/Types.h>
+#include <Zydis/SharedTypes.h>
 #include <immintrin.h>
 #include <iostream>
 #include <llvm/IR/Constant.h>
@@ -24,8 +25,10 @@
 
 using namespace llvm;
 
-FunctionType* lifterClass::parseArgsType(funcsignatures::functioninfo* funcInfo,
-                                         LLVMContext& context) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+FunctionType* lifterClass<Mnemonic, Register, T3>::parseArgsType(
+    funcsignatures<Register>::functioninfo* funcInfo, LLVMContext& context) {
   if (!funcInfo) {
     FunctionType* externFuncType = FunctionType::get(
         Type::getInt64Ty(context),
@@ -56,8 +59,10 @@ FunctionType* lifterClass::parseArgsType(funcsignatures::functioninfo* funcInfo,
                                  false);
 }
 
-std::vector<Value*>
-lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+std::vector<Value*> lifterClass<Mnemonic, Register, T3>::parseArgs(
+    funcsignatures<Register>::functioninfo* funcInfo) {
   auto& context = builder.getContext();
 
   auto RspRegister = GetRegisterValue(Register::RSP);
@@ -95,7 +100,7 @@ lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
                              Type::getInt64Ty(context)),
             createZExtFolder(GetRegisterValue(Register::R15),
                              Type::getInt64Ty(context)),
-            getMemory()};
+            memoryAlloc};
 
   std::vector<Value*> args;
   for (const auto& arg : funcInfo->args) {
@@ -111,13 +116,16 @@ lifterClass::parseArgs(funcsignatures::functioninfo* funcInfo) {
 }
 
 // probably move this stuff somewhere else
-Value* lifterClass::callFunctionIR(const std::string& functionName,
-                                   funcsignatures::functioninfo* funcInfo) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::callFunctionIR(
+    const std::string& functionName,
+    funcsignatures<Register>::functioninfo* funcInfo) {
   auto& context = builder.getContext();
 
   if (!funcInfo) {
     // try to get funcinfo from name
-    funcInfo = funcsignatures::getFunctionInfo(functionName);
+    funcInfo = signatures.getFunctionInfo(functionName);
   }
   FunctionType* externFuncType = parseArgsType(funcInfo, context);
   auto M = builder.GetInsertBlock()->getParent()->getParent();
@@ -138,9 +146,10 @@ Value* lifterClass::callFunctionIR(const std::string& functionName,
   // check if the function is exit or something similar to that
   return callresult;
 }
-
-Value* lifterClass::computeOverflowFlagAdc(Value* Lvalue, Value* Rvalue,
-                                           Value* cf, Value* add) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::computeOverflowFlagAdc(
+    Value* Lvalue, Value* Rvalue, Value* cf, Value* add) {
   auto cfc = createZExtOrTruncFolder(cf, add->getType(), "ofadc1");
   auto ofAdd = createAddFolder(add, cfc, "ofadc2");
   auto xor0 = createXorFolder(Lvalue, ofAdd, "ofadc3");
@@ -149,27 +158,30 @@ Value* lifterClass::computeOverflowFlagAdc(Value* Lvalue, Value* Rvalue,
   return createICMPFolder(CmpInst::ICMP_SLT, ofAnd,
                           ConstantInt::get(ofAnd->getType(), 0), "ofadc6");
 }
-
-Value* lifterClass::computeOverflowFlagAdd(Value* Lvalue, Value* Rvalue,
-                                           Value* add) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::computeOverflowFlagAdd(
+    Value* Lvalue, Value* Rvalue, Value* add) {
   auto xor0 = createXorFolder(Lvalue, add, "ofadd");
   auto xor1 = createXorFolder(Rvalue, add, "ofadd1");
   auto ofAnd = createAndFolder(xor0, xor1, "ofadd2");
   return createICMPFolder(CmpInst::ICMP_SLT, ofAnd,
                           ConstantInt::get(ofAnd->getType(), 0), "ofadd3");
 }
-
-Value* lifterClass::computeOverflowFlagSub(Value* Lvalue, Value* Rvalue,
-                                           Value* sub) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::computeOverflowFlagSub(
+    Value* Lvalue, Value* Rvalue, Value* sub) {
   auto xor0 = createXorFolder(Lvalue, Rvalue, "ofsub");
   auto xor1 = createXorFolder(Lvalue, sub, "ofsub1");
   auto ofAnd = createAndFolder(xor0, xor1, "ofsub2");
   return createICMPFolder(CmpInst::ICMP_SLT, ofAnd,
                           ConstantInt::get(ofAnd->getType(), 0), "ofsub3");
 }
-
-Value* lifterClass::computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue,
-                                           Value* cf, Value* sub) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::computeOverflowFlagSbb(
+    Value* Lvalue, Value* Rvalue, Value* cf, Value* sub) {
 
   auto bitWidth = Lvalue->getType()->getIntegerBitWidth();
   auto signBit = builder.getIntN(bitWidth, bitWidth - 1);
@@ -186,9 +198,11 @@ Value* lifterClass::computeOverflowFlagSbb(Value* Lvalue, Value* Rvalue,
                           ConstantInt::get(result_idk3->getType(), 2),
                           "ofsbb5");
 }
-
-Value* lifterClass::computeAuxFlag(Value* Lvalue, Value* Rvalue,
-                                   Value* result) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::computeAuxFlag(Value* Lvalue,
+                                                           Value* Rvalue,
+                                                           Value* result) {
   auto auxc = ConstantInt::get(result->getType(), 0x10);
   auto aux1 = createXorFolder(result, createXorFolder(Lvalue, Rvalue));
   auto aux2 = createAndFolder(auxc, aux1);
@@ -205,7 +219,9 @@ bool parity =
   (((b * 0x0101010101010101ULL) & 0x8040201008040201ULL) % 0x1FF) & 1;
 The method above takes around 4 operations, but only works on bytes.
 */
-Value* lifterClass::computeParityFlag(Value* value) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::computeParityFlag(Value* value) {
   LLVMContext& context = value->getContext();
 
   Value* lsb = createZExtFolder(
@@ -229,22 +245,27 @@ Value* lifterClass::computeParityFlag(Value* value) {
                             ConstantInt::get(lsb->getType(), 0), parity, "pf5");
   return parity; // Returns 1 if even parity, 0 if odd
 }
-
-Value* lifterClass::computeZeroFlag(Value* value) { // x == 0 = zf
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::computeZeroFlag(
+    Value* value) { // x == 0 = zf
   return createICMPFolder(CmpInst::ICMP_EQ, value,
                           ConstantInt::get(value->getType(), 0), "zeroflag");
 }
-
-Value* lifterClass::computeSignFlag(Value* value) { // x < 0 = sf
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::computeSignFlag(
+    Value* value) { // x < 0 = sf
   return createICMPFolder(CmpInst::ICMP_SLT, value,
                           ConstantInt::get(value->getType(), 0), "signflag");
 }
 
 // this function is used for jumps that are related to user, ex: vms using
 // different handlers, jmptables, etc.
-
-void lifterClass::branchHelper(Value* condition, const std::string& instname,
-                               int numbered, bool reverse) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::branchHelper(
+    Value* condition, const std::string& instname, int numbered, bool reverse) {
   // TODO:
   // save the current state of memory, registers etc.,
   // after execution is finished, return to latest state and continue
@@ -276,8 +297,9 @@ void lifterClass::branchHelper(Value* condition, const std::string& instname,
   // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
   // "\n";
 }
-
-void lifterClass::lift_bextr() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_bextr() {
   /*
   auto src2 = operands[2];
   auto src1 = operands[1];
@@ -303,16 +325,13 @@ void lifterClass::lift_bextr() {
                                     ConstantInt::get(source->getType(), 0)));
 }
 
-void lifterClass::lift_movs_X() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_movs_X() {
+
   LLVMContext& context = builder.getContext();
 
   // replace rep logic with memcopy
-  Value* DSTptrvalue = GetIndexValue(1);
-  SetIndexValue(0, DSTptrvalue);
-
-  bool isREP = (instruction.attributes & ZYDIS_ATTRIB_HAS_REP) != 0;
-
-  Value* DF = getFlag(FLAG_DF);
 
   // sign = (DF*(DF+1)) - 1
   // v = sign * byteSize
@@ -334,61 +353,62 @@ void lifterClass::lift_movs_X() {
   default:
     UNREACHABLE("unreachable case on lift_movs_X");
   }
+  // [e/rsi] = [e/rdi]
 
-  auto SRCop = 2 + isREP;
-  auto DSTop = 3 + isREP;
+  auto sourceReg = GetRegisterValue(Register::RSI);
+  auto sourceVal = GetMemoryValue(sourceReg, byteSizeValue);
 
-  printvalue(DF);
+  auto destReg = GetRegisterValue(Register::RDI);
 
-  Value* SRCvalue = GetIndexValue(SRCop);
-  Value* DSTvalue = GetIndexValue(DSTop);
+  Value* DF = getFlag(FLAG_DF);
 
   Value* Direction = createSelectFolder(
       DF,
       ConstantInt::get(
-          Type::getIntNTy(context, SRCvalue->getType()->getIntegerBitWidth()),
+          Type::getIntNTy(context, sourceReg->getType()->getIntegerBitWidth()),
           -1 * byteSizeValue),
       ConstantInt::get(
-          Type::getIntNTy(context, SRCvalue->getType()->getIntegerBitWidth()),
+          Type::getIntNTy(context, sourceReg->getType()->getIntegerBitWidth()),
           1 * byteSizeValue));
 
-  printvalue(Direction);
-  if (isREP) {
-    Value* count = GetIndexValue(2);
-    if (auto countci = dyn_cast<ConstantInt>(count)) {
-      Value* UpdateSRCvalue = SRCvalue;
-      Value* UpdateDSTvalue = DSTvalue;
-      uint64_t looptime = countci->getZExtValue();
+  printvalue2(instruction.attributes);
 
-      for (int i = looptime; i > 0; i--) {
-        DSTptrvalue = GetIndexValue(1);
-        SetIndexValue(0, DSTptrvalue);
+  if ((instruction.attributes & ZYDIS_ATTRIB_HAS_REP) != 0) {
+    auto sizeReg = GetRegisterValue(Register::RCX);
 
-        UpdateSRCvalue = createAddFolder(UpdateSRCvalue, Direction);
-        UpdateDSTvalue = createAddFolder(UpdateDSTvalue, Direction);
+    // currently it should memcpy properly even if direction is -, but it should
+    // work with current impl, but fix it later
+    auto size = createMulFolder(Direction, sizeReg);
+    printvalue(sourceReg);
+    printvalue(destReg);
+    printvalue(size);
+    createMemcpy(sourceReg, destReg, size);
 
-        SetIndexValue(SRCop, UpdateSRCvalue);
-        SetIndexValue(DSTop, UpdateDSTvalue);
+    sourceReg = createAddFolder(sourceReg, Direction);
+    destReg = createAddFolder(destReg, Direction);
+    printvalue(sourceReg);
+    printvalue(destReg);
+    SetRegisterValue(Register::RDI, sourceReg);
+    SetRegisterValue(Register::RSI, destReg);
 
-        if (i > 1)
-          debugging::increaseInstCounter();
-      }
-
-      SetIndexValue(2, ConstantInt::get(count->getType(), 0));
-      return;
-    } else {
-      UNREACHABLE("fix rep");
-    }
+    // also update sourceReg and destReg properly
+    return;
   }
 
-  Value* UpdateSRCvalue = createAddFolder(SRCvalue, Direction);
-  Value* UpdateDSTvalue = createAddFolder(DSTvalue, Direction);
+  SetMemoryValue(destReg, sourceVal);
 
-  SetIndexValue(SRCop, UpdateSRCvalue);
-  SetIndexValue(DSTop, UpdateDSTvalue);
+  sourceReg = createAddFolder(sourceReg, Direction);
+  destReg = createAddFolder(destReg, Direction);
+  printvalue(sourceReg);
+  printvalue(destReg);
+  SetRegisterValue(Register::RDI, sourceReg);
+  SetRegisterValue(Register::RSI, destReg);
+
+  // this doesnt set flags, so if its rep/repz/repnz, we could do a trick with
+  // memcpy
 }
 /*
-void lifterClass::lift_movaps() {
+void lifterClass<Mnemonic, Register, T3>::lift_movaps() {
   auto dest = operands[0];
   auto src = operands[1];
 
@@ -398,7 +418,7 @@ void lifterClass::lift_movaps() {
 }
 */
 /*
-void lifterClass::lift_xorps() {
+void lifterClass<Mnemonic, Register, T3>::lift_xorps() {
 
   auto dest = operands[0]; // 128
   auto src = operands[1];  // 128
@@ -415,13 +435,13 @@ void lifterClass::lift_xorps() {
   printvalue(Rvalue.v1);
   printvalue(Rvalue.v2);
   auto dest1 = createXorFolder(Rvalue.v1, Lvalue.v1);
-  auto dest2 = createXorFolder(Rvalue.v2, Lvalue.v2);
+  auto desRegister = createXorFolder(Rvalue.v2, Lvalue.v2);
   Rvalue.v1 = dest1;
-  Rvalue.v2 = dest2;
+  Rvalue.v2 = desRegister;
   SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 
-void lifterClass::lift_movdqa() {
+void lifterClass<Mnemonic, Register, T3>::lift_movdqa() {
   auto dest = operands[0]; // 128
   auto src = operands[1];  // 128
 
@@ -437,7 +457,7 @@ void lifterClass::lift_movdqa() {
   SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 
-void lifterClass::lift_pand() {
+void lifterClass<Mnemonic, Register, T3>::lift_pand() {
   auto dest = operands[0]; // 128
   auto src = operands[1];  // 128
 
@@ -459,7 +479,7 @@ void lifterClass::lift_pand() {
   SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
 
-void lifterClass::lift_por() {
+void lifterClass<Mnemonic, Register, T3>::lift_por() {
   auto dest = operands[0]; // 128
   auto src = operands[1];  // 128
 
@@ -480,7 +500,7 @@ void lifterClass::lift_por() {
   Rvalue.v2 = createOrFolder(Rvalue.v2, Lvalue.v2);
   SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
 }
-void lifterClass::lift_pxor() {
+void lifterClass<Mnemonic, Register, T3>::lift_pxor() {
   auto dest = operands[0]; // 128
   auto src = operands[1];  // 128
 
@@ -503,7 +523,9 @@ void lifterClass::lift_pxor() {
 }
 */
 
-void lifterClass::lift_mov() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_mov() {
   LLVMContext& context = builder.getContext();
 
   //  auto Rvalue2 =      GetIndexValue(src, src.size,
@@ -554,8 +576,9 @@ void lifterClass::lift_mov() {
 
   SetIndexValue(0, Rvalue);
 }
-
-void lifterClass::lift_cmovcc() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cmovcc() {
 
   auto getCondition = [&] {
     switch (instruction.mnemonic) {
@@ -639,7 +662,9 @@ void lifterClass::lift_cmovcc() {
 }
 
 // for now assume every call is fake
-void lifterClass::lift_call() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_call() {
   LLVMContext& context = builder.getContext();
 
   // 0 = function
@@ -730,7 +755,9 @@ void lifterClass::lift_call() {
 }
 
 int ret_count = 0;
-void lifterClass::lift_ret() { // fix
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_ret() { // fix
   LLVMContext& context = builder.getContext();
   // [0] = rip
   // [1] = rsp
@@ -879,7 +906,9 @@ void lifterClass::lift_ret() { // fix
 }
 
 int jmpcount = 0;
-void lifterClass::lift_jmp() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jmp() {
   LLVMContext& context = builder.getContext();
   // auto dest = operands[0];
 
@@ -926,7 +955,9 @@ void lifterClass::lift_jmp() {
 
 int branchnumber = 0;
 // jnz and jne
-void lifterClass::lift_jnz() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jnz() {
 
   auto zf = getFlag(FLAG_ZF);
 
@@ -943,8 +974,9 @@ void lifterClass::lift_jnz() {
 
   branchnumber++;
 }
-
-void lifterClass::lift_js() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_js() {
 
   auto sf = getFlag(FLAG_SF);
 
@@ -959,7 +991,9 @@ void lifterClass::lift_js() {
 
   branchnumber++;
 }
-void lifterClass::lift_jns() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jns() {
 
   auto sf = getFlag(FLAG_SF);
 
@@ -974,8 +1008,9 @@ void lifterClass::lift_jns() {
 
   branchnumber++;
 }
-
-void lifterClass::lift_jz() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jz() {
 
   // if 0, then jmp, if not then not jump
 
@@ -992,8 +1027,9 @@ void lifterClass::lift_jz() {
 
   branchnumber++;
 }
-
-void lifterClass::lift_jle() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jle() {
   // If SF != OF or ZF = 1, then jump. Otherwise, do not jump.
 
   auto sf = getFlag(FLAG_SF);
@@ -1014,7 +1050,9 @@ void lifterClass::lift_jle() {
   branchnumber++;
 }
 
-void lifterClass::lift_jl() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jl() {
   auto sf = getFlag(FLAG_SF);
   auto of = getFlag(FLAG_OF);
 
@@ -1030,7 +1068,10 @@ void lifterClass::lift_jl() {
 
   branchnumber++;
 }
-void lifterClass::lift_jnl() {
+
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jnl() {
   auto sf = getFlag(FLAG_SF);
   auto of = getFlag(FLAG_OF);
 
@@ -1049,7 +1090,9 @@ void lifterClass::lift_jnl() {
   branchnumber++;
 }
 
-void lifterClass::lift_jnle() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jnle() {
   // If SF != OF or ZF = 1, then jump. Otherwise, do not jump.
 
   auto sf = getFlag(FLAG_SF);
@@ -1070,7 +1113,9 @@ void lifterClass::lift_jnle() {
   branchnumber++;
 }
 
-void lifterClass::lift_jbe() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jbe() {
 
   auto cf = getFlag(FLAG_CF);
   auto zf = getFlag(FLAG_ZF);
@@ -1087,7 +1132,9 @@ void lifterClass::lift_jbe() {
   branchnumber++;
 }
 
-void lifterClass::lift_jb() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jb() {
 
   auto cf = getFlag(FLAG_CF);
   printvalue(cf);
@@ -1103,7 +1150,9 @@ void lifterClass::lift_jb() {
   branchnumber++;
 }
 
-void lifterClass::lift_jnb() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jnb() {
 
   auto cf = getFlag(FLAG_CF);
   printvalue(cf);
@@ -1118,7 +1167,10 @@ void lifterClass::lift_jnb() {
 
   branchnumber++;
 }
-void lifterClass::lift_jnbe() {
+
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jnbe() {
 
   auto cf = getFlag(FLAG_CF);
   auto zf = getFlag(FLAG_ZF);
@@ -1135,7 +1187,9 @@ void lifterClass::lift_jnbe() {
   branchnumber++;
 }
 
-void lifterClass::lift_jo() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jo() {
 
   auto of = getFlag(FLAG_OF);
 
@@ -1152,7 +1206,9 @@ void lifterClass::lift_jo() {
   branchnumber++;
 }
 
-void lifterClass::lift_jno() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jno() {
 
   auto of = getFlag(FLAG_OF);
 
@@ -1167,8 +1223,9 @@ void lifterClass::lift_jno() {
 
   branchnumber++;
 }
-
-void lifterClass::lift_jp() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jp() {
 
   auto pf = getFlag(FLAG_PF);
   printvalue(pf);
@@ -1183,8 +1240,9 @@ void lifterClass::lift_jp() {
 
   branchnumber++;
 }
-
-void lifterClass::lift_jnp() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_jnp() {
 
   auto pf = getFlag(FLAG_PF);
 
@@ -1200,8 +1258,9 @@ void lifterClass::lift_jnp() {
 
   branchnumber++;
 }
-
-void lifterClass::lift_sbb() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_sbb() {
   /*
   auto dest = operands[0];
   auto src = operands[1];
@@ -1274,7 +1333,9 @@ IF (COUNT & COUNTMASK) = 1
         ELSE OF is undefined;
 FI;
 */
-void lifterClass::lift_rcl() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_rcl() {
   LLVMContext& context = builder.getContext();
   /*
   auto dest = operands[0];
@@ -1378,7 +1439,9 @@ WHILE (tempCOUNT ≠ 0)
 ELIHW;
 
 */
-void lifterClass::lift_rcr() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_rcr() {
   LLVMContext& context = builder.getContext();
   /*
   auto dest = operands[0];
@@ -1471,8 +1534,9 @@ void lifterClass::lift_rcr() {
   setFlag(FLAG_CF, newCF);
   setFlag(FLAG_OF, newOF);
 }
-
-void lifterClass::lift_not() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_not() {
 
   // auto dest = operands[0];
 
@@ -1486,8 +1550,9 @@ void lifterClass::lift_not() {
   //  Flags Affected
   // None
 }
-
-void lifterClass::lift_neg() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_neg() {
 
   // auto dest = operands[0];
   auto Rvalue = GetIndexValue(0);
@@ -1581,8 +1646,9 @@ FI;
 
 */
 // maybe
-
-void lifterClass::lift_sar() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_sar() {
   LLVMContext& context = builder.getContext();
   // auto dest = operands[0 + (instruction.mnemonic == Mnemonic::SARX)];
   // auto count = operands[1 + (instruction.mnemonic == Mnemonic::SARX)];
@@ -1669,7 +1735,10 @@ void lifterClass::lift_sar() {
 }
 
 // TODO fix
-void lifterClass::lift_shr() {
+
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_shr() {
   LLVMContext& context = builder.getContext();
 
   auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
@@ -1748,8 +1817,9 @@ void lifterClass::lift_shr() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_shl() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_shl() {
   LLVMContext& context = builder.getContext();
 
   auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
@@ -1847,8 +1917,9 @@ void lifterClass::lift_shl() {
   }
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_bswap() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_bswap() {
   // auto dest = operands[0];
 
   auto Lvalue = GetIndexValue(0);
@@ -1880,8 +1951,9 @@ void lifterClass::lift_bswap() {
 
   SetIndexValue(0, newswappedvalue);
 }
-
-void lifterClass::lift_cmpxchg() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cmpxchg() {
   /*
     auto dest = operands[0];
     auto src = operands[1];
@@ -1934,8 +2006,9 @@ void lifterClass::lift_cmpxchg() {
   setFlag(FLAG_SF, sf);
   setFlag(FLAG_ZF, zf);
 }
-
-void lifterClass::lift_xchg() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_xchg() {
   /*
     auto dest = operands[0];
     auto src = operands[1];
@@ -1949,8 +2022,9 @@ void lifterClass::lift_xchg() {
   SetIndexValue(0, Rvalue);
   SetIndexValue(1, Lvalue);
 }
-
-void lifterClass::lift_popcnt() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_popcnt() {
   /*
   auto dest = operands[0]; // count
   auto src = operands[1];  // src
@@ -1997,8 +2071,9 @@ void lifterClass::lift_popcnt() {
 
   SetIndexValue(0, destV);
 }
-
-void lifterClass::lift_shld() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_shld() {
   LLVMContext& context = builder.getContext();
 
   /*
@@ -2068,8 +2143,9 @@ void lifterClass::lift_shld() {
 
   SetIndexValue(0, resultValue);
 }
-
-void lifterClass::lift_shrd() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_shrd() {
   LLVMContext& context = builder.getContext();
 
   /*  auto dest = operands[0];
@@ -2142,8 +2218,9 @@ void lifterClass::lift_shrd() {
 
   SetIndexValue(0, resultValue);
 }
-
-void lifterClass::lift_lea() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_lea() {
   /*
     auto dest = operands[0];
     auto src = operands[1]; */
@@ -2159,7 +2236,9 @@ void lifterClass::lift_lea() {
 }
 
 // extract sub from this function, this is convoluted for no reason
-void lifterClass::lift_add_sub() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_add_sub() {
   /* auto dest = operands[0];
   auto src = operands[1]; */
 
@@ -2243,8 +2322,9 @@ void lifterClass::lift_add_sub() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_imul2(bool isSigned) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_imul2(bool isSigned) {
   LLVMContext& context = builder.getContext();
   // auto src = operands[0];
   auto Rvalue = GetRegisterValue(Register::AL);
@@ -2303,7 +2383,10 @@ void lifterClass::lift_imul2(bool isSigned) {
 }
 
 // TODO rewrite this
-void lifterClass::lift_imul() {
+
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_imul() {
   LLVMContext& context = builder.getContext();
 
   auto dest = 0; // dest ? ?????
@@ -2397,7 +2480,9 @@ void lifterClass::lift_imul() {
   printvalue(highPartTruncated) printvalue(of) printvalue(cf);
 }
 // rewrite this too
-void lifterClass::lift_mul() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_mul() {
   /*
   mul rdx
   [0] rdx
@@ -2432,7 +2517,7 @@ void lifterClass::lift_mul() {
   }
   /*
   auto dest1 = operands[1]; // ax
-  auto dest2 = operands[2]; */
+  auto desRegister = operands[2]; */
 
   Value* Rvalue = GetIndexValue(1);
   Value* Lvalue = GetIndexValue(2);
@@ -2472,8 +2557,9 @@ void lifterClass::lift_mul() {
   printvalue(highPartTruncated) printvalue(splitResult) printvalue(of);
   printvalue(cf);
 }
-
-void lifterClass::lift_div() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_div() {
 
   LLVMContext& context = builder.getContext();
   // auto src = operands[0];
@@ -2551,8 +2637,9 @@ void lifterClass::lift_div() {
   printvalue(divisor) printvalue(dividend) printvalue(remainder)
       printvalue(quotient)
 }
-
-void lifterClass::lift_idiv() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_idiv() {
   LLVMContext& context = builder.getContext();
   // auto src = operands[0];
 
@@ -2630,8 +2717,9 @@ void lifterClass::lift_idiv() {
   printvalue(Rvalue) printvalue(dividend) printvalue(remainder)
       printvalue(quotient)
 }
-
-void lifterClass::lift_xor() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_xor() {
   /* auto dest = operands[0];
   auto src = operands[1]; */
   auto Lvalue = GetIndexValue(0);
@@ -2662,8 +2750,9 @@ void lifterClass::lift_xor() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_or() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_or() {
   LLVMContext& context = builder.getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
@@ -2697,8 +2786,9 @@ void lifterClass::lift_or() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_and() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_and() {
   LLVMContext& context = builder.getContext();
   /*  auto dest = operands[0];
    auto src = operands[1]; */
@@ -2732,8 +2822,9 @@ void lifterClass::lift_and() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_andn() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_andn() {
   LLVMContext& context = builder.getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
@@ -2783,7 +2874,9 @@ IF (COUNT & COUNTMASK) = 1
         ELSE OF is undefined;
 FI
 */
-void lifterClass::lift_rol() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_rol() {
   LLVMContext& context = builder.getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
@@ -2859,8 +2952,9 @@ IF (COUNT & COUNTMASK) = 1
 FI
 
 */
-
-void lifterClass::lift_ror() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_ror() {
 
   LLVMContext& context = builder.getContext();
   /*
@@ -2930,8 +3024,9 @@ void lifterClass::lift_ror() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_inc() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_inc() {
   // auto operand = operands[0];
 
   Value* Lvalue = GetIndexValue(0);
@@ -2967,8 +3062,9 @@ void lifterClass::lift_inc() {
   });
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_dec() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_dec() {
   // auto operand = operands[0];
 
   Value* Lvalue = GetIndexValue(0);
@@ -3004,8 +3100,9 @@ void lifterClass::lift_dec() {
   setFlag(FLAG_AF, af);
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_push() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_push() {
   LLVMContext& context = builder.getContext();
   /* auto src = operands[0]; // value that we are pushing
   auto dest = operands[2];
@@ -3052,7 +3149,9 @@ void lifterClass::lift_push() {
   // then mov rsp, val
 }
 
-void lifterClass::lift_pushfq() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_pushfq() {
   LLVMContext& context = builder.getContext();
   /* auto src = operands[2];  // value that we are pushing rflags
   auto dest = operands[1]; // [rsp]
@@ -3078,8 +3177,9 @@ void lifterClass::lift_pushfq() {
   // SetIndexValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
   // then mov rsp, val
 }
-
-void lifterClass::lift_pop() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_pop() {
   LLVMContext& context = builder.getContext();
   /* auto dest = operands[0]; // value that we are pushing
   auto src = operands[2];
@@ -3098,16 +3198,18 @@ void lifterClass::lift_pop() {
 
   printvalue(Rvalue) printvalue(RspValue) printvalue(result);
 
-  SetIndexValue(0, Rvalue); // op
-  // mov val, rsp first
-  /* ???
-    Rvalue =
-        createZExtFolder(Rvalue, builder.getIntNTy(instruction.stack_growth));
-        */
   SetRegisterValue(Register::RSP, result); // then add rsp 8
-}
 
-void lifterClass::lift_leave() {
+  SetIndexValue(0, Rvalue); // op
+                            // mov val, rsp first
+                            /* ???
+                              Rvalue =
+                                  createZExtFolder(Rvalue, builder.getIntNTy(instruction.stack_growth));
+                                  */
+}
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_leave() {
   LLVMContext& context = builder.getContext();
   /*   auto src2 = operands[0]; // [xsp]
     auto src1 = operands[1]; // xbp
@@ -3127,8 +3229,9 @@ void lifterClass::lift_leave() {
 
   // mov val, rsp first
 }
-
-void lifterClass::lift_popfq() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_popfq() {
   LLVMContext& context = builder.getContext();
   /*  auto dest = operands[2]; // value that we are pushing
    auto src = operands[1];  // [rsp]
@@ -3150,8 +3253,9 @@ void lifterClass::lift_popfq() {
   SetRegisterValue(Register::RSP, result); // then add rsp 8
   // then add rsp 8
 }
-
-void lifterClass::lift_adc() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_adc() {
   /*  auto dest = operands[0];
    auto src = operands[1]; */
 
@@ -3200,8 +3304,9 @@ void lifterClass::lift_adc() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_xadd() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_xadd() {
   /*   auto dest = operands[0];
     auto src = operands[1]; */
 
@@ -3256,8 +3361,9 @@ void lifterClass::lift_xadd() {
   // The CF, PF, AF, SF, ZF, and OF flags are set according to the result
   // of the addition, which is stored in the destination operand.
 }
-
-void lifterClass::lift_test() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_test() {
   LLVMContext& context = builder.getContext();
   Value* Lvalue = GetIndexValue(0);
   Value* Rvalue = GetIndexValue(1);
@@ -3284,8 +3390,9 @@ void lifterClass::lift_test() {
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_PF, pf);
 }
-
-void lifterClass::lift_cmp() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cmp() {
 
   Value* Lvalue = GetIndexValue(0);
   Value* Rvalue = GetIndexValue(1);
@@ -3339,14 +3446,16 @@ void lifterClass::lift_cmp() {
                             op2LowerNibble, "sub_af");
   });
 }
-
-void lifterClass::lift_rdtsc() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_rdtsc() {
   // cout << blockInfo.runtime_address << "\n";
   LLVMContext& context = builder.getContext();
   auto rdtscCall = builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
 }
-
-void lifterClass::lift_cpuid() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cpuid() {
   LLVMContext& context = builder.getContext();
   // operands[0] = eax
   // operands[1] = ebx
@@ -3442,8 +3551,9 @@ uint64_t alternative_pext(uint64_t source, uint64_t mask) {
   }
   return result;
 }
-
-void lifterClass::lift_pext() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_pext() {
   /*
    const auto dest = operands[0];
    const auto src1 = operands[1];
@@ -3477,8 +3587,9 @@ void lifterClass::lift_pext() {
     // UNREACHABLE("lazy mf");
   }
 }
-
-void lifterClass::lift_setnz() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setnz() {
   LLVMContext& context = builder.getContext();
 
   // auto dest = operands[0];
@@ -3490,7 +3601,9 @@ void lifterClass::lift_setnz() {
 
   SetIndexValue(0, result);
 }
-void lifterClass::lift_seto() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_seto() {
   LLVMContext& context = builder.getContext();
 
   // auto dest = operands[0];
@@ -3501,7 +3614,9 @@ void lifterClass::lift_seto() {
 
   SetIndexValue(0, result);
 }
-void lifterClass::lift_setno() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setno() {
   LLVMContext& context = builder.getContext();
 
   // auto dest = operands[0];
@@ -3514,8 +3629,9 @@ void lifterClass::lift_setno() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_setnb() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setnb() {
   LLVMContext& context = builder.getContext();
 
   // auto dest = operands[0];
@@ -3529,8 +3645,9 @@ void lifterClass::lift_setnb() {
 
   SetIndexValue(0, byteResult);
 }
-
-void lifterClass::lift_setbe() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setbe() {
   LLVMContext& context = builder.getContext();
 
   Value* cf = getFlag(FLAG_CF);
@@ -3543,8 +3660,9 @@ void lifterClass::lift_setbe() {
   // auto dest = operands[0];
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_setnbe() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setnbe() {
   LLVMContext& context = builder.getContext();
 
   Value* cf = getFlag(FLAG_CF);
@@ -3558,8 +3676,9 @@ void lifterClass::lift_setnbe() {
   // auto dest = operands[0];
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_setns() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setns() {
   LLVMContext& context = builder.getContext();
 
   // auto dest = operands[0];
@@ -3573,8 +3692,9 @@ void lifterClass::lift_setns() {
 
   SetIndexValue(0, byteResult);
 }
-
-void lifterClass::lift_setp() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setp() {
   LLVMContext& context = builder.getContext();
 
   Value* pf = getFlag(FLAG_PF);
@@ -3585,8 +3705,9 @@ void lifterClass::lift_setp() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_setnp() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setnp() {
   LLVMContext& context = builder.getContext();
   // auto dest = operands[0];
 
@@ -3597,8 +3718,9 @@ void lifterClass::lift_setnp() {
 
   SetIndexValue(0, resultValue);
 }
-
-void lifterClass::lift_setb() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setb() {
   LLVMContext& context = builder.getContext();
 
   // auto dest = operands[0];
@@ -3609,8 +3731,9 @@ void lifterClass::lift_setb() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_sets() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_sets() {
   LLVMContext& context = builder.getContext();
   Value* sf = getFlag(FLAG_SF);
 
@@ -3619,8 +3742,9 @@ void lifterClass::lift_sets() {
   // auto dest = operands[0];
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_stosx() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_stosx() {
 
   // auto dest = operands[0]; // xdi
   Value* destValue = GetIndexValue(0);
@@ -3639,8 +3763,9 @@ void lifterClass::lift_stosx() {
                      Direction, ConstantInt::get(DF->getType(), destbitwidth)));
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_setz() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setz() {
   LLVMContext& context = builder.getContext();
   // auto dest = operands[0];
 
@@ -3651,8 +3776,9 @@ void lifterClass::lift_setz() {
 
   SetIndexValue(0, extendedZF);
 }
-
-void lifterClass::lift_setnle() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setnle() {
   LLVMContext& context = builder.getContext();
   // auto dest = operands[0];
 
@@ -3675,8 +3801,9 @@ void lifterClass::lift_setnle() {
 
   SetIndexValue(0, byteResult);
 }
-
-void lifterClass::lift_setle() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setle() {
   LLVMContext& context = builder.getContext();
   Value* zf = getFlag(FLAG_ZF);
   Value* sf = getFlag(FLAG_SF);
@@ -3690,8 +3817,9 @@ void lifterClass::lift_setle() {
   // auto dest = operands[0];
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_setnl() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setnl() {
   LLVMContext& context = builder.getContext();
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
@@ -3703,8 +3831,9 @@ void lifterClass::lift_setnl() {
   // auto dest = operands[0];
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_setl() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_setl() {
   LLVMContext& context = builder.getContext();
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
@@ -3716,8 +3845,9 @@ void lifterClass::lift_setl() {
   // auto dest = operands[0];
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_bt() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_bt() {
   /*
     auto dest = operands[0];
     auto bitIndex = operands[1];
@@ -3756,8 +3886,9 @@ void lifterClass::lift_bt() {
   printvalue(andd);
   printvalue(cf);
 }
-
-void lifterClass::lift_btr() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_btr() {
   /*   auto base = operands[0];
     auto offset = operands[1]; */
 
@@ -3795,8 +3926,9 @@ void lifterClass::lift_btr() {
   printvalue(baseVal);
   printvalue(mask);
 }
-
-void lifterClass::lift_lzcnt() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_lzcnt() {
   // check
   /*   auto dest = operands[0];
     auto src = operands[1]; */
@@ -3838,8 +3970,9 @@ void lifterClass::lift_lzcnt() {
 
   SetIndexValue(0, bitPosition);
 }
-
-void lifterClass::lift_bsr() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_bsr() {
   // check
   /*
   auto dest = operands[0];
@@ -3877,8 +4010,9 @@ void lifterClass::lift_bsr() {
 
   SetIndexValue(0, bitPosition);
 }
-
-void lifterClass::lift_pdep() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_pdep() {
   /*  auto dest = operands[0]; // destination
    auto src = operands[1];  // source
    auto mask = operands[2]; // mask */
@@ -3928,8 +4062,9 @@ void lifterClass::lift_pdep() {
   // Assign the result to the destination operand
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_blsi() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_blsi() {
   /*  auto tmp = operands[0];
    auto src = operands[1]; */
 
@@ -3941,8 +4076,9 @@ void lifterClass::lift_blsi() {
   setFlag(FLAG_ZF, computeZeroFlag(temp));
   setFlag(FLAG_SF, computeSignFlag(temp));
 }
-
-void lifterClass::lift_blsr() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_blsr() {
   /* auto tmp = operands[0];
   auto src = operands[1]; */
 
@@ -3954,8 +4090,9 @@ void lifterClass::lift_blsr() {
   setFlag(FLAG_ZF, computeZeroFlag(temp));
   setFlag(FLAG_SF, computeSignFlag(temp));
 }
-
-void lifterClass::lift_blsmsk() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_blsmsk() {
   /* auto tmp = operands[0];
   auto src = operands[1]; */
 
@@ -3969,8 +4106,9 @@ void lifterClass::lift_blsmsk() {
   setFlag(FLAG_SF, computeSignFlag(temp));
   setFlag(FLAG_CF, createICMPFolder(llvm::CmpInst::ICMP_EQ, source, zero));
 }
-
-void lifterClass::lift_bzhi() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_bzhi() {
   /*
   auto dst = operands[0];
   auto src = operands[1];
@@ -3992,8 +4130,9 @@ void lifterClass::lift_bzhi() {
                              ConstantInt::get(source->getType(), dstsize - 1));
   setFlag(FLAG_CF, CF);
 }
-
-void lifterClass::lift_bsf() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_bsf() {
   // TODOs
   LLVMContext& context = builder.getContext();
   /*   auto dest = operands[0];
@@ -4032,8 +4171,9 @@ void lifterClass::lift_bsf() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_tzcnt() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_tzcnt() {
   LLVMContext& context = builder.getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
@@ -4076,8 +4216,9 @@ void lifterClass::lift_tzcnt() {
 
   SetIndexValue(0, result);
 }
-
-void lifterClass::lift_btc() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_btc() {
   /*   auto base = operands[0];
     auto offset = operands[1]; */
 
@@ -4114,8 +4255,9 @@ void lifterClass::lift_btc() {
   printvalue(baseVal);
   printvalue(mask);
 }
-
-void lifterClass::lift_lahf() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_lahf() {
 
   LLVMContext& context = builder.getContext();
 
@@ -4141,7 +4283,10 @@ void lifterClass::lift_lahf() {
   printvalue(Rvalue);
   SetRegisterValue(Register::AH, Rvalue);
 }
-void lifterClass::lift_sahf() {
+
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_sahf() {
 
   auto ah = GetRegisterValue(Register::AH);
   // RFLAGS(SF:ZF:0:AF:0:PF:1:CF) := AH;
@@ -4166,18 +4311,25 @@ void lifterClass::lift_sahf() {
   setFlag(FLAG_ZF, zf);
   setFlag(FLAG_SF, sf);
 }
-void lifterClass::lift_std() {
+
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_std() {
   LLVMContext& context = builder.getContext();
 
   setFlag(FLAG_DF, ConstantInt::get(Type::getInt1Ty(context), 1));
 }
-void lifterClass::lift_stc() {
+
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_stc() {
   LLVMContext& context = builder.getContext();
 
   setFlag(FLAG_CF, ConstantInt::get(Type::getInt1Ty(context), 1));
 }
-
-void lifterClass::lift_cmc() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cmc() {
 
   Value* cf = getFlag(FLAG_CF);
 
@@ -4185,8 +4337,9 @@ void lifterClass::lift_cmc() {
 
   setFlag(FLAG_CF, createXorFolder(cf, one));
 }
-
-void lifterClass::lift_clc() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_clc() {
 
   LLVMContext& context = builder.getContext();
 
@@ -4194,8 +4347,9 @@ void lifterClass::lift_clc() {
 
   setFlag(FLAG_CF, clearedCF);
 }
-
-void lifterClass::lift_cld() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cld() {
 
   LLVMContext& context = builder.getContext();
 
@@ -4203,8 +4357,9 @@ void lifterClass::lift_cld() {
 
   setFlag(FLAG_DF, clearedDF);
 }
-
-void lifterClass::lift_cli() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cli() {
 
   LLVMContext& context = builder.getContext();
 
@@ -4212,8 +4367,9 @@ void lifterClass::lift_cli() {
 
   setFlag(FLAG_IF, resetIF);
 }
-
-void lifterClass::lift_bts() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_bts() {
   /*   auto base = operands[0];
     auto offset = operands[1]; */
 
@@ -4250,8 +4406,9 @@ void lifterClass::lift_bts() {
   printvalue(baseVal);
   printvalue(mask);
 }
-
-void lifterClass::lift_cwd() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cwd() {
   LLVMContext& context = builder.getContext();
 
   Value* ax =
@@ -4267,8 +4424,9 @@ void lifterClass::lift_cwd() {
 
   SetIndexValue(0, dx);
 }
-
-void lifterClass::lift_cdq() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cdq() {
   LLVMContext& context = builder.getContext();
   // if eax is -, then edx is filled with ones FFFF_FFFF
   Value* eax =
@@ -4284,8 +4442,9 @@ void lifterClass::lift_cdq() {
 
   SetIndexValue(0, edx);
 }
-
-void lifterClass::lift_cqo() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cqo() {
 
   LLVMContext& context = builder.getContext();
   // if rax is -, then rdx is filled with ones FFFF_FFFF_FFFF_FFFF
@@ -4302,8 +4461,9 @@ void lifterClass::lift_cqo() {
       "setRDX");
   printvalue(rax) printvalue(signBit) printvalue(rdx) SetIndexValue(0, rdx);
 }
-
-void lifterClass::lift_cbw() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cbw() {
   LLVMContext& context = builder.getContext();
   Value* al =
       createZExtOrTruncFolder(GetIndexValue(1), Type::getInt8Ty(context));
@@ -4312,8 +4472,9 @@ void lifterClass::lift_cbw() {
 
   SetIndexValue(0, ax);
 }
-
-void lifterClass::lift_cwde() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cwde() {
   LLVMContext& context = builder.getContext();
   Value* ax =
       createZExtOrTruncFolder(GetIndexValue(1), Type::getInt16Ty(context));
@@ -4322,8 +4483,9 @@ void lifterClass::lift_cwde() {
   printvalue(eax);
   SetIndexValue(0, eax);
 }
-
-void lifterClass::lift_cdqe() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::lift_cdqe() {
   LLVMContext& context = builder.getContext();
 
   Value* eax = createZExtOrTruncFolder(GetIndexValue(1),
@@ -4334,40 +4496,13 @@ void lifterClass::lift_cdqe() {
   SetIndexValue(0, rax);
 }
 
-void lifterClass::liftInstructionSemantics() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::liftInstructionSemantics() {
+
   // zydisRegisterToMergenRegister
   switch (instruction.mnemonic) {
-  /*
-    case Mnemonic::XORPS: {
-    lift_xorps();
-    break;
-  }
 
-  case Mnemonic::MOVQ:
-  case Mnemonic::MOVD:
-  case Mnemonic::MOVDQU:
-  case Mnemonic::MOVUPS:
-  case Mnemonic::MOVAPS:
-  case Mnemonic::MOVDQA: {
-    lift_movdqa();
-    break;
-  }
-  case Mnemonic::POR: {
-    lift_por();
-    break;
-  }
-  case Mnemonic::PXOR: {
-    lift_pxor();
-    break;
-  }
-  case Mnemonic::PAND: {
-    lift_pand();
-    break;
-  }
-    */
-  // movs
-  // case Mnemonic::MOVAPS:
-  // case Mnemonic::MOVUPS:
   case Mnemonic::MOVZX:
   case Mnemonic::MOVSX:
   case Mnemonic::MOVSXD:
@@ -4908,8 +5043,9 @@ void lifterClass::liftInstructionSemantics() {
   }
   }
 }
-
-void lifterClass::liftInstruction() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::liftInstruction() {
   LLVMContext& context = builder.getContext();
   // RIP gets updated before execution of the instruction->
   /*
@@ -4931,14 +5067,18 @@ void lifterClass::liftInstruction() {
       reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase);
   imageBase = ntHeaders->optional_header.image_base;
 
-  auto funcInfo = funcsignatures::getFunctionInfo(blockInfo.runtime_address);
+  auto funcInfo = signatures.getFunctionInfo(blockInfo.runtime_address);
   if (blockInfo.runtime_address == 5368721739) // + 0x764e11
-    funcInfo = new funcsignatures::functioninfo(
+    funcInfo = new funcsignatures<Register>::functioninfo(
         "printf", {
-                      funcsignatures::funcArgInfo(Register::RCX, I64, 1),
-                      funcsignatures::funcArgInfo(Register::RDX, I64, 0),
-                      funcsignatures::funcArgInfo(Register::R8, I64, 1),
+                      typename funcsignatures<Register>::funcArgInfo(
+                          Register::RCX, I64, 1),
+                      typename funcsignatures<Register>::funcArgInfo(
+                          Register::RDX, I64, 0),
+                      typename funcsignatures<Register>::funcArgInfo(
+                          Register::R8, I64, 1),
                   });
+
   if (funcInfo) {
     callFunctionIR(funcInfo->name.c_str(), funcInfo);
     outs() << "calling: " << funcInfo->name.c_str() << "\n";

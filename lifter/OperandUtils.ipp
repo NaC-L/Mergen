@@ -1,7 +1,12 @@
-#include "OperandUtils.h"
+
+#pragma once
+
+#include "CommonDisassembler.hpp"
 #include "CommonRegisters.h"
+#include "GEPTracker.ipp"
+#include "OperandUtils.h"
 #include "ZydisDisassembler.hpp"
-#include "lifterClass.h"
+#include "lifterClass.hpp"
 #include "utils.h"
 #include <Zydis/Mnemonic.h>
 #include <Zydis/Register.h>
@@ -81,7 +86,11 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
     }
   }
 }
-llvm::SimplifyQuery lifterClass::createSimplifyQuery(Instruction* Inst) {
+
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+llvm::SimplifyQuery
+lifterClass<Mnemonic, Register, T3>::createSimplifyQuery(Instruction* Inst) {
   // updateDomTree(*fnc);
   // auto DT = getDomTree();
   auto DL = fnc->getParent()->getDataLayout();
@@ -94,24 +103,12 @@ llvm::SimplifyQuery lifterClass::createSimplifyQuery(Instruction* Inst) {
   return SQ;
 }
 
-// returns if a comes before b
-bool comesBefore(Instruction* a, Instruction* b, llvm::DominatorTree& DT) {
-
-  bool sameBlock =
-      a->getParent() == b->getParent(); // if same block, use ->comesBefore,
-
-  if (sameBlock) {
-    return a->comesBefore(b); // if a comes before b, return true
-  }
-  // if "a"'s block dominates "b"'s block, "a" comes first.
-  bool dominate = DT.properlyDominates(a->getParent(), b->getParent());
-  return dominate;
-}
-
 using namespace llvm::PatternMatch;
 
-Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
-                                      Value* const op0, Value* const op1) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::doPatternMatching(
+    Instruction::BinaryOps const I, Value* const op0, Value* const op1) {
 
   switch (I) {
   case Instruction::Add: {
@@ -159,8 +156,8 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
     };
 
     /*
-    %not-PConst2-9425 = and i64 %realnot-5369619277-, 64 ( 2 ** 6 = 64)
-        %shr-lshr-5368775124- = lshr i64 %not-PConst2-9425, 6
+    %not-PConsRegister-9425 = and i64 %realnot-5369619277-, 64 ( 2 ** 6 = 64)
+        %shr-lshr-5368775124- = lshr i64 %not-PConsRegister-9425, 6
         %realadd-5369433110- = add i64 -1, %shr-lshr-5368775124- ( - (2 ** 6-6)
         ;  ( (a & (2**power) ) >> (power-lula) ) - (2**(lula))
         ;  result = select trunc( (a & (2**power) ) >> (power-lula) ),  0 or
@@ -280,7 +277,7 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
                                 "not_v"),
                 createXorFolder(constant_v, Constant::getAllOnesValue(
                                                 constant_v->getType())),
-                "not-PConst2-");
+                "not-PConsRegister-");
           }
           return nullptr;
         };
@@ -333,7 +330,11 @@ Value* lifterClass::doPatternMatching(Instruction::BinaryOps const I,
   return nullptr;
 }
 
-KnownBits lifterClass::analyzeValueKnownBits(Value* value, Instruction* ctxI) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+KnownBits
+lifterClass<Mnemonic, Register, T3>::analyzeValueKnownBits(Value* value,
+                                                           Instruction* ctxI) {
   KnownBits knownBits(64);
   knownBits.resetAll();
   if (value->getType()->getIntegerBitWidth() > 64 || isa<UndefValue>(value))
@@ -403,8 +404,10 @@ inline bool isCast(uint8_t opcode) {
   return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
 };
 
-Value* lifterClass::getOrCreate(const InstructionKey& key, uint8_t opcode,
-                                const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::getOrCreate(
+    const InstructionKey& key, uint8_t opcode, const Twine& Name) {
   auto it = cache.lookup(opcode, key);
   if (it) {
     return it;
@@ -557,10 +560,11 @@ static bool isCommutative(const unsigned Opcode) {
     return false;
   }
 }
-
-Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
-                                      Value* operand2, Type* destType,
-                                      const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createInstruction(
+    unsigned opcode, Value* operand1, Value* operand2, Type* destType,
+    const Twine& Name) {
   if (isCommutative(opcode)) {
     if (getComplexity(operand1) < getComplexity(operand2)) {
       // if operand1 is less complex, move it to RHS
@@ -580,9 +584,10 @@ Value* lifterClass::createInstruction(unsigned opcode, Value* operand1,
       newValue,
       builder.GetInsertBlock()->getParent()->getParent()->getDataLayout()); //
 }
-
-Value* lifterClass::createSelectFolder(Value* C, Value* True, Value* False,
-                                       const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createSelectFolder(
+    Value* C, Value* True, Value* False, const Twine& Name) {
   if (auto* CConst = dyn_cast<Constant>(C)) {
 
     if (CConst->isOneValue()) {
@@ -796,9 +801,10 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
   */
   return KnownBits(0); // never reach
 }
-
-Value* lifterClass::folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
-                                 Instruction::BinaryOps opcode) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::folderBinOps(
+    Value* LHS, Value* RHS, const Twine& Name, Instruction::BinaryOps opcode) {
 
   if (LHS->getType() != RHS->getType()) {
     printvalue(LHS);
@@ -1141,8 +1147,8 @@ z3::expr llvmToZ3Expr(Value* val, z3::context& c) {
   return c.bv_val(0, 64);
 }
 
-std::optional<Value*> lifterClass::evaluateLLVMExpression(Value* value) {
-  static z3::context c;
+std::optional<Value*> lifterClass<Mnemonic, Register,
+T3>::evaluateLLVMExpression(Value* value) { static z3::context c;
 
   printvalue(value);
 
@@ -1210,9 +1216,13 @@ std::optional<Value*> lifterClass::evaluateLLVMExpression(Value* value) {
   return std::nullopt;
 }
 */
-Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
-                                    const Twine& Name) {
-  GEPinfo key = {Address, (uint8_t)(Type->getScalarSizeInBits()), Base == TEB};
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createGEPFolder(Type* Type,
+                                                            Value* Base,
+                                                            Value* Address,
+                                                            const Twine& Name) {
+  GEPinfo key = {Address, (uint8_t)(Type->getScalarSizeInBits()), 1};
   auto it = GEPcache.lookup(key);
   if (it) {
     return it;
@@ -1224,85 +1234,134 @@ Value* lifterClass::createGEPFolder(Type* Type, Value* Base, Value* Address,
   GEPcache.insert({key, v});
   return v;
 }
-
-Value* lifterClass::createAddFolder(Value* LHS, Value* RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createAddFolder(Value* LHS,
+                                                            Value* RHS,
+                                                            const Twine& Name) {
 
   return folderBinOps(LHS, RHS, Name, Instruction::Add);
 }
-
-Value* lifterClass::createSubFolder(Value* LHS, Value* RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createSubFolder(Value* LHS,
+                                                            Value* RHS,
+                                                            const Twine& Name) {
 
   return folderBinOps(LHS, RHS, Name, Instruction::Sub);
 }
-
-Value* lifterClass::createOrFolder(Value* LHS, Value* RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createOrFolder(Value* LHS,
+                                                           Value* RHS,
+                                                           const Twine& Name) {
 
   return folderBinOps(LHS, RHS, Name, Instruction::Or);
 }
-
-Value* lifterClass::createXorFolder(Value* LHS, Value* RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createXorFolder(Value* LHS,
+                                                            Value* RHS,
+                                                            const Twine& Name) {
 
   return folderBinOps(LHS, RHS, Name, Instruction::Xor);
 }
-
-Value* lifterClass::createNotFolder(Value* LHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createNotFolder(Value* LHS,
+                                                            const Twine& Name) {
 
   return createXorFolder(LHS, Constant::getAllOnesValue(LHS->getType()), Name);
 }
-
-Value* lifterClass::createAndFolder(Value* LHS, Value* RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createAndFolder(Value* LHS,
+                                                            Value* RHS,
+                                                            const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::And);
 }
-
-Value* lifterClass::createMulFolder(Value* LHS, Value* RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createMulFolder(Value* LHS,
+                                                            Value* RHS,
+                                                            const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::Mul);
 }
-
-Value* lifterClass::createSDivFolder(Value* LHS, Value* RHS,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createSDivFolder(Value* LHS, Value* RHS,
+                                                      const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::SDiv);
 }
-Value* lifterClass::createUDivFolder(Value* LHS, Value* RHS,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createUDivFolder(Value* LHS, Value* RHS,
+                                                      const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::UDiv);
 }
-
-Value* lifterClass::createSRemFolder(Value* LHS, Value* RHS,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createSRemFolder(Value* LHS, Value* RHS,
+                                                      const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::SRem);
 }
-Value* lifterClass::createURemFolder(Value* LHS, Value* RHS,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createURemFolder(Value* LHS, Value* RHS,
+                                                      const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::URem);
 }
-
-Value* lifterClass::createShlFolder(Value* LHS, Value* RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createShlFolder(Value* LHS,
+                                                            Value* RHS,
+                                                            const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::Shl);
 }
-
-Value* lifterClass::createLShrFolder(Value* LHS, Value* RHS,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createLShrFolder(Value* LHS, Value* RHS,
+                                                      const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::LShr);
 }
-Value* lifterClass::createAShrFolder(Value* LHS, Value* RHS,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createAShrFolder(Value* LHS, Value* RHS,
+                                                      const Twine& Name) {
   return folderBinOps(LHS, RHS, Name, Instruction::AShr);
 }
-
-Value* lifterClass::createShlFolder(Value* LHS, uint64_t RHS,
-                                    const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createShlFolder(Value* LHS,
+                                                            uint64_t RHS,
+                                                            const Twine& Name) {
   return createShlFolder(LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
-
-Value* lifterClass::createShlFolder(Value* LHS, APInt RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createShlFolder(Value* LHS,
+                                                            APInt RHS,
+                                                            const Twine& Name) {
   return createShlFolder(LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
-
-Value* lifterClass::createLShrFolder(Value* LHS, uint64_t RHS,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createLShrFolder(Value* LHS, uint64_t RHS,
+                                                      const Twine& Name) {
   return createLShrFolder(LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
-Value* lifterClass::createLShrFolder(Value* LHS, APInt RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createLShrFolder(Value* LHS, APInt RHS,
+                                                      const Twine& Name) {
   return createLShrFolder(LHS, ConstantInt::get(LHS->getType(), RHS), Name);
 }
 std::optional<bool> foldKnownBits(CmpInst::Predicate P, const KnownBits& LHS,
@@ -1352,9 +1411,10 @@ Value* ICMPPatternMatcher(IRBuilder<llvm::InstSimplifyFolder>& builder,
 
   return nullptr;
 }
-
-Value* lifterClass::createICMPFolder(CmpInst::Predicate P, Value* LHS,
-                                     Value* RHS, const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createICMPFolder(
+    CmpInst::Predicate P, Value* LHS, Value* RHS, const Twine& Name) {
   if (auto patternCheck = ICMPPatternMatcher(builder, P, LHS, RHS, Name)) {
     printvalue(patternCheck);
     return patternCheck;
@@ -1377,8 +1437,11 @@ Value* lifterClass::createICMPFolder(CmpInst::Predicate P, Value* LHS,
 }
 
 // - probably not needed anymore
-Value* lifterClass::createTruncFolder(Value* V, Type* DestTy,
-                                      const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createTruncFolder(Value* V, Type* DestTy,
+                                                       const Twine& Name) {
   Value* result =
       createInstruction(Instruction::Trunc, V, nullptr, DestTy, Name);
 
@@ -1401,9 +1464,11 @@ Value* lifterClass::createTruncFolder(Value* V, Type* DestTy,
       result,
       builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
-
-Value* lifterClass::createZExtFolder(Value* V, Type* DestTy,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createZExtFolder(Value* V, Type* DestTy,
+                                                      const Twine& Name) {
   auto result = createInstruction(Instruction::ZExt, V, nullptr, DestTy, Name);
 #ifdef TESTFOLDER8
   if (auto ctxI = dyn_cast<Instruction>(result)) {
@@ -1417,9 +1482,10 @@ Value* lifterClass::createZExtFolder(Value* V, Type* DestTy,
       result,
       builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
-
-Value* lifterClass::createZExtOrTruncFolder(Value* V, Type* DestTy,
-                                            const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createZExtOrTruncFolder(
+    Value* V, Type* DestTy, const Twine& Name) {
   Type* VTy = V->getType();
   if (VTy->getScalarSizeInBits() < DestTy->getScalarSizeInBits())
     return createZExtFolder(V, DestTy, Name);
@@ -1427,9 +1493,11 @@ Value* lifterClass::createZExtOrTruncFolder(Value* V, Type* DestTy,
     return createTruncFolder(V, DestTy, Name);
   return V;
 }
-
-Value* lifterClass::createSExtFolder(Value* V, Type* DestTy,
-                                     const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::createSExtFolder(Value* V, Type* DestTy,
+                                                      const Twine& Name) {
   auto result = createInstruction(Instruction::SExt, V, nullptr, DestTy, Name);
 
 #ifdef TESTFOLDER8
@@ -1444,9 +1512,10 @@ Value* lifterClass::createSExtFolder(Value* V, Type* DestTy,
       result,
       builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
-
-Value* lifterClass::createSExtOrTruncFolder(Value* V, Type* DestTy,
-                                            const Twine& Name) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::createSExtOrTruncFolder(
+    Value* V, Type* DestTy, const Twine& Name) {
   Type* VTy = V->getType();
   if (VTy->getScalarSizeInBits() < DestTy->getScalarSizeInBits())
     return createSExtFolder(V, DestTy, Name);
@@ -1459,7 +1528,9 @@ Value* lifterClass::createSExtOrTruncFolder(Value* V, Type* DestTy,
 %extendedValue13 = zext i8 %trunc11 to i64
 %maskedreg14 = and i64 %newreg9, -256
 */
-void lifterClass::Init_Flags() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::Init_Flags() {
   LLVMContext& context = builder.getContext();
   auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
@@ -1479,7 +1550,10 @@ void lifterClass::Init_Flags() {
   Registers[Register::RFLAGS] = two;
 }
 
-Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::setFlag(const Flag flag,
+                                                    Value* newValue) {
   LLVMContext& context = builder.getContext();
   newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
   // printvalue2((int32_t)flag) printvalue(newValue);
@@ -1489,9 +1563,10 @@ Value* lifterClass::setFlag(const Flag flag, Value* newValue) {
   FlagList[flag].set(newValue); // Set the new value directly
   return newValue;
 }
-
-void lifterClass::setFlag(const Flag flag,
-                          std::function<Value*()> calculation) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::setFlag(
+    const Flag flag, std::function<Value*()> calculation) {
   // If the flag is one of the reserved ones, do not modify
   if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
     return;
@@ -1499,13 +1574,15 @@ void lifterClass::setFlag(const Flag flag,
   // lazy calculation
   FlagList[flag].setCalculation(calculation);
 }
-
-LazyValue lifterClass::getLazyFlag(const Flag flag) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+LazyValue lifterClass<Mnemonic, Register, T3>::getLazyFlag(const Flag flag) {
   //
   return FlagList[flag];
 }
-
-Value* lifterClass::getFlag(const Flag flag) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::getFlag(const Flag flag) {
   Value* result = FlagList[flag].get(); // Retrieve the value,
   if (result) // if its somehow nullptr, just return False as value
     return createTruncFolder(result, builder.getInt1Ty());
@@ -1514,14 +1591,10 @@ Value* lifterClass::getFlag(const Flag flag) {
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-// ??
-Value* memoryAlloc;
-Value* TEB;
-void initMemoryAlloc(Value* allocArg) { memoryAlloc = allocArg; }
-Value* getMemory() { return memoryAlloc; }
-// ??
-
-void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::InitRegisters(Function* function,
+                                                        const ZyanU64 rip) {
 
   // rsp
   // rsp_unaligned = %rsp % 16
@@ -1537,9 +1610,6 @@ void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
     if (std::next(argIt) == argEnd) {
       arg->setName("memory");
       memoryAlloc = arg;
-    } else if (std::next(argIt, 2) == argEnd) {
-      arg->setName("TEB");
-      TEB = arg;
     } else {
       // arg->setName(ZydisRegisterGetString(zydisRegister));
       Registers[reg] = arg;
@@ -1602,8 +1672,10 @@ void lifterClass::InitRegisters(Function* function, const ZyanU64 rip) {
   */
   return;
 }
-
-Value* lifterClass::GetValueFromHighByteRegister(const Register reg) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::GetValueFromHighByteRegister(
+    const Register reg) {
 
   Value* fullRegisterValue = Registers[getBiggestEncoding(reg)];
 
@@ -1614,8 +1686,9 @@ Value* lifterClass::GetValueFromHighByteRegister(const Register reg) {
 
   return createTruncFolder(highByteValue, builder.getIntNTy(8));
 }
-
-void lifterClass::SetRFLAGSValue(Value* value) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::SetRFLAGSValue(Value* value) {
   LLVMContext& context = builder.getContext();
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
     int shiftAmount = flag;
@@ -1628,8 +1701,9 @@ void lifterClass::SetRFLAGSValue(Value* value) {
   }
   return;
 }
-
-Value* lifterClass::GetRFLAGSValue() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::GetRFLAGSValue() {
   LLVMContext& context = builder.getContext();
   Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0);
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
@@ -1644,8 +1718,10 @@ Value* lifterClass::GetRFLAGSValue() {
   }
   return rflags;
 }
-
-Value* lifterClass::GetRegisterValue(const Register key) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value*
+lifterClass<Mnemonic, Register, T3>::GetRegisterValue(const Register key) {
   // printvalue2(magic_enum::enum_name(key));
 
   if (key == Register::RIP) {
@@ -1665,11 +1741,11 @@ Value* lifterClass::GetRegisterValue(const Register key) {
   }
 
   if (key == Register::GS) {
-    auto funcInfo = new funcsignatures::functioninfo("loadGS", {});
+    auto funcInfo = new funcsignatures<Register>::functioninfo("loadGS", {});
     return callFunctionIR("loadGS", funcInfo);
   }
   if (key == Register::DS) {
-    auto funcInfo = new funcsignatures::functioninfo("loadDS", {});
+    auto funcInfo = new funcsignatures<Register>::functioninfo("loadDS", {});
     return callFunctionIR("loadDS", funcInfo);
   }
   /*
@@ -1679,12 +1755,13 @@ Value* lifterClass::GetRegisterValue(const Register key) {
   */
 
   Register largestKey = getBiggestEncoding(key);
-  uint8_t size = getRegisterSize(key);
-  return createTruncFolder(Registers[largestKey], builder.getIntNTy(size));
+  // dont truncate here?
+  return Registers[largestKey];
 }
-
-Value* lifterClass::SetValueToHighByteRegister(const Register reg,
-                                               Value* value) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::SetValueToHighByteRegister(
+    const Register reg, Value* value) {
   LLVMContext& context = builder.getContext();
   int shiftValue = 8;
 
@@ -1708,8 +1785,10 @@ Value* lifterClass::SetValueToHighByteRegister(const Register reg,
 
   return newRegisterValue;
 }
-
-Value* lifterClass::SetValueToSubRegister_8b(const Register reg, Value* value) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::SetValueToSubRegister_8b(
+    const Register reg, Value* value) {
   LLVMContext& context = builder.getContext();
   Register fullRegKey = getBiggestEncoding(reg);
   Value* fullRegisterValue = Registers[fullRegKey];
@@ -1741,9 +1820,10 @@ Value* lifterClass::SetValueToSubRegister_8b(const Register reg, Value* value) {
 
   return updatedReg;
 }
-
-Value* lifterClass::SetValueToSubRegister_16b(const Register reg,
-                                              Value* value) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::SetValueToSubRegister_16b(
+    const Register reg, Value* value) {
 
   Register fullRegKey = getBiggestEncoding(reg);
   Value* fullRegisterValue = Registers[fullRegKey];
@@ -1759,7 +1839,10 @@ Value* lifterClass::SetValueToSubRegister_16b(const Register reg,
   return updatedReg;
 }
 
-void lifterClass::SetRegisterValue(const Register key, Value* value) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::SetRegisterValue(const Register key,
+                                                           Value* value) {
   if ((key >= Register::AL) && (key <= Register::R15B)) {
     value = SetValueToSubRegister_8b(key, value);
   }
@@ -1778,7 +1861,9 @@ void lifterClass::SetRegisterValue(const Register key, Value* value) {
   Registers[newKey] = value;
 }
 
-Value* lifterClass::GetEffectiveAddress() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::GetEffectiveAddress() {
   LLVMContext& context = builder.getContext();
 
   Value* effectiveAddress = nullptr;
@@ -1813,6 +1898,7 @@ Value* lifterClass::GetEffectiveAddress() {
     effectiveAddress = ConstantInt::get(Type::getInt64Ty(context), 0);
   }
 
+  printvalue2(instruction.mem_disp);
   if (instruction.mem_disp) {
 
     Value* dispValue =
@@ -1823,8 +1909,9 @@ Value* lifterClass::GetEffectiveAddress() {
   printvalue(effectiveAddress);
   return effectiveAddress;
 }
-
-Value* lifterClass::getPointer(Value* address) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::getPointer(Value* address) {
 
   LLVMContext& context = builder.getContext();
   std::vector<Value*> indices;
@@ -1841,7 +1928,10 @@ Value* lifterClass::getPointer(Value* address) {
 }
 
 // takes address, not pointers
-Value* lifterClass::GetMemoryValue(Value* address, uint8_t size) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::GetMemoryValue(Value* address,
+                                                           uint8_t size) {
 
   // convert to pointer first
   auto pointer = getPointer(address);
@@ -1863,7 +1953,10 @@ Value* lifterClass::GetMemoryValue(Value* address, uint8_t size) {
 }
 
 // takes address, not pointers
-void lifterClass::SetMemoryValue(llvm::Value* address, llvm::Value* value) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::SetMemoryValue(llvm::Value* address,
+                                                         llvm::Value* value) {
 
   auto pointer = getPointer(address);
 
@@ -1871,8 +1964,9 @@ void lifterClass::SetMemoryValue(llvm::Value* address, llvm::Value* value) {
 
   insertMemoryOp(cast<StoreInst>(store));
 }
-
-Value* lifterClass::GetIndexValue(uint8_t index) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::GetIndexValue(uint8_t index) {
 
   auto type = instruction.types[index];
 
@@ -1885,7 +1979,8 @@ Value* lifterClass::GetIndexValue(uint8_t index) {
   case OperandType::Register64: {
     auto reg = instruction.regs[index];
 
-    return GetRegisterValue(reg);
+    return createTruncFolder(GetRegisterValue(reg),
+                             builder.getIntNTy(GetTypeSize(type)));
   }
 
   case OperandType::Immediate8:
@@ -1951,7 +2046,10 @@ Value* lifterClass::GetIndexValue(uint8_t index) {
   }
 }
 
-void lifterClass::SetIndexValue(uint8_t index, Value* value) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::SetIndexValue(uint8_t index,
+                                                        Value* value) {
 
   auto type = instruction.types[index];
 
@@ -2015,37 +2113,29 @@ void lifterClass::SetIndexValue(uint8_t index, Value* value) {
   }
   }
 }
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::GetOperandValue(
+    const ZydisDecodedOperand& op, int possiblesize,
+    const std::string& address) {}
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::SetOperandValue(
+    const ZydisDecodedOperand& op, Value* value, const std::string& address) {}
 
-Value* lifterClass::GetOperandValue(const ZydisDecodedOperand& op,
-                                    int possiblesize,
-                                    const std::string& address) {}
-
-Value* lifterClass::SetOperandValue(const ZydisDecodedOperand& op, Value* value,
-                                    const std::string& address) {}
-
-Value* getMemoryFromValue(IRBuilder<llvm::InstSimplifyFolder>& builder,
-                          Value* value) {
-  LLVMContext& context = builder.getContext();
-
-  std::vector<Value*> indices;
-  indices.push_back(value);
-
-  Value* pointer = builder.CreateGEP(Type::getInt8Ty(context), memoryAlloc,
-                                     indices, "GEPSTOREVALUE");
-
-  return pointer;
-}
-
-std::vector<Value*> lifterClass::GetRFLAGS() {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+std::vector<Value*> lifterClass<Mnemonic, Register, T3>::GetRFLAGS() {
   std::vector<Value*> rflags;
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
     rflags.push_back(getFlag((Flag)flag));
   }
   return rflags;
 }
-
-void lifterClass::pushFlags(const std::vector<Value*>& value,
-                            const std::string& address) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+void lifterClass<Mnemonic, Register, T3>::pushFlags(
+    const std::vector<Value*>& value, const std::string& address) {
   LLVMContext& context = builder.getContext();
 
   auto rsp = GetRegisterValue(Register::RSP);
@@ -2071,7 +2161,9 @@ void lifterClass::pushFlags(const std::vector<Value*>& value,
 }
 
 // return [rsp], rsp+=8
-Value* lifterClass::popStack(int size) {
+template <typename Mnemonic, typename Register,
+          template <typename, typename> class T3>
+Value* lifterClass<Mnemonic, Register, T3>::popStack(int size) {
   LLVMContext& context = builder.getContext();
   auto rsp = GetRegisterValue(Register::RSP);
   // should we get a address calculator function, do we need that?

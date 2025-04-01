@@ -1,8 +1,9 @@
 #pragma once
 
+#include "OperandUtils.ipp"
 #include "ZydisDisassembler.hpp"
 #include "includes.h"
-#include "lifterClass.h"
+#include "lifterClass.hpp"
 #include <Zydis/Decoder.h>
 #include <Zydis/DecoderTypes.h>
 #include <Zydis/Disassembler.h>
@@ -13,25 +14,6 @@
 #include <llvm/Support/raw_ostream.h>
 
 enum FlagState { UNDEF = -1, CLEAR = 0, SET = 1, UNKNOWN };
-
-inline llvm::raw_ostream& operator<<(llvm::raw_ostream& os,
-                                     const FlagState state) {
-  switch (state) {
-  case UNDEF:
-    os << "UNDEF";
-    break;
-  case CLEAR:
-    os << "CLEAR";
-    break;
-  case SET:
-    os << "SET";
-    break;
-  case UNKNOWN:
-    os << "UNKNOWN";
-    break;
-  }
-  return os;
-}
 
 struct TestCase {
 
@@ -75,7 +57,7 @@ inline std::vector<TestCase::FlagsStatus> parseFlagStates(uint64_t flagint) {
 class Tester {
 public:
   ZydisDecoder decoder;
-  lifterClass* lifter;
+  lifterClass<>* lifter;
 
   using TestFunction = std::function<bool(Tester*)>;
 
@@ -182,7 +164,7 @@ public:
     return failures;
   }
 
-  Tester(lifterClass* lifter, bool is64Bit = true) : lifter(lifter) {
+  Tester(lifterClass<>* lifter, bool is64Bit = true) : lifter(lifter) {
 
     ZydisDecoderInit(&decoder,
                      is64Bit ? ZYDIS_MACHINE_MODE_LONG_64
@@ -278,12 +260,13 @@ public:
 
   void disassembleBytesAndLift(const std::vector<uint8_t>& bytes) {
     ZydisDecodedInstruction instruction;
-    ZydisDecoderDecodeFull(&decoder, bytes.data(), 15, &instruction,
-                           lifter->operands);
+    ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+
+    ZydisDecoderDecodeFull(&decoder, bytes.data(), 15, &instruction, operands);
 
     lifter->instruction.attributes = instruction.attributes;
 
-    lifter->instruction.mnemonic = (Mnemonic)(instruction.mnemonic - 1);
+    lifter->instruction.mnemonic = (instruction.mnemonic);
 
     // lifter->instruction.operand_count_total = instruction.operand_count;
 

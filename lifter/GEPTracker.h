@@ -3,6 +3,7 @@
 
 #include <Zycore/Types.h>
 #include <llvm/ADT/APInt.h>
+#include <llvm/ADT/DenseSet.h>
 #include <llvm/IR/Value.h>
 
 using namespace llvm;
@@ -71,6 +72,8 @@ namespace BinaryOperations {
 
   bool isWrittenTo(const uint64_t addr);
 
+  void WriteTo(uint64_t addr);
+
   uint64_t RvaToFileOffset(const void* ntHeadersBase, uint32_t rva);
 
   uint64_t address_to_mapped_address(uint64_t rva);
@@ -87,4 +90,5 @@ namespace SCCPSimplifier {
     void cleanup();
 } // namespace SCCPSimplifier
 */
+
 #endif
