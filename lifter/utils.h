@@ -1,4 +1,5 @@
 #pragma once
+#include "CommonDisassembler.hpp"
 #include "llvm/IR/Value.h"
 #include <linuxpe>
 #include <llvm/Support/raw_ostream.h>
@@ -41,7 +42,7 @@
 
 #define printvalueforce2(x)                                                    \
   do {                                                                         \
-    llvm::outs() << " " #x " : " << x << "\n";                                 \
+    llvm::outs() << " " #x " : " << x << __FILE__ << __LINE__ << "\n";         \
     llvm::outs().flush();                                                      \
   } while (0);
 
@@ -57,6 +58,7 @@ namespace debugging {
   template <typename T> void printValue(const T& v, const char* name) {
     if (!shouldDebug || !debugStream)
       return;
+
     if constexpr (std::is_same_v<T, uint8_t> || std::is_same_v<T, int8_t>) {
       *debugStream << " " << name << " : " << static_cast<int>(v) << "\n";
       debugStream->flush();

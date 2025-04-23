@@ -3657,6 +3657,24 @@ inline Mnemonic ConvertZydisToMergen2(ZydisMnemonic mnemonic) {
   };
 };
 
+inline InstructionPrefix
+ConvertAttributesZydisToMergen(ZydisInstructionAttributes attributes) {
+
+  if (attributes & ZYDIS_ATTRIB_HAS_REP) {
+    return InstructionPrefix::Rep;
+  }
+  if (attributes & ZYDIS_ATTRIB_HAS_REPE) {
+    return InstructionPrefix::Repe;
+  }
+  if (attributes & ZYDIS_ATTRIB_HAS_REPNE) {
+    return InstructionPrefix::Repne;
+  }
+  if (attributes & ZYDIS_ATTRIB_HAS_LOCK) {
+    return InstructionPrefix::Lock;
+  }
+  return InstructionPrefix::None;
+}
+
 template <typename Mnemonic>
 inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
   if constexpr (std::is_same_v<Mnemonic, MnemonicZydis>) {
@@ -4390,10 +4408,6 @@ inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
   return zydisRegisterToMergenRegister2<Register>(reg);
 }
 
-struct a {
-  ZydisDecoder decoder;
-};
-
 template <typename Mnemonic, typename Register> class ZydisDisassembler {
 private:
   ZydisDecoder decoder;
@@ -4420,13 +4434,22 @@ public:
     ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 
     ZydisDecoderDecodeFull(&decoder, buffer, size, &instruction, operands);
+    /*
+        for (int i = 0; i < instruction.length; i++) {
+          auto byte = static_cast<uint8_t*>(buffer)[i];
+          static std::error_code EC;
+          static auto fileStream = llvm::raw_fd_ostream("bytes.txt", EC);
+          fileStream << (char)byte;
+          fileStream.flush();
+        } */
 
     auto convertedInstruction =
         MergenDisassembledInstruction_base<Mnemonic, Register>{
-            .mnemonic = ConvertZydisToMergen<Mnemonic>(instruction.mnemonic),
-            .attributes = instruction.attributes,
+            .attributes =
+                ConvertAttributesZydisToMergen(instruction.attributes),
             .length = instruction.length,
             .operand_count_visible = instruction.operand_count_visible,
+            .mnemonic = ConvertZydisToMergen<Mnemonic>(instruction.mnemonic),
         };
     bool secondimm = false;
 
@@ -4450,7 +4473,6 @@ public:
       if (op.type == ZYDIS_OPERAND_TYPE_REGISTER) {
 
         // printvalue2(op.reg.value);
-        // printvalue2(magic_enum::enum_name(op.reg.value));
 
         convertedInstruction.regs[i] =
             zydisRegisterToMergenRegister<Register>(op.reg.value);
@@ -4493,37 +4515,34 @@ public:
     }
     switch (instruction.mnemonic) {
     case ZYDIS_MNEMONIC_PUSH: {
-      convertedInstruction.stack_growth = operands[2].size;
+      convertedInstruction.stack_growth = operands[2].size / 8;
       break;
     }
     case ZYDIS_MNEMONIC_POP: {
-      convertedInstruction.stack_growth = operands[2].size;
+      convertedInstruction.stack_growth = operands[2].size / 8;
       break;
     }
     default:
       break;
     };
 
-#ifndef _NODEV
-    debugging::doIfDebug([&]() {
-      ZydisFormatter formatter;
+    ZydisFormatter formatter;
 
-      ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
-      char buffer[256];
+    ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+    char buf[256];
 
-      ZyanU64 runtime_address = 0;
+    ZyanU64 runtime_address = 0;
 
-      ZydisFormatterFormatInstruction(&formatter, &(instruction), operands,
-                                      instruction.operand_count_visible,
-                                      &buffer[0], sizeof(buffer),
-                                      runtime_address, ZYAN_NULL);
+    ZydisFormatterFormatInstruction(&formatter, &(instruction), operands,
+                                    instruction.operand_count_visible, &buf[0],
+                                    sizeof(buf), runtime_address, ZYAN_NULL);
 
-      convertedInstruction.text = std::string(buffer);
-    });
-#endif
-
+    convertedInstruction.text = std::string(buf);
+    /*
+    printvalueforce2(convertedInstruction.text);
+    */
     return convertedInstruction;
-  };
+  }
 };
 
 #endif // ZYDIS_DISASSEMBLER_H

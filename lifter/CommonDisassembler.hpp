@@ -5,7 +5,6 @@
 #include "CommonRegisters.h"
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
-#include "utils.h"
 #include <Zydis/Decoder.h>
 #include <Zydis/DecoderTypes.h>
 #include <Zydis/Mnemonic.h>
@@ -67,7 +66,7 @@ inline uint8_t GetTypeSize(OperandType op) {
 enum class InstructionPrefix : uint8_t {
   None = 0,
   Rep,
-  Repe,
+  Repe = Rep,
   Repne,
   Lock,
   End = Lock
@@ -79,8 +78,6 @@ enum class InstructionPrefix : uint8_t {
 template <typename Mnemonic = MnemonicInternal,
           typename Register = RegisterInternal>
 struct MergenDisassembledInstruction_base {
-  // instruction mnemonic
-  Mnemonic mnemonic;
 
   // we only care about explicit operands in this struct
 
@@ -90,24 +87,27 @@ struct MergenDisassembledInstruction_base {
   Register mem_index;
   uint8_t mem_scale;
 
-  union {
-    uint64_t mem_disp;
-    uint64_t immediate2;
-  };
-
   uint8_t stack_growth;
-
-  // TODO : 32 bit
-  uint64_t immediate; //
 
   Register regs[4];
   OperandType types[4];
 
   // instruction prefix, attributes
-  uint64_t attributes;
+  InstructionPrefix attributes;
 
   uint8_t length;
   uint8_t operand_count_visible;
+
+  // instruction mnemonic
+  Mnemonic mnemonic;
+
+  // TODO : 32 bit
+  uint64_t immediate; //
+
+  union {
+    uint64_t mem_disp;
+    uint64_t immediate2;
+  };
 
 #ifndef _NODEV
   std::string text;

@@ -5,6 +5,11 @@
 #include "GEPTracker.h"
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
+#include "ZydisDisassembler_mnemonics.h"
+#include "ZydisDisassembler_registers.h"
+#include "icedDisassembler.hpp"
+#include "icedDisassembler_mnemonics.h"
+#include "icedDisassembler_registers.h"
 #include "includes.h"
 #include "utils.h"
 #include <Zydis/DecoderTypes.h>
@@ -249,9 +254,9 @@ public:
 
 // Core lifter
 
-template <typename Mnemonic = MnemonicZydis, typename Register = RegisterZydis,
+template <typename Mnemonic = IcedMnemonics, typename Register = IcedRegister,
           template <typename, typename> class DisassemblerBase =
-              ZydisDisassembler>
+              icedDisassembler>
 class lifterClass {
 public:
   using Disassembler = DisassemblerBase<Mnemonic, Register>;
@@ -338,6 +343,8 @@ public:
   llvm::DenseMap<GEPinfo, Value*, typename GEPinfo::GEPinfoKeyInfo> GEPcache;
   std::vector<llvm::Instruction*> memInfos;
 
+  std::vector<BBInfo> unvisitedAddresses;
+
   // global
   llvm::Value* memoryAlloc;
   llvm::Function* fnc;
@@ -353,7 +360,7 @@ public:
       : builder(other.builder), // Reference copied directly
         blockInfo(
             other.blockInfo), // Assuming BBInfo has a proper copy constructor
-        run(other.run), finished(other.finished), counter(other.counter),
+        run(other.run), finished(0), counter(other.counter),
         isUnreachable(other.isUnreachable),
         instruction(other.instruction), // Shallow copy of the pointer
         assumptions(other.assumptions), // Deep copy of assumptions
@@ -429,6 +436,22 @@ public:
   simpleFPV SetOperandValueFP(const ZydisDecodedOperand& op, simpleFPV value,
                               const std::string& address = "");
   */
+
+  Register GetAccumulatorRegister(uint8_t size = 64) {
+    switch (size) {
+    case 64:
+      return Register::RAX;
+    case 32:
+      return Register::EAX;
+    case 16:
+      return Register::AX;
+    case 8:
+      return Register::AL;
+    default:
+      UNREACHABLE("invalid acc");
+    }
+  }
+
   llvm::Value* GetIndexValue(uint8_t index);
 
   void SetIndexValue(uint8_t index, Value* value);

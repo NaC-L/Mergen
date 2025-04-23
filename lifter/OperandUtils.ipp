@@ -1442,6 +1442,7 @@ template <typename Mnemonic, typename Register,
 Value*
 lifterClass<Mnemonic, Register, T3>::createTruncFolder(Value* V, Type* DestTy,
                                                        const Twine& Name) {
+
   Value* result =
       createInstruction(Instruction::Trunc, V, nullptr, DestTy, Name);
 
@@ -1620,24 +1621,13 @@ void lifterClass<Mnemonic, Register, T3>::InitRegisters(Function* function,
 
   LLVMContext& context = builder.getContext();
 
-  const auto filebase =
-      ConstantInt::getSigned(Type::getInt64Ty(context), 0x140001000);
-  const auto filesize =
-      ConstantInt::getSigned(Type::getInt64Ty(context), 0x391000);
   const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
-  const auto magic = ConstantInt::getSigned(Type::getInt64Ty(context), 0x13370);
-  const auto magicpluseight =
-      ConstantInt::getSigned(Type::getInt64Ty(context), 0x13370 + 8);
-  const auto magicplusten =
-      ConstantInt::getSigned(Type::getInt64Ty(context), 0x13370 + 0x10);
 
   /*
     Registers[Register::RBP] = zero;
 
-    Registers[Register::RCX] = magic;
 
     Registers[Register::RAX] = filebase;
-    Registers[Register::RDX] = filesize;
     Registers[Register::RBX] = filebase;
 
     Registers[Register::RSI] = zero;
@@ -1969,8 +1959,8 @@ template <typename Mnemonic, typename Register,
 Value* lifterClass<Mnemonic, Register, T3>::GetIndexValue(uint8_t index) {
 
   auto type = instruction.types[index];
-
-  // printvalue2(magic_enum::enum_name(type));
+  printvalue2(index);
+  printvalue2(magic_enum::enum_name(type));
 
   switch (type) {
   case OperandType::Register8:
@@ -1979,8 +1969,8 @@ Value* lifterClass<Mnemonic, Register, T3>::GetIndexValue(uint8_t index) {
   case OperandType::Register64: {
     auto reg = instruction.regs[index];
 
-    return createTruncFolder(GetRegisterValue(reg),
-                             builder.getIntNTy(GetTypeSize(type)));
+    return createZExtOrTruncFolder(GetRegisterValue(reg),
+                                   builder.getIntNTy(GetTypeSize(type)));
   }
 
   case OperandType::Immediate8:
@@ -2041,6 +2031,8 @@ Value* lifterClass<Mnemonic, Register, T3>::GetIndexValue(uint8_t index) {
     return GetMemoryValue(addr, size);
   }
   default: {
+    printvalueforce2(magic_enum::enum_name(type));
+    printvalueforce2((uint32_t)index);
     UNREACHABLE("idk");
   }
   }
