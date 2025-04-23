@@ -65,6 +65,7 @@ static_assert(offsetof(icedObj, text) == 40, "invalid offset");
 
 extern "C" {
 int disas(void* obj, const void* code, size_t len);
+int disas2(void* obj, const void* code, size_t len);
 }
 
 template <typename Mnemonic>
@@ -4186,7 +4187,11 @@ public:
   disassemble(void* buffer, size_t size = 15) {
 
     icedObj obj;
-    disas(&obj, buffer, size);
+    if (debugging::shouldDebug) {
+      disas2(&obj, buffer, size);
+    } else {
+      disas(&obj, buffer, size);
+    }
     /*
         printvalueforce2(obj.text);
         auto val = icedToMergenMnemonics<Mnemonic>(

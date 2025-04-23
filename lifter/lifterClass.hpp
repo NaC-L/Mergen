@@ -24,6 +24,10 @@
 #include <llvm/Support/KnownBits.h>
 #include <set>
 
+#define MAGIC_ENUM_RANGE_MIN -1000
+#define MAGIC_ENUM_RANGE_MAX 1000
+#include <magic_enum/magic_enum.hpp>
+
 #ifndef DEFINE_FUNCTION
 #define DEFINE_FUNCTION(name) void lift_##name()
 #endif
