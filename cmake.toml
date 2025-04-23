@@ -9,6 +9,7 @@ name = "Mergen"
 windows = "WIN32"
 testmode = "DEFINED MERGEN_TEST"
 
+
 [variables]
 CMAKE_MODULE_PATH = "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
 CMAKE_CXX_FLAGS_DEBUG = "-O0 -gfull"
@@ -25,13 +26,16 @@ tag = "v4.1.0"
 git = "https://github.com/Neargye/magic_enum"
 tag = "a413fcc"
 
+
 [find-package.LLVM-Wrapper]
+
+[find-package.Iced-Wrapper]
 
 [target.lifter]
 type = "executable"
 sources = ["lifter/*.cpp"]
 headers = ["lifter/*.h", "lifter/*.hpp", "lifter/*.ipp"]
-link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe", "magic_enum"]
-windows.link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe", "Ws2_32"]
+link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe",  "magic_enum", "Iced_Wrapper"]
+windows.link-libraries = ["Ws2_32"]
 compile-features = ["cxx_std_20"]
 testmode.compile-definitions = ["MERGEN_TEST"]
