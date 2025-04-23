@@ -1714,7 +1714,7 @@ Value*
 lifterClass<Mnemonic, Register, T3>::GetRegisterValue(const Register key) {
   // printvalue2(magic_enum::enum_name(key));
 
-  if (key == Register::RIP) {
+  if (key == Register::RIP || key == Register::EIP) {
     return ConstantInt::getSigned(BinaryOperations::getBitness() == 64
                                       ? Type::getInt64Ty(builder.getContext())
                                       : Type::getInt32Ty(builder.getContext()),
