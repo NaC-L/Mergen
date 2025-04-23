@@ -1833,6 +1833,10 @@ template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
 void lifterClass<Mnemonic, Register, T3>::SetRegisterValue(const Register key,
                                                            Value* value) {
+
+  if (key == Register::EIP)
+    return;
+
   if ((key >= Register::AL) && (key <= Register::R15B)) {
     value = SetValueToSubRegister_8b(key, value);
   }
