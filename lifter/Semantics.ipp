@@ -20,6 +20,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <magic_enum/magic_enum.hpp>
 
 // #include <popcntintrin.h>
 
@@ -371,6 +372,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_movs_X() {
           Type::getIntNTy(context, sourceReg->getType()->getIntegerBitWidth()),
           1 * byteSizeValue));
 
+  printvalue2(magic_enum::enum_name(instruction.attributes));
   if (instruction.attributes == InstructionPrefix::Rep) {
     auto sizeReg = GetRegisterValue(Register::RCX);
 
@@ -386,8 +388,8 @@ void lifterClass<Mnemonic, Register, T3>::lift_movs_X() {
     destReg = createAddFolder(destReg, Direction);
     printvalue(sourceReg);
     printvalue(destReg);
-    SetRegisterValue(Register::RDI, sourceReg);
-    SetRegisterValue(Register::RSI, destReg);
+    SetRegisterValue(Register::RSI, sourceReg);
+    SetRegisterValue(Register::RDI, destReg);
 
     // also update sourceReg and destReg properly
     return;

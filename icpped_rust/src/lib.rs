@@ -6,8 +6,16 @@ use memoffset::offset_of;
 
 /// A C-compatible version of your disassembled instruction structure.
 
-#[derive(Debug, Clone, Copy)]
+pub const PREFIX_NONE: u8 = 0;
+pub const PREFIX_REP: u8 = 1;
+pub const PREFIX_REPE: u8 = 1;
+pub const PREFIX_REPNE: u8 = 2;
+pub const PREFIX_LOCK: u8 = 3;
+pub const PREFIX_END: u8 = 3;
 
+
+
+#[derive(Debug, Clone, Copy)]
 enum OperandType {
   Invalid,
   Register8,
@@ -173,7 +181,7 @@ fn convert_type_to_mergen(inst : &Instruction,  index : u32) -> OperandType {
 pub extern "C" fn disas(
     out: *mut MergenDisassembledInstructionBase,
     code_ptr: *const u8,
-    len: usize,
+    len: usize
 ) -> i32 {
     // Fast null/length check
     if out.is_null() || code_ptr.is_null() || len == 0 {
@@ -184,6 +192,7 @@ pub extern "C" fn disas(
     let code = unsafe { std::slice::from_raw_parts(code_ptr, len) };
     let mut decoder = Decoder::new(64, code, DecoderOptions::NONE);
     let instr = decoder.decode();
+
 
     // Precompute commonly used values
     let disp64 = instr.memory_displacement64();
@@ -203,9 +212,9 @@ pub extern "C" fn disas(
 
     // Compute prefix attributes via bitflags
     let mut attrs = 0u8;
-    if instr.has_rep_prefix()   { attrs |= 0b001; }
-    if instr.has_repne_prefix() { attrs |= 0b010; }
-    if instr.has_lock_prefix()  { attrs |= 0b100; }
+    if instr.has_rep_prefix()   { attrs = PREFIX_REP as u8; }
+    if instr.has_repne_prefix() { attrs = PREFIX_REPNE as u8; }
+    if instr.has_lock_prefix()  { attrs = PREFIX_LOCK as u8; }
 
     // Build output struct in one go
     let out_value = MergenDisassembledInstructionBase {
