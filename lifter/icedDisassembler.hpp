@@ -4187,6 +4187,7 @@ public:
   disassemble(void* buffer, size_t size = 15) {
 
     icedObj obj;
+
     if (debugging::shouldDebug) {
       disas2(&obj, buffer, size);
     } else {
@@ -4229,7 +4230,7 @@ public:
             // .mem_disp = obj.mem_disp,
             .mem_scale = obj.mem_scale,
             .stack_growth = obj.stack_growth,
-
+            .attributes = static_cast<InstructionPrefix>(obj.attributes),
             .length = obj.length,
             .operand_count_visible = obj.operand_count_visible,
 
@@ -4267,7 +4268,8 @@ public:
       }
       }
     }
-    // convertedInstruction.text = obj.text;
+
+    debugging::doIfDebug([&] { convertedInstruction.text = obj.text; });
     return convertedInstruction;
   };
 };
