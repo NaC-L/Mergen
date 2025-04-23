@@ -7,14 +7,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     software-properties-common \
     gnupg \
     cmake \
-    git \
-    rustc
+    git 
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     wget https://apt.llvm.org/llvm.sh \
     && chmod +x llvm.sh \
     && ./llvm.sh 18 \
     && rm llvm.sh
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 COPY . /root/Mergen
 
