@@ -7,7 +7,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     software-properties-common \
     gnupg \
     cmake \
-    git
+    git \
+    rust
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     wget https://apt.llvm.org/llvm.sh \
