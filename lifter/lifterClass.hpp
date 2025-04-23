@@ -144,7 +144,7 @@ public:
     default: {
       // For ordered registers RAX to R15, map directly by offset from RAX
 
-      if (key >= Register::RAX && key <= Register::R15) {
+      if (!(key >= Register::RAX && key <= Register::R15)) {
         printvalueforce2(magic_enum::enum_name(key));
       }
       assert(key >= Register::RAX && key <= Register::R15 &&
