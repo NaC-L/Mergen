@@ -81,12 +81,15 @@ void lifterClass<Mnemonic, Register, T3>::createMemcpy(Value* src, Value* dest,
   printvalue2(C_size);
 
   for (int i = 0; i < C_size; i++) {
-    // we shouldn't interact with buffer directly, because buffer doesnt include
+
+    // we shouldn't read the buffer directly, because buffer doesnt include
     // the binary.
+
     if (!buffer.contains(C_src + i)) {
+
       printvalue2(C_src + i);
       printvalue2(C_dest + i);
-      // UNREACHABLE("interact with the buffer better you bozo");
+
       buffer[C_dest + i] = ValueByteReference();
       continue;
     }

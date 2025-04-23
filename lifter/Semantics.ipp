@@ -371,13 +371,11 @@ void lifterClass<Mnemonic, Register, T3>::lift_movs_X() {
           Type::getIntNTy(context, sourceReg->getType()->getIntegerBitWidth()),
           1 * byteSizeValue));
 
-  printvalue2(instruction.attributes);
-
-  if ((instruction.attributes & ZYDIS_ATTRIB_HAS_REP) != 0) {
+  if (instruction.attributes == InstructionPrefix::Rep) {
     auto sizeReg = GetRegisterValue(Register::RCX);
 
-    // currently it should memcpy properly even if direction is -, but it should
-    // work with current impl, but fix it later
+    // currently it should memcpy properly even if direction is -, but it
+    // should work with current impl, but fix it later
     auto size = createMulFolder(Direction, sizeReg);
     printvalue(sourceReg);
     printvalue(destReg);
@@ -1822,6 +1820,8 @@ template <typename Mnemonic, typename Register,
 void lifterClass<Mnemonic, Register, T3>::lift_shl() {
   LLVMContext& context = builder.getContext();
 
+  printvalue2(finished);
+
   auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
   auto count = 1 + (instruction.mnemonic == Mnemonic::SARX);
   Value* Lvalue = GetIndexValue(dest);
@@ -1959,11 +1959,18 @@ void lifterClass<Mnemonic, Register, T3>::lift_cmpxchg() {
     auto src = operands[1];
     auto accop = operands[2];
    */
-  auto Rvalue = GetIndexValue(0);
 
-  auto Lvalue = GetIndexValue(1);
+  auto Lvalue = GetIndexValue(0);
+  auto Rvalue = GetIndexValue(1);
 
-  auto accum = GetIndexValue(1);
+  Register accreg =
+      GetAccumulatorRegister(Lvalue->getType()->getIntegerBitWidth());
+  auto accum =
+      GetRegisterValue(accreg); // accumulator register, get depending on size?
+  printvalue2(magic_enum::enum_name(accreg));
+  printvalue(accum);
+  printvalue(Rvalue);
+  printvalue(Lvalue);
 
   auto sub = createSubFolder(accum, Lvalue);
 
@@ -1998,7 +2005,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_cmpxchg() {
   // if zf dest = src
   auto result = createSelectFolder(zf, Rvalue, Lvalue);
   auto acc = createSelectFolder(zf, accum, Lvalue);
-  SetIndexValue(2, acc);
+  SetRegisterValue(accreg, acc);
   SetIndexValue(0, result);
   setFlag(FLAG_OF, of);
   setFlag(FLAG_CF, cf);
@@ -2392,11 +2399,11 @@ void lifterClass<Mnemonic, Register, T3>::lift_imul() {
   auto dest = 0; // dest ? ?????
 
   auto destsize = GetTypeSize(instruction.types[0]);
-
   if (destsize == 8 && instruction.operand_count_visible == 1) {
     lift_imul2(1);
     return;
   }
+
   auto src = 1;
   auto src2 = (instruction.operand_count_visible == 3)
                   ? 2
@@ -3113,10 +3120,9 @@ void lifterClass<Mnemonic, Register, T3>::lift_push() {
   auto RspValue = GetRegisterValue(Register::RSP);
 
   auto destsize = instruction.stack_growth;
-
-  auto val = ConstantInt::getSigned(
-      Type::getInt64Ty(context),
-      destsize / 8); // jokes on me apparently this is not a fixed value
+  printvalue2(destsize);
+  auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
+                                    destsize); //
 
   auto result = createSubFolder(
       RspValue, val,
@@ -3136,8 +3142,8 @@ void lifterClass<Mnemonic, Register, T3>::lift_push() {
   case OperandType::Immediate8:
   case OperandType::Immediate16:
   case OperandType::Immediate32: {
-    Rvalue =
-        createSExtFolder(Rvalue, builder.getIntNTy(instruction.stack_growth));
+    Rvalue = createSExtFolder(Rvalue,
+                              builder.getIntNTy(instruction.stack_growth * 8));
     break;
   }
   default:
@@ -3157,7 +3163,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_pushfq() {
   auto dest = operands[1]; // [rsp]
   auto rsp = operands[0];  // rsp */
 
-  auto Rvalue = GetIndexValue(0);
+  auto Rvalue = GetRFLAGSValue();
   // auto Rvalue = GetRFLAGS(builder);
   auto RspValue = GetRegisterValue(Register::RSP);
 
@@ -3187,11 +3193,11 @@ void lifterClass<Mnemonic, Register, T3>::lift_pop() {
 
   auto destsize = instruction.stack_growth;
 
-  auto Rvalue = GetMemoryValue(getSPaddress(), destsize); // [rsp]
+  auto Rvalue = GetMemoryValue(getSPaddress(), destsize * 8); // [rsp]
 
   auto RspValue = GetRegisterValue(Register::RSP);
 
-  auto val = ConstantInt::getSigned(Type::getInt64Ty(context), destsize / 8);
+  auto val = ConstantInt::getSigned(Type::getInt64Ty(context), destsize);
   auto result = createAddFolder(
       RspValue, val,
       "popping_new_rsp-" + std::to_string(blockInfo.runtime_address) + "-");
@@ -3248,7 +3254,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_popfq() {
       RspValue, val,
       "popfq-" + std::to_string(blockInfo.runtime_address) + "-");
 
-  SetIndexValue(2, Rvalue);
+  SetRFLAGSValue(Rvalue);
   // mov val, rsp first
   SetRegisterValue(Register::RSP, result); // then add rsp 8
   // then add rsp 8
@@ -3367,7 +3373,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_test() {
   LLVMContext& context = builder.getContext();
   Value* Lvalue = GetIndexValue(0);
   Value* Rvalue = GetIndexValue(1);
-
+  Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
   Value* testResult = createAndFolder(Lvalue, Rvalue, "testAnd");
   printvalue(Lvalue);
   printvalue(Rvalue);
@@ -3396,6 +3402,8 @@ void lifterClass<Mnemonic, Register, T3>::lift_cmp() {
 
   Value* Lvalue = GetIndexValue(0);
   Value* Rvalue = GetIndexValue(1);
+
+  Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
 
   Value* cmpResult = createSubFolder(Lvalue, Rvalue);
 
@@ -3865,6 +3873,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_bt() {
   auto Lvalue = GetIndexValue(0);
   auto bitIndexValue = GetIndexValue(1);
 
+  bitIndexValue = createZExtFolder(bitIndexValue, Lvalue->getType());
   unsigned LvalueBitW = cast<IntegerType>(Lvalue->getType())->getBitWidth();
 
   auto Rvalue =
@@ -3896,7 +3905,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_btr() {
   unsigned baseBitWidth = basesize;
 
   Value* bitOffset = GetIndexValue(1);
-
+  bitOffset = createZExtFolder(bitOffset, builder.getIntNTy(basesize));
   Value* bitOffsetMasked = createAndFolder(
       bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
       "bitOffsetMasked");
@@ -4227,6 +4236,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_btc() {
 
   Value* bitOffset = GetIndexValue(1);
 
+  bitOffset = createZExtFolder(bitOffset, builder.getIntNTy(basesize));
   Value* bitOffsetMasked = createAndFolder(
       bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
       "bitOffsetMasked");
@@ -4378,6 +4388,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_bts() {
 
   Value* bitOffset = GetIndexValue(1);
 
+  bitOffset = createZExtFolder(bitOffset, builder.getIntNTy(basesize));
   Value* bitOffsetMasked = createAndFolder(
       bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
       "bitOffsetMasked");
@@ -4411,8 +4422,8 @@ template <typename Mnemonic, typename Register,
 void lifterClass<Mnemonic, Register, T3>::lift_cwd() {
   LLVMContext& context = builder.getContext();
 
-  Value* ax =
-      createZExtOrTruncFolder(GetIndexValue(1), Type::getInt16Ty(context));
+  Value* ax = createZExtOrTruncFolder(GetRegisterValue(Register::AX),
+                                      Type::getInt16Ty(context));
 
   Value* signBit = computeSignFlag(ax);
 
@@ -4422,15 +4433,16 @@ void lifterClass<Mnemonic, Register, T3>::lift_cwd() {
       ConstantInt::get(Type::getInt16Ty(context), 0),
       ConstantInt::get(Type::getInt16Ty(context), 0xFFFF), "setDX");
 
-  SetIndexValue(0, dx);
+  SetRegisterValue(Register::DX, dx);
 }
 template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
 void lifterClass<Mnemonic, Register, T3>::lift_cdq() {
   LLVMContext& context = builder.getContext();
   // if eax is -, then edx is filled with ones FFFF_FFFF
-  Value* eax =
-      createZExtOrTruncFolder(GetIndexValue(1), Type::getInt32Ty(context));
+
+  Value* eax = createZExtOrTruncFolder(GetRegisterValue(Register::EAX),
+                                       Type::getInt32Ty(context));
 
   Value* signBit = computeSignFlag(eax);
 
@@ -4440,7 +4452,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_cdq() {
       ConstantInt::get(Type::getInt32Ty(context), 0),
       ConstantInt::get(Type::getInt32Ty(context), 0xFFFFFFFF), "setEDX");
 
-  SetIndexValue(0, edx);
+  SetRegisterValue(Register::EDX, edx);
 }
 template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
@@ -4448,8 +4460,8 @@ void lifterClass<Mnemonic, Register, T3>::lift_cqo() {
 
   LLVMContext& context = builder.getContext();
   // if rax is -, then rdx is filled with ones FFFF_FFFF_FFFF_FFFF
-  Value* rax =
-      createZExtOrTruncFolder(GetIndexValue(1), Type::getInt64Ty(context));
+  Value* rax = createZExtOrTruncFolder(GetRegisterValue(Register::RAX),
+                                       Type::getInt64Ty(context));
 
   Value* signBit = computeSignFlag(rax);
 
@@ -4459,41 +4471,44 @@ void lifterClass<Mnemonic, Register, T3>::lift_cqo() {
       ConstantInt::get(Type::getInt64Ty(context), 0),
       ConstantInt::get(Type::getInt64Ty(context), 0xFFFFFFFFFFFFFFFF),
       "setRDX");
-  printvalue(rax) printvalue(signBit) printvalue(rdx) SetIndexValue(0, rdx);
+  printvalue(rax) printvalue(signBit) printvalue(rdx);
+
+  SetRegisterValue(Register::RDX, rdx);
 }
 template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
 void lifterClass<Mnemonic, Register, T3>::lift_cbw() {
   LLVMContext& context = builder.getContext();
-  Value* al =
-      createZExtOrTruncFolder(GetIndexValue(1), Type::getInt8Ty(context));
+  Value* al = createZExtOrTruncFolder(GetRegisterValue(Register::AL),
+                                      Type::getInt8Ty(context));
 
   Value* ax = createSExtFolder(al, Type::getInt16Ty(context), "cbw");
 
-  SetIndexValue(0, ax);
+  SetRegisterValue(Register::AX, ax);
 }
 template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
 void lifterClass<Mnemonic, Register, T3>::lift_cwde() {
   LLVMContext& context = builder.getContext();
-  Value* ax =
-      createZExtOrTruncFolder(GetIndexValue(1), Type::getInt16Ty(context));
+  Value* ax = createZExtOrTruncFolder(GetRegisterValue(Register::AX),
+                                      Type::getInt16Ty(context));
   printvalue(ax);
   Value* eax = createSExtFolder(ax, Type::getInt32Ty(context), "cwde");
   printvalue(eax);
-  SetIndexValue(0, eax);
+
+  SetRegisterValue(Register::EAX, eax);
 }
 template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
 void lifterClass<Mnemonic, Register, T3>::lift_cdqe() {
   LLVMContext& context = builder.getContext();
 
-  Value* eax = createZExtOrTruncFolder(GetIndexValue(1),
+  Value* eax = createZExtOrTruncFolder(GetRegisterValue(Register::EAX),
                                        Type::getInt32Ty(context), "cdqe-trunc");
 
   Value* rax = createSExtFolder(eax, Type::getInt64Ty(context), "cdqe");
 
-  SetIndexValue(0, rax);
+  SetRegisterValue(Register::RAX, rax);
 }
 
 template <typename Mnemonic, typename Register,

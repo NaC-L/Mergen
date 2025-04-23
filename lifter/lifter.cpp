@@ -1,13 +1,18 @@
 
+#define MAGIC_ENUM_RANGE_MIN -1000
+#define MAGIC_ENUM_RANGE_MAX 1000
+
 #include "CommonMnemonics.h"
 #include "CommonRegisters.h"
 #include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
+#include "icedDisassembler.hpp"
 #include "includes.h"
 #include "lifterClass.hpp"
 #include "nt/nt_headers.hpp"
+
 // #include "test_instructions.h"
 #include "utils.h"
 #include <Zydis/Mnemonic.h>
@@ -81,6 +86,7 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
         UNREACHABLE("Found Self Modifying Code! we dont support it");
       }
       ++(lifter->counter);
+
       auto counter = debugging::increaseInstCounter() - 1;
       /*
       ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
@@ -107,10 +113,25 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
          printvalue2(runtime);
        });
        */
-
       lifter->runDisassembler(data + offset);
+      /*
+      icedDisassembler<MnemonicZydis, RegisterZydis> dis;
+      auto res = dis.disassemble(data + offset);
 
+      for (int i = 0; i < 4; i++) {
+        auto typecheck = res.types[i] == lifter->instruction.types[i];
+        if (!typecheck) {
+          printvalueforce2(res.text);
+          printvalueforce2(i);
+          printvalueforce2(uint32_t(res.types[i]));
+          printvalueforce2(magic_enum::enum_name(res.types[i]));
+          printvalueforce2(magic_enum::enum_name(lifter->instruction.types[i]));
+          printvalueforce2(magic_enum::enum_name(lifter->instruction.regs[i]));
+        }
+      }
+    */
       const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));
+
       const auto runtime_address =
           (llvm::format_hex_no_prefix(lifter->blockInfo.runtime_address, 0));
 
@@ -124,16 +145,11 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
       // printvalue2(lifter->instruction.text);
 
       // lifter->instruction = runDisassembler(disas, data + offset);
-
       lifter->blockInfo.runtime_address += lifter->instruction.length;
 
       lifter->liftInstruction();
-
       lifter->runtime_address_prev = lifter->blockInfo.runtime_address;
-
-      // unicorn_get(RAX) == lifter.get(RAX)
-      // etc.
-      // if unequal, there is a bug
+      printvalue2(lifter->finished);
       if (lifter->finished) {
         lifter->run = 0;
         lifters.pop_back();
@@ -147,7 +163,6 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
         });
         auto nextlift = "next lifter instance\n";
         printvalue2(nextlift);
-        printvalueforce2(nextlift);
 
         delete lifter;
         break;
@@ -300,6 +315,7 @@ void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
 // #define TEST
 
 int main(int argc, char* argv[]) {
+
   std::vector<std::string> args(argv, argv + argc);
   argparser::parseArguments(args);
   timer::startTimer();
