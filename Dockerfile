@@ -8,7 +8,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     gnupg \
     cmake \
     git \
-    rust
+    rustc
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     wget https://apt.llvm.org/llvm.sh \
