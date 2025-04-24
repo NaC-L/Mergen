@@ -254,9 +254,16 @@ public:
 
 // Core lifter
 
+
+#ifdef ICED_FOUND
 template <typename Mnemonic = IcedMnemonics, typename Register = IcedRegister,
           template <typename, typename> class DisassemblerBase =
               icedDisassembler>
+#else
+template <typename Mnemonic = MnemonicZydis, typename Register = RegisterZydis,
+          template <typename, typename> class DisassemblerBase =
+              ZydisDisassembler>
+#endif
 class lifterClass {
 public:
   using Disassembler = DisassemblerBase<Mnemonic, Register>;
