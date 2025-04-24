@@ -1,7 +1,6 @@
 #ifndef GEPTracker_H
 #define GEPTracker_H
 
-#include <Zycore/Types.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/IR/Value.h>
@@ -62,9 +61,9 @@ namespace BinaryOperations {
 
   int getBitness();
 
-  void initBases(ZyanU8* data, arch_mode is64); // ?
+  void initBases(uint8_t* data, arch_mode is64); // ?
 
-  void getBases(ZyanU8** data);
+  void getBases(uint8_t** data);
 
   bool isImport(uint64_t addr);
 

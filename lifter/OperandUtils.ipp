@@ -8,9 +8,6 @@
 #include "ZydisDisassembler.hpp"
 #include "lifterClass.hpp"
 #include "utils.h"
-#include <Zydis/Mnemonic.h>
-#include <Zydis/Register.h>
-#include <Zydis/SharedTypes.h>
 #include <cstdio>
 #include <iostream>
 #include <llvm/ADT/DenseMap.h>
@@ -1595,7 +1592,7 @@ Value* lifterClass<Mnemonic, Register, T3>::getFlag(const Flag flag) {
 template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
 void lifterClass<Mnemonic, Register, T3>::InitRegisters(Function* function,
-                                                        const ZyanU64 rip) {
+                                                        const uint64_t rip) {
 
   // rsp
   // rsp_unaligned = %rsp % 16
@@ -2109,6 +2106,8 @@ void lifterClass<Mnemonic, Register, T3>::SetIndexValue(uint8_t index,
   }
   }
 }
+
+/*
 template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
 Value* lifterClass<Mnemonic, Register, T3>::GetOperandValue(
@@ -2118,6 +2117,7 @@ template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>
 Value* lifterClass<Mnemonic, Register, T3>::SetOperandValue(
     const ZydisDecodedOperand& op, Value* value, const std::string& address) {}
+*/
 
 template <typename Mnemonic, typename Register,
           template <typename, typename> class T3>

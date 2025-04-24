@@ -15,8 +15,6 @@
 
 // #include "test_instructions.h"
 #include "utils.h"
-#include <Zydis/Mnemonic.h>
-#include <Zydis/Register.h>
 #include <coff/line_number.hpp>
 #include <cstdint>
 #include <fstream>
@@ -43,18 +41,11 @@ arch_mode is64Bit;
 
 void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
 
-  // you are stupid
+
   auto data = fileData.data();
-  BinaryOperations::initBases(data, is64Bit); // sigh ?
+  BinaryOperations::initBases(data, is64Bit); 
 
-  ZydisDecoder decoder;
-  ZydisDecoderInit(&decoder,
-                   is64Bit ? ZYDIS_MACHINE_MODE_LONG_64
-                           : ZYDIS_MACHINE_MODE_LEGACY_32,
-                   is64Bit ? ZYDIS_STACK_WIDTH_64 : ZYDIS_STACK_WIDTH_32);
-  auto addr = 0;
 
-  ZydisDisassembler<MnemonicZydis, RegisterZydis> disas(true);
 
   // Initialize the context structure
 
@@ -173,7 +164,7 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
   }
 }
 
-void InitFunction_and_LiftInstructions(const ZyanU64 runtime_address,
+void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
                                        std::vector<uint8_t> fileData) {
 
   auto fileBase = fileData.data();

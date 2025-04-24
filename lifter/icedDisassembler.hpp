@@ -8,9 +8,6 @@
 #include "icedDisassembler_registers.h"
 #include "utils.h"
 
-#include <Zydis/Register.h>
-#include <Zydis/SharedTypes.h>
-#include <Zydis/Zydis.h>
 
 #include <cstddef>
 #include <magic_enum/magic_enum.hpp>

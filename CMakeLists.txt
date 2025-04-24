@@ -12,7 +12,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 	set(CMKR_ROOT_PROJECT ON)
 
 	# Bootstrap cmkr and automatically regenerate CMakeLists.txt
-	include("cmake/cmkr.cmake" OPTIONAL RESULT_VARIABLE CMKR_INCLUDE_RESULT)
+	include("cmake/cmkr.cmake;" OPTIONAL RESULT_VARIABLE CMKR_INCLUDE_RESULT)
 	if(CMKR_INCLUDE_RESULT)
 		cmkr()
 	endif()
@@ -31,6 +31,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -gfull")
 project(Mergen)
 
 # Packages
+find_package(Iced-Wrapper REQUIRED)
+
 find_package(LLVM-Wrapper REQUIRED)
 
 include(FetchContent)
@@ -48,33 +50,58 @@ FetchContent_Declare(linux-pe SYSTEM
 )
 FetchContent_MakeAvailable(linux-pe)
 
-message(STATUS "Fetching Zydis (v4.1.0)...")
-FetchContent_Declare(Zydis SYSTEM
+if(ICED_FOUND) # NOTE: unnamed condition
+	message(STATUS "Fetching Zydis (v4.1.0)...")
+	FetchContent_Declare(Zydis SYSTEM
+		GIT_REPOSITORY
+			"https://github.com/zyantific/zydis"
+		GIT_TAG
+			v4.1.0
+	)
+	FetchContent_MakeAvailable(Zydis)
+
+endif()
+message(STATUS "Fetching magic_enum (a413fcc)...")
+FetchContent_Declare(magic_enum SYSTEM
 	GIT_REPOSITORY
-		"https://github.com/zyantific/zydis"
+		"https://github.com/Neargye/magic_enum"
 	GIT_TAG
-		v4.1.0
+		a413fcc
 )
-FetchContent_MakeAvailable(Zydis)
+FetchContent_MakeAvailable(magic_enum)
 
 # Target: lifter
 set(lifter_SOURCES
 	"lifter/FunctionSignatures.cpp"
 	"lifter/GEPTracker.cpp"
-	"lifter/OperandUtils.cpp"
 	"lifter/PathSolver.cpp"
-	"lifter/Semantics.cpp"
 	"lifter/lifter.cpp"
+	"lifter/test_instructions.cpp"
 	"lifter/utils.cpp"
-	"lifter/CustomPasses.hpp"
-	"lifter/FunctionSignatures.h"
+	"lifter/CommonMnemonics.h"
+	"lifter/CommonRegisters.h"
 	"lifter/GEPTracker.h"
 	"lifter/OperandUtils.h"
 	"lifter/PathSolver.h"
 	"lifter/Semantics.h"
+	"lifter/ZydisDisassembler_mnemonics.h"
+	"lifter/ZydisDisassembler_registers.h"
+	"lifter/icedDisassembler_mnemonics.h"
+	"lifter/icedDisassembler_registers.h"
 	"lifter/includes.h"
-	"lifter/lifterClass.h"
+	"lifter/test_instructions.h"
 	"lifter/utils.h"
+	"lifter/CommonDisassembler.hpp"
+	"lifter/CustomPasses.hpp"
+	"lifter/FunctionSignatures.hpp"
+	"lifter/ZydisDisassembler.hpp"
+	"lifter/icedDisassembler.hpp"
+	"lifter/lifterClass.hpp"
+	"lifter/tester.hpp"
+	"lifter/GEPTracker.ipp"
+	"lifter/OperandUtils.ipp"
+	"lifter/PathSolver.ipp"
+	"lifter/Semantics.ipp"
 	cmake.toml
 )
 
@@ -83,21 +110,36 @@ add_executable(lifter)
 target_sources(lifter PRIVATE ${lifter_SOURCES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${lifter_SOURCES})
 
+if(DEFINED MERGEN_TEST) # testmode
+	target_compile_definitions(lifter PRIVATE
+		MERGEN_TEST
+	)
+endif()
+
 target_compile_features(lifter PRIVATE
 	cxx_std_20
 )
 
 target_link_libraries(lifter PRIVATE
-	Zydis
 	LLVM-Wrapper
 	linux-pe
+	magic_enum
 )
+
+if(ICED_NOT_FOUND) # NOTE: unnamed condition
+	target_link_libraries(lifter PRIVATE
+		Zydis
+	)
+endif()
+
+if(ICED_FOUND) # NOTE: unnamed condition
+	target_link_libraries(lifter PRIVATE
+		Iced_Wrapper
+	)
+endif()
 
 if(WIN32) # windows
 	target_link_libraries(lifter PRIVATE
-		Zydis
-		LLVM-Wrapper
-		linux-pe
 		Ws2_32
 	)
 endif()

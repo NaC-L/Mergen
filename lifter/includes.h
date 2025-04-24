@@ -25,7 +25,6 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
-#include <Zydis/Zydis.h>
 
 using Value = llvm::Value;
 using Instruction = llvm::Instruction;

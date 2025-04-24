@@ -18,7 +18,11 @@ CMAKE_CXX_FLAGS_DEBUG = "-O0 -gfull"
 git = "https://github.com/can1357/linux-pe"
 tag = "be6d1f6"
 
+
+[find-package.Iced-Wrapper]
+
 [fetch-content.Zydis]
+condition = "ICED_FOUND"
 git = "https://github.com/zyantific/zydis"
 tag = "v4.1.0"
 
@@ -29,13 +33,13 @@ tag = "a413fcc"
 
 [find-package.LLVM-Wrapper]
 
-[find-package.Iced-Wrapper]
 
 [target.lifter]
 type = "executable"
 sources = ["lifter/*.cpp"]
 headers = ["lifter/*.h", "lifter/*.hpp", "lifter/*.ipp"]
-link-libraries = ["Zydis", "LLVM-Wrapper", "linux-pe",  "magic_enum"]
+link-libraries = ["LLVM-Wrapper", "linux-pe",  "magic_enum"]
+ICED_NOT_FOUND.link-libraries = ["Zydis"]
 ICED_FOUND.link-libraries = ["Iced_Wrapper"]
 windows.link-libraries = ["Ws2_32"]
 compile-features = ["cxx_std_20"]

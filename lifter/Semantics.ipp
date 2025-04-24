@@ -6,8 +6,6 @@
 #include "includes.h"
 #include "lifterClass.hpp"
 #include "utils.h"
-#include <Zycore/Types.h>
-#include <Zydis/SharedTypes.h>
 #include <immintrin.h>
 #include <iostream>
 #include <llvm/IR/Constant.h>
@@ -5073,7 +5071,7 @@ void lifterClass<Mnemonic, Register, T3>::liftInstruction() {
   auto rsp = GetRegisterValue(Register::RSP);
   printvalue(rsp);
   printvalue2(blockInfo.runtime_address);
-  ZyanU8* data;
+  uint8_t* data;
   BinaryOperations::getBases(&data);
   auto dosHeader = reinterpret_cast<const win::dos_header_t*>(data);
   auto ntHeadersBase =
