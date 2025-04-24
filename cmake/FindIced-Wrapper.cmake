@@ -1,11 +1,11 @@
 find_program(CARGO_EXECUTABLE cargo)
 
-if (CARGO_EXECUTABLE)
+if (NOT CARGO_EXECUTABLE)
     message("Cargo not found. Default to Zydis")
     return()
 endif()
 
-message("Cargo not found. Default to Iced")
+message("Cargo found. Default to Iced")
 
 include(FetchContent)
 
