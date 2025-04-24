@@ -1,3 +1,4 @@
+#ifdef ICED_NOT_FOUND
 #ifndef MNEMONICS_ZYDIS_H
 #define MNEMONICS_ZYDIS_H
 
@@ -1805,3 +1806,4 @@ enum class MnemonicZydis : uint16_t {
 // using Mnemonic = MnemonicZydis;
 
 #endif // MNEMONICS_ZYDIS_H
+#endif // ICED_NOT_FOUND

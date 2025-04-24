@@ -4,19 +4,19 @@
 
 namespace BinaryOperations {
 
-  // wtf man
-  ZyanU8* data_g;
+  // ???, do this while creating the pass
+  uint8_t* data_g;
   arch_mode is64Bit;
   bool concretize_unsafe_reads = 0;
   // this is the worst way of doing this
 
-  void initBases(ZyanU8* data, arch_mode is64) {
+  void initBases(uint8_t* data, arch_mode is64) {
     data_g = data;
     is64Bit = is64;
   }
 
   int getBitness() { return is64Bit == X64 ? 64 : 32; }
-  void getBases(ZyanU8** data) { *data = data_g; }
+  void getBases(uint8_t** data) { *data = data_g; }
 
   const char* getName(uint64_t offset) {
     auto dosHeader = (win::dos_header_t*)data_g;

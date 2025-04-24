@@ -12,7 +12,6 @@
 #include "icedDisassembler_registers.h"
 #include "includes.h"
 #include "utils.h"
-#include <Zydis/DecoderTypes.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/DomConditionCache.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
@@ -413,7 +412,7 @@ public:
   void setFlag(const Flag flag, std::function<llvm::Value*()> calculation);
   LazyValue getLazyFlag(const Flag flag);
   llvm::Value* getFlag(const Flag flag);
-  void InitRegisters(llvm::Function* function, ZyanU64 rip);
+  void InitRegisters(llvm::Function* function, uint64_t rip);
   llvm::Value* GetValueFromHighByteRegister(Register reg);
   llvm::Value* GetRegisterValue(const Register key);
   llvm::Value* GetMemoryValue(llvm::Value* address, uint8_t size);
@@ -462,13 +461,14 @@ public:
   llvm::Value* GetIndexValue(uint8_t index);
 
   void SetIndexValue(uint8_t index, Value* value);
-
+/*
   llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
                                const int possiblesize,
                                const std::string& address = "");
   llvm::Value* SetOperandValue(const ZydisDecodedOperand& op,
                                llvm::Value* value,
                                const std::string& address = "");
+                               */
   llvm::Value* GetRFLAGSValue();
 
   llvm::Value* getSPaddress() { return GetRegisterValue(Register::RSP); }

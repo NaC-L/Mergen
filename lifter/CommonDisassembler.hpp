@@ -5,10 +5,6 @@
 #include "CommonRegisters.h"
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
-#include <Zydis/Decoder.h>
-#include <Zydis/DecoderTypes.h>
-#include <Zydis/Mnemonic.h>
-#include <Zydis/SharedTypes.h>
 #include <concepts>
 #include <cstdint>
 #include <iostream>
@@ -61,6 +57,212 @@ inline uint8_t GetTypeSize(OperandType op) {
   }
   }
   return 0;
+}
+
+
+template <typename Register> inline Register getBiggestEncoding(Register reg) {
+
+  switch (reg) {
+
+  case Register::AL:
+  case Register::AH:
+  case Register::AX:
+  case Register::EAX:
+  case Register::RAX:
+    return Register::RAX;
+
+  case Register::CL:
+  case Register::CH:
+  case Register::CX:
+  case Register::ECX:
+  case Register::RCX:
+    return Register::RCX;
+
+  case Register::DL:
+  case Register::DH:
+  case Register::DX:
+  case Register::EDX:
+  case Register::RDX:
+    return Register::RDX;
+
+  case Register::BL:
+  case Register::BH:
+  case Register::BX:
+  case Register::EBX:
+  case Register::RBX:
+    return Register::RBX;
+
+  case Register::SPL:
+  case Register::SP:
+  case Register::ESP:
+  case Register::RSP:
+    return Register::RSP;
+
+  case Register::BPL:
+  case Register::BP:
+  case Register::EBP:
+  case Register::RBP:
+    return Register::RBP;
+
+  case Register::SIL:
+  case Register::SI:
+  case Register::ESI:
+  case Register::RSI:
+    return Register::RSI;
+
+  case Register::DIL:
+  case Register::DI:
+  case Register::EDI:
+  case Register::RDI:
+    return Register::RDI;
+
+  case Register::R8B:
+  case Register::R8W:
+  case Register::R8D:
+  case Register::R8:
+    return Register::R8;
+
+  case Register::R9B:
+  case Register::R9W:
+  case Register::R9D:
+  case Register::R9:
+    return Register::R9;
+
+  case Register::R10B:
+  case Register::R10W:
+  case Register::R10D:
+  case Register::R10:
+    return Register::R10;
+
+  case Register::R11B:
+  case Register::R11W:
+  case Register::R11D:
+  case Register::R11:
+    return Register::R11;
+
+  case Register::R12B:
+  case Register::R12W:
+  case Register::R12D:
+  case Register::R12:
+    return Register::R12;
+
+  case Register::R13B:
+  case Register::R13W:
+  case Register::R13D:
+  case Register::R13:
+    return Register::R13;
+
+  case Register::R14B:
+  case Register::R14W:
+  case Register::R14D:
+  case Register::R14:
+    return Register::R14;
+
+  case Register::R15B:
+  case Register::R15W:
+  case Register::R15D:
+  case Register::R15:
+    return Register::R15;
+
+  case Register::EFLAGS:
+  case Register::RFLAGS:
+    return Register::RFLAGS;
+
+  case Register::EIP:
+  case Register::RIP:
+    return Register::RIP;
+
+  default:
+    return Register::None;
+  }
+}
+
+template <typename Register> inline uint8_t getRegisterSize(Register reg) {
+
+  switch (reg) {
+
+  case Register::RAX:
+  case Register::RCX:
+  case Register::RDX:
+  case Register::RBX:
+  case Register::RSP:
+  case Register::RBP:
+  case Register::RSI:
+  case Register::RDI:
+  case Register::R8:
+  case Register::R9:
+  case Register::R10:
+  case Register::R11:
+  case Register::R12:
+  case Register::R13:
+  case Register::R14:
+  case Register::R15:
+  case Register::RIP:
+  case Register::RFLAGS:
+    return 64;
+
+  case Register::EAX:
+  case Register::ECX:
+  case Register::EDX:
+  case Register::EBX:
+  case Register::ESP:
+  case Register::EBP:
+  case Register::ESI:
+  case Register::EDI:
+  case Register::R8D:
+  case Register::R9D:
+  case Register::R10D:
+  case Register::R11D:
+  case Register::R12D:
+  case Register::R13D:
+  case Register::R14D:
+  case Register::R15D:
+  case Register::EIP:
+  case Register::EFLAGS:
+    return 32;
+
+  case Register::AX:
+  case Register::CX:
+  case Register::DX:
+  case Register::BX:
+  case Register::SP:
+  case Register::BP:
+  case Register::SI:
+  case Register::DI:
+  case Register::R8W:
+  case Register::R9W:
+  case Register::R10W:
+  case Register::R11W:
+  case Register::R12W:
+  case Register::R13W:
+  case Register::R14W:
+  case Register::R15W:
+    return 16;
+
+  case Register::AL:
+  case Register::AH:
+  case Register::CL:
+  case Register::CH:
+  case Register::DL:
+  case Register::DH:
+  case Register::BL:
+  case Register::BH:
+  case Register::SPL:
+  case Register::BPL:
+  case Register::SIL:
+  case Register::DIL:
+  case Register::R8B:
+  case Register::R9B:
+  case Register::R10B:
+  case Register::R11B:
+  case Register::R12B:
+  case Register::R13B:
+  case Register::R14B:
+  case Register::R15B:
+    return 8;
+  default:
+    return 0;
+  }
 }
 
 enum class InstructionPrefix : uint8_t {

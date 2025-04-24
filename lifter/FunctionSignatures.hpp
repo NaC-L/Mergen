@@ -1,8 +1,7 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
 #include "GEPTracker.h"
-#include "ZydisDisassembler.hpp"
-#include <Zydis/Register.h>
+#include "CommonDisassembler.hpp"
 #include <map>
 #include <queue>
 #include <string>

@@ -171,7 +171,7 @@ public:
 // refactor
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
-  ZyanU8* data;
+  uint8_t* data;
 
   GEPLoadPass() { BinaryOperations::getBases(&data); }
 

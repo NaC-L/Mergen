@@ -1,3 +1,4 @@
+#ifdef ICED_NOT_FOUND
 #ifndef REGISTERS_ZYDIS_H
 #define REGISTERS_ZYDIS_H
 
@@ -261,3 +262,4 @@ enum class RegisterZydis : uint16_t {
 };
 
 #endif // REGISTERS_ZYDIS_H
+#endif // ICED_NOT_FOUND
