@@ -22,7 +22,7 @@ tag = "be6d1f6"
 [find-package.Iced-Wrapper]
 
 [fetch-content.Zydis]
-condition = "ICED_FOUND"
+condition = "ICED_NOT_FOUND"
 git = "https://github.com/zyantific/zydis"
 tag = "v4.1.0"
 
