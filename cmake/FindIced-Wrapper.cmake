@@ -3,6 +3,8 @@ find_program(CARGO_EXECUTABLE cargo)
 if (NOT CARGO_EXECUTABLE)
     message("Cargo not found. Default to Zydis")
     set(ICED_NOT_FOUND TRUE CACHE BOOL "Rust/Cargo found => build the iced (Rust) backend")
+    add_compile_definitions(ICED_NOT_FOUND)
+
     return()
 endif()
 
