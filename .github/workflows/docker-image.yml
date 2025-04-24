@@ -1,4 +1,5 @@
 name: Docker Image CI
+
 on:
   push:
     branches: ["main"]
@@ -10,31 +11,37 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        install_rust: [false, true]
+        variant: [iced, zydis]
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Build the Docker image
         run: |
-          TAG=my-image-name:${{ matrix.install_rust }}
+          TAG=my-image-name:${{ matrix.variant }}
+          # decide whether to install Rust: only for "iced"
+          if [ "${{ matrix.variant }}" = "iced" ]; then
+            RUST_ARG=true
+          else
+            RUST_ARG=false
+          fi
           docker build \
-            --build-arg INSTALL_RUST=${{ matrix.install_rust }} \
+            --build-arg INSTALL_RUST=$RUST_ARG \
             --file Dockerfile \
             --tag $TAG \
             .
 
       - name: Extract the lifter binary
         run: |
-          TAG=my-image-name:${{ matrix.install_rust }}
+          TAG=my-image-name:${{ matrix.variant }}
           docker create --name extract-container "$TAG"
           mkdir -p ./output
           docker cp extract-container:/root/Mergen/build/lifter \
-                    ./output/lifter-${{ matrix.install_rust }}
+                    ./output/lifter-${{ matrix.variant }}
           docker rm extract-container
 
       - name: Upload the extracted binary as an artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lifter-${{ matrix.install_rust }}
-          path: ./output/lifter-${{ matrix.install_rust }}
+          name: lifter-${{ matrix.variant }}
+          path: ./output/lifter-${{ matrix.variant }}
