@@ -7,30 +7,33 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
+strategy:
+      matrix:
+        install_rust: [false, true]
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag my-image-name:latest
+      - uses: actions/checkout@v4
 
-    - name: Create a container and extract the binary
-      run: |
-        # Create a container
-        docker create --name extract-container my-image-name:latest
-        
-        # Copy the binary from the container
-        mkdir -p ./output
-        docker cp extract-container:/root/Mergen/build/lifter ./output/lifter
-        
-        # Remove the container
-        docker rm extract-container
+      - name: Build the Docker image
+        run: |
+          TAG=my-image-name:${{ matrix.install_rust }}
+          docker build \
+            --build-arg INSTALL_RUST=${{ matrix.install_rust }} \
+            --file Dockerfile \
+            --tag $TAG \
+            .
 
-    - name: Upload the extracted binary as an artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Lifter
-        path: ./output/lifter
+      - name: Extract the lifter binary
+        run: |
+          TAG=my-image-name:${{ matrix.install_rust }}
+          docker create --name extract-container "$TAG"
+          mkdir -p ./output
+          docker cp extract-container:/root/Mergen/build/lifter \
+                    ./output/lifter-${{ matrix.install_rust }}
+          docker rm extract-container
+
+      - name: Upload the extracted binary as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifter-${{ matrix.install_rust }}
+          path: ./output/lifter-${{ matrix.install_rust }}
