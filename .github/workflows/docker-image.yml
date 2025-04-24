@@ -1,39 +1,40 @@
 name: Docker Image CI
-
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-  strategy:
-        matrix:
-          install_rust: [false, true]
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        install_rust: [false, true]
 
-  steps:
-    - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-    - name: Build the Docker image
-      run: |
-        TAG=my-image-name:${{ matrix.install_rust }}
-        docker build \
-          --build-arg INSTALL_RUST=${{ matrix.install_rust }} \
-          --file Dockerfile \
-          --tag $TAG \
-          .
+      - name: Build the Docker image
+        run: |
+          TAG=my-image-name:${{ matrix.install_rust }}
+          docker build \
+            --build-arg INSTALL_RUST=${{ matrix.install_rust }} \
+            --file Dockerfile \
+            --tag $TAG \
+            .
 
-    - name: Extract the lifter binary
-      run: |
-        TAG=my-image-name:${{ matrix.install_rust }}
-        docker create --name extract-container "$TAG"
-        mkdir -p ./output
-        docker cp extract-container:/root/Mergen/build/lifter \
-                  ./output/lifter-${{ matrix.install_rust }}
-        docker rm extract-container
+      - name: Extract the lifter binary
+        run: |
+          TAG=my-image-name:${{ matrix.install_rust }}
+          docker create --name extract-container "$TAG"
+          mkdir -p ./output
+          docker cp extract-container:/root/Mergen/build/lifter \
+                    ./output/lifter-${{ matrix.install_rust }}
+          docker rm extract-container
 
-    - name: Upload the extracted binary as an artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: lifter-${{ matrix.install_rust }}
-        path: ./output/lifter-${{ matrix.install_rust }}
+      - name: Upload the extracted binary as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifter-${{ matrix.install_rust }}
+          path: ./output/lifter-${{ matrix.install_rust }}
