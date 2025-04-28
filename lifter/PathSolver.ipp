@@ -5,12 +5,8 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
 
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class DisassemblerBase>
-
-PATH_info lifterClass<Mnemonic, Register, DisassemblerBase>::solvePath(
+MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
-
   PATH_info result = PATH_unsolved;
   if (llvm::ConstantInt* constInt =
           dyn_cast<llvm::ConstantInt>(simplifyValue)) {

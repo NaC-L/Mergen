@@ -59,8 +59,7 @@ inline uint8_t GetTypeSize(OperandType op) {
   return 0;
 }
 
-
-template <typename Register> inline Register getBiggestEncoding(Register reg) {
+template <Registers Register> inline Register getBiggestEncoding(Register reg) {
 
   switch (reg) {
 
@@ -177,10 +176,9 @@ template <typename Register> inline Register getBiggestEncoding(Register reg) {
   }
 }
 
-template <typename Register> inline uint8_t getRegisterSize(Register reg) {
+template <Registers Register> inline uint8_t getRegisterSize(Register reg) {
 
   switch (reg) {
-
   case Register::RAX:
   case Register::RCX:
   case Register::RDX:
@@ -277,8 +275,8 @@ enum class InstructionPrefix : uint8_t {
 // This unified structure is meant to capture common disassembly information
 // In the future, we might need to extend this
 
-template <typename Mnemonic = MnemonicInternal,
-          typename Register = RegisterInternal>
+template <Mnemonics Mnemonic = MnemonicInternal,
+          Registers Register = RegisterInternal>
 struct MergenDisassembledInstruction_base {
 
   // we only care about explicit operands in this struct

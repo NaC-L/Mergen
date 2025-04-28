@@ -2653,6 +2653,7 @@ enum class IcedMnemonics : uint16_t {
   SHA256MSG1 = static_cast<uint16_t>(IcedMnemonics_internal::Sha256msg1),
   SHA256MSG2 = static_cast<uint16_t>(IcedMnemonics_internal::Sha256msg2),
   SHA256RNDS2 = static_cast<uint16_t>(IcedMnemonics_internal::Sha256rnds2),
+  SAL = static_cast<uint16_t>(IcedMnemonics_internal::Sal),
   SHL = static_cast<uint16_t>(IcedMnemonics_internal::Shl),
   SHLD = static_cast<uint16_t>(IcedMnemonics_internal::Shld),
   SHLX = static_cast<uint16_t>(IcedMnemonics_internal::Shlx),

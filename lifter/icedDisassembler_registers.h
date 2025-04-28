@@ -519,7 +519,9 @@ enum class IcedRegister : uint8_t {
   TMM5 = static_cast<uint8_t>(IcedRegister_internal::TMM5),
   TMM6 = static_cast<uint8_t>(IcedRegister_internal::TMM6),
   TMM7 = static_cast<uint8_t>(IcedRegister_internal::TMM7),
-  RFLAGS,
   EFLAGS,
+  RFLAGS,
+  START = None,
+  END = RFLAGS,
 };
 #endif // ICED_DISASSEMBLER_REGISTERS_H

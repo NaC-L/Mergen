@@ -66,7 +66,7 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
     return OperandType::Invalid;
   }
 }
-template <typename Mnemonic>
+template <Mnemonics Mnemonic>
 inline Mnemonic ConvertZydisToMergen2(ZydisMnemonic mnemonic) {
   switch (mnemonic) {
   case ZYDIS_MNEMONIC_AAA:
@@ -3676,7 +3676,7 @@ ConvertAttributesZydisToMergen(ZydisInstructionAttributes attributes) {
   return InstructionPrefix::None;
 }
 
-template <typename Mnemonic>
+template <Mnemonics Mnemonic>
 inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
   if constexpr (std::is_same_v<Mnemonic, MnemonicZydis>) {
     return static_cast<Mnemonic>(mnemonic);
@@ -3684,8 +3684,7 @@ inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
   return ConvertZydisToMergen2<Mnemonic>(mnemonic);
 }
 
-
-template <typename Register>
+template <Registers Register>
 inline Register zydisRegisterToMergenRegister2(ZydisRegister reg) {
 
   switch (reg) {
@@ -4196,7 +4195,7 @@ inline Register zydisRegisterToMergenRegister2(ZydisRegister reg) {
   }
 }
 
-template <typename Register>
+template <Registers Register>
 inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
   if constexpr (std::is_same_v<Register, RegisterZydis>) {
 
@@ -4205,7 +4204,7 @@ inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
   return zydisRegisterToMergenRegister2<Register>(reg);
 }
 
-template <typename Mnemonic, typename Register> class ZydisDisassembler {
+template <Mnemonics Mnemonic, Registers Register> class ZydisDisassembler {
 private:
   ZydisDecoder decoder;
 

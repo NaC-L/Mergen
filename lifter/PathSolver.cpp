@@ -46,7 +46,7 @@ PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
   return result;
 }
 
-void final_optpass(llvm::Function* clonedFuncx) {
+void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase) {
   llvm::PassBuilder passBuilder;
 
   llvm::LoopAnalysisManager loopAnalysisManager;
@@ -79,9 +79,9 @@ void final_optpass(llvm::Function* clonedFuncx) {
     modulePassManager =
         passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1);
 
-    modulePassManager.addPass(GEPLoadPass());
+    modulePassManager.addPass(GEPLoadPass(mem, filebase));
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
-    modulePassManager.addPass(PromotePseudoStackPass());
+    modulePassManager.addPass(PromotePseudoStackPass(mem));
 
     modulePassManager.run(*module, moduleAnalysisManager);
 

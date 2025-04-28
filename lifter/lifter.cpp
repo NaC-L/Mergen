@@ -41,11 +41,8 @@ arch_mode is64Bit;
 
 void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
 
-
   auto data = fileData.data();
-  BinaryOperations::initBases(data, is64Bit); 
-
-
+  BinaryOperations::initBases(data, is64Bit);
 
   // Initialize the context structure
 
@@ -293,7 +290,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
-  final_optpass(function);
+  final_optpass(function, function->getArg(16), fileData.data());
   const std::string Filename = "output.ll";
   std::error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);
