@@ -22,9 +22,7 @@
 
 using namespace llvm;
 
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-void lifterClass<Mnemonic, Register, T3>::addValueReference(Value* value,
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::addValueReference(Value* value,
                                                             uint64_t address) {
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
@@ -38,9 +36,8 @@ void lifterClass<Mnemonic, Register, T3>::addValueReference(Value* value,
 }
 
 // takes direct address, not gep pointer
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-void lifterClass<Mnemonic, Register, T3>::createMemcpy(Value* src, Value* dest,
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
                                                        Value* size) {
   // TODO: support full symbolic memcpy
 
@@ -96,11 +93,9 @@ void lifterClass<Mnemonic, Register, T3>::createMemcpy(Value* src, Value* dest,
     buffer[C_dest + i] = buffer[C_src + i];
   }
 }
-
 // instead of passing a LazyValue, lazily load it.
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-Value* lifterClass<Mnemonic, Register, T3>::retrieveCombinedValue(
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     uint64_t startAddress, uint8_t byteCount, LazyValue orgLoad) {
   LLVMContext& context = builder.getContext();
   if (byteCount == 0) {
@@ -182,9 +177,8 @@ Value* lifterClass<Mnemonic, Register, T3>::retrieveCombinedValue(
 
   return result;
 }
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-Value* lifterClass<Mnemonic, Register, T3>::extractBytes(Value* value,
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::extractBytes(Value* value,
                                                          uint8_t startOffset,
                                                          uint8_t endOffset) {
   LLVMContext& context = builder.getContext();
@@ -248,9 +242,8 @@ namespace SCCPSimplifier {
 
 // do some cleanup
 // rename it to MemoryTracker ?
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-isPaged lifterClass<Mnemonic, Register, T3>::isValuePaged(Value* address,
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(isPaged)::isValuePaged(Value* address,
                                                           Instruction* ctxI) {
   if (isa<ConstantInt>(address)) {
     return isMemPaged(cast<ConstantInt>(address)->getZExtValue())
@@ -282,9 +275,8 @@ isPaged lifterClass<Mnemonic, Register, T3>::isValuePaged(Value* address,
 
   return MEMORY_NOT_PAGED;
 }
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-void lifterClass<Mnemonic, Register, T3>::pagedCheck(Value* address,
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::pagedCheck(Value* address,
                                                      Instruction* ctxI) {
   isPaged paged = isValuePaged(address, ctxI);
 
@@ -303,9 +295,8 @@ void lifterClass<Mnemonic, Register, T3>::pagedCheck(Value* address,
   }
   }
 }
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-void lifterClass<Mnemonic, Register, T3>::loadMemoryOp(Value* ptr) {
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::loadMemoryOp(Value* ptr) {
   if (!isa<GetElementPtrInst>(ptr))
     return;
 
@@ -320,10 +311,8 @@ void lifterClass<Mnemonic, Register, T3>::loadMemoryOp(Value* ptr) {
   return;
 }
 
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
 // rename func name to indicate its only for store
-void lifterClass<Mnemonic, Register, T3>::insertMemoryOp(StoreInst* inst) {
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::insertMemoryOp(StoreInst* inst) {
   memInfos.push_back(inst);
 
   auto ptr = inst->getPointerOperand();
@@ -449,10 +438,8 @@ void removeDuplicateOffsets(std::vector<Instruction*>& vec) {
 
 int aea = 10;
 
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-std::set<APInt, APIntComparator>
-lifterClass<Mnemonic, Register, T3>::getPossibleValues(
+using pvalueset = std::set<APInt, APIntComparator>;
+MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
     const llvm::KnownBits& known, unsigned max_unknown) {
 
   if ((max_unknown == 0) || (max_unknown >= 4)) {
@@ -617,11 +604,8 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
   return res;
 }
 
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-std::set<APInt, APIntComparator>
-lifterClass<Mnemonic, Register, T3>::computePossibleValues(Value* V,
-                                                           uint8_t Depth) {
+MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
+    Value* V, uint8_t Depth) {
   printvalue2(Depth);
   if (Depth > 16) {
     debugging::doIfDebug([&]() {
@@ -723,9 +707,8 @@ lifterClass<Mnemonic, Register, T3>::computePossibleValues(Value* V,
   }
   return res;
 }
-template <typename Mnemonic, typename Register,
-          template <typename, typename> class T3>
-Value* lifterClass<Mnemonic, Register, T3>::solveLoad(LazyValue load,
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
                                                       Value* ptr,
                                                       uint8_t size) {
 

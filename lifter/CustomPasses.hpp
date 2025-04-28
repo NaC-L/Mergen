@@ -98,6 +98,8 @@ public:
 class PromotePseudoStackPass
     : public llvm::PassInfoMixin<PromotePseudoStackPass> {
 public:
+  Value* mem = nullptr;
+  PromotePseudoStackPass(Value* val) : mem(val){};
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
     bool hasChanged = false;
@@ -171,9 +173,10 @@ public:
 // refactor
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
-  uint8_t* data;
+  uint8_t* filebase;
 
-  GEPLoadPass() { BinaryOperations::getBases(&data); }
+  Value* mem = nullptr;
+  GEPLoadPass(Value* val, uint8_t* filebase) : mem(val), filebase(filebase){};
 
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
     bool hasChanged = false;
@@ -195,9 +198,10 @@ public:
                     unsigned byteSize = loadType->getIntegerBitWidth() / 8;
                     uint64_t tempvalue;
 
-                    std::memcpy(&tempvalue,
-                                reinterpret_cast<const void*>(data + offset),
-                                byteSize);
+                    std::memcpy(
+                        &tempvalue,
+                        reinterpret_cast<const void*>(filebase + offset),
+                        byteSize);
 
                     llvm::APInt readValue(byteSize * 8, tempvalue);
                     llvm::Constant* newVal =

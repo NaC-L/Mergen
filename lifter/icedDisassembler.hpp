@@ -8,7 +8,6 @@
 #include "icedDisassembler_registers.h"
 #include "utils.h"
 
-
 #include <cstddef>
 #include <magic_enum/magic_enum.hpp>
 
@@ -65,7 +64,7 @@ int disas(void* obj, const void* code, size_t len);
 int disas2(void* obj, const void* code, size_t len);
 }
 
-template <typename Mnemonic>
+template <Mnemonics Mnemonic>
 Mnemonic icedToMergenMnemonics(IcedMnemonics_internal mnemonic) {
   if constexpr (std::is_same_v<Mnemonic, IcedMnemonics>) {
     // move this to rust
@@ -3668,7 +3667,7 @@ Mnemonic icedToMergenMnemonics(IcedMnemonics_internal mnemonic) {
   }
 }
 
-template <typename Register>
+template <Registers Register>
 Register icedToMergenRegisters(IcedRegister_internal reg) {
   if constexpr (std::is_same_v<Register, IcedRegister>) {
     return static_cast<Register>(reg);
@@ -4175,7 +4174,7 @@ Register icedToMergenRegisters(IcedRegister_internal reg) {
   }
 }
 
-template <typename Mnemonic, typename Register> class icedDisassembler {
+template <Mnemonics Mnemonic, Registers Register> class icedDisassembler {
 private:
 public:
   icedDisassembler(){};

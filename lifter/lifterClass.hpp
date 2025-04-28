@@ -97,28 +97,28 @@ public:
   Value* v2;
 };
 
-template <typename Register> class RegisterManager {
+template <Registers Register> class RegisterManager {
 public:
   enum RegisterIndex {
     RAX_ = 0,
-    RCX_,
-    RDX_,
-    RBX_,
-    RSP_,
-    RBP_,
-    RSI_,
-    RDI_,
-    R8_,
-    R9_,
-    R10_,
-    R11_,
-    R12_,
-    R13_,
-    R14_,
-    R15_,
-    RIP_,
-    RFLAGS_,
-    REGISTER_COUNT // Total number of registers
+    RCX_ = 1,
+    RDX_ = 2,
+    RBX_ = 3,
+    RSP_ = 4,
+    RBP_ = 5,
+    RSI_ = 6,
+    RDI_ = 7,
+    R8_ = 8,
+    R9_ = 9,
+    R10_ = 10,
+    R11_ = 11,
+    R12_ = 12,
+    R13_ = 13,
+    R14_ = 14,
+    R15_ = 15,
+    RIP_ = 16,
+    RFLAGS_ = 17,
+    REGISTER_COUNT = RFLAGS_ // Total number of registers
   };
   std::array<Value*, REGISTER_COUNT> vec;
 
@@ -139,6 +139,11 @@ public:
     default: {
       // For ordered registers RAX to R15, map directly by offset from RAX
 
+      /*
+      if (!(key >= Register::RAX && key <= Register::R15)) {
+        printvalueforce2("debug this"); // debug this branch l8r
+      }
+      */
       assert(key >= Register::RAX && key <= Register::R15 &&
              "Key must be between RAX and R15");
 
@@ -242,27 +247,25 @@ public:
   }
 };
 
-// This tanks compile time. Proper way to do it would be extracting functions
-// that dont rely on templates to a seperate class. However, to do that, we
-// would need to create a simplistic IR to translate so functions would have a
-// "generic" value to return. Considering we want to be able to lift into
-// different IR's in the future, it will be a future problem.
-//
+#define MERGEN_LIFTER_DEFINITION_TEMPLATES(ret)                                \
+  template <Mnemonics Mnemonic, Registers Register,                            \
+            template <typename, typename> class DisassemblerBase>              \
+    requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,      \
+                          Register>                                            \
+  ret lifterClass<Mnemonic, Register, DisassemblerBase>
 
-// Also, concepts are not properly utilized...
-
-// Core lifter
-
-
+// main lifter
 #ifdef ICED_FOUND
-template <typename Mnemonic = IcedMnemonics, typename Register = IcedRegister,
+template <Mnemonics Mnemonic = IcedMnemonics, Registers Register = IcedRegister,
           template <typename, typename> class DisassemblerBase =
               icedDisassembler>
 #else
-template <typename Mnemonic = MnemonicZydis, typename Register = RegisterZydis,
-          template <typename, typename> class DisassemblerBase =
-              ZydisDisassembler>
+template <
+    Mnemonics Mnemonic = MnemonicZydis, Registers Register = RegisterZydis,
+    template <typename, typename> class DisassemblerBase = ZydisDisassembler>
 #endif
+  requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,
+                        Register>
 class lifterClass {
 public:
   using Disassembler = DisassemblerBase<Mnemonic, Register>;
@@ -461,14 +464,14 @@ public:
   llvm::Value* GetIndexValue(uint8_t index);
 
   void SetIndexValue(uint8_t index, Value* value);
-/*
-  llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
-                               const int possiblesize,
-                               const std::string& address = "");
-  llvm::Value* SetOperandValue(const ZydisDecodedOperand& op,
-                               llvm::Value* value,
-                               const std::string& address = "");
-                               */
+  /*
+    llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
+                                 const int possiblesize,
+                                 const std::string& address = "");
+    llvm::Value* SetOperandValue(const ZydisDecodedOperand& op,
+                                 llvm::Value* value,
+                                 const std::string& address = "");
+                                 */
   llvm::Value* GetRFLAGSValue();
 
   llvm::Value* getSPaddress() { return GetRegisterValue(Register::RSP); }
@@ -776,6 +779,7 @@ public:
   */
   // end semantics definition
 };
+
 extern std::vector<lifterClass<>*> lifters;
 
 #undef DEFINE_FUNCTION
