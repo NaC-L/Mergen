@@ -634,7 +634,8 @@ public:
 
   // end folders
 
-  // semantics definition
+  // would look nicer if we didnt have this, and do everything in a macro
+  // instead?
   DEFINE_FUNCTION(movs_X);
   DEFINE_FUNCTION(movaps);
   DEFINE_FUNCTION(mov);
