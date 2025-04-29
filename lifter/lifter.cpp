@@ -290,7 +290,8 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
-  final_optpass(function, function->getArg(16), fileData.data());
+
+  final_optpass(function, function->getArg(17), fileData.data());
   const std::string Filename = "output.ll";
   std::error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);

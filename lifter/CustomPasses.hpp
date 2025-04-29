@@ -19,11 +19,6 @@
 
 using namespace llvm;
 
-inline Value* getMemory(llvm::Function& fnc) {
-  // check if its really memory
-  return fnc.getArg(16);
-}
-
 class BasicBlockDotGraphPass
     : public llvm::PassInfoMixin<BasicBlockDotGraphPass> {
 public:
@@ -105,7 +100,7 @@ public:
     bool hasChanged = false;
     llvm::Value* stackMemory = NULL;
     for (auto& F : M) {
-      llvm::Value* memory = getMemory(F);
+      llvm::Value* memory = mem;
       if (!stackMemory) {
         llvm::IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
         stackMemory = Builder.CreateAlloca(
@@ -120,9 +115,10 @@ public:
 
             // TODO: prettify here!!!
             auto* MemoryOperand = GEP->getOperand(GEP->getNumOperands() - 2);
-            // printvalue(MemoryOperand)
-            // printvalue(memory)
-
+            /*
+              printvalueforce(MemoryOperand);
+              printvalueforce(memory);
+            */
             if (memory != MemoryOperand)
               continue;
 
@@ -275,13 +271,15 @@ to
 */
 class PromotePseudoMemory : public llvm::PassInfoMixin<PromotePseudoMemory> {
 public:
+  Value* mem = nullptr;
+  PromotePseudoMemory(Value* val) : mem(val){};
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
     std::vector<llvm::Instruction*> toPromote;
 
     bool hasChanged = false;
     for (auto& F : M) {
-      Value* memory = getMemory(F);
+      Value* memory = mem;
       for (auto& BB : F) {
         for (auto& I : BB) {
           if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {

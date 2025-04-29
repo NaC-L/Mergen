@@ -95,7 +95,7 @@ void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase) {
       passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
 
   modulePassManager.addPass(ResizeAllocatedStackPass());
-  modulePassManager.addPass(PromotePseudoMemory());
+  modulePassManager.addPass(PromotePseudoMemory(mem));
 
   modulePassManager.run(*module, moduleAnalysisManager);
 }
