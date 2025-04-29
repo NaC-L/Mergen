@@ -28,3 +28,4 @@ CMakeLists.txt.user
 # output files
 output.ll
 output_finalnoopt.ll
+/icpped_rust
