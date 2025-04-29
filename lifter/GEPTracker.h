@@ -1,9 +1,11 @@
 #ifndef GEPTracker_H
 #define GEPTracker_H
 
-#include <Zycore/Types.h>
 #include <llvm/ADT/APInt.h>
+#include <llvm/ADT/DenseSet.h>
 #include <llvm/IR/Value.h>
+
+using namespace llvm;
 
 enum Assumption { Real, Assumed }; // add None
 
@@ -54,20 +56,22 @@ public:
 };
 
 namespace BinaryOperations {
-
+  extern bool concretize_unsafe_reads;
   const char* getName(const uint64_t offset);
 
   int getBitness();
 
-  void initBases(ZyanU8* data, arch_mode is64); // ?
+  void initBases(uint8_t* data, arch_mode is64); // ?
 
-  void getBases(ZyanU8** data);
+  void getBases(uint8_t** data);
 
   bool isImport(uint64_t addr);
 
   bool readMemory(const uint64_t addr, unsigned byteSize, llvm::APInt& value);
 
   bool isWrittenTo(const uint64_t addr);
+
+  void WriteTo(uint64_t addr);
 
   uint64_t RvaToFileOffset(const void* ntHeadersBase, uint32_t rva);
 
@@ -85,4 +89,5 @@ namespace SCCPSimplifier {
     void cleanup();
 } // namespace SCCPSimplifier
 */
+
 #endif
