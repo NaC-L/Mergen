@@ -67,7 +67,7 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
   }
 }
 template <Mnemonics Mnemonic>
-inline Mnemonic ConvertZydisToMergen2(Mergen::MnemonicZydis mnemonic) {
+inline Mnemonic ConvertZydisToMergen2(ZydisMnemonic mnemonic) {
   switch (mnemonic) {
   case ZYDIS_MNEMONIC_AAA:
     return Mnemonic::AAA;
@@ -3678,7 +3678,7 @@ ConvertAttributesZydisToMergen(ZydisInstructionAttributes attributes) {
 
 template <Mnemonics Mnemonic>
 inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
-  if constexpr (std::is_same_v<Mnemonic, MnemonicZydis>) {
+  if constexpr (std::is_same_v<Mnemonic, Mergen::MnemonicZydis>) {
     return static_cast<Mnemonic>(mnemonic);
   }
   return ConvertZydisToMergen2<Mnemonic>(mnemonic);
@@ -4199,7 +4199,7 @@ template <Registers Register>
 inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
   if constexpr (std::is_same_v<Register, Mergen::ZydisRegister>) {
 
-    return static_cast<ZydisRegister>(reg);
+    return static_cast<Mergen::ZydisRegister>(reg);
   }
   return zydisRegisterToMergenRegister2<Register>(reg);
 }
