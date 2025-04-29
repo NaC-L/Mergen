@@ -67,7 +67,7 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
   }
 }
 template <Mnemonics Mnemonic>
-inline Mnemonic ConvertZydisToMergen2(ZydisMnemonic mnemonic) {
+inline Mnemonic ConvertZydisToMergen2(Mergen::MnemonicZydis mnemonic) {
   switch (mnemonic) {
   case ZYDIS_MNEMONIC_AAA:
     return Mnemonic::AAA;
@@ -4197,149 +4197,150 @@ inline Register zydisRegisterToMergenRegister2(ZydisRegister reg) {
 
 template <Registers Register>
 inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
-  if constexpr (std::is_same_v<Register, RegisterZydis>) {
+  if constexpr (std::is_same_v<Register, Mergen::RegisterZydis>) {
 
     return static_cast<RegisterZydis>(reg);
   }
   return zydisRegisterToMergenRegister2<Register>(reg);
 }
+namespace Mergen {
+  template <Mnemonics Mnemonic, Registers Register> class ZydisDisassembler {
+  private:
+    ZydisDecoder decoder;
 
-template <Mnemonics Mnemonic, Registers Register> class ZydisDisassembler {
-private:
-  ZydisDecoder decoder;
+  public:
+    ZydisDisassembler() {
 
-public:
-  ZydisDisassembler() {
-
-    ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64,
-                     ZYDIS_STACK_WIDTH_64);
-  };
-
-  ZydisDisassembler(bool is64Bit) {
-
-    ZydisDecoderInit(&decoder,
-                     is64Bit ? ZYDIS_MACHINE_MODE_LONG_64
-                             : ZYDIS_MACHINE_MODE_LEGACY_32,
-                     is64Bit ? ZYDIS_STACK_WIDTH_64 : ZYDIS_STACK_WIDTH_32);
-  };
-
-  MergenDisassembledInstruction_base<Mnemonic, Register>
-  disassemble(void* buffer, size_t size = 15) {
-    ZydisDecodedInstruction instruction;
-
-    ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-
-    ZydisDecoderDecodeFull(&decoder, buffer, size, &instruction, operands);
-    /*
-        for (int i = 0; i < instruction.length; i++) {
-          auto byte = static_cast<uint8_t*>(buffer)[i];
-          static std::error_code EC;
-          static auto fileStream = llvm::raw_fd_ostream("bytes.txt", EC);
-          fileStream << (char)byte;
-          fileStream.flush();
-        } */
-
-    auto convertedInstruction =
-        MergenDisassembledInstruction_base<Mnemonic, Register>{
-            .attributes =
-                ConvertAttributesZydisToMergen(instruction.attributes),
-            .length = instruction.length,
-            .operand_count_visible = instruction.operand_count_visible,
-            .mnemonic = ConvertZydisToMergen<Mnemonic>(instruction.mnemonic),
-        };
-    bool secondimm = false;
-
-    for (int i = 0; i < 4; i++) {
-
-      auto op = operands[i];
-      // printvalue2(magic_enum::enum_name(operands[i].type));
-      // printvalue2(magic_enum::enum_name(operands[i].visibility));
-
-      // skip implicit operands
-      /*
-      if (operands[i].visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
-        continue;
-      */
-      // printvalue2(i);
-      convertedInstruction.types[i] =
-          zydisTypeToMergenType(op.type, op.size, secondimm);
-
-      // printvalue2(magic_enum::enum_name(op.type));
-
-      if (op.type == ZYDIS_OPERAND_TYPE_REGISTER) {
-
-        // printvalue2(op.reg.value);
-
-        convertedInstruction.regs[i] =
-            zydisRegisterToMergenRegister<Register>(op.reg.value);
-
-        continue;
-      }
-
-      if (op.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
-
-        convertedInstruction.immediate = op.imm.value.u;
-        secondimm = true;
-        continue;
-      }
-
-      if (op.type == ZYDIS_OPERAND_TYPE_MEMORY) {
-
-        // with push, pop, implicit/hidden rsp fucks this up.
-        // skip all implicit memory operands.
-        // printvalue2(magic_enum::enum_name(op.visibility));
-        if (op.visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
-          continue;
-
-        convertedInstruction.mem_base =
-            zydisRegisterToMergenRegister<Register>(op.mem.base);
-
-        convertedInstruction.mem_index =
-            zydisRegisterToMergenRegister<Register>(op.mem.index);
-
-        // printvalue2(op.mem.base);
-
-        // printvalue2(op.mem.index);
-
-        // printvalue2(op.mem.disp.value);
-        convertedInstruction.mem_disp = op.mem.disp.value;
-
-        convertedInstruction.mem_scale = op.mem.scale;
-
-        continue;
-      }
-    }
-    switch (instruction.mnemonic) {
-    case ZYDIS_MNEMONIC_PUSH: {
-      convertedInstruction.stack_growth = operands[2].size / 8;
-      break;
-    }
-    case ZYDIS_MNEMONIC_POP: {
-      convertedInstruction.stack_growth = operands[2].size / 8;
-      break;
-    }
-    default:
-      break;
+      ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64,
+                       ZYDIS_STACK_WIDTH_64);
     };
 
-    ZydisFormatter formatter;
+    ZydisDisassembler(bool is64Bit) {
 
-    ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
-    char buf[256];
+      ZydisDecoderInit(&decoder,
+                       is64Bit ? ZYDIS_MACHINE_MODE_LONG_64
+                               : ZYDIS_MACHINE_MODE_LEGACY_32,
+                       is64Bit ? ZYDIS_STACK_WIDTH_64 : ZYDIS_STACK_WIDTH_32);
+    };
 
-    ZyanU64 runtime_address = 0;
+    MergenDisassembledInstruction_base<Mnemonic, Register>
+    disassemble(void* buffer, size_t size = 15) {
+      ZydisDecodedInstruction instruction;
 
-    ZydisFormatterFormatInstruction(&formatter, &(instruction), operands,
-                                    instruction.operand_count_visible, &buf[0],
-                                    sizeof(buf), runtime_address, ZYAN_NULL);
+      ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
 
-    convertedInstruction.text = std::string(buf);
-    /*
-    printvalueforce2(convertedInstruction.text);
-    */
-    return convertedInstruction;
-  }
-};
+      ZydisDecoderDecodeFull(&decoder, buffer, size, &instruction, operands);
+      /*
+          for (int i = 0; i < instruction.length; i++) {
+            auto byte = static_cast<uint8_t*>(buffer)[i];
+            static std::error_code EC;
+            static auto fileStream = llvm::raw_fd_ostream("bytes.txt", EC);
+            fileStream << (char)byte;
+            fileStream.flush();
+          } */
 
+      auto convertedInstruction =
+          MergenDisassembledInstruction_base<Mnemonic, Register>{
+              .attributes =
+                  ConvertAttributesZydisToMergen(instruction.attributes),
+              .length = instruction.length,
+              .operand_count_visible = instruction.operand_count_visible,
+              .mnemonic = ConvertZydisToMergen<Mnemonic>(instruction.mnemonic),
+          };
+      bool secondimm = false;
+
+      for (int i = 0; i < 4; i++) {
+
+        auto op = operands[i];
+        // printvalue2(magic_enum::enum_name(operands[i].type));
+        // printvalue2(magic_enum::enum_name(operands[i].visibility));
+
+        // skip implicit operands
+        /*
+        if (operands[i].visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
+          continue;
+        */
+        // printvalue2(i);
+        convertedInstruction.types[i] =
+            zydisTypeToMergenType(op.type, op.size, secondimm);
+
+        // printvalue2(magic_enum::enum_name(op.type));
+
+        if (op.type == ZYDIS_OPERAND_TYPE_REGISTER) {
+
+          // printvalue2(op.reg.value);
+
+          convertedInstruction.regs[i] =
+              zydisRegisterToMergenRegister<Register>(op.reg.value);
+
+          continue;
+        }
+
+        if (op.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
+
+          convertedInstruction.immediate = op.imm.value.u;
+          secondimm = true;
+          continue;
+        }
+
+        if (op.type == ZYDIS_OPERAND_TYPE_MEMORY) {
+
+          // with push, pop, implicit/hidden rsp fucks this up.
+          // skip all implicit memory operands.
+          // printvalue2(magic_enum::enum_name(op.visibility));
+          if (op.visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
+            continue;
+
+          convertedInstruction.mem_base =
+              zydisRegisterToMergenRegister<Register>(op.mem.base);
+
+          convertedInstruction.mem_index =
+              zydisRegisterToMergenRegister<Register>(op.mem.index);
+
+          // printvalue2(op.mem.base);
+
+          // printvalue2(op.mem.index);
+
+          // printvalue2(op.mem.disp.value);
+          convertedInstruction.mem_disp = op.mem.disp.value;
+
+          convertedInstruction.mem_scale = op.mem.scale;
+
+          continue;
+        }
+      }
+      switch (instruction.mnemonic) {
+      case ZYDIS_MNEMONIC_PUSH: {
+        convertedInstruction.stack_growth = operands[2].size / 8;
+        break;
+      }
+      case ZYDIS_MNEMONIC_POP: {
+        convertedInstruction.stack_growth = operands[2].size / 8;
+        break;
+      }
+      default:
+        break;
+      };
+
+      ZydisFormatter formatter;
+
+      ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
+      char buf[256];
+
+      ZyanU64 runtime_address = 0;
+
+      ZydisFormatterFormatInstruction(&formatter, &(instruction), operands,
+                                      instruction.operand_count_visible,
+                                      &buf[0], sizeof(buf), runtime_address,
+                                      ZYAN_NULL);
+
+      convertedInstruction.text = std::string(buf);
+      /*
+      printvalueforce2(convertedInstruction.text);
+      */
+      return convertedInstruction;
+    }
+  };
+} // namespace Mergen
 #endif // ZYDIS_DISASSEMBLER_H
 #endif // ICED_NOT_FOUND

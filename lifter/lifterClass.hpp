@@ -256,13 +256,15 @@ public:
 
 // main lifter
 #ifdef ICED_FOUND
-template <Mnemonics Mnemonic = IcedMnemonics, Registers Register = IcedRegister,
+template <Mnemonics Mnemonic = Mergen::IcedMnemonics,
+          Registers Register = Mergen::IcedRegister,
           template <typename, typename> class DisassemblerBase =
-              icedDisassembler>
+              Mergen::icedDisassembler>
 #else
-template <
-    Mnemonics Mnemonic = MnemonicZydis, Registers Register = RegisterZydis,
-    template <typename, typename> class DisassemblerBase = ZydisDisassembler>
+template <Mnemonics Mnemonic = Mergen::ZydisMnemonic,
+          Registers Register = Mergen::ZydisRegister,
+          template <typename, typename> class DisassemblerBase =
+              Mergen::ZydisDisassembler>
 #endif
   requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,
                         Register>
