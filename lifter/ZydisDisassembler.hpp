@@ -3678,7 +3678,7 @@ ConvertAttributesZydisToMergen(ZydisInstructionAttributes attributes) {
 
 template <Mnemonics Mnemonic>
 inline Mnemonic ConvertZydisToMergen(ZydisMnemonic mnemonic) {
-  if constexpr (std::is_same_v<Mnemonic, Mergen::MnemonicZydis>) {
+  if constexpr (std::is_same_v<Mnemonic, Mergen::ZydisMnemonic>) {
     return static_cast<Mnemonic>(mnemonic);
   }
   return ConvertZydisToMergen2<Mnemonic>(mnemonic);
