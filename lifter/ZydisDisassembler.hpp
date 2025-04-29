@@ -4197,9 +4197,9 @@ inline Register zydisRegisterToMergenRegister2(ZydisRegister reg) {
 
 template <Registers Register>
 inline Register zydisRegisterToMergenRegister(ZydisRegister reg) {
-  if constexpr (std::is_same_v<Register, Mergen::RegisterZydis>) {
+  if constexpr (std::is_same_v<Register, Mergen::ZydisRegister>) {
 
-    return static_cast<RegisterZydis>(reg);
+    return static_cast<ZydisRegister>(reg);
   }
   return zydisRegisterToMergenRegister2<Register>(reg);
 }
