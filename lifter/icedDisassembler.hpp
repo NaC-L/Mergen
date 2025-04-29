@@ -66,7 +66,7 @@ int disas2(void* obj, const void* code, size_t len);
 
 template <Mnemonics Mnemonic>
 Mnemonic icedToMergenMnemonics(IcedMnemonics_internal mnemonic) {
-  if constexpr (std::is_same_v<Mnemonic, IcedMnemonics>) {
+  if constexpr (std::is_same_v<Mnemonic, Mergen::IcedMnemonics>) {
     // move this to rust
     if (mnemonic == IcedMnemonics_internal::Sal)
       return Mnemonic::SHL;
@@ -3669,7 +3669,7 @@ Mnemonic icedToMergenMnemonics(IcedMnemonics_internal mnemonic) {
 
 template <Registers Register>
 Register icedToMergenRegisters(IcedRegister_internal reg) {
-  if constexpr (std::is_same_v<Register, IcedRegister>) {
+  if constexpr (std::is_same_v<Register, Mergen::IcedRegister>) {
     return static_cast<Register>(reg);
   }
   switch (reg) {
@@ -4173,101 +4173,101 @@ Register icedToMergenRegisters(IcedRegister_internal reg) {
     return Register::None;
   }
 }
+namespace Mergen {
+  template <Mnemonics Mnemonic, Registers Register> class icedDisassembler {
+  private:
+  public:
+    icedDisassembler(){};
 
-template <Mnemonics Mnemonic, Registers Register> class icedDisassembler {
-private:
-public:
-  icedDisassembler(){};
+    MergenDisassembledInstruction_base<Mnemonic, Register>
+    disassemble(void* buffer, size_t size = 15) {
 
-  MergenDisassembledInstruction_base<Mnemonic, Register>
-  disassemble(void* buffer, size_t size = 15) {
+      icedObj obj;
 
-    icedObj obj;
-
-    if (debugging::shouldDebug) {
-      disas2(&obj, buffer, size);
-    } else {
-      disas(&obj, buffer, size);
-    }
-    /*
-        printvalueforce2(obj.text);
-        auto val = icedToMergenMnemonics<Mnemonic>(
-            static_cast<IcedMnemonics_internal>(obj.mnemonic));
-        auto val2 = icedToMergenRegisters<Register>(
-            static_cast<IcedRegister_internal>(obj.regs[0]));
-        // printvalueforce2(obj.regs);
-
-        printvalueforce2((uint32_t)obj.operand_count_visible);
-        printvalueforce2((uint32_t)val);
-        printvalueforce2(magic_enum::enum_name(val));
-        printvalueforce2((uint32_t)val2);
-        printvalueforce2(magic_enum::enum_name(val2));
-        printvalueforce2((uint32_t)obj.regs[0]);
-        printvalueforce2((uint32_t)obj.length);
-        printvalueforce2((uint32_t)obj.attributes);
-        printvalueforce2(magic_enum::enum_name(obj.attributes));
-     */
-    // mnemonic
-    // attributes
-    // length
-    // operand count
-    // stack growth
-
-    // operand,
-    // type
-    // value
-    auto convertedInstruction =
-        MergenDisassembledInstruction_base<Mnemonic, Register>{
-
-            .mem_base = icedToMergenRegisters<Register>(
-                static_cast<IcedRegister_internal>(obj.mem_base)),
-            .mem_index = icedToMergenRegisters<Register>(
-                static_cast<IcedRegister_internal>(obj.mem_index)),
-            // .mem_disp = obj.mem_disp,
-            .mem_scale = obj.mem_scale,
-            .stack_growth = obj.stack_growth,
-            .attributes = static_cast<InstructionPrefix>(obj.attributes),
-            .length = obj.length,
-            .operand_count_visible = obj.operand_count_visible,
-
-            .mnemonic = icedToMergenMnemonics<Mnemonic>(
-                static_cast<IcedMnemonics_internal>(obj.mnemonic)),
-
-            .immediate = obj.immediate,
-            .immediate2 = obj.immediate2,
-
-        };
-
-    // printvalueforce2(obj.text);
-    bool secondimm = false;
-    for (int i = 0; i < 4; i++) {
-
-      // converted in rust part
-      OperandType optype = static_cast<OperandType>(obj.types[i]);
-
-      convertedInstruction.types[i] = optype;
+      if (debugging::shouldDebug) {
+        disas2(&obj, buffer, size);
+      } else {
+        disas(&obj, buffer, size);
+      }
       /*
-      printvalueforce2(uint32_t(optype));
-      printvalueforce2(magic_enum::enum_name(optype));
-      */
+          printvalueforce2(obj.text);
+          auto val = icedToMergenMnemonics<Mnemonic>(
+              static_cast<IcedMnemonics_internal>(obj.mnemonic));
+          auto val2 = icedToMergenRegisters<Register>(
+              static_cast<IcedRegister_internal>(obj.regs[0]));
+          // printvalueforce2(obj.regs);
 
-      switch (optype) {
-      case OperandType::Register8:
-      case OperandType::Register16:
-      case OperandType::Register32:
-      case OperandType::Register64: {
-        convertedInstruction.regs[i] = icedToMergenRegisters<Register>(
-            static_cast<IcedRegister_internal>(obj.regs[i]));
-        break;
-      default:
-        break;
-      }
-      }
-    }
+          printvalueforce2((uint32_t)obj.operand_count_visible);
+          printvalueforce2((uint32_t)val);
+          printvalueforce2(magic_enum::enum_name(val));
+          printvalueforce2((uint32_t)val2);
+          printvalueforce2(magic_enum::enum_name(val2));
+          printvalueforce2((uint32_t)obj.regs[0]);
+          printvalueforce2((uint32_t)obj.length);
+          printvalueforce2((uint32_t)obj.attributes);
+          printvalueforce2(magic_enum::enum_name(obj.attributes));
+       */
+      // mnemonic
+      // attributes
+      // length
+      // operand count
+      // stack growth
 
-    debugging::doIfDebug([&] { convertedInstruction.text = obj.text; });
-    return convertedInstruction;
+      // operand,
+      // type
+      // value
+      auto convertedInstruction =
+          MergenDisassembledInstruction_base<Mnemonic, Register>{
+
+              .mem_base = icedToMergenRegisters<Register>(
+                  static_cast<IcedRegister_internal>(obj.mem_base)),
+              .mem_index = icedToMergenRegisters<Register>(
+                  static_cast<IcedRegister_internal>(obj.mem_index)),
+              // .mem_disp = obj.mem_disp,
+              .mem_scale = obj.mem_scale,
+              .stack_growth = obj.stack_growth,
+              .attributes = static_cast<InstructionPrefix>(obj.attributes),
+              .length = obj.length,
+              .operand_count_visible = obj.operand_count_visible,
+
+              .mnemonic = icedToMergenMnemonics<Mnemonic>(
+                  static_cast<IcedMnemonics_internal>(obj.mnemonic)),
+
+              .immediate = obj.immediate,
+              .immediate2 = obj.immediate2,
+
+          };
+
+      // printvalueforce2(obj.text);
+      bool secondimm = false;
+      for (int i = 0; i < 4; i++) {
+
+        // converted in rust part
+        OperandType optype = static_cast<OperandType>(obj.types[i]);
+
+        convertedInstruction.types[i] = optype;
+        /*
+        printvalueforce2(uint32_t(optype));
+        printvalueforce2(magic_enum::enum_name(optype));
+        */
+
+        switch (optype) {
+        case OperandType::Register8:
+        case OperandType::Register16:
+        case OperandType::Register32:
+        case OperandType::Register64: {
+          convertedInstruction.regs[i] = icedToMergenRegisters<Register>(
+              static_cast<IcedRegister_internal>(obj.regs[i]));
+          break;
+        default:
+          break;
+        }
+        }
+      }
+
+      debugging::doIfDebug([&] { convertedInstruction.text = obj.text; });
+      return convertedInstruction;
+    };
   };
-};
-
+} // namespace Mergen
 #endif // ICED_DISASSEMBLER_H
