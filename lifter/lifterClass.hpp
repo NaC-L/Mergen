@@ -1,13 +1,22 @@
 #ifndef LIFTERCLASS_H
 #define LIFTERCLASS_H
-#include "FunctionSignatures.h"
+#include "CommonDisassembler.hpp"
+#include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
 #include "PathSolver.h"
+#include "ZydisDisassembler.hpp"
+#include "ZydisDisassembler_mnemonics.h"
+#include "ZydisDisassembler_registers.h"
+#include "icedDisassembler.hpp"
+#include "icedDisassembler_mnemonics.h"
+#include "icedDisassembler_registers.h"
 #include "includes.h"
 #include "utils.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/DomConditionCache.h>
+#include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/Analysis/SimplifyQuery.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -88,28 +97,28 @@ public:
   Value* v2;
 };
 
-class RegisterManager {
+template <Registers Register> class RegisterManager {
 public:
   enum RegisterIndex {
     RAX_ = 0,
-    RCX_,
-    RDX_,
-    RBX_,
-    RSP_,
-    RBP_,
-    RSI_,
-    RDI_,
-    R8_,
-    R9_,
-    R10_,
-    R11_,
-    R12_,
-    R13_,
-    R14_,
-    R15_,
-    RIP_,
-    RFLAGS_,
-    REGISTER_COUNT // Total number of registers
+    RCX_ = 1,
+    RDX_ = 2,
+    RBX_ = 3,
+    RSP_ = 4,
+    RBP_ = 5,
+    RSI_ = 6,
+    RDI_ = 7,
+    R8_ = 8,
+    R9_ = 9,
+    R10_ = 10,
+    R11_ = 11,
+    R12_ = 12,
+    R13_ = 13,
+    R14_ = 14,
+    R15_ = 15,
+    RIP_ = 16,
+    RFLAGS_ = 17,
+    REGISTER_COUNT = RFLAGS_ // Total number of registers
   };
   std::array<Value*, REGISTER_COUNT> vec;
 
@@ -118,30 +127,81 @@ public:
 
   // Overload the [] operator for getting register values
 
-  int getRegisterIndex(const ZydisRegister key) const {
+  int getRegisterIndex(Register key) const {
 
     switch (key) {
-    case ZYDIS_REGISTER_RIP: {
+    case Register::RIP: {
       return RIP_;
     }
-    case ZYDIS_REGISTER_RFLAGS: {
+    case Register::RFLAGS: {
       return RFLAGS_;
     }
     default: {
       // For ordered registers RAX to R15, map directly by offset from RAX
-      assert(key >= ZYDIS_REGISTER_RAX && key <= ZYDIS_REGISTER_R15 &&
+
+      /*
+      if (!(key >= Register::RAX && key <= Register::R15)) {
+        printvalueforce2("debug this"); // debug this branch l8r
+      }
+      */
+      assert(key >= Register::RAX && key <= Register::R15 &&
              "Key must be between RAX and R15");
 
-      return key - ZYDIS_REGISTER_RAX;
+      return (static_cast<int>(key) - static_cast<int>(Register::RAX));
     }
     }
   }
 
-  llvm::Value*& operator[](ZydisRegister key) {
+  llvm::Value*& operator[](Register key) {
     int index = getRegisterIndex(key);
     return vec[index];
   }
 };
+
+/*
+struct simpleFPV {
+  Value* v1;
+  Value* v2;
+};
+class RegisterManagerFP {
+public:
+  enum RegisterIndexFP {
+    XMM0_ = 0,
+    XMM1_,
+    XMM2_,
+    XMM3_,
+    XMM4_,
+    XMM5_,
+    XMM6_,
+    XMM7_,
+    XMM8_,
+    XMM9_,
+    XMM10_,
+    XMM11_,
+    XMM12_,
+    XMM13_,
+    XMM14_,
+    XMM15_,
+    REGISTER_COUNT // Total number of registers
+  };
+  std::array<simpleFPV, REGISTER_COUNT> vec;
+
+  RegisterManagerFP() {}
+  RegisterManagerFP(const RegisterManagerFP& other) : vec(other.vec) {}
+
+  // Overload the [] operator for getting register values
+
+  int getRegisterIndex( Register key) const {
+    return key - Register::XMM0;
+  }
+
+  simpleFPV& operator[](Register key) {
+    int index = getRegisterIndex(key);
+    printvalue2(index);
+    return vec[index];
+  }
+};
+*/
 
 struct BBInfo {
   uint64_t runtime_address;
@@ -187,28 +247,60 @@ public:
   }
 };
 
+#define MERGEN_LIFTER_DEFINITION_TEMPLATES(ret)                                \
+  template <Mnemonics Mnemonic, Registers Register,                            \
+            template <typename, typename> class DisassemblerBase>              \
+    requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,      \
+                          Register>                                            \
+  ret lifterClass<Mnemonic, Register, DisassemblerBase>
+
+// main lifter
+#ifdef ICED_FOUND
+template <Mnemonics Mnemonic = Mergen::IcedMnemonics,
+          Registers Register = Mergen::IcedRegister,
+          template <typename, typename> class DisassemblerBase =
+              Mergen::icedDisassembler>
+#else
+template <Mnemonics Mnemonic = Mergen::ZydisMnemonic,
+          Registers Register = Mergen::ZydisRegister,
+          template <typename, typename> class DisassemblerBase =
+              Mergen::ZydisDisassembler>
+#endif
+  requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,
+                        Register>
 class lifterClass {
 public:
-  llvm::IRBuilder<>& builder;
-  BBInfo blockInfo;
+  using Disassembler = DisassemblerBase<Mnemonic, Register>;
 
+  llvm::IRBuilder<llvm::InstSimplifyFolder>& builder;
+  BBInfo blockInfo;
+  uint64_t runtime_address_prev;
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
   uint32_t counter = 0;
   // unique
 
-  ZydisDecodedInstruction instruction;
-  ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+  funcsignatures<Register> signatures;
+  MergenDisassembledInstruction_base<Mnemonic, Register> instruction;
+
+  Disassembler dis;
+
+  void runDisassembler(void* buffer, size_t size = 15) {
+    instruction = dis.disassemble(buffer, size);
+  }
+
+  // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
   llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
   llvm::DenseMap<uint64_t, ValueByteReference> buffer;
   using flagManager = std::array<LazyValue, FLAGS_END>;
   // llvm::DenseMap<Value*, flagManager> flagbuffer;
 
   flagManager FlagList;
-  RegisterManager Registers;
+  RegisterManager<Register> Registers;
+  // RegisterManagerFP RegistersFP;
 
-  llvm::DomConditionCache* DC = new DomConditionCache();
+  llvm::DomConditionCache* DC = new llvm::DomConditionCache();
 
   unsigned int instct = 0;
   llvm::SimplifyQuery* cachedquery;
@@ -243,9 +335,7 @@ public:
     struct GEPinfoKeyInfo {
       // Custom hash function
       static inline unsigned getHashValue(const GEPinfo& key) {
-        auto h2 = llvm::hash_value(key.addr);
-        auto h3 = llvm::hash_value(key.type + key.TEB);
-        return llvm::hash_combine(h2, h3);
+        return llvm::hash_combine(key.addr, key.type + key.TEB);
       }
 
       // Equality function
@@ -261,30 +351,38 @@ public:
       }
     };
   };
-  DenseMap<GEPinfo, Value*, GEPinfo::GEPinfoKeyInfo> GEPcache;
+  llvm::DenseMap<GEPinfo, Value*, typename GEPinfo::GEPinfoKeyInfo> GEPcache;
   std::vector<llvm::Instruction*> memInfos;
 
+  std::vector<BBInfo> unvisitedAddresses;
+
   // global
-  llvm::Value* memory;
-  llvm::Value* TEB;
+  llvm::Value* memoryAlloc;
   llvm::Function* fnc;
 
-  lifterClass(llvm::IRBuilder<>& irbuilder) : builder(irbuilder){};
+  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>& irbuilder,
+              uint64_t runtime_addr = 0)
+      : builder(irbuilder) {
+
+    InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
+  };
 
   lifterClass(const lifterClass& other)
       : builder(other.builder), // Reference copied directly
         blockInfo(
             other.blockInfo), // Assuming BBInfo has a proper copy constructor
-        run(other.run), finished(other.finished), counter(other.counter),
+        run(other.run), finished(0), counter(other.counter),
         isUnreachable(other.isUnreachable),
         instruction(other.instruction), // Shallow copy of the pointer
         assumptions(other.assumptions), // Deep copy of assumptions
         buffer(other.buffer),
         FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
                                   // constructor
-        Registers(other.Registers),     // Assuming RegisterManager has a copy
-                                        // constructor
-        DC(other.DC),                   // Deep copy of DC
+        // RegistersFP(other.RegistersFP), // Assuming RegisterManager has a
+        // copy constructor
+        Registers(other.Registers), // Assuming RegisterManager has a copy
+                                    // constructor
+        DC(other.DC),               // Deep copy of DC
         instct(other.instct),
         cachedquery(other.cachedquery), // Assuming raw pointer, copied directly
         DT(other.DT),                   // Assuming pointer, copied directly
@@ -293,11 +391,9 @@ public:
         BIlist(other.BIlist), // Deep copy handled by vector's copy constructor
         cache(other.cache), // Deep copy handled by DenseMap's copy constructor
         memInfos(
-            other.memInfos),  // Deep copy handled by vector's copy constructor
-        memory(other.memory), // Shallow copy of the pointer
-        TEB(other.TEB),       // Shallow copy of the pointer
-        fnc(other.fnc)        // Shallow copy of the pointer
-  {}
+            other.memInfos), // Deep copy handled by vector's copy constructor
+        memoryAlloc(other.memoryAlloc), // Shallow copy of the pointer
+        fnc(other.fnc) {}
 
   void liftInstruction();
   void liftInstructionSemantics();
@@ -306,24 +402,37 @@ public:
 
   // init
   void Init_Flags();
-  void initDomTree(llvm::Function& F) { DT = new DominatorTree(F); }
+  void initDomTree(llvm::Function& F) { DT = new llvm::DominatorTree(F); }
   // end init
+
+  std::optional<llvm::Value*> evaluateLLVMExpression(llvm::Value* value);
 
   // getters-setters
   llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
+  void setFlagUndef(const Flag flag) {
+    auto undef = UndefValue::get(builder.getInt1Ty());
+    FlagList[flag].set(undef); // Set the new value directly
+  }
+
   void setFlag(const Flag flag, std::function<llvm::Value*()> calculation);
   LazyValue getLazyFlag(const Flag flag);
   llvm::Value* getFlag(const Flag flag);
-  void InitRegisters(llvm::Function* function, ZyanU64 rip);
-  llvm::Value* GetValueFromHighByteRegister(const ZydisRegister reg);
-  llvm::Value* GetRegisterValue(const ZydisRegister key);
-  llvm::Value* SetValueToHighByteRegister(const ZydisRegister reg,
+  void InitRegisters(llvm::Function* function, uint64_t rip);
+  llvm::Value* GetValueFromHighByteRegister(Register reg);
+  llvm::Value* GetRegisterValue(const Register key);
+  llvm::Value* GetMemoryValue(llvm::Value* address, uint8_t size);
+  llvm::Value* SetValueToHighByteRegister(const Register reg,
                                           llvm::Value* value);
-  llvm::Value* SetValueToSubRegister_8b(const ZydisRegister reg,
-                                        llvm::Value* value);
-  llvm::Value* SetValueToSubRegister_16b(const ZydisRegister reg,
+  llvm::Value* SetValueToSubRegister_8b(const Register reg, llvm::Value* value);
+  llvm::Value* SetValueToSubRegister_16b(const Register reg,
                                          llvm::Value* value);
-  void SetRegisterValue(const ZydisRegister key, llvm::Value* value);
+
+  // this actually might be a good reason for static polymorphism, since
+  // current implementation cant be encapsulated in a class very efficently
+  void createMemcpy(llvm::Value* src, llvm::Value* dest, llvm::Value* size);
+
+  void SetRegisterValue(const Register key, llvm::Value* value);
+  void SetMemoryValue(llvm::Value* address, llvm::Value* value);
   void SetRFLAGSValue(llvm::Value* value);
   PATH_info solvePath(llvm::Function* function, uint64_t& dest,
                       llvm::Value* simplifyValue);
@@ -332,22 +441,55 @@ public:
                  const std::string& address);
   std::vector<llvm::Value*> GetRFLAGS();
 
-  llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
-                               const int possiblesize,
-                               const std::string& address = "");
-  llvm::Value* SetOperandValue(const ZydisDecodedOperand& op,
-                               llvm::Value* value,
-                               const std::string& address = "");
+  /*
+  simpleFPV GetOperandValueFP(const ZydisDecodedOperand& op,
+                              const std::string& address = "");
+  simpleFPV SetOperandValueFP(const ZydisDecodedOperand& op, simpleFPV value,
+                              const std::string& address = "");
+  */
+
+  Register GetAccumulatorRegister(uint8_t size = 64) {
+    switch (size) {
+    case 64:
+      return Register::RAX;
+    case 32:
+      return Register::EAX;
+    case 16:
+      return Register::AX;
+    case 8:
+      return Register::AL;
+    default:
+      UNREACHABLE("invalid acc");
+    }
+  }
+
+  llvm::Value* GetIndexValue(uint8_t index);
+
+  void SetIndexValue(uint8_t index, Value* value);
+  /*
+    llvm::Value* GetOperandValue(const ZydisDecodedOperand& op,
+                                 const int possiblesize,
+                                 const std::string& address = "");
+    llvm::Value* SetOperandValue(const ZydisDecodedOperand& op,
+                                 llvm::Value* value,
+                                 const std::string& address = "");
+                                 */
   llvm::Value* GetRFLAGSValue();
+
+  llvm::Value* getSPaddress() { return GetRegisterValue(Register::RSP); }
+  llvm::Value* getSP() { return getPointer(getSPaddress()); };
   // end getters-setters
   // misc
   llvm::Value* callFunctionIR(const std::string& functionName,
-                              funcsignatures::functioninfo* funcInfo);
-  llvm::Value* GetEffectiveAddress(const ZydisDecodedOperand& op,
-                                   const int possiblesize);
-  std::vector<llvm::Value*> parseArgs(funcsignatures::functioninfo* funcInfo);
-  llvm::FunctionType* parseArgsType(funcsignatures::functioninfo* funcInfo,
-                                    llvm::LLVMContext& context);
+                              funcsignatures<Register>::functioninfo* funcInfo);
+  llvm::Value* GetEffectiveAddress();
+  llvm::Value* getPointer(llvm::Value* value);
+
+  std::vector<llvm::Value*>
+  parseArgs(funcsignatures<Register>::functioninfo* funcInfo);
+  llvm::FunctionType*
+  parseArgsType(funcsignatures<Register>::functioninfo* funcInfo,
+                llvm::LLVMContext& context);
 
   llvm::Value* computeSignFlag(Value* value);
   llvm::Value* computeZeroFlag(Value* value);
@@ -368,14 +510,14 @@ public:
 
   llvm::SimplifyQuery createSimplifyQuery(Instruction* Inst);
 
-  void RegisterBranch(BranchInst* BI) {
+  void RegisterBranch(llvm::BranchInst* BI) {
     //
     BIlist.push_back(BI);
   }
 
-  DominatorTree* getDomTree() { return DT; }
+  llvm::DominatorTree* getDomTree() { return DT; }
 
-  void updateDomTree(Function& F) {
+  void updateDomTree(llvm::Function& F) {
     // should only recalculate if we
 
     auto getLastBB = &(F.back());
@@ -392,15 +534,19 @@ public:
   }
 
   bool isMemPaged(const int64_t address) {
+
     auto it = pageMap.upper_bound(address);
     if (it == pageMap.begin())
       return false;
+
     --it;
-    return address >= it->first && address < it->second;
+
+    auto rs = address >= it->first && address < it->second;
+    return rs;
   }
 
-  set<APInt, APIntComparator> getPossibleValues(const llvm::KnownBits& known,
-                                                unsigned max_unknown);
+  std::set<llvm::APInt, APIntComparator>
+  getPossibleValues(const llvm::KnownBits& known, unsigned max_unknown);
 
   Value* retrieveCombinedValue(const uint64_t startAddress,
                                const uint8_t byteCount, LazyValue orgLoad);
@@ -413,9 +559,9 @@ public:
 
   void loadMemoryOp(Value* inst);
 
-  void insertMemoryOp(StoreInst* inst);
-  set<APInt, APIntComparator> computePossibleValues(Value* V,
-                                                    const uint8_t Depth = 0);
+  void insertMemoryOp(llvm::StoreInst* inst);
+  std::set<llvm::APInt, APIntComparator>
+  computePossibleValues(Value* V, const uint8_t Depth = 0);
 
   Value* extractBytes(Value* value, const uint8_t startOffset,
                       const uint8_t endOffset);
@@ -436,7 +582,7 @@ public:
 
   Value* createXorFolder(Value* LHS, Value* RHS, const Twine& Name = "");
 
-  Value* createICMPFolder(CmpInst::Predicate P, Value* LHS, Value* RHS,
+  Value* createICMPFolder(llvm::CmpInst::Predicate P, Value* LHS, Value* RHS,
                           const Twine& Name = "");
   Value* createNotFolder(Value* LHS, const Twine& Name = "");
   Value* createMulFolder(Value* LHS, Value* RHS, const Twine& Name = "");
@@ -466,14 +612,16 @@ public:
   Value* createLShrFolder(Value* LHS, const uint64_t RHS,
                           const Twine& Name = "");
 
-  Value* createLShrFolder(Value* LHS, const APInt RHS, const Twine& Name = "");
+  Value* createLShrFolder(Value* LHS, const llvm::APInt RHS,
+                          const Twine& Name = "");
 
   Value* createShlFolder(Value* LHS, Value* RHS, const Twine& Name = "");
 
   Value* createShlFolder(Value* LHS, const uint64_t RHS,
                          const Twine& Name = "");
 
-  Value* createShlFolder(Value* LHS, const APInt RHS, const Twine& Name = "");
+  Value* createShlFolder(Value* LHS, const llvm::APInt RHS,
+                         const Twine& Name = "");
   Value* folderBinOps(Value* LHS, Value* RHS, const Twine& Name,
                       Instruction::BinaryOps opcode);
   Value* createInstruction(const unsigned opcode, Value* operand1,
@@ -486,10 +634,14 @@ public:
 
   // end folders
 
-  // semantics definition
+  // would look nicer if we didnt have this, and do everything in a macro
+  // instead?
   DEFINE_FUNCTION(movs_X);
   DEFINE_FUNCTION(movaps);
   DEFINE_FUNCTION(mov);
+
+  DEFINE_FUNCTION(cmovcc);
+  /*
   DEFINE_FUNCTION(cmovbz);
   DEFINE_FUNCTION(cmovnbz);
   DEFINE_FUNCTION(cmovz);
@@ -506,6 +658,7 @@ public:
   DEFINE_FUNCTION(cmovno);
   DEFINE_FUNCTION(cmovp);
   DEFINE_FUNCTION(cmovnp);
+  */
   DEFINE_FUNCTION(popcnt);
   //
   DEFINE_FUNCTION(call);
@@ -597,6 +750,9 @@ public:
   DEFINE_FUNCTION(bzhi);
   DEFINE_FUNCTION(bsr);
   DEFINE_FUNCTION(bsf);
+  DEFINE_FUNCTION(blsmsk);
+  DEFINE_FUNCTION(pdep);
+  DEFINE_FUNCTION(blsi);
   DEFINE_FUNCTION(blsr);
   DEFINE_FUNCTION(tzcnt);
   DEFINE_FUNCTION(btc);
@@ -615,9 +771,19 @@ public:
   DEFINE_FUNCTION(cwde);
   DEFINE_FUNCTION(cdqe);
   DEFINE_FUNCTION(bextr);
+
+  // sse
+  /*
+  DEFINE_FUNCTION(movdqa);
+  DEFINE_FUNCTION(pand);
+  DEFINE_FUNCTION(por);
+  DEFINE_FUNCTION(pxor);
+  DEFINE_FUNCTION(xorps);
+  */
   // end semantics definition
 };
-extern vector<lifterClass*> lifters;
+
+extern std::vector<lifterClass<>*> lifters;
 
 #undef DEFINE_FUNCTION
 #endif // LIFTERCLASS_H

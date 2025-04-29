@@ -1,0 +1,13 @@
+[package]
+name = "Iced-Wrapper"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+crate-type = ["staticlib"]
+
+
+
+[dependencies]
+iced-x86 = "1.21"
+memoffset = "0.9.1"
