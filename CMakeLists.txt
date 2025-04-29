@@ -50,7 +50,7 @@ FetchContent_Declare(linux-pe SYSTEM
 )
 FetchContent_MakeAvailable(linux-pe)
 
-if(ICED_FOUND) # NOTE: unnamed condition
+if(ICED_NOT_FOUND) # NOTE: unnamed condition
 	message(STATUS "Fetching Zydis (v4.1.0)...")
 	FetchContent_Declare(Zydis SYSTEM
 		GIT_REPOSITORY
