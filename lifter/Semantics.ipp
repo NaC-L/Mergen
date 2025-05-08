@@ -1,8 +1,8 @@
 ﻿#include "CommonDisassembler.hpp"
-#include "CommonMnemonics.h"
 #include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
 #include "OperandUtils.ipp"
+#include "fileReader.hpp"
 #include "includes.h"
 #include "lifterClass.hpp"
 #include "utils.h"
@@ -251,12 +251,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::branchHelper(
   block->setName(instname + std::to_string(numbered));
   auto function = block->getParent();
 
-  auto true_jump_addr = instruction.immediate + blockInfo.runtime_address;
+  auto true_jump_addr = instruction.immediate + current_address;
 
   Value* true_jump =
       ConstantInt::get(function->getReturnType(), true_jump_addr);
 
-  auto false_jump_addr = blockInfo.runtime_address;
+  auto false_jump_addr = current_address;
   Value* false_jump =
       ConstantInt::get(function->getReturnType(), false_jump_addr);
   Value* next_jump = nullptr;
@@ -384,8 +384,8 @@ void lifterClass<Mnemonic, Register, T3>::lift_movaps() {
   auto src = operands[1];
 
   auto Rvalue =
-      GetIndexValue(src, src.size, std::to_string(blockInfo.runtime_address));
-  SetIndexValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+      GetIndexValue(src, src.size, std::to_string(current_address));
+  SetIndexValue(dest, Rvalue, std::to_string(current_address));
 }
 */
 /*
@@ -400,16 +400,16 @@ void lifterClass<Mnemonic, Register, T3>::lift_xorps() {
   // rm
 
   auto Lvalue =
-      GetIndexValueFP(dest, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(dest, std::to_string(current_address));
   auto Rvalue =
-      GetIndexValueFP(src, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(src, std::to_string(current_address));
   printvalue(Rvalue.v1);
   printvalue(Rvalue.v2);
   auto dest1 = createXorFolder(Rvalue.v1, Lvalue.v1);
   auto desRegister = createXorFolder(Rvalue.v2, Lvalue.v2);
   Rvalue.v1 = dest1;
   Rvalue.v2 = desRegister;
-  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
 }
 
 void lifterClass<Mnemonic, Register, T3>::lift_movdqa() {
@@ -422,10 +422,10 @@ void lifterClass<Mnemonic, Register, T3>::lift_movdqa() {
   // rm
 
   auto Rvalue =
-      GetIndexValueFP(src, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(src, std::to_string(current_address));
   printvalue(Rvalue.v1);
   printvalue(Rvalue.v2);
-  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
 }
 
 void lifterClass<Mnemonic, Register, T3>::lift_pand() {
@@ -438,16 +438,16 @@ void lifterClass<Mnemonic, Register, T3>::lift_pand() {
   // rm
 
   auto Rvalue =
-      GetIndexValueFP(src, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(src, std::to_string(current_address));
   auto Lvalue =
-      GetIndexValueFP(dest, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(dest, std::to_string(current_address));
   printvalue(Rvalue.v1);
   printvalue(Rvalue.v2);
   printvalue(Lvalue.v1);
   printvalue(Lvalue.v2);
   Rvalue.v1 = createAndFolder(Rvalue.v1, Lvalue.v1);
   Rvalue.v2 = createAndFolder(Rvalue.v2, Lvalue.v2);
-  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
 }
 
 void lifterClass<Mnemonic, Register, T3>::lift_por() {
@@ -460,16 +460,16 @@ void lifterClass<Mnemonic, Register, T3>::lift_por() {
   // rm
 
   auto Rvalue =
-      GetIndexValueFP(src, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(src, std::to_string(current_address));
   auto Lvalue =
-      GetIndexValueFP(dest, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(dest, std::to_string(current_address));
   printvalue(Rvalue.v1);
   printvalue(Rvalue.v2);
   printvalue(Lvalue.v1);
   printvalue(Lvalue.v2);
   Rvalue.v1 = createOrFolder(Rvalue.v1, Lvalue.v1);
   Rvalue.v2 = createOrFolder(Rvalue.v2, Lvalue.v2);
-  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
 }
 void lifterClass<Mnemonic, Register, T3>::lift_pxor() {
   auto dest = operands[0]; // 128
@@ -481,16 +481,16 @@ void lifterClass<Mnemonic, Register, T3>::lift_pxor() {
   // rm
 
   auto Rvalue =
-      GetIndexValueFP(src, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(src, std::to_string(current_address));
   auto Lvalue =
-      GetIndexValueFP(dest, std::to_string(blockInfo.runtime_address));
+      GetIndexValueFP(dest, std::to_string(current_address));
   printvalue(Rvalue.v1);
   printvalue(Rvalue.v2);
   printvalue(Lvalue.v1);
   printvalue(Lvalue.v2);
   Rvalue.v1 = createXorFolder(Rvalue.v1, Lvalue.v1);
   Rvalue.v2 = createXorFolder(Rvalue.v2, Lvalue.v2);
-  SetIndexValueFP(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
 }
 */
 
@@ -498,7 +498,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mov() {
   LLVMContext& context = builder.getContext();
 
   //  auto Rvalue2 =      GetIndexValue(src, src.size,
-  //  std::to_string(blockInfo.runtime_address));
+  //  std::to_string(current_address));
   auto Rvalue = GetIndexValue(1);
 
   printvalue(Rvalue);
@@ -507,19 +507,19 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mov() {
   case Mnemonic::MOVSX: {
     Rvalue = createSExtFolder(
         Rvalue, Type::getIntNTy(context, GetTypeSize(instruction.types[0])),
-        "movsx-" + std::to_string(blockInfo.runtime_address) + "-");
+        "movsx-" + std::to_string(current_address) + "-");
     break;
   }
   case Mnemonic::MOVZX: {
     Rvalue = createZExtFolder(
         Rvalue, Type::getIntNTy(context, GetTypeSize(instruction.types[0])),
-        "movzx-" + std::to_string(blockInfo.runtime_address) + "-");
+        "movzx-" + std::to_string(current_address) + "-");
     break;
   }
   case Mnemonic::MOVSXD: {
     Rvalue = createSExtFolder(
         Rvalue, Type::getIntNTy(context, GetTypeSize(instruction.types[0])),
-        "movsxd-" + std::to_string(blockInfo.runtime_address) + "-");
+        "movsxd-" + std::to_string(current_address) + "-");
     break;
   }
   default: {
@@ -644,11 +644,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   auto RspValue = GetRegisterValue(Register::RSP);
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    BinaryOperations::getBitness() / 8);
+                                    file.getMode() == arch_mode::X64 ? 8 : 4);
 
   auto result = createSubFolder(RspValue, val, "pushing_newrsp");
 
-  uint64_t jump_address = blockInfo.runtime_address;
+  uint64_t jump_address = current_address;
 
   std::string block_name = "jmp_call-" + std::to_string(jump_address) + "-";
 
@@ -765,12 +765,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   printvalue2(rop_result);
   if (rop_result == REAL_return) {
     lastinst->eraseFromParent();
-    block->setName("real_return-" + std::to_string(blockInfo.runtime_address) +
-                   "-");
+    block->setName("real_return-" + std::to_string(current_address) + "-");
 
     auto rax = GetRegisterValue(Register::RAX);
-    rax = createZExtFolder(rax,
-                           builder.getIntNTy(BinaryOperations::getBitness()));
+    rax = createZExtFolder(
+        rax, builder.getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
     // put this in a function
     std::vector<llvm::Type*> argTypes;
     argTypes.push_back(llvm::Type::getInt64Ty(context));
@@ -851,10 +850,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   lastinst->eraseFromParent();
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    BinaryOperations::getBitness() / 8);
+                                    file.getMode() == arch_mode::X64 ? 8 : 4);
   auto rsp_result = createAddFolder(
-      rspvalue, val,
-      "ret-new-rsp-" + std::to_string(blockInfo.runtime_address) + "-");
+      rspvalue, val, "ret-new-rsp-" + std::to_string(current_address) + "-");
 
   if (instruction.types[0] == OperandType::Immediate16) {
 
@@ -883,8 +881,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   // if its r/m then we probably need to zext
 
   auto newRip = createAddFolder(
-      Value, ripval,
-      "jump-xd-" + std::to_string(blockInfo.runtime_address) + "-");
+      Value, ripval, "jump-xd-" + std::to_string(current_address) + "-");
 
   jmpcount++;
   auto targetv = Value;
@@ -1463,8 +1460,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_not() {
 
   auto Rvalue = GetIndexValue(0);
   Rvalue = createXorFolder(Rvalue, Constant::getAllOnesValue(Rvalue->getType()),
-                           "realnot-" +
-                               std::to_string(blockInfo.runtime_address) + "-");
+                           "realnot-" + std::to_string(current_address) + "-");
   SetIndexValue(0, Rvalue);
 
   printvalue(Rvalue);
@@ -1592,9 +1588,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sar() {
   // Shift by bitWidth - 1 if clampedCount exceeds bitWidth - 1
   clampedCount = createSelectFolder(isZeroed, maxShift, clampedCount);
 
-  Value* result = createAShrFolder(
-      Lvalue, clampedCount,
-      "sar-ashr-" + std::to_string(blockInfo.runtime_address) + "-");
+  Value* result =
+      createAShrFolder(Lvalue, clampedCount,
+                       "sar-ashr-" + std::to_string(current_address) + "-");
 
   auto last_shift = createAShrFolder(
       Lvalue,
@@ -1669,9 +1665,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shr() {
   Value* clampedCount = createAndFolder(
       countValue, ConstantInt::get(countValue->getType(), maskC), "shrclamp");
 
-  Value* result = createLShrFolder(
-      Lvalue, clampedCount,
-      "shr-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
+  Value* result =
+      createLShrFolder(Lvalue, clampedCount,
+                       "shr-lshr-" + std::to_string(current_address) + "-");
 
   Value* zero = ConstantInt::get(countValue->getType(), 0);
 
@@ -2158,8 +2154,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_add_sub() {
   switch (instruction.mnemonic) {
   case Mnemonic::ADD: {
     result = createAddFolder(
-        Lvalue, Rvalue,
-        "realadd-" + std::to_string(blockInfo.runtime_address) + "-");
+        Lvalue, Rvalue, "realadd-" + std::to_string(current_address) + "-");
 
     setFlag(FLAG_AF, [this, result, Lvalue, Rvalue]() {
       auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
@@ -2185,8 +2180,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_add_sub() {
   }
   case Mnemonic::SUB: {
     result = createSubFolder(
-        Lvalue, Rvalue,
-        "realsub-" + std::to_string(blockInfo.runtime_address) + "-");
+        Lvalue, Rvalue, "realsub-" + std::to_string(current_address) + "-");
 
     setFlag(FLAG_AF, [this, result, Lvalue, Rvalue]() {
       auto lowerNibbleMask = ConstantInt::get(Lvalue->getType(), 0xF);
@@ -2622,8 +2616,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_xor() {
   Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
 
   auto result = createXorFolder(
-      Lvalue, Rvalue,
-      "realxor-" + std::to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue, "realxor-" + std::to_string(current_address) + "-");
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
 
@@ -2654,8 +2647,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_or() {
 
   Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
   auto result = createOrFolder(
-      Lvalue, Rvalue,
-      "realor-" + std::to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue, "realor-" + std::to_string(current_address) + "-");
 
   printvalue(Lvalue);
   printvalue(Rvalue);
@@ -2689,8 +2681,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_and() {
   Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
 
   auto result = createAndFolder(
-      Lvalue, Rvalue,
-      "realand-" + std::to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue, "realand-" + std::to_string(current_address) + "-");
 
   // auto pf = computeParityFlag(result);
 
@@ -2719,9 +2710,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_andn() {
   auto Lvalue = GetIndexValue(0);
   auto Rvalue = GetIndexValue(1);
 
-  auto result = createAndFolder(
-      createNotFolder(Lvalue), Rvalue,
-      "realand-" + std::to_string(blockInfo.runtime_address) + "-");
+  auto result =
+      createAndFolder(createNotFolder(Lvalue), Rvalue,
+                      "realand-" + std::to_string(current_address) + "-");
 
   // auto pf = computeParityFlag(result);
 
@@ -2881,7 +2872,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ror() {
 
   Value* result =
       createOrFolder(rightshifted, leftshifted,
-                     "ror-" + std::to_string(blockInfo.runtime_address) + "-");
+                     "ror-" + std::to_string(current_address) + "-");
 
   Value* msb = createLShrFolder(result, MSBpos);
   Value* cf = createZExtOrTruncFolder(msb, Type::getInt1Ty(context), "ror-cf");
@@ -2915,7 +2906,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_inc() {
 
   Value* one = ConstantInt::get(Lvalue->getType(), 1, true);
   Value* result = createAddFolder(
-      Lvalue, one, "inc-" + std::to_string(blockInfo.runtime_address) + "-");
+      Lvalue, one, "inc-" + std::to_string(current_address) + "-");
   // Value* of = computeOverflowFlagAdd(Lvalue, one, result);
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
   // according to the result.
@@ -2951,7 +2942,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_dec() {
 
   Value* one = ConstantInt::get(Lvalue->getType(), 1, true);
   Value* result = createSubFolder(
-      Lvalue, one, "dec-" + std::to_string(blockInfo.runtime_address) + "-");
+      Lvalue, one, "dec-" + std::to_string(current_address) + "-");
   Value* of = computeOverflowFlagSub(Lvalue, one, result);
 
   // The CF flag is not affected. The OF, SF, ZF, AF, and PF flags are set
@@ -2996,15 +2987,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_push() {
                                     destsize); //
 
   auto result = createSubFolder(
-      RspValue, val,
-      "pushing_newrsp-" + std::to_string(blockInfo.runtime_address) + "-");
+      RspValue, val, "pushing_newrsp-" + std::to_string(current_address) + "-");
 
   printvalue(Rvalue);
   printvalue(RspValue);
   printvalue(result);
 
   SetRegisterValue(Register::RSP, result);
-  // SetIndexValue(rsp, result, std::to_string(blockInfo.runtime_address));
+  // SetIndexValue(rsp, result, std::to_string(current_address));
   //  sub rsp 8 first,
 
   // sign extend
@@ -3022,7 +3012,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_push() {
   }
 
   SetMemoryValue(getSPaddress(), Rvalue);
-  // SetIndexValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  // SetIndexValue(dest, Rvalue, std::to_string(current_address));
   // then mov rsp, val
 }
 
@@ -3042,14 +3032,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pushfq() {
   auto result = createSubFolder(RspValue, val);
 
   SetRegisterValue(Register::RSP, result);
-  // SetIndexValue(rsp, result, std::to_string(blockInfo.runtime_address));
+  // SetIndexValue(rsp, result, std::to_string(current_address));
   //  sub rsp 8 first,
 
   // pushFlags( dest, Rvalue,
-  // std::to_string(blockInfo.runtime_address));;
+  // std::to_string(current_address));;
 
   SetMemoryValue(getSPaddress(), Rvalue);
-  // SetIndexValue(dest, Rvalue, std::to_string(blockInfo.runtime_address));
+  // SetIndexValue(dest, Rvalue, std::to_string(current_address));
   // then mov rsp, val
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pop() {
@@ -3065,9 +3055,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pop() {
   auto RspValue = GetRegisterValue(Register::RSP);
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context), destsize);
-  auto result = createAddFolder(
-      RspValue, val,
-      "popping_new_rsp-" + std::to_string(blockInfo.runtime_address) + "-");
+  auto result = createAddFolder(RspValue, val,
+                                "popping_new_rsp-" +
+                                    std::to_string(current_address) + "-");
 
   printvalue(Rvalue) printvalue(RspValue) printvalue(result);
 
@@ -3114,8 +3104,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_popfq() {
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context), destsize / 8);
   auto result = createAddFolder(
-      RspValue, val,
-      "popfq-" + std::to_string(blockInfo.runtime_address) + "-");
+      RspValue, val, "popfq-" + std::to_string(current_address) + "-");
 
   SetRFLAGSValue(Rvalue);
   // mov val, rsp first
@@ -3135,11 +3124,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_adc() {
   cf = createZExtFolder(cf, Lvalue->getType());
 
   Value* tempResult = createAddFolder(
-      Lvalue, Rvalue,
-      "adc-temp-" + std::to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue, "adc-temp-" + std::to_string(current_address) + "-");
   Value* result = createAddFolder(
-      tempResult, cf,
-      "adc-result-" + std::to_string(blockInfo.runtime_address) + "-");
+      tempResult, cf, "adc-result-" + std::to_string(current_address) + "-");
   // The OF, SF, ZF, AF, CF, and PF flags are set according to the result.
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(tempResult);
@@ -3179,8 +3166,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_xadd() {
   auto Rvalue = GetIndexValue(1);
 
   Value* TEMP = createAddFolder(
-      Lvalue, Rvalue,
-      "xadd_sum-" + std::to_string(blockInfo.runtime_address) + "-");
+      Lvalue, Rvalue, "xadd_sum-" + std::to_string(current_address) + "-");
 
   SetIndexValue(1, Lvalue);
 
@@ -3310,7 +3296,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cmp() {
   });
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_rdtsc() {
-  // cout << blockInfo.runtime_address << "\n";
+  // cout << current_address << "\n";
   LLVMContext& context = builder.getContext();
   auto rdtscCall = builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
 }
@@ -3723,9 +3709,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btr() {
 
   Value* baseVal = GetIndexValue(0);
 
-  Value* bit = createLShrFolder(
-      baseVal, bitOffsetMasked,
-      "btr-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
+  Value* bit =
+      createLShrFolder(baseVal, bitOffsetMasked,
+                       "btr-lshr-" + std::to_string(current_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -3737,9 +3723,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btr() {
                                 bitOffsetMasked, "btr-shl");
 
   mask = createNotFolder(mask); // invert mask
-  baseVal = createAndFolder(
-      baseVal, mask,
-      "btr-and-" + std::to_string(blockInfo.runtime_address) + "-");
+  baseVal = createAndFolder(baseVal, mask,
+                            "btr-and-" + std::to_string(current_address) + "-");
 
   SetIndexValue(0, baseVal);
   printvalue(bitOffset);
@@ -4034,9 +4019,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btc() {
 
   Value* baseVal = GetIndexValue(0);
 
-  Value* bit = createLShrFolder(
-      baseVal, bitOffsetMasked,
-      "btc-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
+  Value* bit =
+      createLShrFolder(baseVal, bitOffsetMasked,
+                       "btc-lshr-" + std::to_string(current_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -4047,9 +4032,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btc() {
   Value* mask = createShlFolder(ConstantInt::get(baseVal->getType(), 1),
                                 bitOffsetMasked, "btc-shl");
 
-  baseVal = createXorFolder(
-      baseVal, mask,
-      "btc-and-" + std::to_string(blockInfo.runtime_address) + "-");
+  baseVal = createXorFolder(baseVal, mask,
+                            "btc-and-" + std::to_string(current_address) + "-");
 
   SetIndexValue(0, baseVal);
   printvalue(bitOffset);
@@ -4168,9 +4152,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bts() {
 
   Value* baseVal = GetIndexValue(0);
 
-  Value* bit = createLShrFolder(
-      baseVal, bitOffsetMasked,
-      "bts-lshr-" + std::to_string(blockInfo.runtime_address) + "-");
+  Value* bit =
+      createLShrFolder(baseVal, bitOffsetMasked,
+                       "bts-lshr-" + std::to_string(current_address) + "-");
 
   Value* one = ConstantInt::get(bit->getType(), 1);
 
@@ -4182,8 +4166,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bts() {
                                 bitOffsetMasked, "bts-shl");
 
   baseVal = createOrFolder(baseVal, mask,
-                           "bts-or-" +
-                               std::to_string(blockInfo.runtime_address) + "-");
+                           "bts-or-" + std::to_string(current_address) + "-");
 
   SetIndexValue(0, baseVal);
   printvalue(bitOffset);
@@ -4798,8 +4781,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
 
     printvalueforce2(this->counter);
     std::cout << "not implemented: " << (uint64_t)instruction.mnemonic
-              << " runtime: " << std::hex << blockInfo.runtime_address
-              << std::endl;
+              << " runtime: " << std::hex << current_address << std::endl;
     /*
         std::string Filename = "output_notimplemented.ll";
         std::error_code EC;
@@ -4819,44 +4801,27 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
+
+  // in future this function could be staticly dispatched for custom logic?
+
   LLVMContext& context = builder.getContext();
   // RIP gets updated before execution of the instruction->
   /*
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    blockInfo.runtime_address);
+                                    current_address);
   SetRegisterValue(Register::RIP, val);
   */
   auto rsp = GetRegisterValue(Register::RSP);
   printvalue(rsp);
-  printvalue2(blockInfo.runtime_address);
-  uint8_t* data;
-  BinaryOperations::getBases(&data);
-  auto dosHeader = reinterpret_cast<const win::dos_header_t*>(data);
-  auto ntHeadersBase =
-      reinterpret_cast<const uint8_t*>(data) + dosHeader->e_lfanew;
+  printvalue2(current_address);
 
-  uint64_t imageBase;
-  auto ntHeaders =
-      reinterpret_cast<const win::nt_headers_t<true>*>(ntHeadersBase);
-  imageBase = ntHeaders->optional_header.image_base;
-
-  auto funcInfo = signatures.getFunctionInfo(blockInfo.runtime_address);
-  if (blockInfo.runtime_address == 5368721739) // + 0x764e11
-    funcInfo = new funcsignatures<Register>::functioninfo(
-        "printf", {
-                      typename funcsignatures<Register>::funcArgInfo(
-                          Register::RCX, I64, 1),
-                      typename funcsignatures<Register>::funcArgInfo(
-                          Register::RDX, I64, 0),
-                      typename funcsignatures<Register>::funcArgInfo(
-                          Register::R8, I64, 1),
-                  });
+  auto funcInfo = signatures.getFunctionInfo(current_address);
 
   if (funcInfo) {
     callFunctionIR(funcInfo->name.c_str(), funcInfo);
     outs() << "calling: " << funcInfo->name.c_str() << "\n";
     outs().flush();
-    auto next_jump = popStack(BinaryOperations::getBitness() / 8);
+    auto next_jump = popStack(file.getMode() == arch_mode::X64 ? 8 : 4);
 
     // get [rsp], jump there
     if (!isa<ConstantInt>(next_jump)) {
@@ -4877,11 +4842,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
 
   // if really an import, jump_address + imagebase should return a std::string
   // (?)
-  uint64_t jump_address = blockInfo.runtime_address;
-  APInt temp;
-  bool isReadable = BinaryOperations::readMemory(jump_address, 1, temp);
-  bool isImport = BinaryOperations::isImport(jump_address);
-  if (!isReadable && isImport &&
+  uint64_t jump_address = current_address;
+  uint64_t temp;
+  bool isReadable = file.readMemory(jump_address, 1, temp);
+  // bool isImport = file.isImport(jump_address); check if rwx?
+
+  // this ~~would~~ SHOULD catch missed function calls, probably take care of
+  // this in solvePath?
+
+  if (!isReadable &&
       cast<ConstantInt>(GetRegisterValue(Register::RSP))->getValue() !=
           STACKP_VALUE) {
     printvalueforce2(jump_address);
@@ -4889,14 +4858,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
                                  builder.GetInsertBlock()->getParent());
     // actually call the function first
 
-    auto functionName = BinaryOperations::getName(jump_address);
+    auto functionName = file.getName(jump_address);
     outs() << "calling : " << functionName
            << " addr: " << (uint64_t)jump_address;
     outs().flush();
 
     callFunctionIR(functionName, nullptr);
 
-    auto next_jump = popStack(BinaryOperations::getBitness() / 8);
+    auto next_jump = popStack(file.getMode() == arch_mode::X64 ? 8 : 4);
 
     // get [rsp], jump there
     auto RIP_value = cast<ConstantInt>(next_jump);
@@ -4908,19 +4877,19 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
     run = 0;
     return;
   }
-  // wt
 
-  if (!isReadable && !isImport) {
-    // done something wrong;
-    std::string Filename = "output_external.ll";
-    std::error_code EC;
-    raw_fd_ostream OS(Filename, EC);
-    builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+  /*
+    if (!isReadable && !isImport) {
+      // done something wrong;
+      std::string Filename = "output_external.ll";
+      std::error_code EC;
+      raw_fd_ostream OS(Filename, EC);
+      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
 
-    outs().flush();
-    // UNREACHABLE("Trying to execute invalid external function");
-  }
-
+      outs().flush();
+      // UNREACHABLE("Trying to execute invalid external function");
+    }
+   */
   // do something for prefixes like rep here
   liftInstructionSemantics();
 }
