@@ -7,6 +7,7 @@
 #include "ZydisDisassembler.hpp"
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
+#include "fileReader.hpp"
 #include "icedDisassembler.hpp"
 #include "icedDisassembler_mnemonics.h"
 #include "icedDisassembler_registers.h"
@@ -204,13 +205,13 @@ public:
 */
 
 struct BBInfo {
-  uint64_t runtime_address;
+  uint64_t block_address;
   llvm::BasicBlock* block;
 
   BBInfo(){};
 
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
-      : runtime_address(runtime_address), block(block) {}
+      : block_address(runtime_address), block(block) {}
 };
 
 class LazyValue {
@@ -274,7 +275,7 @@ public:
 
   llvm::IRBuilder<llvm::InstSimplifyFolder>& builder;
   BBInfo blockInfo;
-  uint64_t runtime_address_prev;
+  uint64_t current_address;
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
@@ -288,6 +289,72 @@ public:
 
   void runDisassembler(void* buffer, size_t size = 15) {
     instruction = dis.disassemble(buffer, size);
+  }
+
+  // handle the file here
+  uint8_t* fileBase;
+
+  // lifts single instruction
+  void liftBytes(void* bytes, size_t size = 15) {
+    // what about the basicblock?
+    runDisassembler(bytes, size);
+    current_address += instruction.length;
+    liftInstructionSemantics();
+    this->counter++;
+  };
+
+  x86_64FileReader file;
+
+  void loadFile(uint8_t* file_start) {
+    fileBase = file_start;
+    file = x86_64FileReader(file_start);
+  }
+
+  // also lifts single inst
+  void liftAddress(uint64_t addr, size_t size = 15) {
+    file.filebase_exists();
+
+    this->current_address = addr;
+    auto offset = file.address_to_mapped_address(addr);
+    // what about the basicblock?
+
+    runDisassembler((void*)offset, size);
+    const auto ct = (llvm::format_hex_no_prefix(this->counter, 0));
+    const auto runtime_address =
+        (llvm::format_hex_no_prefix(this->current_address, 0));
+    printvalue2(ct);
+    printvalue2(runtime_address);
+#ifndef _NODEV
+    debugging::doIfDebug([&]() { printvalue2(this->instruction.text); });
+#endif
+    // also pass the file to address_to_mapped_address?
+    this->current_address += instruction.length;
+    liftInstruction();
+    this->counter++;
+  };
+
+  void liftBasicBlockFromBytes(std::vector<uint8_t> bytes) {
+    //
+  }
+
+  void liftBasicBlockFromAddress(uint64_t addr) {
+    printvalue2(this->finished);
+    printvalue2(this->run);
+    this->run = 1;
+    while (this->finished == 0 && this->run) {
+      liftAddress(addr);
+    }
+    // liftAddress
+    // then lift until we hit a jump
+  }
+  uint64_t getUnvisitedAddr() {
+    // get next unvisited addr
+  }
+  void writeFunctionToFile(const std::string filename) {
+
+    std::error_code EC_noopt;
+    llvm::raw_fd_ostream OS_noopt(filename, EC_noopt);
+    fnc->print(OS_noopt, nullptr);
   }
 
   // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
@@ -354,7 +421,9 @@ public:
   llvm::DenseMap<GEPinfo, Value*, typename GEPinfo::GEPinfoKeyInfo> GEPcache;
   std::vector<llvm::Instruction*> memInfos;
 
-  std::vector<BBInfo> unvisitedAddresses;
+  // todo : std::set
+  std::vector<BBInfo> unvisitedBlocks;
+  std::vector<BBInfo> visitedBlocks;
 
   // global
   llvm::Value* memoryAlloc;
@@ -367,15 +436,22 @@ public:
     InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
   };
 
+  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>& irbuilder,
+              uint8_t* fileBase, uint64_t runtime_addr = 0)
+      : builder(irbuilder), file(fileBase), fileBase(fileBase) {
+
+    InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
+  };
+
   lifterClass(const lifterClass& other)
       : builder(other.builder), // Reference copied directly
         blockInfo(
             other.blockInfo), // Assuming BBInfo has a proper copy constructor
-        run(other.run), finished(0), counter(other.counter),
-        isUnreachable(other.isUnreachable),
+        fileBase(other.fileBase), run(other.run), finished(0),
+        counter(other.counter), isUnreachable(other.isUnreachable),
         instruction(other.instruction), // Shallow copy of the pointer
         assumptions(other.assumptions), // Deep copy of assumptions
-        buffer(other.buffer),
+        buffer(other.buffer), file(other.file),
         FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
                                   // constructor
         // RegistersFP(other.RegistersFP), // Assuming RegisterManager has a
