@@ -9,8 +9,6 @@ using namespace llvm;
 
 enum Assumption { Real, Assumed }; // add None
 
-enum arch_mode { X86 = 0, X64 = 1 };
-
 enum isPaged { MEMORY_PAGED, MEMORY_MIGHT_BE_PAGED, MEMORY_NOT_PAGED };
 
 struct APIntComparator {
@@ -54,32 +52,6 @@ public:
   ValueByteReferenceRange(uint64_t addr, uint8_t startv, uint8_t endv)
       : memoryAddress(addr), start(startv), end(endv), isRef(false) {}
 };
-
-namespace BinaryOperations {
-  extern bool concretize_unsafe_reads;
-  const char* getName(const uint64_t offset);
-
-  int getBitness();
-
-  void initBases(uint8_t* data, arch_mode is64); // ?
-
-  void getBases(uint8_t** data);
-
-  bool isImport(uint64_t addr);
-
-  bool readMemory(const uint64_t addr, unsigned byteSize, llvm::APInt& value);
-
-  bool isWrittenTo(const uint64_t addr);
-
-  void WriteTo(uint64_t addr);
-
-  uint64_t RvaToFileOffset(const void* ntHeadersBase, uint32_t rva);
-
-  uint64_t address_to_mapped_address(uint64_t rva);
-
-  uint64_t fileOffsetToRVA(uint64_t fileAddress);
-
-}; // namespace BinaryOperations
 
 /*
 namespace SCCPSimplifier {

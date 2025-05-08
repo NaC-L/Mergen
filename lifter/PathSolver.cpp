@@ -1,9 +1,6 @@
 
 #include "CustomPasses.hpp"
-#include "OperandUtils.h"
-#include "lifterClass.hpp"
 #include "utils.h"
-#include <iostream>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -46,6 +43,8 @@ PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
   return result;
 }
 
+// not pathsolver, & probably put this in lifter class, & we would utilize
+// templates since geploadpass
 void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase) {
   llvm::PassBuilder passBuilder;
 

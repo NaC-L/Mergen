@@ -1,4 +1,5 @@
 
+#include "fileReader.hpp"
 #define MAGIC_ENUM_RANGE_MIN -1000
 #define MAGIC_ENUM_RANGE_MAX 1000
 
@@ -27,7 +28,6 @@
 #include <llvm/Support/NativeFormatting.h>
 #include <magic_enum/magic_enum.hpp>
 
-#include "OperandUtils.ipp"
 #include "Semantics.ipp"
 
 // #define TEST
@@ -42,39 +42,25 @@ arch_mode is64Bit;
 void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
 
   auto data = fileData.data();
-  BinaryOperations::initBases(data, is64Bit);
 
   // Initialize the context structure
 
   while (lifters.size() > 0) {
     auto lifter = lifters.back();
-    uint64_t offset = BinaryOperations::address_to_mapped_address(
-        lifter->blockInfo.runtime_address);
-    debugging::doIfDebug([&]() {
-      const auto printv =
-          "runtime_addr: " + std::to_string(lifter->blockInfo.runtime_address) +
-          " offset:" + std::to_string(offset) + " byte there: 0x" +
-          std::to_string((int)*(data + offset)) + "\n" +
-          "offset: " + std::to_string(offset) +
-          " file_base: " + std::to_string(original_address) +
-          " runtime: " + std::to_string(lifter->blockInfo.runtime_address) +
-          "\n";
-      printvalue2(printv);
-    });
 
+    lifter->current_address = lifter->blockInfo.block_address;
     lifter->builder.SetInsertPoint(lifter->blockInfo.block);
 
     lifter->run = 1;
     while ((lifter->run && !lifter->finished)) {
 
       // ZydisDecodedInstruction instruction;
-
-      if (BinaryOperations::isWrittenTo(lifter->blockInfo.runtime_address)) {
-        printvalueforce2(lifter->blockInfo.runtime_address);
-        UNREACHABLE("Found Self Modifying Code! we dont support it");
-      }
-      ++(lifter->counter);
-
+      /*
+            if (BinaryOperations::isWrittenTo(lifter->blockInfo.block_address))
+         { printvalueforce2(lifter->blockInfo.block_address); UNREACHABLE("Found
+         Self Modifying Code! we dont support it");
+            }
+       */
       auto counter = debugging::increaseInstCounter() - 1;
       /*
       ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
@@ -101,42 +87,14 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
          printvalue2(runtime);
        });
        */
-      lifter->runDisassembler(data + offset);
-      /*
-      icedDisassembler<MnemonicZydis, RegisterZydis> dis;
-      auto res = dis.disassemble(data + offset);
 
-      for (int i = 0; i < 4; i++) {
-        auto typecheck = res.types[i] == lifter->instruction.types[i];
-        if (!typecheck) {
-          printvalueforce2(res.text);
-          printvalueforce2(i);
-          printvalueforce2(uint32_t(res.types[i]));
-          printvalueforce2(magic_enum::enum_name(res.types[i]));
-          printvalueforce2(magic_enum::enum_name(lifter->instruction.types[i]));
-          printvalueforce2(magic_enum::enum_name(lifter->instruction.regs[i]));
-        }
-      }
-    */
-      const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));
+      printvalue2(lifter->current_address);
+      lifter->liftAddress(lifter->current_address);
 
-      const auto runtime_address =
-          (llvm::format_hex_no_prefix(lifter->blockInfo.runtime_address, 0));
+      /*   lifter->runDisassembler(data + offset);
+        lifter->current_address += lifter->instruction.length;
+        lifter->liftInstruction(); */
 
-      printvalue2(ct);
-      printvalue2(runtime_address);
-
-#ifndef _NODEV
-      debugging::doIfDebug([&]() { printvalue2(lifter->instruction.text); });
-#endif
-
-      // printvalue2(lifter->instruction.text);
-
-      // lifter->instruction = runDisassembler(disas, data + offset);
-      lifter->blockInfo.runtime_address += lifter->instruction.length;
-
-      lifter->liftInstruction();
-      lifter->runtime_address_prev = lifter->blockInfo.runtime_address;
       printvalue2(lifter->finished);
       if (lifter->finished) {
         lifter->run = 0;
@@ -155,8 +113,6 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
         delete lifter;
         break;
       }
-
-      offset += lifter->instruction.length;
     }
   }
 }
@@ -205,12 +161,14 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   // auto RegisterList = InitRegisters(builder, function, runtime_address);
 
-  auto main = new lifterClass(builder);
-  main->InitRegisters(function, runtime_address);
+  auto main = new lifterClass(builder, fileBase);
+  // main->InitRegisters(function, runtime_address);
   main->blockInfo = BBInfo(runtime_address, bb);
 
   main->fnc = function;
   main->initDomTree(*function);
+  main->loadFile(fileBase);
+  x86FileReader file(fileBase);
   auto dosHeader = (win::dos_header_t*)fileBase;
   if (*(unsigned short*)fileBase != 0x5a4d) {
     UNREACHABLE("Only PE files are supported");
@@ -224,7 +182,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   is64Bit = (arch_mode)(PEmagic == IMAGE_NT_OPTIONAL_HDR64_MAGIC);
 
-  auto processHeaders = [fileBase, runtime_address,
+  auto processHeaders = [fileBase, runtime_address, &file,
                          main](const void* ntHeadersBase) -> uint64_t {
     uint64_t address, imageSize, stackSize;
 
@@ -243,8 +201,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
     }
 
     const uint64_t RVA = static_cast<uint64_t>(runtime_address - address);
-    const uint64_t fileOffset =
-        BinaryOperations::RvaToFileOffset(ntHeadersBase, RVA);
+    const uint64_t fileOffset = file.RvaToFileOffset(RVA);
     const uint8_t* dataAtAddress =
         reinterpret_cast<const uint8_t*>(fileBase) + fileOffset;
 
@@ -269,8 +226,13 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   for (const auto& [key, value] : main->signatures.siglookup) {
     value.display();
   }
+
   auto ms = timer::getTimer();
   std::cout << "\n" << std::dec << ms << " milliseconds has past" << std::endl;
+
+  main->liftBasicBlockFromAddress(0x1400011C7);
+  main->writeFunctionToFile("test.ll");
+  printvalue2("liftbasicBLOCk");
 
   // blockAddresses->push_back(make_tuple(runtime_address, bb,
   // RegisterList));

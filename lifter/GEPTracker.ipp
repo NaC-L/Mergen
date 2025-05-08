@@ -4,7 +4,6 @@
 #include "OperandUtils.ipp"
 #include "lifterClass.hpp"
 #include "utils.h"
-#include <iostream>
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/AssumptionCache.h>
@@ -27,7 +26,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::addValueReference(Value* value,
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
 
-    BinaryOperations::WriteTo(address + i);
+    // BinaryOperations::WriteTo(address + i);
     printvalue2(address + i);
     buffer[address + i] = ValueByteReference(value, i);
     printvalue(value);
@@ -142,19 +141,18 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     Value* byteValue = nullptr;
     uint8_t bytesize = v.end - v.start;
 
-    APInt mem_value(1, 0);
+    uint64_t mem_value;
     printvalue2(v.isRef);
-    auto read_mem =
-        BinaryOperations::readMemory(v.memoryAddress, bytesize, mem_value);
+    auto read_mem = file.readMemory(v.memoryAddress, bytesize, mem_value);
     printvalue2(read_mem);
     printvalue2(mem_value);
     if (v.isRef) {
       byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
                                v.ref.byteOffset + bytesize);
-    } else if (!v.isRef && BinaryOperations::readMemory(v.memoryAddress,
-                                                        bytesize, mem_value)) {
+    } else if (!v.isRef &&
+               file.readMemory(v.memoryAddress, bytesize, mem_value)) {
 
-      byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
+      byteValue = builder.getIntN(bytesize * 8, mem_value);
     } else if (!v.isRef) {
       // there has been no stores in this region and its not safe to concretize.
 
@@ -361,7 +359,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::insertMemoryOp(StoreInst* inst) {
   auto gepOffsetCI = cast<ConstantInt>(gepOffset);
 
   addValueReference(inst->getValueOperand(), gepOffsetCI->getZExtValue());
-  BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
+  // BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
 }
 
 inline bool overlaps(uint64_t addr1, uint64_t size1, uint64_t addr2,

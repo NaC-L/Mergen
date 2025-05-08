@@ -3,6 +3,7 @@
 
 #include "GEPTracker.h"
 #include "OperandUtils.h"
+#include "fileReader.hpp"
 #include "includes.h"
 #include "utils.h"
 #include "llvm/IR/PassManager.h"
@@ -166,13 +167,13 @@ public:
   }
 };
 
-// refactor
+// refactor & template for filereader
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
-  uint8_t* filebase;
+  x86_64FileReader file;
 
   Value* mem = nullptr;
-  GEPLoadPass(Value* val, uint8_t* filebase) : mem(val), filebase(filebase){};
+  GEPLoadPass(Value* val, uint8_t* filebase) : mem(val), file(filebase){};
 
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
     bool hasChanged = false;
@@ -185,19 +186,15 @@ public:
             if (auto* ConstInt =
                     llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
               uint64_t constintvalue = (uint64_t)ConstInt->getZExtValue();
-              if (uint64_t offset = BinaryOperations::address_to_mapped_address(
-                      constintvalue)) {
+              if (uint64_t offset =
+                      file.address_to_mapped_address(constintvalue)) {
                 for (auto* User : GEP->users()) {
                   if (auto* LoadInst = llvm::dyn_cast<llvm::LoadInst>(User)) {
                     llvm::Type* loadType = LoadInst->getType();
-
                     unsigned byteSize = loadType->getIntegerBitWidth() / 8;
                     uint64_t tempvalue;
 
-                    std::memcpy(
-                        &tempvalue,
-                        reinterpret_cast<const void*>(filebase + offset),
-                        byteSize);
+                    file.readMemory(constintvalue, byteSize, tempvalue);
 
                     llvm::APInt readValue(byteSize * 8, tempvalue);
                     llvm::Constant* newVal =
