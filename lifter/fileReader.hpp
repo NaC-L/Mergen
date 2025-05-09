@@ -40,7 +40,7 @@ concept FileRead = requires(T t) {
 
 template <typename Derived> class FileReader {
 protected:
-  uint8_t* fileBase;
+  uint8_t* FileBase;
 
 public:
   FileReader() {
@@ -60,7 +60,7 @@ public:
     return static_cast<Derived*>(this)->getName_impl(offset);
   }
   inline void filebase_exists() {
-    assert(fileBase != nullptr && "fileBase is NULL");
+    assert(FileBase != nullptr && "fileBase is NULL");
   }
 };
 
@@ -141,7 +141,7 @@ public:
   uint64_t address_to_mapped_address_impl(uint64_t rva) {
 
     uint64_t address = rva - imageBase;
-    return (uint64_t)fileBase + RvaToFileOffset(address);
+    return (uint64_t)FileBase + RvaToFileOffset(address);
   }
 
   bool readMemory_impl(uint64_t addr, unsigned byteSize, uint64_t& value) {
@@ -151,7 +151,7 @@ public:
     if (mappedAddr > 0) {
       uint64_t tempValue;
       std::memcpy(&tempValue,
-                  reinterpret_cast<const void*>(fileBase + mappedAddr),
+                  reinterpret_cast<const void*>(FileBase + mappedAddr),
                   byteSize);
 
       value = tempValue;
@@ -163,7 +163,7 @@ public:
 
   const char* getName_impl(uint64_t offset) {
     auto rvaOffset = RvaToFileOffset(offset);
-    return (const char*)fileBase + rvaOffset;
+    return (const char*)FileBase + rvaOffset;
   }
 };
 
@@ -180,7 +180,7 @@ private:
 
 public:
   bool init_impl(uint8_t* fileBase) {
-
+    FileBase = fileBase;
     dosHeader = reinterpret_cast<win::dos_header_t*>(fileBase);
     ntHeadersBase = reinterpret_cast<uint8_t*>(fileBase) + dosHeader->e_lfanew;
     ntHeaders = reinterpret_cast<win::nt_headers_t<X64>*>(ntHeadersBase);
@@ -227,38 +227,40 @@ public:
   }
 
   uint64_t RvaToFileOffset(uint32_t rva) {
+
     auto it =
         std::upper_bound(sections_v.begin(), sections_v.end(), rva,
                          [](uint32_t val, const win::section_header_t& s) {
                            return val < s.virtual_address;
                          });
-
     if (it == sections_v.begin())
       return 0;
     --it;
-
     if (rva < it->virtual_address + it->virtual_size) {
 
       return (rva - it->virtual_address) + it->ptr_raw_data;
     }
-
     return 0;
   }
 
   uint64_t fileOffsetToRVA(uint64_t offset) {
+    printvalue2(1);
     auto it =
         std::upper_bound(sections_v.begin(), sections_v.end(), offset,
                          [](uint32_t val, const win::section_header_t& s) {
                            return val < s.virtual_address;
                          });
+    printvalue2(2);
     if (it == sections_v.begin()) {
       // rva is before the first section
       return 0;
     }
+    printvalue2(3);
     --it; // now *it is the candidate section
     if (offset < it->ptr_raw_data + it->size_raw_data) {
       return (offset - it->virtual_address) + it->ptr_raw_data;
     }
+    printvalue2(4);
     return 0;
   }
 
@@ -267,7 +269,10 @@ public:
     printvalue2(imageBase);
     uint64_t address = rva - imageBase;
     printvalue2(address);
-    return (uint64_t)fileBase + RvaToFileOffset(address);
+    printvalue2(FileBase);
+    auto res = (uint64_t)FileBase + RvaToFileOffset(address);
+    printvalue2(res);
+    return res;
   }
 
   bool readMemory_impl(uint64_t addr, unsigned byteSize, uint64_t& value) {
@@ -276,7 +281,7 @@ public:
     if (mappedAddr > 0) {
       uint64_t tempValue;
       std::memcpy(&tempValue,
-                  reinterpret_cast<const void*>(fileBase + mappedAddr),
+                  reinterpret_cast<const void*>(mappedAddr),
                   byteSize);
 
       value = tempValue;
@@ -288,7 +293,7 @@ public:
 
   const char* getName_impl(uint64_t offset) {
     auto rvaOffset = RvaToFileOffset(offset);
-    return (const char*)fileBase + rvaOffset;
+    return (const char*)FileBase + rvaOffset;
   }
 };
 

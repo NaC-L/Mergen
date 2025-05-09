@@ -22,7 +22,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     builder.CreateBr(bb_solved);
     blockInfo = BBInfo(dest, bb_solved);
-
+    printvalue2("pushing block");
     unvisitedBlocks.push_back(blockInfo);
 
     return result;
@@ -39,6 +39,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
       builder.CreateBr(bb_solved);
       blockInfo = BBInfo(dest, bb_solved);
+      printvalue2("pushing block");
       unvisitedBlocks.push_back(blockInfo);
 
       return solved;
@@ -57,6 +58,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     builder.CreateBr(bb_solved);
     blockInfo = BBInfo(pv[0].getZExtValue(), bb_solved);
+    printvalue2("pushing block");
     unvisitedBlocks.push_back(blockInfo);
   }
   if (pv.size() == 2) {
@@ -110,21 +112,23 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     // we can simplify any value tied to is dependent on condition,
     // and try to simplify any value calculates condition
 
-    lifterClass* newlifter = new lifterClass(*this);
-
     // for [newlifter], we can assume condition is false
     auto newblock = BBInfo(firstcase.getZExtValue(), bb_true);
 
-    newlifter->blockInfo = newblock;
+    // this->blockInfo = newblock;
     printvalue(condition);
-    newlifter->assumptions[cast<Instruction>(condition)] = 1;
+    this->assumptions[cast<Instruction>(condition)] = 1;
 
     assumptions[cast<Instruction>(condition)] = 0;
 
-    lifters.push_back(newlifter);
+    // lifters.push_back(newlifter);
 
+    // store mem&reg info for BB
     unvisitedBlocks.push_back(blockInfo);
     unvisitedBlocks.push_back(newblock);
+
+    branch_backup(blockInfo);
+    branch_backup(newblock);
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_newpath.ll";
