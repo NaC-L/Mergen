@@ -574,6 +574,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createInstruction(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSelectFolder(
     Value* C, Value* True, Value* False, const Twine& Name) {
+  assert(True->getType() == False->getType() &&
+         "Both values must have same type in select");
   if (auto* CConst = dyn_cast<Constant>(C)) {
 
     if (CConst->isOneValue()) {
@@ -1652,10 +1654,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
   // printvalue2(magic_enum::enum_name(key));
 
   if (key == Register::RIP || key == Register::EIP) {
-    return ConstantInt::getSigned(BinaryOperations::getBitness() == 64
+    return ConstantInt::getSigned(file.getMode() == X64
                                       ? Type::getInt64Ty(builder.getContext())
                                       : Type::getInt32Ty(builder.getContext()),
-                                  blockInfo.runtime_address);
+                                  current_address);
   }
 
   if (key == Register::AH || key == Register::CH || key == Register::DH ||

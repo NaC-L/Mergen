@@ -7,6 +7,9 @@
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
+
+  // do static polymorphism here
+
   PATH_info result = PATH_unsolved;
   if (llvm::ConstantInt* constInt =
           dyn_cast<llvm::ConstantInt>(simplifyValue)) {
@@ -19,6 +22,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     builder.CreateBr(bb_solved);
     blockInfo = BBInfo(dest, bb_solved);
+    printvalue2("pushing block");
+    unvisitedBlocks.push_back(blockInfo);
+
     return result;
   }
 
@@ -33,6 +39,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
       builder.CreateBr(bb_solved);
       blockInfo = BBInfo(dest, bb_solved);
+      printvalue2("pushing block");
+      unvisitedBlocks.push_back(blockInfo);
+
       return solved;
     }
   }
@@ -49,6 +58,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     builder.CreateBr(bb_solved);
     blockInfo = BBInfo(pv[0].getZExtValue(), bb_solved);
+    printvalue2("pushing block");
+    unvisitedBlocks.push_back(blockInfo);
   }
   if (pv.size() == 2) {
     auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
@@ -101,16 +112,23 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     // we can simplify any value tied to is dependent on condition,
     // and try to simplify any value calculates condition
 
-    lifterClass* newlifter = new lifterClass(*this);
-
     // for [newlifter], we can assume condition is false
-    newlifter->blockInfo = BBInfo(firstcase.getZExtValue(), bb_true);
+    auto newblock = BBInfo(firstcase.getZExtValue(), bb_true);
+
+    // this->blockInfo = newblock;
     printvalue(condition);
-    newlifter->assumptions[cast<Instruction>(condition)] = 1;
+    this->assumptions[cast<Instruction>(condition)] = 1;
 
     assumptions[cast<Instruction>(condition)] = 0;
 
-    lifters.push_back(newlifter);
+    // lifters.push_back(newlifter);
+
+    // store mem&reg info for BB
+    unvisitedBlocks.push_back(blockInfo);
+    unvisitedBlocks.push_back(newblock);
+
+    branch_backup(blockInfo);
+    branch_backup(newblock);
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_newpath.ll";
@@ -120,6 +138,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     });
     std::cout << "created a new path\n" << std::flush;
   }
+
   if (pv.size() > 2) {
     UNREACHABLE("cant reach more than 2 paths!");
   }
