@@ -574,6 +574,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createInstruction(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSelectFolder(
     Value* C, Value* True, Value* False, const Twine& Name) {
+  assert(True->getType() == False->getType() &&
+         "Both values must have same type in select");
   if (auto* CConst = dyn_cast<Constant>(C)) {
 
     if (CConst->isOneValue()) {
