@@ -23,6 +23,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/Support/KnownBits.h>
 #include <set>
+#include <utility>
 
 #ifndef DEFINE_FUNCTION
 #define DEFINE_FUNCTION(name) void lift_##name()
@@ -212,6 +213,33 @@ struct BBInfo {
 
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
       : block_address(runtime_address), block(block) {}
+
+  bool operator==(const BBInfo& other) const {
+    if (block_address != other.block_address)
+      return false;
+    return block == other.block;
+  }
+
+  struct BBInfoKeyInfo {
+    // Custom hash function
+    static inline unsigned getHashValue(const BBInfo& key) {
+      return llvm::hash_combine(key.block_address, key.block);
+    }
+
+    // Equality function
+    static inline bool isEqual(const BBInfo& lhs, const BBInfo& rhs) {
+      return lhs == rhs;
+    }
+
+    // Define empty and tombstone keys
+    static inline BBInfo getEmptyKey() {
+      return BBInfo(-1, static_cast<BasicBlock*>(nullptr));
+    }
+
+    static inline BBInfo getTombstoneKey() {
+      return BBInfo(0, static_cast<BasicBlock*>(nullptr));
+    }
+  };
 };
 
 class LazyValue {
@@ -317,7 +345,8 @@ public:
     this->current_address = addr;
     auto offset = file.address_to_mapped_address(addr);
     // what about the basicblock?
-
+    printvalue2(offset);
+    printvalue2(*(uint8_t*)offset);
     runDisassembler((void*)offset, size);
     const auto ct = (llvm::format_hex_no_prefix(this->counter, 0));
     const auto runtime_address =
@@ -337,19 +366,65 @@ public:
     //
   }
 
+  // refactor: put these stuff in a class (?) so we can properly have a fully
+  // symbolized version
+  struct backup_point {
+    RegisterManager<Register> regs;
+    llvm::DenseMap<uint64_t, ValueByteReference> buffer;
+
+    bool operator==(const backup_point& other) const {
+      if (buffer != other.buffer)
+        return false;
+      return regs == other.regs;
+    }
+    backup_point(){};
+
+    backup_point(backup_point& other)
+        : regs(other.regs), buffer(other.buffer){};
+
+    backup_point(backup_point&& other)
+        : regs(other.regs), buffer(other.buffer){};
+
+    backup_point(RegisterManager<Register> registers,
+                 llvm::DenseMap<uint64_t, ValueByteReference> map)
+        : regs(registers), buffer(map){};
+
+    backup_point& operator=(const backup_point&) = default;
+  };
+  llvm::DenseMap<BBInfo, backup_point, BBInfo::BBInfoKeyInfo> BBbackup;
+  void branch_backup(BBInfo info) {
+    //
+    BBbackup[info] = {Registers, buffer};
+  }
+
+  void load_backup(BBInfo info) {
+    if (BBbackup.contains(info)) {
+      auto bbinfo = BBbackup[info];
+      Registers = bbinfo.regs;
+      buffer = bbinfo.buffer;
+    }
+  }
+
   void liftBasicBlockFromAddress(uint64_t addr) {
     printvalue2(this->finished);
     printvalue2(this->run);
     this->run = 1;
     while (this->finished == 0 && this->run) {
+      // TODO: refactor logic for finished and run, instead semantics should
+      // return the info about jumps
       liftAddress(addr);
+      addr = current_address;
     }
-    // liftAddress
-    // then lift until we hit a jump
   }
-  uint64_t getUnvisitedAddr() {
-    // get next unvisited addr
+
+  bool getUnvisitedAddr(BBInfo& out) {
+    if (unvisitedBlocks.empty())
+      return false;
+    out = std::move(unvisitedBlocks.back());
+    unvisitedBlocks.pop_back();
+    return true;
   }
+
   void writeFunctionToFile(const std::string filename) {
 
     std::error_code EC_noopt;

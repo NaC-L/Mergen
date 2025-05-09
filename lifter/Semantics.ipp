@@ -711,11 +711,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   // if its trying to jump somewhere else than our binary, call it and
   // continue from [rsp]
 
+  // TODO: add some of this code to solvePath
   builder.CreateBr(bb);
 
   printvalue2(jump_address);
 
   blockInfo = BBInfo(jump_address, bb);
+  printvalue2("pushing block");
+  unvisitedBlocks.push_back(blockInfo);
   run = 0;
 }
 
@@ -1613,7 +1616,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sar() {
   cfValue = createSelectFolder(isCountZero, oldcf, cfValue, "cfValue");
   // if isZeroed and the source is -, return the sign bit
 
-  cfValue = createSelectFolder(isZeroed, signBit, cfValue);
+  cfValue = createSelectFolder(
+      isZeroed, createTruncFolder(signBit, cfValue->getType()), cfValue);
 
   // OF is cleared for SAR
   Value* of = ConstantInt::get(Type::getInt1Ty(context), 0);
