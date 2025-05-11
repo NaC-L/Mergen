@@ -127,8 +127,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     unvisitedBlocks.push_back(blockInfo);
     unvisitedBlocks.push_back(newblock);
 
-    branch_backup(blockInfo);
-    branch_backup(newblock);
+    branch_backup(blockInfo.block);
+    branch_backup(newblock.block);
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_newpath.ll";
