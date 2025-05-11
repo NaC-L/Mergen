@@ -214,32 +214,32 @@ struct BBInfo {
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
       : block_address(runtime_address), block(block) {}
 
-  bool operator==(const BBInfo& other) const {
-    if (block_address != other.block_address)
-      return false;
-    return block == other.block;
-  }
+  // bool operator==(const BBInfo& other) const {
+  //   if (block_address != other.block_address)
+  //     return false;
+  //   return block == other.block;
+  // }
 
-  struct BBInfoKeyInfo {
-    // Custom hash function
-    static inline unsigned getHashValue(const BBInfo& key) {
-      return llvm::hash_combine(key.block_address, key.block);
-    }
+  // struct BBInfoKeyInfo {
+  //   // Custom hash function
+  //   static inline unsigned getHashValue(const BBInfo& key) {
+  //     return llvm::hash_combine(key.block_address, key.block);
+  //   }
 
-    // Equality function
-    static inline bool isEqual(const BBInfo& lhs, const BBInfo& rhs) {
-      return lhs == rhs;
-    }
+  //   // Equality function
+  //   static inline bool isEqual(const BBInfo& lhs, const BBInfo& rhs) {
+  //     return lhs == rhs;
+  //   }
 
-    // Define empty and tombstone keys
-    static inline BBInfo getEmptyKey() {
-      return BBInfo(-1, static_cast<BasicBlock*>(nullptr));
-    }
+  //   // Define empty and tombstone keys
+  //   static inline BBInfo getEmptyKey() {
+  //     return BBInfo(-1, static_cast<BasicBlock*>(nullptr));
+  //   }
 
-    static inline BBInfo getTombstoneKey() {
-      return BBInfo(0, static_cast<BasicBlock*>(nullptr));
-    }
-  };
+  //   static inline BBInfo getTombstoneKey() {
+  //     return BBInfo(0, static_cast<BasicBlock*>(nullptr));
+  //   }
+  // };
 };
 
 class LazyValue {
@@ -391,15 +391,15 @@ public:
 
     backup_point& operator=(const backup_point&) = default;
   };
-  llvm::DenseMap<BBInfo, backup_point, BBInfo::BBInfoKeyInfo> BBbackup;
-  void branch_backup(BBInfo info) {
+  llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
+  void branch_backup(BasicBlock* bb) {
     //
-    BBbackup[info] = {Registers, buffer};
+    BBbackup[bb] = {Registers, buffer};
   }
 
-  void load_backup(BBInfo info) {
-    if (BBbackup.contains(info)) {
-      auto bbinfo = BBbackup[info];
+  void load_backup(BasicBlock* bb) {
+    if (BBbackup.contains(bb)) {
+      auto bbinfo = BBbackup[bb];
       Registers = bbinfo.regs;
       buffer = bbinfo.buffer;
     }

@@ -47,7 +47,7 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
   BBInfo bbinfo;
 
   while (lifter->getUnvisitedAddr(bbinfo)) {
-    lifter->load_backup(bbinfo);
+    lifter->load_backup(bbinfo.block);
     lifter->finished = 0;
     auto next_bb_name = bbinfo.block->getName();
     printvalue2(next_bb_name);
