@@ -1,11 +1,12 @@
 #ifndef FILEREADER_HPP
 #define FILEREADER_HPP
 
-#include "GEPTracker.h"
 #include "nt/nt_headers.hpp"
-#include "utils.h"
+#include <algorithm>
+#include <assert.h>
 #include <coff/section_header.hpp>
 #include <cstdint>
+#include <vector>
 
 enum arch_mode : uint8_t { X86 = 0, X64 = 1 };
 enum class characteristics : uint8_t {
@@ -60,6 +61,7 @@ public:
     return static_cast<Derived*>(this)->getName_impl(offset);
   }
   inline void filebase_exists() {
+
     assert(FileBase != nullptr && "fileBase is NULL");
   }
 };

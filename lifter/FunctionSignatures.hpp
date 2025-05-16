@@ -1,8 +1,7 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
-#include "CommonDisassembler.hpp"
-#include "GEPTracker.h"
 #include "fileReader.hpp"
+#include <iostream>
 #include <map>
 #include <queue>
 #include <string>
