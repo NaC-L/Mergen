@@ -6,10 +6,12 @@
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
 #include "utils.h"
+#include <array>
 #include <concepts>
 #include <cstdint>
 #include <iostream>
 #include <type_traits>
+
 
 // #include <string>
 
