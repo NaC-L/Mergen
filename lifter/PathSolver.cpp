@@ -1,4 +1,5 @@
 
+#include "PathSolver.h"
 #include "CustomPasses.hpp"
 #include "utils.h"
 #include <llvm/ADT/DenseMap.h>
@@ -69,6 +70,26 @@ void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase) {
 
   modulePassManager.run(*module, moduleAnalysisManager);
   */
+  bool changed = 0;
+  do {
+    changed = false;
+
+    const size_t beforeSize = module->getInstructionCount();
+
+    modulePassManager =
+        passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1);
+
+    modulePassManager.addPass(GEPLoadPass(mem, filebase));
+    modulePassManager.addPass(ReplaceTruncWithLoadPass());
+    modulePassManager.addPass(PromotePseudoStackPass(mem));
+
+    modulePassManager.run(*module, moduleAnalysisManager);
+
+    const size_t afterSize = module->getInstructionCount();
+
+    changed = beforeSize != afterSize;
+
+  } while (changed);
 
   modulePassManager =
       passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
