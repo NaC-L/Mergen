@@ -847,7 +847,8 @@ public:
   DEFINE_FUNCTION(shrd);
   DEFINE_FUNCTION(lea);
   DEFINE_FUNCTION(add_sub);
-  void lift_imul2(const bool isSigned);
+  DEFINE_FUNCTION(imul2);
+  DEFINE_FUNCTION(mul2);
   DEFINE_FUNCTION(imul);
   DEFINE_FUNCTION(mul);
   DEFINE_FUNCTION(div2);

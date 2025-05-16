@@ -2226,8 +2226,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_add_sub() {
 
   SetIndexValue(0, result);
 }
-MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul2(bool isSigned) {
-  LLVMContext& context = builder.getContext();
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul2() {
+  LLVMContext& context = builder->getContext();
   // auto src = operands[0];
   auto Rvalue = GetRegisterValue(Register::AL);
 
@@ -2235,42 +2236,67 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul2(bool isSigned) {
 
   Value* Lvalue = GetIndexValue(0);
 
-  if (isSigned) { // do this in a prettier way
-    Lvalue = createSExtFolder(Lvalue, Type::getIntNTy(context, srcsize * 2));
+  Lvalue = createSExtFolder(Lvalue, Type::getIntNTy(context, srcsize * 2));
 
-    Rvalue = createSExtOrTruncFolder(
-        Rvalue, Type::getIntNTy(context,
-                                srcsize)); // make sure the size is correct,
-                                           // 1 byte, GetRegisterValue doesnt
-                                           // ensure we have the correct size
-    Rvalue = createSExtOrTruncFolder(Rvalue, Lvalue->getType());
-  } else {
-    Lvalue = createZExtFolder(Lvalue, Type::getIntNTy(context, srcsize * 2));
+  Rvalue = createSExtOrTruncFolder(
+      Rvalue, Type::getIntNTy(context,
+                              srcsize)); // make sure the size is correct,
+                                         // 1 byte, GetRegisterValue doesnt
+                                         // ensure we have the correct size
+  Rvalue = createSExtOrTruncFolder(Rvalue, Lvalue->getType());
 
-    Rvalue = createZExtOrTruncFolder(
-        Rvalue, Type::getIntNTy(context,
-                                srcsize)); // make sure the size is correct, 1
-                                           // byte, GetRegisterValue doesnt
-                                           // ensure we have the correct size
-    Rvalue = createZExtOrTruncFolder(Rvalue, Lvalue->getType());
-  }
   Value* result = createMulFolder(Rvalue, Lvalue);
   Value* lowerresult = createTruncFolder(
       result, Type::getIntNTy(context, srcsize), "lowerResult");
   Value* of;
   Value* cf;
-  if (isSigned) {
-    of = createICMPFolder(CmpInst::ICMP_NE, result,
-                          createSExtFolder(lowerresult, result->getType()));
-    cf = of;
-  } else {
-    Value* highPart = createLShrFolder(result, srcsize, "highPart");
-    Value* highPartTruncated = createTruncFolder(
-        highPart, Type::getIntNTy(context, srcsize), "truncatedHighPart");
-    cf = createICMPFolder(CmpInst::ICMP_NE, highPartTruncated,
-                          ConstantInt::get(result->getType(), 0), "cf");
-    of = cf;
-  }
+
+  of = createICMPFolder(CmpInst::ICMP_NE, result,
+                        createSExtFolder(lowerresult, result->getType()));
+  cf = of;
+
+  setFlag(FLAG_CF, cf);
+  setFlag(FLAG_OF, of);
+  printvalue(cf);
+  printvalue(of);
+  SetRegisterValue(Register::AX, result);
+  printvalue(Lvalue);
+  printvalue(Rvalue);
+  printvalue(result);
+  // if imul modify cf and of flags
+  // if not, dont do anything else
+}
+
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mul2() {
+  LLVMContext& context = builder->getContext();
+  // auto src = operands[0];
+  auto Rvalue = GetRegisterValue(Register::AL);
+
+  auto srcsize = GetTypeSize(instruction.types[0]);
+
+  Value* Lvalue = GetIndexValue(0);
+
+  Lvalue = createZExtFolder(Lvalue, Type::getIntNTy(context, srcsize * 2));
+
+  Rvalue = createZExtOrTruncFolder(
+      Rvalue, Type::getIntNTy(context,
+                              srcsize)); // make sure the size is correct, 1
+                                         // byte, GetRegisterValue doesnt
+                                         // ensure we have the correct size
+  Rvalue = createZExtOrTruncFolder(Rvalue, Lvalue->getType());
+
+  Value* result = createMulFolder(Rvalue, Lvalue);
+  Value* lowerresult = createTruncFolder(
+      result, Type::getIntNTy(context, srcsize), "lowerResult");
+  Value* of;
+  Value* cf;
+
+  Value* highPart = createLShrFolder(result, srcsize, "highPart");
+  Value* highPartTruncated = createTruncFolder(
+      highPart, Type::getIntNTy(context, srcsize), "truncatedHighPart");
+  cf = createICMPFolder(CmpInst::ICMP_NE, highPartTruncated,
+                        ConstantInt::get(result->getType(), 0), "cf");
+  of = cf;
 
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
@@ -2288,12 +2314,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul2(bool isSigned) {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul() {
   LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   auto dest = 0; // dest ? ?????
 
   auto destsize = GetTypeSize(instruction.types[0]);
+  printvalue2(destsize);
+  printvalue2(instruction.operand_count_visible);
   if (destsize == 8 && instruction.operand_count_visible == 1) {
-    lift_imul2(1);
+    lift_imul2();
     return;
   }
 
@@ -2302,10 +2331,30 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul() {
                   ? 2
                   : dest; // if exists third operand
 
-  Value* Lvalue = GetIndexValue(src);
-  Value* Rvalue = GetIndexValue(src2);
+  // switch case?
+  Value* Lvalue; // = GetIndexValue(src);
+  Value* Rvalue; // = GetIndexValue(src2);
 
-  Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
+  switch (instruction.operand_count_visible) {
+  case 3:
+    Lvalue = GetIndexValue(2);
+    Rvalue = GetIndexValue(1);
+    break;
+  case 2:
+    Lvalue = GetIndexValue(1);
+    Rvalue = GetIndexValue(0);
+    break;
+  case 1:
+    Lvalue = GetIndexValue(0);
+    Rvalue = GetRegisterValue(getRegOfSize(Register::RAX, destsize));
+    printvalue(Rvalue);
+    printvalue2(destsize);
+    break;
+  default:
+    UNREACHABLE("impossible count");
+  }
+
+  // Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
 
   auto srcsize = GetTypeSize(instruction.types[0]);
   uint8_t initialSize = srcsize;
@@ -2316,13 +2365,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul() {
   Lvalue = createSExtFolder(Lvalue, Type::getIntNTy(context, initialSize * 2));
 
   Value* result = createMulFolder(Lvalue, Rvalue, "intmul");
-
+  printvalue(result);
   // Flags
 
   Value* highPart = createLShrFolder(result, initialSize, "highPart");
   Value* highPartTruncated = createTruncFolder(
       highPart, Type::getIntNTy(context, initialSize), "truncatedHighPart");
-
+  printvalue(highPart);
+  printvalue(highPartTruncated);
   /*
   For the one operand form of the instruction, the CF and OF flags are set
   when significant bits are carried into the upper half of the result and
@@ -2349,7 +2399,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul() {
   Value* of = cf;
 
   if (instruction.operand_count_visible == 3) {
-    SetIndexValue(dest, truncresult);
+    SetIndexValue(0, truncresult);
   } else if (instruction.operand_count_visible == 2) {
     SetIndexValue(0, truncresult);
   } else { // For one operand, result goes into ?dx:?ax if not a byte
@@ -2364,13 +2414,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul() {
     printvalue(of);
     printvalue(result);
     printvalue(SEsplitResult);
-
+    auto lowreg = getRegOfSize(Register::RAX, srcsize);
     if (initialSize == 8) {
-      SetIndexValue(1, result);
+
+      SetRegisterValue(lowreg, result);
     } else {
 
-      SetIndexValue(1, splitResult);
-      SetIndexValue(2, highPartTruncated);
+      auto highreg = getRegOfSize(Register::RDX, srcsize);
+      SetRegisterValue(lowreg, splitResult);
+      SetRegisterValue(highreg, highPartTruncated);
     }
   }
 
@@ -2404,21 +2456,27 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mul() {
   FI;
   */
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // auto src = operands[0];
 
   auto srcsize = GetTypeSize(instruction.types[0]);
+  printvalue2(srcsize);
+  printvalue2(instruction.operand_count_visible);
+  // visible count is always 1 for mul,
 
-  if (srcsize == 8 && instruction.operand_count_visible == 1) {
-    lift_imul2(0);
+  // if srcsize is 8, we only write to AX
+  if (srcsize == 8) {
+    lift_mul2();
     return;
   }
-  /*
-  auto dest1 = operands[1]; // ax
-  auto desRegister = operands[2]; */
 
-  Value* Rvalue = GetIndexValue(1);
-  Value* Lvalue = GetIndexValue(2);
+  Value* Rvalue = GetIndexValue(0);
+  printvalue(Rvalue);
+  auto keyvalue = getRegOfSize(Register::RAX, srcsize);
+  printvalue2(magic_enum::enum_name(keyvalue));
+  Value* Lvalue = createTruncFolder(GetRegisterValue(keyvalue),
+                                    builder->getIntNTy(srcsize));
+  printvalue(Lvalue);
 
   uint8_t initialSize = Rvalue->getType()->getIntegerBitWidth();
   printvalue2(initialSize);
@@ -2447,13 +2505,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mul() {
   auto splitResult = createTruncFolder(
       result, Type::getIntNTy(context, initialSize), "splitResult");
   // if not byte operation, result goes into ?dx:?ax
-
-  SetIndexValue(1, splitResult);
-  SetIndexValue(2, highPartTruncated);
-
-  printvalue(Lvalue) printvalue(Rvalue) printvalue(result) printvalue(highPart);
-  printvalue(highPartTruncated) printvalue(splitResult) printvalue(of);
-  printvalue(cf);
+  auto lowreg = getRegOfSize(Register::RAX, srcsize);
+  auto highreg = getRegOfSize(Register::RDX, srcsize);
+  printvalue2(magic_enum::enum_name(lowreg));
+  printvalue(splitResult);
+  printvalue2(magic_enum::enum_name(highreg));
+  printvalue(highPartTruncated);
+  SetRegisterValue(lowreg, splitResult);
+  SetRegisterValue(highreg, highPartTruncated);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_div() {
 
@@ -2463,6 +2522,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_div() {
   Value *divisor, *dividend, *quotient, *remainder;
 
   auto srcsize = GetTypeSize(instruction.types[0]);
+  auto lowreg = getRegOfSize(Register::RAX, srcsize);
+  auto highreg = getRegOfSize(Register::RDX, srcsize);
   // When operand size is 8 bit
   if (srcsize == 8) {
     dividend = GetRegisterValue(Register::AX);
@@ -2487,8 +2548,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_div() {
 
     divisor = GetIndexValue(0);
 
-    Value* dividendLow = GetIndexValue(1);
-    Value* dividendHigh = GetIndexValue(2);
+    Value* dividendLow = GetRegisterValue(lowreg);
+    Value* dividendHigh = GetRegisterValue(highreg);
 
     dividendLow =
         createZExtFolder(dividendLow, Type::getIntNTy(context, srcsize * 2));
@@ -2525,9 +2586,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_div() {
       remainder = createURemFolder(dividend, ZExtdivisor);
     }
 
-    SetIndexValue(1, createZExtOrTruncFolder(quotient, divisor->getType()));
+    SetRegisterValue(lowreg,
+                     createZExtOrTruncFolder(quotient, divisor->getType()));
 
-    SetIndexValue(2, createZExtOrTruncFolder(remainder, divisor->getType()));
+    SetRegisterValue(highreg,
+                     createZExtOrTruncFolder(remainder, divisor->getType()));
   }
 
   printvalue(divisor) printvalue(dividend) printvalue(remainder)

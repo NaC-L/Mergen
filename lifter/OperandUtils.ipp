@@ -1400,6 +1400,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createICMPFolder(
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createTruncFolder(
     Value* V, Type* DestTy, const Twine& Name) {
 
+  if (V->getType()->getIntegerBitWidth() <= DestTy->getIntegerBitWidth())
+    return V;
+
   Value* result =
       createInstruction(Instruction::Trunc, V, nullptr, DestTy, Name);
 
@@ -1684,8 +1687,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
   */
 
   Register largestKey = getBiggestEncoding(key);
-  // dont truncate here?
-  return Registers[largestKey];
+  // it is safe to zext&truncate here, because if size doesnt match, we DO need
+  // to make it fit, we start caring about signedness once we are in the
+  // semantics
+  return createZExtOrTruncFolder(Registers[largestKey],
+                                 builder->getIntNTy(getRegisterSize(key)));
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToHighByteRegister(
@@ -1753,7 +1759,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_16b(
 
   Register fullRegKey = getBiggestEncoding(reg);
   Value* fullRegisterValue = Registers[fullRegKey];
-
+  printvalue(fullRegisterValue);
   Value* last4cleared =
       ConstantInt::get(fullRegisterValue->getType(), 0xFFFFFFFFFFFF0000);
   Value* maskedFullReg =
@@ -1776,6 +1782,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
   }
 
   if (((key >= Register::AX) && (key <= Register::R15W))) {
+    printvalue2("subreg_16");
     value = SetValueToSubRegister_16b(key, value);
   }
 
