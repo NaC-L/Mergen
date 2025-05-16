@@ -95,6 +95,7 @@ set(lifter_SOURCES
 	"lifter/CustomPasses.hpp"
 	"lifter/FunctionSignatures.hpp"
 	"lifter/ZydisDisassembler.hpp"
+	"lifter/fileReader.hpp"
 	"lifter/icedDisassembler.hpp"
 	"lifter/lifterClass.hpp"
 	"lifter/tester.hpp"

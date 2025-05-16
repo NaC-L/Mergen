@@ -7,6 +7,9 @@
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
+
+  // do static polymorphism here
+
   PATH_info result = PATH_unsolved;
   if (llvm::ConstantInt* constInt =
           dyn_cast<llvm::ConstantInt>(simplifyValue)) {
@@ -15,10 +18,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     run = 0;
     auto bb_solved = BasicBlock::Create(
         function->getContext(), "bb_constraint-" + std::to_string(dest) + "-",
-        builder.GetInsertBlock()->getParent());
+        builder->GetInsertBlock()->getParent());
 
-    builder.CreateBr(bb_solved);
+    builder->CreateBr(bb_solved);
     blockInfo = BBInfo(dest, bb_solved);
+    printvalue2("pushing block");
+    unvisitedBlocks.push_back(blockInfo);
+
     return result;
   }
 
@@ -29,10 +35,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
                 << std::flush;
       auto bb_solved = BasicBlock::Create(
           function->getContext(), "bb_constraint-" + std::to_string(dest) + "-",
-          builder.GetInsertBlock()->getParent());
+          builder->GetInsertBlock()->getParent());
 
-      builder.CreateBr(bb_solved);
+      builder->CreateBr(bb_solved);
       blockInfo = BBInfo(dest, bb_solved);
+      printvalue2("pushing block");
+      unvisitedBlocks.push_back(blockInfo);
+
       return solved;
     }
   }
@@ -45,16 +54,18 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   if (pv.size() == 1) {
     printvalue2(pv[0]);
     auto bb_solved = BasicBlock::Create(function->getContext(), "bb_false",
-                                        builder.GetInsertBlock()->getParent());
+                                        builder->GetInsertBlock()->getParent());
 
-    builder.CreateBr(bb_solved);
+    builder->CreateBr(bb_solved);
     blockInfo = BBInfo(pv[0].getZExtValue(), bb_solved);
+    printvalue2("pushing block");
+    unvisitedBlocks.push_back(blockInfo);
   }
   if (pv.size() == 2) {
     auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
-                                       builder.GetInsertBlock()->getParent());
+                                       builder->GetInsertBlock()->getParent());
     auto bb_true = BasicBlock::Create(function->getContext(), "bb_true",
-                                      builder.GetInsertBlock()->getParent());
+                                      builder->GetInsertBlock()->getParent());
 
     auto firstcase = pv[0];
     auto secondcase = pv[1];
@@ -62,7 +73,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     static auto try_simplify = [&](APInt c1,
                                    Value* simplifyv) -> std::optional<Value*> {
       if (auto si = dyn_cast<SelectInst>(simplifyv)) {
-        auto firstcase_v = builder.getIntN(
+        auto firstcase_v = builder->getIntN(
             simplifyv->getType()->getIntegerBitWidth(), c1.getZExtValue());
         if (si->getTrueValue() == firstcase_v)
           return si->getCondition();
@@ -87,10 +98,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     } else
       condition = createICMPFolder(
           llvm::CmpInst::ICMP_EQ, simplifyValue,
-          builder.getIntN(simplifyValue->getType()->getIntegerBitWidth(),
-                          firstcase.getZExtValue()));
+          builder->getIntN(simplifyValue->getType()->getIntegerBitWidth(),
+                           firstcase.getZExtValue()));
     printvalue(condition);
-    auto BR = builder.CreateCondBr(condition, bb_true, bb_false);
+    auto BR = builder->CreateCondBr(condition, bb_true, bb_false);
 
     RegisterBranch(BR);
 
@@ -101,16 +112,23 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     // we can simplify any value tied to is dependent on condition,
     // and try to simplify any value calculates condition
 
-    lifterClass* newlifter = new lifterClass(*this);
-
     // for [newlifter], we can assume condition is false
-    newlifter->blockInfo = BBInfo(firstcase.getZExtValue(), bb_true);
+    auto newblock = BBInfo(firstcase.getZExtValue(), bb_true);
+
+    // this->blockInfo = newblock;
     printvalue(condition);
-    newlifter->assumptions[cast<Instruction>(condition)] = 1;
+    this->assumptions[cast<Instruction>(condition)] = 1;
 
     assumptions[cast<Instruction>(condition)] = 0;
 
-    lifters.push_back(newlifter);
+    // lifters.push_back(newlifter);
+
+    // store mem&reg info for BB
+    unvisitedBlocks.push_back(blockInfo);
+    unvisitedBlocks.push_back(newblock);
+
+    branch_backup(blockInfo.block);
+    branch_backup(newblock.block);
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_newpath.ll";
@@ -120,6 +138,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     });
     std::cout << "created a new path\n" << std::flush;
   }
+
   if (pv.size() > 2) {
     UNREACHABLE("cant reach more than 2 paths!");
   }

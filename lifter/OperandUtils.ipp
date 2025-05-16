@@ -138,7 +138,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::doPatternMatching(
             printvalue2(ci->getValue() == -(math_is_hard));
             if (ci->getValue() == -(math_is_hard)) {
               auto zero =
-                  builder.getIntN(op1->getType()->getIntegerBitWidth(), 0);
+                  builder->getIntN(op1->getType()->getIntegerBitWidth(), 0);
               auto cond = createICMPFolder(llvm::CmpInst::ICMP_EQ, op1, zero);
               return createSelectFolder(cond, ci, zero);
             }
@@ -411,10 +411,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
       if (isa<ConstantInt>(key.operand2))
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                select_inst->getTrueValue(), key.operand2),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                select_inst->getFalseValue(), key.operand2),
+            builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                 select_inst->getTrueValue(), key.operand2),
+            builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                 select_inst->getFalseValue(), key.operand2),
             "lola-");
     }
 
@@ -424,10 +424,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
       if (isa<ConstantInt>(key.operand1))
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                key.operand1, select_inst->getTrueValue()),
-            builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                key.operand1, select_inst->getFalseValue()),
+            builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                 key.operand1, select_inst->getTrueValue()),
+            builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                 key.operand1, select_inst->getFalseValue()),
             "lolb-");
     }
     Value *cnd1, *lhs1, *rhs1;
@@ -438,10 +438,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
                                                                 // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  lhs1, select_inst->getTrueValue()),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  rhs1, select_inst->getFalseValue()),
+              builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                   lhs1, select_inst->getTrueValue()),
+              builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                   rhs1, select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -453,10 +453,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
                                                                 // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  lhs1, select_inst->getTrueValue()),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  rhs1, select_inst->getFalseValue()),
+              builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                   lhs1, select_inst->getTrueValue()),
+              builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                   rhs1, select_inst->getFalseValue()),
               "lol2-");
     }
 
@@ -468,10 +468,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
                                                                // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  select_inst->getFalseValue(), rhs),
+              builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                   select_inst->getTrueValue(), lhs),
+              builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                   select_inst->getFalseValue(), rhs),
               "lol2-");
     } else if (match(key.operand2,
                      m_ZExtOrSExtOrSelf(
@@ -481,15 +481,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
                                                                // if inversed
           return createSelectFolder(
               select_inst->getCondition(),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  select_inst->getTrueValue(), lhs),
-              builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                                  select_inst->getFalseValue(), rhs),
+              builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                   select_inst->getTrueValue(), lhs),
+              builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                                   select_inst->getFalseValue(), rhs),
               "lol2-");
     }
     newInstruction =
-        builder.CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
-                            key.operand1, key.operand2, Name);
+        builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
+                             key.operand1, key.operand2, Name);
   } else if (isCast(opcode)) {
     // Cast instruction
     switch (opcode) {
@@ -500,16 +500,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
       if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand1)) {
         return createSelectFolder(
             select_inst->getCondition(),
-            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
-                               select_inst->getTrueValue(), key.destType),
-            builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
-                               select_inst->getFalseValue(), key.destType),
+            builder->CreateCast(static_cast<Instruction::CastOps>(opcode),
+                                select_inst->getTrueValue(), key.destType),
+            builder->CreateCast(static_cast<Instruction::CastOps>(opcode),
+                                select_inst->getFalseValue(), key.destType),
             "lol-");
       }
 
       newInstruction =
-          builder.CreateCast(static_cast<Instruction::CastOps>(opcode),
-                             key.operand1, key.destType);
+          builder->CreateCast(static_cast<Instruction::CastOps>(opcode),
+                              key.operand1, key.destType);
       break;
     // Add other cast operations as needed
     default:
@@ -569,11 +569,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createInstruction(
 
   return simplifyValue(
       newValue,
-      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout()); //
+      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout()); //
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSelectFolder(
     Value* C, Value* True, Value* False, const Twine& Name) {
+  assert(True->getType() == False->getType() &&
+         "Both values must have same type in select");
   if (auto* CConst = dyn_cast<Constant>(C)) {
 
     if (CConst->isOneValue()) {
@@ -586,7 +588,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSelectFolder(
   if (True == False)
     return True;
 
-  auto inst = builder.CreateSelect(C, True, False, Name);
+  auto inst = builder->CreateSelect(C, True, False, Name);
 
   auto RHSKBSELECT_C = analyzeValueKnownBits(C, dyn_cast<Instruction>(inst));
 
@@ -811,7 +813,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::folderBinOps(
       if (RHSConst->isZero())
         return LHS;
       if (RHSConst->getZExtValue() >= LHS->getType()->getIntegerBitWidth()) {
-        return builder.getIntN(LHS->getType()->getIntegerBitWidth(), 0);
+        return builder->getIntN(LHS->getType()->getIntegerBitWidth(), 0);
       }
     }
     [[fallthrough]];
@@ -865,13 +867,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::folderBinOps(
   case Instruction::And: {
     if (ConstantInt* LHSConst = dyn_cast<ConstantInt>(LHS)) {
       if (LHSConst->isZero())
-        return builder.getIntN(LHSConst->getBitWidth(), 0);
+        return builder->getIntN(LHSConst->getBitWidth(), 0);
       if (LHSConst->isMinusOne())
         return RHS;
     }
     if (ConstantInt* RHSConst = dyn_cast<ConstantInt>(RHS)) {
       if (RHSConst->isZero())
-        return builder.getIntN(RHSConst->getBitWidth(), 0);
+        return builder->getIntN(RHSConst->getBitWidth(), 0);
       if (RHSConst->isMinusOne())
         return LHS;
     }
@@ -899,8 +901,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::folderBinOps(
 
   auto computedBits = computeKnownBitsFromOperation(LHSKB, RHSKB, opcode);
   if (computedBits.isConstant() && !computedBits.hasConflict()) {
-    return builder.getIntN(LHS->getType()->getIntegerBitWidth(),
-                           computedBits.getConstant().getZExtValue());
+    return builder->getIntN(LHS->getType()->getIntegerBitWidth(),
+                            computedBits.getConstant().getZExtValue());
   }
   /*
   if (auto try_z3 = evaluateLLVMExpression(inst)) {
@@ -1214,7 +1216,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createGEPFolder(Type* Type,
 
   std::vector<Value*> indices;
   indices.push_back(Address);
-  auto v = builder.CreateGEP(Type, Base, indices);
+  auto v = builder->CreateGEP(Type, Base, indices);
   GEPcache.insert({key, v});
   return v;
 }
@@ -1353,7 +1355,7 @@ std::optional<bool> foldKnownBits(CmpInst::Predicate P, const KnownBits& LHS,
   return std::nullopt;
 }
 
-Value* ICMPPatternMatcher(IRBuilder<llvm::InstSimplifyFolder>& builder,
+Value* ICMPPatternMatcher(IRBuilder<llvm::InstSimplifyFolder>* builder,
                           CmpInst::Predicate P, Value* LHS, Value* RHS,
                           const Twine& Name) {
   if (auto SI = dyn_cast<SelectInst>(LHS)) {
@@ -1372,12 +1374,13 @@ Value* ICMPPatternMatcher(IRBuilder<llvm::InstSimplifyFolder>& builder,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createICMPFolder(
     CmpInst::Predicate P, Value* LHS, Value* RHS, const Twine& Name) {
-  if (auto patternCheck = ICMPPatternMatcher(builder, P, LHS, RHS, Name)) {
+  if (auto patternCheck =
+          ICMPPatternMatcher(builder.get(), P, LHS, RHS, Name)) {
     printvalue(patternCheck);
     return patternCheck;
   }
 
-  auto result = builder.CreateICmp(P, LHS, RHS, Name);
+  auto result = builder->CreateICmp(P, LHS, RHS, Name);
 
   if (auto ctxI = dyn_cast<Instruction>(result)) {
 
@@ -1385,7 +1388,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createICMPFolder(
     KnownBits KnownRHS = analyzeValueKnownBits(RHS, ctxI);
 
     if (std::optional<bool> v = foldKnownBits(P, KnownLHS, KnownRHS)) {
-      return ConstantInt::get(Type::getInt1Ty(builder.getContext()), v.value());
+      return ConstantInt::get(Type::getInt1Ty(builder->getContext()),
+                              v.value());
     }
     printvalue2(KnownLHS) printvalue2(KnownRHS);
   }
@@ -1397,6 +1401,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createICMPFolder(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createTruncFolder(
     Value* V, Type* DestTy, const Twine& Name) {
+
+  if (V->getType()->getIntegerBitWidth() <= DestTy->getIntegerBitWidth())
+    return V;
 
   Value* result =
       createInstruction(Instruction::Trunc, V, nullptr, DestTy, Name);
@@ -1418,7 +1425,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createTruncFolder(
 
   return simplifyValue(
       result,
-      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createZExtFolder(
@@ -1434,7 +1441,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createZExtFolder(
 #endif
   return simplifyValue(
       result,
-      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createZExtOrTruncFolder(
@@ -1461,7 +1468,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtFolder(
 #endif
   return simplifyValue(
       result,
-      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtOrTruncFolder(
@@ -1480,7 +1487,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtOrTruncFolder(
 */
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::Init_Flags() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
   auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
   auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
@@ -1501,7 +1508,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::Init_Flags() {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::setFlag(const Flag flag,
                                                     Value* newValue) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
   // printvalue2((int32_t)flag) printvalue(newValue);
   if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
@@ -1529,9 +1536,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(LazyValue)::getLazyFlag(const Flag flag) {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getFlag(const Flag flag) {
   Value* result = FlagList[flag].get(); // Retrieve the value,
   if (result) // if its somehow nullptr, just return False as value
-    return createTruncFolder(result, builder.getInt1Ty());
+    return createTruncFolder(result, builder->getInt1Ty());
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
@@ -1560,7 +1567,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::InitRegisters(Function* function,
   }
   Init_Flags();
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
 
@@ -1614,11 +1621,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetValueFromHighByteRegister(
   Value* FF = ConstantInt::get(shiftedValue->getType(), 0xff);
   Value* highByteValue = createAndFolder(shiftedValue, FF, "highByte");
 
-  return createTruncFolder(highByteValue, builder.getIntNTy(8));
+  return createTruncFolder(highByteValue, builder->getIntNTy(8));
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRFLAGSValue(Value* value) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
     int shiftAmount = flag;
     Value* shiftedFlagValue = createLShrFolder(
@@ -1632,7 +1639,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRFLAGSValue(Value* value) {
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRFLAGSValue() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0);
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
     Value* flagValue = getFlag((Flag)flag);
@@ -1652,10 +1659,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
   // printvalue2(magic_enum::enum_name(key));
 
   if (key == Register::RIP || key == Register::EIP) {
-    return ConstantInt::getSigned(BinaryOperations::getBitness() == 64
-                                      ? Type::getInt64Ty(builder.getContext())
-                                      : Type::getInt32Ty(builder.getContext()),
-                                  blockInfo.runtime_address);
+    return ConstantInt::getSigned(file.getMode() == X64
+                                      ? Type::getInt64Ty(builder->getContext())
+                                      : Type::getInt32Ty(builder->getContext()),
+                                  current_address);
   }
 
   if (key == Register::AH || key == Register::CH || key == Register::DH ||
@@ -1682,13 +1689,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
   */
 
   Register largestKey = getBiggestEncoding(key);
-  // dont truncate here?
-  return Registers[largestKey];
+  // it is safe to zext&truncate here, because if size doesnt match, we DO need
+  // to make it fit, we start caring about signedness once we are in the
+  // semantics
+  return createZExtOrTruncFolder(Registers[largestKey],
+                                 builder->getIntNTy(getRegisterSize(key)));
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToHighByteRegister(
     const Register reg, Value* value) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   int shiftValue = 8;
 
   Register fullRegKey = getBiggestEncoding(reg);
@@ -1714,7 +1724,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToHighByteRegister(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_8b(
     const Register reg, Value* value) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Register fullRegKey = getBiggestEncoding(reg);
   Value* fullRegisterValue = Registers[fullRegKey];
   fullRegisterValue =
@@ -1751,7 +1761,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_16b(
 
   Register fullRegKey = getBiggestEncoding(reg);
   Value* fullRegisterValue = Registers[fullRegKey];
-
+  printvalue(fullRegisterValue);
   Value* last4cleared =
       ConstantInt::get(fullRegisterValue->getType(), 0xFFFFFFFFFFFF0000);
   Value* maskedFullReg =
@@ -1774,6 +1784,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
   }
 
   if (((key >= Register::AX) && (key <= Register::R15W))) {
+    printvalue2("subreg_16");
     value = SetValueToSubRegister_16b(key, value);
   }
 
@@ -1788,7 +1799,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetEffectiveAddress() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* effectiveAddress = nullptr;
 
@@ -1836,7 +1847,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetEffectiveAddress() {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getPointer(Value* address) {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   std::vector<Value*> indices;
   indices.push_back(address);
 
@@ -1846,7 +1857,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getPointer(Value* address) {
   //     memoryOperand = TEB;
 
   Value* pointer =
-      builder.CreateGEP(Type::getInt8Ty(context), memoryOperand, indices);
+      builder->CreateGEP(Type::getInt8Ty(context), memoryOperand, indices);
   return pointer;
 }
 
@@ -1859,8 +1870,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetMemoryValue(Value* address,
   auto pointer = getPointer(address);
 
   LazyValue retval([this, pointer, size]() {
-    return builder.CreateLoad(builder.getIntNTy(size),
-                              pointer /*, "Loadxd-" + address + "-"*/);
+    return builder->CreateLoad(builder->getIntNTy(size),
+                               pointer /*, "Loadxd-" + address + "-"*/);
   });
 
   loadMemoryOp(pointer);
@@ -1881,7 +1892,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetMemoryValue(llvm::Value* address,
 
   auto pointer = getPointer(address);
 
-  auto store = builder.CreateStore(value, pointer);
+  auto store = builder->CreateStore(value, pointer);
 
   insertMemoryOp(cast<StoreInst>(store));
 }
@@ -1898,9 +1909,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
   case OperandType::Register32:
   case OperandType::Register64: {
     auto reg = instruction.regs[index];
-
+    printvalue2(magic_enum::enum_name(reg));
     return createZExtOrTruncFolder(GetRegisterValue(reg),
-                                   builder.getIntNTy(GetTypeSize(type)));
+                                   builder->getIntNTy(GetTypeSize(type)));
   }
 
   case OperandType::Immediate8:
@@ -1926,11 +1937,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
       UNREACHABLE("??");
     }
 
-    return builder.getIntN(size, instruction.immediate);
+    return builder->getIntN(size, instruction.immediate);
   }
 
   case OperandType::Immediate8_2nd: {
-    return builder.getIntN(8, instruction.immediate2);
+    return builder->getIntN(8, instruction.immediate2);
   }
 
   case OperandType::Memory8:
@@ -1983,7 +1994,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetIndexValue(uint8_t index,
     // TODO: do we need to remove this sext from here?
     // value =
     //    createSExtOrTruncFolder(value,
-    //    builder.getIntNTy(getRegisterSize(reg)));
+    //    builder->getIntNTy(getRegisterSize(reg)));
 
     SetRegisterValue(reg, value);
     return;
@@ -2022,7 +2033,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetIndexValue(uint8_t index,
     }
 
     // TODO: do we need to remove this sext from here?
-    value = createSExtOrTruncFolder(value, builder.getIntNTy(size));
+    value = createSExtOrTruncFolder(value, builder->getIntNTy(size));
     auto addr = GetEffectiveAddress();
     SetMemoryValue(addr, value);
 
@@ -2054,7 +2065,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(std::vector<Value*>)::GetRFLAGS() {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::pushFlags(
     const std::vector<Value*>& value, const std::string& address) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   auto rsp = GetRegisterValue(Register::RSP);
 
@@ -2071,7 +2082,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::pushFlags(
     Value* pointer = createGEPFolder(Type::getInt8Ty(context), memoryAlloc, rsp,
                                      "GEPSTORE-" + address + "-");
 
-    auto store = builder.CreateStore(byteVal, pointer, "storebyte");
+    auto store = builder->CreateStore(byteVal, pointer, "storebyte");
 
     insertMemoryOp(cast<StoreInst>(store));
     rsp = createAddFolder(rsp, ConstantInt::get(rsp->getType(), 1));
@@ -2081,7 +2092,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::pushFlags(
 // return [rsp], rsp+=8
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::popStack(int size) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   auto rsp = GetRegisterValue(Register::RSP);
   // should we get a address calculator function, do we need that?
 
@@ -2090,7 +2101,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::popStack(int size) {
 
   auto loadType = Type::getInt64Ty(context);
   LazyValue returnValue([this, loadType, pointer]() {
-    return builder.CreateLoad(loadType, pointer /*, "PopStack-"*/);
+    return builder->CreateLoad(loadType, pointer /*, "PopStack-"*/);
   });
 
   auto CI = ConstantInt::get(rsp->getType(), size);

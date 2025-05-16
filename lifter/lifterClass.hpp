@@ -7,6 +7,7 @@
 #include "ZydisDisassembler.hpp"
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
+#include "fileReader.hpp"
 #include "icedDisassembler.hpp"
 #include "icedDisassembler_mnemonics.h"
 #include "icedDisassembler_registers.h"
@@ -22,6 +23,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/Support/KnownBits.h>
 #include <set>
+#include <utility>
 
 #ifndef DEFINE_FUNCTION
 #define DEFINE_FUNCTION(name) void lift_##name()
@@ -204,13 +206,40 @@ public:
 */
 
 struct BBInfo {
-  uint64_t runtime_address;
+  uint64_t block_address;
   llvm::BasicBlock* block;
 
   BBInfo(){};
 
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
-      : runtime_address(runtime_address), block(block) {}
+      : block_address(runtime_address), block(block) {}
+
+  // bool operator==(const BBInfo& other) const {
+  //   if (block_address != other.block_address)
+  //     return false;
+  //   return block == other.block;
+  // }
+
+  // struct BBInfoKeyInfo {
+  //   // Custom hash function
+  //   static inline unsigned getHashValue(const BBInfo& key) {
+  //     return llvm::hash_combine(key.block_address, key.block);
+  //   }
+
+  //   // Equality function
+  //   static inline bool isEqual(const BBInfo& lhs, const BBInfo& rhs) {
+  //     return lhs == rhs;
+  //   }
+
+  //   // Define empty and tombstone keys
+  //   static inline BBInfo getEmptyKey() {
+  //     return BBInfo(-1, static_cast<BasicBlock*>(nullptr));
+  //   }
+
+  //   static inline BBInfo getTombstoneKey() {
+  //     return BBInfo(0, static_cast<BasicBlock*>(nullptr));
+  //   }
+  // };
 };
 
 class LazyValue {
@@ -272,9 +301,9 @@ class lifterClass {
 public:
   using Disassembler = DisassemblerBase<Mnemonic, Register>;
 
-  llvm::IRBuilder<llvm::InstSimplifyFolder>& builder;
+  std::unique_ptr<llvm::IRBuilder<llvm::InstSimplifyFolder>> builder;
   BBInfo blockInfo;
-  uint64_t runtime_address_prev;
+  uint64_t current_address;
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
@@ -288,6 +317,119 @@ public:
 
   void runDisassembler(void* buffer, size_t size = 15) {
     instruction = dis.disassemble(buffer, size);
+  }
+
+  // handle the file here
+  uint8_t* fileBase;
+
+  // lifts single instruction
+  void liftBytes(void* bytes, size_t size = 15) {
+    // what about the basicblock?
+    runDisassembler(bytes, size);
+    current_address += instruction.length;
+    liftInstructionSemantics();
+    this->counter++;
+  };
+
+  x86_64FileReader file;
+
+  void loadFile(uint8_t* file_start) {
+    fileBase = file_start;
+    file = x86_64FileReader(file_start);
+  }
+
+  // also lifts single inst
+  void liftAddress(uint64_t addr, size_t size = 15) {
+    file.filebase_exists();
+
+    this->current_address = addr;
+    auto offset = file.address_to_mapped_address(addr);
+    // what about the basicblock?
+    printvalue2(offset);
+    printvalue2(*(uint8_t*)offset);
+    runDisassembler((void*)offset, size);
+    const auto ct = (llvm::format_hex_no_prefix(this->counter, 0));
+    const auto runtime_address =
+        (llvm::format_hex_no_prefix(this->current_address, 0));
+    printvalue2(ct);
+    printvalue2(runtime_address);
+#ifndef _NODEV
+    debugging::doIfDebug([&]() { printvalue2(this->instruction.text); });
+#endif
+    // also pass the file to address_to_mapped_address?
+    this->current_address += instruction.length;
+    liftInstruction();
+    this->counter++;
+  };
+
+  void liftBasicBlockFromBytes(std::vector<uint8_t> bytes) {
+    //
+  }
+
+  // refactor: put these stuff in a class (?) so we can properly have a fully
+  // symbolized version
+  struct backup_point {
+    RegisterManager<Register> regs;
+    llvm::DenseMap<uint64_t, ValueByteReference> buffer;
+
+    bool operator==(const backup_point& other) const {
+      if (buffer != other.buffer)
+        return false;
+      return regs == other.regs;
+    }
+    backup_point(){};
+
+    backup_point(backup_point& other)
+        : regs(other.regs), buffer(other.buffer){};
+
+    backup_point(backup_point&& other)
+        : regs(other.regs), buffer(other.buffer){};
+
+    backup_point(RegisterManager<Register> registers,
+                 llvm::DenseMap<uint64_t, ValueByteReference> map)
+        : regs(registers), buffer(map){};
+
+    backup_point& operator=(const backup_point&) = default;
+  };
+  llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
+  void branch_backup(BasicBlock* bb) {
+    //
+    BBbackup[bb] = {Registers, buffer};
+  }
+
+  void load_backup(BasicBlock* bb) {
+    if (BBbackup.contains(bb)) {
+      auto bbinfo = BBbackup[bb];
+      Registers = bbinfo.regs;
+      buffer = bbinfo.buffer;
+    }
+  }
+
+  void liftBasicBlockFromAddress(uint64_t addr) {
+    printvalue2(this->finished);
+    printvalue2(this->run);
+    this->run = 1;
+    while (this->finished == 0 && this->run) {
+      // TODO: refactor logic for finished and run, instead semantics should
+      // return the info about jumps
+      liftAddress(addr);
+      addr = current_address;
+    }
+  }
+
+  bool getUnvisitedAddr(BBInfo& out) {
+    if (unvisitedBlocks.empty())
+      return false;
+    out = std::move(unvisitedBlocks.back());
+    unvisitedBlocks.pop_back();
+    return true;
+  }
+
+  void writeFunctionToFile(const std::string filename) {
+
+    std::error_code EC_noopt;
+    llvm::raw_fd_ostream OS_noopt(filename, EC_noopt);
+    fnc->print(OS_noopt, nullptr);
   }
 
   // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
@@ -354,28 +496,81 @@ public:
   llvm::DenseMap<GEPinfo, Value*, typename GEPinfo::GEPinfoKeyInfo> GEPcache;
   std::vector<llvm::Instruction*> memInfos;
 
-  std::vector<BBInfo> unvisitedAddresses;
+  // todo : std::set
+  std::vector<BBInfo> unvisitedBlocks;
+  std::vector<BBInfo> visitedBlocks;
 
   // global
   llvm::Value* memoryAlloc;
   llvm::Function* fnc;
+  llvm::Module* M;
 
-  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>& irbuilder,
+  lifterClass() {
+
+    llvm::LLVMContext context;
+    std::string mod_name = "lifter_module_default";
+    llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
+
+    std::vector<llvm::Type*> argTypes;
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::PointerType::get(context, 0));
+    argTypes.push_back(llvm::PointerType::get(context, 0)); // temp fix TEB
+
+    auto functionType =
+        llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
+
+    const std::string function_name = "main";
+    auto function =
+        llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
+                               function_name.c_str(), lifting_module);
+    const std::string block_name = "entry";
+    auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
+
+    llvm::InstSimplifyFolder Folder(lifting_module.getDataLayout());
+    auto irbuilder = llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
+    InitRegisters(builder->GetInsertBlock()->getParent(), 1000);
+  };
+
+  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>* irbuilder,
               uint64_t runtime_addr = 0)
-      : builder(irbuilder) {
+      : builder(irbuilder), M(irbuilder->GetInsertBlock()->getModule()) {
 
-    InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
+    InitRegisters(irbuilder->GetInsertBlock()->getParent(), runtime_addr);
+  };
+
+  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>* irbuilder,
+              uint8_t* fileBase, uint64_t runtime_addr = 0)
+      : builder(irbuilder), file(fileBase), fileBase(fileBase),
+        M(irbuilder->GetInsertBlock()->getModule()) {
+
+    InitRegisters(irbuilder->GetInsertBlock()->getParent(), runtime_addr);
   };
 
   lifterClass(const lifterClass& other)
-      : builder(other.builder), // Reference copied directly
+
+      : M(other.M), builder(other.builder), // Reference copied directly
         blockInfo(
             other.blockInfo), // Assuming BBInfo has a proper copy constructor
-        run(other.run), finished(0), counter(other.counter),
-        isUnreachable(other.isUnreachable),
+        fileBase(other.fileBase), run(other.run), finished(0),
+        counter(other.counter), isUnreachable(other.isUnreachable),
         instruction(other.instruction), // Shallow copy of the pointer
         assumptions(other.assumptions), // Deep copy of assumptions
-        buffer(other.buffer),
+        buffer(other.buffer), file(other.file),
         FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
                                   // constructor
         // RegistersFP(other.RegistersFP), // Assuming RegisterManager has a
@@ -410,7 +605,7 @@ public:
   // getters-setters
   llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
   void setFlagUndef(const Flag flag) {
-    auto undef = UndefValue::get(builder.getInt1Ty());
+    auto undef = UndefValue::get(builder->getInt1Ty());
     FlagList[flag].set(undef); // Set the new value directly
   }
 
@@ -696,7 +891,8 @@ public:
   DEFINE_FUNCTION(shrd);
   DEFINE_FUNCTION(lea);
   DEFINE_FUNCTION(add_sub);
-  void lift_imul2(const bool isSigned);
+  DEFINE_FUNCTION(imul2);
+  DEFINE_FUNCTION(mul2);
   DEFINE_FUNCTION(imul);
   DEFINE_FUNCTION(mul);
   DEFINE_FUNCTION(div2);
