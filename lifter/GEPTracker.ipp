@@ -96,7 +96,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     uint64_t startAddress, uint8_t byteCount, LazyValue orgLoad) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   if (byteCount == 0) {
     return nullptr;
   }
@@ -152,7 +152,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     } else if (!v.isRef &&
                file.readMemory(v.memoryAddress, bytesize, mem_value)) {
 
-      byteValue = builder.getIntN(bytesize * 8, mem_value);
+      byteValue = builder->getIntN(bytesize * 8, mem_value);
     } else if (!v.isRef) {
       // there has been no stores in this region and its not safe to concretize.
 
@@ -172,14 +172,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     }
     m += bytesize;
   }
-
+  printvalue(result);
   return result;
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::extractBytes(Value* value,
                                                          uint8_t startOffset,
                                                          uint8_t endOffset) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   if (!value) {
     return ConstantInt::get(
@@ -446,7 +446,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
       std::string Filename = "output_too_many_unk.ll";
       std::error_code EC;
       raw_fd_ostream OS(Filename, EC);
-      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+      builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
     printvalueforce2(max_unknown);
     UNREACHABLE("There is a very huge chance that this shouldnt happen");
@@ -610,7 +610,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
       std::string Filename = "output_depth_exceeded.ll";
       std::error_code EC;
       raw_fd_ostream OS(Filename, EC);
-      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+      builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
     UNREACHABLE("Depth exceeded");
   }

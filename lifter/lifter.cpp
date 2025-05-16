@@ -1,5 +1,6 @@
 
 #include "fileReader.hpp"
+#include "icedDisassembler_registers.h"
 #define MAGIC_ENUM_RANGE_MIN -1000
 #define MAGIC_ENUM_RANGE_MAX 1000
 
@@ -51,80 +52,9 @@ void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
     lifter->finished = 0;
     auto next_bb_name = bbinfo.block->getName();
     printvalue2(next_bb_name);
-    lifter->builder.SetInsertPoint(bbinfo.block);
+    lifter->builder->SetInsertPoint(bbinfo.block);
     lifter->liftBasicBlockFromAddress(bbinfo.block_address);
   }
-  // Initialize the context structure
-
-  // while (lifters.size() > 0) {
-  //   auto lifter = lifters.back();
-
-  //   lifter->current_address = lifter->blockInfo.block_address;
-  //   lifter->builder.SetInsertPoint(lifter->blockInfo.block);
-
-  //   lifter->run = 1;
-  //   while ((lifter->run && !lifter->finished)) {
-
-  //     // ZydisDecodedInstruction instruction;
-  //     /*
-  //           if
-  //           (BinaryOperations::isWrittenTo(lifter->blockInfo.block_address))
-  //        { printvalueforce2(lifter->blockInfo.block_address);
-  //        UNREACHABLE("Found Self Modifying Code! we dont support it");
-  //           }
-  //      */
-  //     auto counter = debugging::increaseInstCounter() - 1;
-  //     /*
-  //     ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-  //      ZydisDecoderDecodeFull(&decoder, data + offset, 15, &(instruction),
-  //                             operands);
-
-  //      debugging::doIfDebug([&]() {
-  //        ZydisFormatter formatter;
-
-  //        ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
-  //        char buffer[256];
-  //        ZyanU64 runtime_address = 0;
-  //        ZydisFormatterFormatInstruction(
-  //            &formatter, &(instruction), operands,
-  //            lifter->instruction.operand_count_visible, &buffer[0],
-  //            sizeof(buffer), runtime_address, ZYAN_NULL);
-  //        const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));
-  //        printvalue2(ct);
-  //        const auto inst = buffer;
-  //        printvalue2(inst);
-  //        const auto runtime = lifter->blockInfo.runtime_address;
-  //        printvalue2(runtime);
-  //      });
-  //      */
-
-  //     printvalue2(lifter->current_address);
-  //     lifter->liftAddress(lifter->current_address);
-
-  //     /*   lifter->runDisassembler(data + offset);
-  //       lifter->current_address += lifter->instruction.length;
-  //       lifter->liftInstruction(); */
-
-  //     printvalue2(lifter->finished);
-  //     if (lifter->finished) {
-  //       lifter->run = 0;
-  //       lifters.pop_back();
-
-  //       debugging::doIfDebug([&]() {
-  //         std::string Filename =
-  //             "output_path_" + std::to_string(++pathNo) + ".ll";
-  //         std::error_code EC;
-  //         llvm::raw_fd_ostream OS(Filename, EC);
-  //         lifter->fnc->getParent()->print(OS, nullptr);
-  //       });
-  //       auto nextlift = "next lifter instance\n";
-  //       printvalue2(nextlift);
-
-  //       delete lifter;
-  //       break;
-  //     }
-  //   }
-  //}
 }
 
 void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
@@ -169,9 +99,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   llvm::IRBuilder<llvm::InstSimplifyFolder> builder =
       llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
 
-  // auto RegisterList = InitRegisters(builder, function, runtime_address);
-
-  auto main = new lifterClass(builder, fileBase);
+  auto main = new lifterClass(&builder, fileBase);
   // main->InitRegisters(function, runtime_address);
   main->blockInfo = BBInfo(runtime_address, bb);
   main->unvisitedBlocks.push_back(main->blockInfo);

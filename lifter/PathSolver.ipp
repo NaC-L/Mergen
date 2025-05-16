@@ -18,9 +18,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     run = 0;
     auto bb_solved = BasicBlock::Create(
         function->getContext(), "bb_constraint-" + std::to_string(dest) + "-",
-        builder.GetInsertBlock()->getParent());
+        builder->GetInsertBlock()->getParent());
 
-    builder.CreateBr(bb_solved);
+    builder->CreateBr(bb_solved);
     blockInfo = BBInfo(dest, bb_solved);
     printvalue2("pushing block");
     unvisitedBlocks.push_back(blockInfo);
@@ -35,9 +35,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
                 << std::flush;
       auto bb_solved = BasicBlock::Create(
           function->getContext(), "bb_constraint-" + std::to_string(dest) + "-",
-          builder.GetInsertBlock()->getParent());
+          builder->GetInsertBlock()->getParent());
 
-      builder.CreateBr(bb_solved);
+      builder->CreateBr(bb_solved);
       blockInfo = BBInfo(dest, bb_solved);
       printvalue2("pushing block");
       unvisitedBlocks.push_back(blockInfo);
@@ -54,18 +54,18 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   if (pv.size() == 1) {
     printvalue2(pv[0]);
     auto bb_solved = BasicBlock::Create(function->getContext(), "bb_false",
-                                        builder.GetInsertBlock()->getParent());
+                                        builder->GetInsertBlock()->getParent());
 
-    builder.CreateBr(bb_solved);
+    builder->CreateBr(bb_solved);
     blockInfo = BBInfo(pv[0].getZExtValue(), bb_solved);
     printvalue2("pushing block");
     unvisitedBlocks.push_back(blockInfo);
   }
   if (pv.size() == 2) {
     auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
-                                       builder.GetInsertBlock()->getParent());
+                                       builder->GetInsertBlock()->getParent());
     auto bb_true = BasicBlock::Create(function->getContext(), "bb_true",
-                                      builder.GetInsertBlock()->getParent());
+                                      builder->GetInsertBlock()->getParent());
 
     auto firstcase = pv[0];
     auto secondcase = pv[1];
@@ -73,7 +73,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     static auto try_simplify = [&](APInt c1,
                                    Value* simplifyv) -> std::optional<Value*> {
       if (auto si = dyn_cast<SelectInst>(simplifyv)) {
-        auto firstcase_v = builder.getIntN(
+        auto firstcase_v = builder->getIntN(
             simplifyv->getType()->getIntegerBitWidth(), c1.getZExtValue());
         if (si->getTrueValue() == firstcase_v)
           return si->getCondition();
@@ -98,10 +98,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     } else
       condition = createICMPFolder(
           llvm::CmpInst::ICMP_EQ, simplifyValue,
-          builder.getIntN(simplifyValue->getType()->getIntegerBitWidth(),
-                          firstcase.getZExtValue()));
+          builder->getIntN(simplifyValue->getType()->getIntegerBitWidth(),
+                           firstcase.getZExtValue()));
     printvalue(condition);
-    auto BR = builder.CreateCondBr(condition, bb_true, bb_false);
+    auto BR = builder->CreateCondBr(condition, bb_true, bb_false);
 
     RegisterBranch(BR);
 
