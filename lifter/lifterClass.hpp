@@ -301,7 +301,7 @@ class lifterClass {
 public:
   using Disassembler = DisassemblerBase<Mnemonic, Register>;
 
-  llvm::IRBuilder<llvm::InstSimplifyFolder>& builder;
+  std::unique_ptr<llvm::IRBuilder<llvm::InstSimplifyFolder>> builder;
   BBInfo blockInfo;
   uint64_t current_address;
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
@@ -503,23 +503,67 @@ public:
   // global
   llvm::Value* memoryAlloc;
   llvm::Function* fnc;
+  llvm::Module* M;
 
-  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>& irbuilder,
-              uint64_t runtime_addr = 0)
-      : builder(irbuilder) {
+  lifterClass() {
 
-    InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
+    llvm::LLVMContext context;
+    std::string mod_name = "lifter_module_default";
+    llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
+
+    std::vector<llvm::Type*> argTypes;
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::PointerType::get(context, 0));
+    argTypes.push_back(llvm::PointerType::get(context, 0)); // temp fix TEB
+
+    auto functionType =
+        llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
+
+    const std::string function_name = "main";
+    auto function =
+        llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
+                               function_name.c_str(), lifting_module);
+    const std::string block_name = "entry";
+    auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
+
+    llvm::InstSimplifyFolder Folder(lifting_module.getDataLayout());
+    auto irbuilder = llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
+    InitRegisters(builder->GetInsertBlock()->getParent(), 1000);
   };
 
-  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>& irbuilder,
-              uint8_t* fileBase, uint64_t runtime_addr = 0)
-      : builder(irbuilder), file(fileBase), fileBase(fileBase) {
+  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>* irbuilder,
+              uint64_t runtime_addr = 0)
+      : builder(irbuilder), M(irbuilder->GetInsertBlock()->getModule()) {
 
-    InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
+    InitRegisters(irbuilder->GetInsertBlock()->getParent(), runtime_addr);
+  };
+
+  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>* irbuilder,
+              uint8_t* fileBase, uint64_t runtime_addr = 0)
+      : builder(irbuilder), file(fileBase), fileBase(fileBase),
+        M(irbuilder->GetInsertBlock()->getModule()) {
+
+    InitRegisters(irbuilder->GetInsertBlock()->getParent(), runtime_addr);
   };
 
   lifterClass(const lifterClass& other)
-      : builder(other.builder), // Reference copied directly
+
+      : M(other.M), builder(other.builder), // Reference copied directly
         blockInfo(
             other.blockInfo), // Assuming BBInfo has a proper copy constructor
         fileBase(other.fileBase), run(other.run), finished(0),
@@ -561,7 +605,7 @@ public:
   // getters-setters
   llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
   void setFlagUndef(const Flag flag) {
-    auto undef = UndefValue::get(builder.getInt1Ty());
+    auto undef = UndefValue::get(builder->getInt1Ty());
     FlagList[flag].set(undef); // Set the new value directly
   }
 

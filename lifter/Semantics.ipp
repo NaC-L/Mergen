@@ -58,7 +58,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(FunctionType*)::parseArgsType(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(std::vector<Value*>)::parseArgs(
     funcsignatures<Register>::functioninfo* funcInfo) {
-  auto& context = builder.getContext();
+  auto& context = builder->getContext();
 
   auto RspRegister = GetRegisterValue(Register::RSP);
   if (!funcInfo)
@@ -114,27 +114,27 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(std::vector<Value*>)::parseArgs(
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::callFunctionIR(
     const std::string& functionName,
     funcsignatures<Register>::functioninfo* funcInfo) {
-  auto& context = builder.getContext();
+  auto& context = builder->getContext();
 
   if (!funcInfo) {
     // try to get funcinfo from name
     funcInfo = signatures.getFunctionInfo(functionName);
   }
   FunctionType* externFuncType = parseArgsType(funcInfo, context);
-  auto M = builder.GetInsertBlock()->getParent()->getParent();
+  auto M = builder->GetInsertBlock()->getParent()->getParent();
 
   // what about ordinals???????
   Function* externFunc = cast<Function>(
       M->getOrInsertFunction(functionName, externFuncType).getCallee());
   // fix calling
   std::vector<Value*> args = parseArgs(funcInfo);
-  auto callresult = builder.CreateCall(externFunc, args);
+  auto callresult = builder->CreateCall(externFunc, args);
 
   SetRegisterValue(Register::RAX,
                    callresult); // rax = externalfunc()
   /*
   SetRegisterValue(Register::RAX,
-                   builder.getInt64(1337)); // rax = externalfunc()
+                   builder->getInt64(1337)); // rax = externalfunc()
   */
   // check if the function is exit or something similar to that
   return callresult;
@@ -170,7 +170,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::computeOverflowFlagSbb(
     Value* Lvalue, Value* Rvalue, Value* cf, Value* sub) {
 
   auto bitWidth = Lvalue->getType()->getIntegerBitWidth();
-  auto signBit = builder.getIntN(bitWidth, bitWidth - 1);
+  auto signBit = builder->getIntN(bitWidth, bitWidth - 1);
 
   auto lhsSign = createLShrFolder(Lvalue, signBit);
   auto rhsSign = createLShrFolder(Rvalue, signBit);
@@ -247,7 +247,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::branchHelper(
   // after execution is finished, return to latest state and continue
   // execution from the other branch
 
-  auto block = builder.GetInsertBlock();
+  auto block = builder->GetInsertBlock();
   block->setName(instname + std::to_string(numbered));
   auto function = block->getParent();
 
@@ -301,7 +301,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bextr() {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   // replace rep logic with memcopy
 
@@ -495,7 +495,7 @@ void lifterClass<Mnemonic, Register, T3>::lift_pxor() {
 */
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mov() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   //  auto Rvalue2 =      GetIndexValue(src, src.size,
   //  std::to_string(current_address));
@@ -630,7 +630,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cmovcc() {
 
 // for now assume every call is fake
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   // 0 = function
   // 1 = rip
@@ -682,10 +682,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
       registerValue->print(outs());
       std::cout << "\n";
       auto idltvm =
-          builder.CreateIntToPtr(registerValue, PointerType::get(context, 0));
+          builder->CreateIntToPtr(registerValue, PointerType::get(context, 0));
 
-      builder.CreateCall(parseArgsType(nullptr, context), idltvm,
-                         parseArgs(nullptr));
+      builder->CreateCall(parseArgsType(nullptr, context), idltvm,
+                          parseArgs(nullptr));
 
       break;
     }
@@ -707,12 +707,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   // sub rsp 8 last,
 
   auto bb = BasicBlock::Create(context, block_name.c_str(),
-                               builder.GetInsertBlock()->getParent());
+                               builder->GetInsertBlock()->getParent());
   // if its trying to jump somewhere else than our binary, call it and
   // continue from [rsp]
 
   // TODO: add some of this code to solvePath
-  builder.CreateBr(bb);
+  builder->CreateBr(bb);
 
   printvalue2(jump_address);
 
@@ -724,7 +724,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
 
 int ret_count = 0;
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // [0] = rip
   // [1] = rsp
   // [2] = [rsp]
@@ -741,9 +741,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   // IMPORTANT, change logic
   auto realval = GetMemoryValue(getSPaddress(), 64); // todo : based on bitness
 
-  auto block = builder.GetInsertBlock();
+  auto block = builder->GetInsertBlock();
   auto function = block->getParent();
-  auto lastinst = builder.CreateRet(realval);
+  // auto lastinst = builder->CreateRet(realval);
 
   printvalue(rspvalue);
 
@@ -767,12 +767,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   }
   printvalue2(rop_result);
   if (rop_result == REAL_return) {
-    lastinst->eraseFromParent();
+    // lastinst->eraseFromParent();
     block->setName("real_return-" + std::to_string(current_address) + "-");
 
     auto rax = GetRegisterValue(Register::RAX);
     rax = createZExtFolder(
-        rax, builder.getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
+        rax, builder->getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
     // put this in a function
     std::vector<llvm::Type*> argTypes;
     argTypes.push_back(llvm::Type::getInt64Ty(context));
@@ -796,39 +796,39 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     auto myStruct = UndefValue::get(myStructType);
 
     // Use CreateInsertValue for structs
-    auto returnvalue = builder.CreateInsertValue(myStruct, rax, {0});
-    returnvalue = builder.CreateInsertValue(
+    auto returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::RCX), {1});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::RDX), {2});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::RBX), {3});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::RSP), {4});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::RBP), {5});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::RSI), {6});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::RDI), {7});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::R8), {8});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::R9), {9});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::R10), {10});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::R11), {11});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::R12), {12});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::R13), {13});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::R14), {14});
-    returnvalue = builder.CreateInsertValue(
+    returnvalue = builder->CreateInsertValue(
         returnvalue, GetRegisterValue(Register::R15), {15});
-    builder.CreateRet(rax);
-    Function* originalFunc_finalnopt = builder.GetInsertBlock()->getParent();
+    builder->CreateRet(rax);
+    Function* originalFunc_finalnopt = builder->GetInsertBlock()->getParent();
 
     debugging::doIfDebug([&]() {
       std::string Filename_finalnopt = "output_finalnoopt.ll";
@@ -850,7 +850,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     return;
   }
 
-  lastinst->eraseFromParent();
+  // lastinst->eraseFromParent();
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     file.getMode() == arch_mode::X64 ? 8 : 4);
@@ -871,7 +871,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
 
 int jmpcount = 0;
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // auto dest = operands[0];
 
   auto Value = GetIndexValue(0);
@@ -894,7 +894,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   printvalue(ripval);
   printvalue(trunc);
   uint64_t destination = 0;
-  auto function = builder.GetInsertBlock()->getParent();
+  auto function = builder->GetInsertBlock()->getParent();
 
   switch (instruction.types[0]) {
   case OperandType::Immediate8:
@@ -1261,7 +1261,7 @@ IF (COUNT & COUNTMASK) = 1
 FI;
 */
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_rcl() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*
   auto dest = operands[0];
   auto count = operands[1];
@@ -1365,7 +1365,7 @@ ELIHW;
 
 */
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_rcr() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*
   auto dest = operands[0];
   auto count = operands[1];
@@ -1478,7 +1478,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_neg() {
   auto cf = createICMPFolder(CmpInst::ICMP_NE, Rvalue,
                              ConstantInt::get(Rvalue->getType(), 0), "cf");
   auto result = createSubFolder(
-      builder.getIntN(Rvalue->getType()->getIntegerBitWidth(), 0), Rvalue,
+      builder->getIntN(Rvalue->getType()->getIntegerBitWidth(), 0), Rvalue,
       "neg");
   SetIndexValue(0, result);
 
@@ -1565,7 +1565,7 @@ FI;
 */
 // maybe
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sar() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // auto dest = operands[0 + (instruction.mnemonic == Mnemonic::SARX)];
   // auto count = operands[1 + (instruction.mnemonic == Mnemonic::SARX)];
   auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
@@ -1604,8 +1604,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sar() {
   auto signbitPos = bitWidth - 1;
 
   auto signBit =
-      createAShrFolder(Lvalue, builder.getIntN(bitWidth, signbitPos), "sarcf");
-  Value* cfValue = createTruncFolder(last_shift, builder.getInt1Ty());
+      createAShrFolder(Lvalue, builder->getIntN(bitWidth, signbitPos), "sarcf");
+  Value* cfValue = createTruncFolder(last_shift, builder->getInt1Ty());
 
   Value* isCountZero =
       createICMPFolder(CmpInst::ICMP_EQ, clampedCount,
@@ -1654,7 +1654,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sar() {
 // TODO fix
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shr() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
   auto count = 1 + (instruction.mnemonic == Mnemonic::SARX);
@@ -1691,7 +1691,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shr() {
           createSubFolder(clampedCount,
                           ConstantInt::get(clampedCount->getType(), 1)),
           "shrcf"),
-      builder.getInt1Ty());
+      builder->getInt1Ty());
 
   Value* isCountOne =
       createICMPFolder(CmpInst::ICMP_EQ, clampedCount,
@@ -1733,7 +1733,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shr() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shl() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   printvalue2(finished);
 
@@ -1946,47 +1946,48 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_popcnt() {
 
   auto destsizec = GetTypeSize(instruction.types[0]);
 
-  auto zero = builder.getIntN(destsizec, 0);
-  auto one = builder.getIntN(destsizec, 1);
+  auto zero = builder->getIntN(destsizec, 0);
+  auto one = builder->getIntN(destsizec, 1);
 
-  auto destsize = builder.getIntN(destsizec, destsizec + 1);
+  auto destsize = builder->getIntN(destsizec, destsizec + 1);
 
   auto srcV = GetIndexValue(1);
   printvalue(srcV); // if src is 0, count 0
 
   // create intrinsic for popct
-  auto popcnt = Intrinsic::getDeclaration(builder.GetInsertBlock()->getModule(),
-                                          Intrinsic::ctpop, srcV->getType());
+  auto popcnt =
+      Intrinsic::getDeclaration(builder->GetInsertBlock()->getModule(),
+                                Intrinsic::ctpop, srcV->getType());
   Value* popcntV = nullptr;
 
   if (isa<ConstantInt>(srcV)) {
     popcntV =
-        builder.getIntN(srcV->getType()->getIntegerBitWidth(),
-                        popcount(cast<ConstantInt>(srcV)->getZExtValue()));
+        builder->getIntN(srcV->getType()->getIntegerBitWidth(),
+                         popcount(cast<ConstantInt>(srcV)->getZExtValue()));
   } else {
-    popcntV = builder.CreateCall(popcnt, {srcV});
+    popcntV = builder->CreateCall(popcnt, {srcV});
   }
   auto destV = simplifyValue(
       popcntV,
-      builder.GetInsertBlock()->getParent()->getParent()->getDataLayout());
+      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
   printvalue(destV);
 
-  setFlag(FLAG_OF, builder.getInt1(0));
+  setFlag(FLAG_OF, builder->getInt1(0));
 
-  setFlag(FLAG_SF, builder.getInt1(0));
+  setFlag(FLAG_SF, builder->getInt1(0));
 
   setFlag(FLAG_ZF, computeZeroFlag(destV));
 
-  setFlag(FLAG_AF, builder.getInt1(0));
+  setFlag(FLAG_AF, builder->getInt1(0));
 
-  setFlag(FLAG_CF, builder.getInt1(0));
+  setFlag(FLAG_CF, builder->getInt1(0));
 
-  setFlag(FLAG_PF, builder.getInt1(0));
+  setFlag(FLAG_PF, builder->getInt1(0));
 
   SetIndexValue(0, destV);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shld() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   /*
   auto dest = operands[0];
@@ -2056,7 +2057,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shld() {
   SetIndexValue(0, resultValue);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shrd() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   /*  auto dest = operands[0];
    auto source = operands[1];
@@ -2116,7 +2117,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shrd() {
   of = createZExtOrTruncFolder(of, Type::getInt1Ty(context));
 
   // TODO: wrapper for undef behaviour?
-  of = createSelectFolder(isCountOne, of, UndefValue::get(builder.getInt1Ty()));
+  of =
+      createSelectFolder(isCountOne, of, UndefValue::get(builder->getInt1Ty()));
   of = createZExtFolder(of, Type::getInt1Ty(context));
 
   setFlag(FLAG_CF, cf);
@@ -2136,7 +2138,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_lea() {
   auto destsize = GetTypeSize(instruction.types[0]);
 
   auto Rvalue = createZExtOrTruncFolder(GetEffectiveAddress(),
-                                        builder.getIntNTy(destsize));
+                                        builder->getIntNTy(destsize));
 
   printvalue(Rvalue);
 
@@ -2313,7 +2315,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mul2() {
 // TODO rewrite this
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul() {
-  LLVMContext& context = builder.getContext();
   LLVMContext& context = builder->getContext();
 
   auto dest = 0; // dest ? ?????
@@ -2516,7 +2517,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mul() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_div() {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // auto src = operands[0];
 
   Value *divisor, *dividend, *quotient, *remainder;
@@ -2597,7 +2598,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_div() {
       printvalue(quotient)
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_idiv() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // auto src = operands[0];
 
   auto srcsize = GetTypeSize(instruction.types[0]);
@@ -2632,8 +2633,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_idiv() {
 
   Value *dividendLow, *dividendHigh, *dividend;
 
-  dividendLow = GetIndexValue(1);
-  dividendHigh = GetIndexValue(2);
+  auto lowreg = getRegOfSize(Register::RAX, srcsize);
+  printvalue2(magic_enum::enum_name(lowreg));
+  dividendLow = GetRegisterValue(lowreg);
+  printvalue(dividendLow);
+  auto highreg = getRegOfSize(Register::RDX, srcsize);
+  printvalue2(magic_enum::enum_name(highreg));
+  dividendHigh = GetRegisterValue(highreg);
+  printvalue(dividendHigh);
 
   dividendLow =
       createZExtFolder(dividendLow, Type::getIntNTy(context, srcsize * 2));
@@ -2667,9 +2674,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_idiv() {
     quotient = createSDivFolder(dividend, divide);
     remainder = createSRemFolder(dividend, divide);
   }
-  SetIndexValue(1, createZExtOrTruncFolder(quotient, Rvalue->getType()));
+  SetRegisterValue(getRegOfSize(Register::RAX, srcsize),
+                   createZExtOrTruncFolder(quotient, Rvalue->getType()));
 
-  SetIndexValue(2, createZExtOrTruncFolder(remainder, Rvalue->getType()));
+  SetRegisterValue(getRegOfSize(Register::RDX, srcsize),
+                   createZExtOrTruncFolder(remainder, Rvalue->getType()));
 
   printvalue(Rvalue) printvalue(dividend) printvalue(remainder)
       printvalue(quotient)
@@ -2696,16 +2705,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_xor() {
   setFlag(FLAG_PF, [this, result]() { return computeParityFlag(result); });
 
   setFlag(FLAG_OF, [this]() {
-    return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
+    return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
   setFlag(FLAG_CF, [this]() {
-    return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
+    return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
 
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_or() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
 
@@ -2729,16 +2738,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_or() {
   setFlag(FLAG_PF, [this, result]() { return computeParityFlag(result); });
 
   setFlag(FLAG_OF, [this]() {
-    return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
+    return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
   setFlag(FLAG_CF, [this]() {
-    return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
+    return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
 
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_and() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*  auto dest = operands[0];
    auto src = operands[1]; */
 
@@ -2760,10 +2769,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_and() {
   setFlag(FLAG_PF, [this, result]() { return computeParityFlag(result); });
 
   setFlag(FLAG_OF, [this]() {
-    return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
+    return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
   setFlag(FLAG_CF, [this]() {
-    return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
+    return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
@@ -2771,7 +2780,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_and() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_andn() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
   auto Lvalue = GetIndexValue(0);
@@ -2791,10 +2800,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_andn() {
   setFlag(FLAG_PF, [this, result]() { return computeParityFlag(result); });
 
   setFlag(FLAG_OF, [this]() {
-    return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
+    return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
   setFlag(FLAG_CF, [this]() {
-    return ConstantInt::getSigned(Type::getInt1Ty(builder.getContext()), 0);
+    return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
 
   printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
@@ -2821,7 +2830,7 @@ IF (COUNT & COUNTMASK) = 1
 FI
 */
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_rol() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
 
@@ -2898,7 +2907,7 @@ FI
 */
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ror() {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*
     auto dest = operands[0];
 
@@ -3039,7 +3048,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_dec() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_push() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /* auto src = operands[0]; // value that we are pushing
   auto dest = operands[2];
   auto rsp = operands[1]; */
@@ -3071,7 +3080,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_push() {
   case OperandType::Immediate16:
   case OperandType::Immediate32: {
     Rvalue = createSExtFolder(Rvalue,
-                              builder.getIntNTy(instruction.stack_growth * 8));
+                              builder->getIntNTy(instruction.stack_growth * 8));
     break;
   }
   default:
@@ -3084,7 +3093,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_push() {
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pushfq() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /* auto src = operands[2];  // value that we are pushing rflags
   auto dest = operands[1]; // [rsp]
   auto rsp = operands[0];  // rsp */
@@ -3110,7 +3119,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pushfq() {
   // then mov rsp, val
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pop() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /* auto dest = operands[0]; // value that we are pushing
   auto src = operands[2];
   auto rsp = operands[1]; */
@@ -3134,11 +3143,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pop() {
                             // mov val, rsp first
                             /* ???
                               Rvalue =
-                                  createZExtFolder(Rvalue, builder.getIntNTy(instruction.stack_growth));
+                                  createZExtFolder(Rvalue, builder->getIntNTy(instruction.stack_growth));
                                   */
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_leave() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*   auto src2 = operands[0]; // [xsp]
     auto src1 = operands[1]; // xbp
     auto dest = operands[2]; // xsp */
@@ -3158,7 +3167,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_leave() {
   // mov val, rsp first
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_popfq() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*  auto dest = operands[2]; // value that we are pushing
    auto src = operands[1];  // [rsp]
    auto rsp = operands[0];  // rsp */
@@ -3280,7 +3289,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_xadd() {
   // of the addition, which is stored in the destination operand.
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_test() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Value* Lvalue = GetIndexValue(0);
   Value* Rvalue = GetIndexValue(1);
   Rvalue = createSExtFolder(Rvalue, Lvalue->getType());
@@ -3364,11 +3373,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cmp() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_rdtsc() {
   // cout << current_address << "\n";
-  LLVMContext& context = builder.getContext();
-  auto rdtscCall = builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
+  LLVMContext& context = builder->getContext();
+  auto rdtscCall =
+      builder->CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // operands[0] = eax
   // operands[1] = ebx
   // operands[2] = ecx
@@ -3437,12 +3447,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
 
   std::vector<Value*> Args{eax, ConstantInt::get(eax->getType(), 0)};
 
-  Value* cpuidCall = builder.CreateCall(IA, Args);
+  Value* cpuidCall = builder->CreateCall(IA, Args);
 
-  Value* eaxv = builder.CreateExtractValue(cpuidCall, 0, "eax");
-  Value* ebx = builder.CreateExtractValue(cpuidCall, 1, "ebx");
-  Value* ecx = builder.CreateExtractValue(cpuidCall, 2, "ecx");
-  Value* edx = builder.CreateExtractValue(cpuidCall, 3, "edx");
+  Value* eaxv = builder->CreateExtractValue(cpuidCall, 0, "eax");
+  Value* ebx = builder->CreateExtractValue(cpuidCall, 1, "ebx");
+  Value* ecx = builder->CreateExtractValue(cpuidCall, 2, "ecx");
+  Value* edx = builder->CreateExtractValue(cpuidCall, 3, "edx");
 
   SetIndexValue(0, eaxv);
   SetIndexValue(1, ebx);
@@ -3489,7 +3499,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pext() {
             ->getOrInsertFunction("pext",
                                   Type::getIntNTy(fnc->getContext(), destsize))
             .getCallee());
-    auto rs = builder.CreateCall(fakyu, {src1v, src2v});
+    auto rs = builder->CreateCall(fakyu, {src1v, src2v});
     SetIndexValue(0, createAndFolder(
                          rs, ConstantInt::get(
                                  rs->getType(),
@@ -3498,7 +3508,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pext() {
   }
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnz() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   // auto dest = operands[0];
 
@@ -3510,7 +3520,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnz() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_seto() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   // auto dest = operands[0];
 
@@ -3521,7 +3531,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_seto() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setno() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   // auto dest = operands[0];
 
@@ -3534,7 +3544,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setno() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnb() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   // auto dest = operands[0];
 
@@ -3548,7 +3558,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnb() {
   SetIndexValue(0, byteResult);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setbe() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* cf = getFlag(FLAG_CF);
   Value* zf = getFlag(FLAG_ZF);
@@ -3561,7 +3571,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setbe() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnbe() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* cf = getFlag(FLAG_CF);
   Value* zf = getFlag(FLAG_ZF);
@@ -3575,7 +3585,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnbe() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setns() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   // auto dest = operands[0];
 
@@ -3589,7 +3599,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setns() {
   SetIndexValue(0, byteResult);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setp() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* pf = getFlag(FLAG_PF);
 
@@ -3600,7 +3610,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setp() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnp() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // auto dest = operands[0];
 
   Value* pf = getFlag(FLAG_PF);
@@ -3611,7 +3621,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnp() {
   SetIndexValue(0, resultValue);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setb() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   // auto dest = operands[0];
 
@@ -3622,7 +3632,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setb() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sets() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Value* sf = getFlag(FLAG_SF);
 
   Value* result = createZExtFolder(sf, Type::getInt8Ty(context));
@@ -3650,7 +3660,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_stosx() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setz() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
@@ -3661,7 +3671,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setz() {
   SetIndexValue(0, extendedZF);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnle() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
@@ -3684,7 +3694,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnle() {
   SetIndexValue(0, byteResult);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setle() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Value* zf = getFlag(FLAG_ZF);
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
@@ -3698,7 +3708,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setle() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnl() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
 
@@ -3710,7 +3720,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setnl() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setl() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Value* sf = getFlag(FLAG_SF);
   Value* of = getFlag(FLAG_OF);
 
@@ -3769,7 +3779,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btr() {
   unsigned baseBitWidth = basesize;
 
   Value* bitOffset = GetIndexValue(1);
-  bitOffset = createZExtFolder(bitOffset, builder.getIntNTy(basesize));
+  bitOffset = createZExtFolder(bitOffset, builder->getIntNTy(basesize));
   Value* bitOffsetMasked = createAndFolder(
       bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
       "bitOffsetMasked");
@@ -3886,15 +3896,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pdep() {
   auto destsize = GetTypeSize(instruction.types[0]);
 
   unsigned operandSize = destsize; // assuming size in bits
-  Value* destV = builder.getIntN(operandSize, 0);
-  auto zero = builder.getIntN(operandSize, 0);
-  auto one = builder.getIntN(operandSize, 1);
+  Value* destV = builder->getIntN(operandSize, 0);
+  auto zero = builder->getIntN(operandSize, 0);
+  auto one = builder->getIntN(operandSize, 1);
 
   auto srcV = GetIndexValue(1);
   auto maskV = GetIndexValue(2);
 
   // Initialize the result to zero
-  Value* result = builder.getIntN(operandSize, 0);
+  Value* result = builder->getIntN(operandSize, 0);
   Value* srcPos = zero;
 
   // Loop over each bit position in the mask
@@ -3910,14 +3920,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pdep() {
     Value* srcBit = createAndFolder(createLShrFolder(srcV, srcPos, "srcBit"),
                                     one, "srcBit");
     Value* shiftedSrcBit = createShlFolder(
-        srcBit, builder.getIntN(operandSize, i), "shiftedSrcBit");
+        srcBit, builder->getIntN(operandSize, i), "shiftedSrcBit");
     result =
         createSelectFolder(isMaskBitSet, createOrFolder(result, shiftedSrcBit),
                            result, "pdep_result");
 
     // Update the source position if the mask bit was set
     srcPos = createAddFolder(
-        srcPos, createZExtFolder(isMaskBitSet, builder.getIntNTy(operandSize)),
+        srcPos, createZExtFolder(isMaskBitSet, builder->getIntNTy(operandSize)),
         "srcPos");
   }
 
@@ -3975,7 +3985,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bzhi() {
   Value* source = GetIndexValue(1);
 
   Value* source2 = createAndFolder(
-      source, builder.getIntN(source->getType()->getIntegerBitWidth(), 7));
+      source, builder->getIntN(source->getType()->getIntegerBitWidth(), 7));
   auto one = ConstantInt::get(source2->getType(), 1);
   auto bitmask = createAShrFolder(createShlFolder(one, source2), source2);
   auto result = createAndFolder(source, bitmask);
@@ -3990,7 +4000,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bzhi() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsf() {
   // TODOs
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
 
@@ -4028,7 +4038,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsf() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_tzcnt() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   /*   auto dest = operands[0];
     auto src = operands[1]; */
 
@@ -4079,7 +4089,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btc() {
 
   Value* bitOffset = GetIndexValue(1);
 
-  bitOffset = createZExtFolder(bitOffset, builder.getIntNTy(basesize));
+  bitOffset = createZExtFolder(bitOffset, builder->getIntNTy(basesize));
   Value* bitOffsetMasked = createAndFolder(
       bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
       "bitOffsetMasked");
@@ -4109,7 +4119,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btc() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_lahf() {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   auto sf = getFlag(FLAG_SF);
   auto zf = getFlag(FLAG_ZF);
@@ -4161,13 +4171,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sahf() {
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_std() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   setFlag(FLAG_DF, ConstantInt::get(Type::getInt1Ty(context), 1));
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_stc() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   setFlag(FLAG_CF, ConstantInt::get(Type::getInt1Ty(context), 1));
 }
@@ -4181,7 +4191,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cmc() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_clc() {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* clearedCF = ConstantInt::get(Type::getInt1Ty(context), 0);
 
@@ -4189,7 +4199,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_clc() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cld() {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* clearedDF = ConstantInt::get(Type::getInt1Ty(context), 0);
 
@@ -4197,7 +4207,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cld() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cli() {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* resetIF = ConstantInt::get(Type::getInt1Ty(context), 0);
 
@@ -4212,7 +4222,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bts() {
 
   Value* bitOffset = GetIndexValue(1);
 
-  bitOffset = createZExtFolder(bitOffset, builder.getIntNTy(basesize));
+  bitOffset = createZExtFolder(bitOffset, builder->getIntNTy(basesize));
   Value* bitOffsetMasked = createAndFolder(
       bitOffset, ConstantInt::get(bitOffset->getType(), baseBitWidth - 1),
       "bitOffsetMasked");
@@ -4241,7 +4251,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bts() {
   printvalue(mask);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cwd() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* ax = createZExtOrTruncFolder(GetRegisterValue(Register::AX),
                                       Type::getInt16Ty(context));
@@ -4257,7 +4267,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cwd() {
   SetRegisterValue(Register::DX, dx);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cdq() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // if eax is -, then edx is filled with ones FFFF_FFFF
 
   Value* eax = createZExtOrTruncFolder(GetRegisterValue(Register::EAX),
@@ -4275,7 +4285,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cdq() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cqo() {
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // if rax is -, then rdx is filled with ones FFFF_FFFF_FFFF_FFFF
   Value* rax = createZExtOrTruncFolder(GetRegisterValue(Register::RAX),
                                        Type::getInt64Ty(context));
@@ -4293,7 +4303,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cqo() {
   SetRegisterValue(Register::RDX, rdx);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cbw() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Value* al = createZExtOrTruncFolder(GetRegisterValue(Register::AL),
                                       Type::getInt8Ty(context));
 
@@ -4302,7 +4312,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cbw() {
   SetRegisterValue(Register::AX, ax);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cwde() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   Value* ax = createZExtOrTruncFolder(GetRegisterValue(Register::AX),
                                       Type::getInt16Ty(context));
   printvalue(ax);
@@ -4312,7 +4322,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cwde() {
   SetRegisterValue(Register::EAX, eax);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cdqe() {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   Value* eax = createZExtOrTruncFolder(GetRegisterValue(Register::EAX),
                                        Type::getInt32Ty(context), "cdqe-trunc");
@@ -4832,7 +4842,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
         fnc->getParent()
             ->getOrInsertFunction("exception", fnc->getReturnType())
             .getCallee());
-    builder.CreateRet(builder.CreateCall(externFunc));
+    builder->CreateRet(builder->CreateCall(externFunc));
     run = 0;
     finished = 1;
     return;
@@ -4853,14 +4863,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
         std::string Filename = "output_notimplemented.ll";
         std::error_code EC;
         raw_fd_ostream OS(Filename, EC);
-        builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+        builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
         */
     // UNREACHABLE("Instruction not implemented");
     Function* externFunc = cast<Function>(
         fnc->getParent()
             ->getOrInsertFunction("not_implemented", fnc->getReturnType())
             .getCallee());
-    builder.CreateRet(builder.CreateCall(externFunc));
+    builder->CreateRet(builder->CreateCall(externFunc));
     run = 0;
     finished = 1;
   }
@@ -4871,7 +4881,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
 
   // in future this function could be staticly dispatched for custom logic?
 
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
   // RIP gets updated before execution of the instruction->
   /*
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
@@ -4899,8 +4909,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
     auto jump_address = RIP_value->getZExtValue();
 
     auto bb = BasicBlock::Create(context, "returnToOrgCF",
-                                 builder.GetInsertBlock()->getParent());
-    builder.CreateBr(bb);
+                                 builder->GetInsertBlock()->getParent());
+    builder->CreateBr(bb);
 
     blockInfo = BBInfo(jump_address, bb);
     run = 0;
@@ -4922,7 +4932,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
           STACKP_VALUE) {
     printvalueforce2(jump_address);
     auto bb = BasicBlock::Create(context, "returnToOrgCF",
-                                 builder.GetInsertBlock()->getParent());
+                                 builder->GetInsertBlock()->getParent());
     // actually call the function first
 
     auto functionName = file.getName(jump_address);
@@ -4938,7 +4948,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
     auto RIP_value = cast<ConstantInt>(next_jump);
     jump_address = RIP_value->getZExtValue();
 
-    builder.CreateBr(bb);
+    builder->CreateBr(bb);
 
     blockInfo = BBInfo(jump_address, bb);
     run = 0;
@@ -4951,7 +4961,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
       std::string Filename = "output_external.ll";
       std::error_code EC;
       raw_fd_ostream OS(Filename, EC);
-      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+      builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
 
       outs().flush();
       // UNREACHABLE("Trying to execute invalid external function");

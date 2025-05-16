@@ -244,34 +244,28 @@ public:
   }
 
   uint64_t fileOffsetToRVA(uint64_t offset) {
-    printvalue2(1);
     auto it =
         std::upper_bound(sections_v.begin(), sections_v.end(), offset,
                          [](uint32_t val, const win::section_header_t& s) {
                            return val < s.virtual_address;
                          });
-    printvalue2(2);
     if (it == sections_v.begin()) {
       // rva is before the first section
       return 0;
     }
-    printvalue2(3);
     --it; // now *it is the candidate section
     if (offset < it->ptr_raw_data + it->size_raw_data) {
       return (offset - it->virtual_address) + it->ptr_raw_data;
     }
-    printvalue2(4);
     return 0;
   }
 
   uint64_t address_to_mapped_address_impl(uint64_t rva) {
-    printvalue2(rva);
-    printvalue2(imageBase);
+
     uint64_t address = rva - imageBase;
-    printvalue2(address);
-    printvalue2(FileBase);
+
     auto res = (uint64_t)FileBase + RvaToFileOffset(address);
-    printvalue2(res);
+
     return res;
   }
 
@@ -280,8 +274,7 @@ public:
 
     if (mappedAddr > 0) {
       uint64_t tempValue;
-      std::memcpy(&tempValue,
-                  reinterpret_cast<const void*>(mappedAddr),
+      std::memcpy(&tempValue, reinterpret_cast<const void*>(mappedAddr),
                   byteSize);
 
       value = tempValue;
