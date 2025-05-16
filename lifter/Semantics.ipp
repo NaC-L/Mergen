@@ -3244,9 +3244,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_xadd() {
   Value* TEMP = createAddFolder(
       Lvalue, Rvalue, "xadd_sum-" + std::to_string(current_address) + "-");
 
-  SetIndexValue(1, Lvalue);
-
+  // only 0 could be memory, so ideally 0 should be set first?
   SetIndexValue(0, TEMP);
+  SetIndexValue(1, Lvalue);
   /*
   TEMP := SRC + DEST;
   SRC := DEST;
