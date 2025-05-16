@@ -4,19 +4,6 @@
 #include "OperandUtils.ipp"
 #include "lifterClass.hpp"
 #include "utils.h"
-#include <llvm/ADT/DenseSet.h>
-#include <llvm/Analysis/AliasAnalysis.h>
-#include <llvm/Analysis/AssumptionCache.h>
-#include <llvm/Analysis/BasicAliasAnalysis.h>
-#include <llvm/Analysis/TargetLibraryInfo.h>
-#include <llvm/Analysis/ValueTracking.h>
-#include <llvm/Analysis/WithCache.h>
-#include <llvm/IR/ConstantRange.h>
-#include <llvm/IR/InstrTypes.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/Support/ErrorHandling.h>
-#include <llvm/Support/KnownBits.h>
-#include <llvm/TargetParser/Triple.h>
 #include <llvm/Transforms/Utils/SCCPSolver.h>
 
 using namespace llvm;

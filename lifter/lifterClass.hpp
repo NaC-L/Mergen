@@ -13,14 +13,12 @@
 #include "icedDisassembler_registers.h"
 #include "includes.h"
 #include "utils.h"
-#include <llvm/ADT/SmallVector.h>
+
 #include <llvm/Analysis/DomConditionCache.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/Analysis/SimplifyQuery.h>
-#include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
 #include <llvm/Support/KnownBits.h>
 #include <set>
 #include <utility>

@@ -5,8 +5,6 @@
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Value.h>
 
-#include "PathSolver.ipp"
-
 inline bool comesBefore(llvm::Instruction* a, llvm::Instruction* b,
                         llvm::DominatorTree& DT) {
 

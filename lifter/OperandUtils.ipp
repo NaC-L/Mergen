@@ -2,9 +2,7 @@
 #pragma once
 
 #include "CommonDisassembler.hpp"
-#include "CommonRegisters.h"
 #include "GEPTracker.ipp"
-#include "OperandUtils.h"
 #include "ZydisDisassembler.hpp"
 #include "lifterClass.hpp"
 #include "utils.h"
@@ -1217,6 +1215,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createGEPFolder(Type* Type,
   std::vector<Value*> indices;
   indices.push_back(Address);
   auto v = builder->CreateGEP(Type, Base, indices);
+  printvalue(v);
   GEPcache.insert({key, v});
   return v;
 }
@@ -1870,8 +1869,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetMemoryValue(Value* address,
   auto pointer = getPointer(address);
 
   LazyValue retval([this, pointer, size]() {
-    return builder->CreateLoad(builder->getIntNTy(size),
-                               pointer /*, "Loadxd-" + address + "-"*/);
+    auto ret = builder->CreateLoad(builder->getIntNTy(size),
+                                   pointer /*, "Loadxd-" + address + "-"*/);
+    printvalue(ret);
+    return ret;
   });
 
   loadMemoryOp(pointer);
@@ -1969,7 +1970,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
       UNREACHABLE("??");
     }
     auto addr = GetEffectiveAddress();
-    return GetMemoryValue(addr, size);
+    auto ret = GetMemoryValue(addr, size);
+    printvalue(ret);
+    return ret;
   }
   default: {
     printvalueforce2(magic_enum::enum_name(type));
@@ -2101,7 +2104,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::popStack(int size) {
 
   auto loadType = Type::getInt64Ty(context);
   LazyValue returnValue([this, loadType, pointer]() {
-    return builder->CreateLoad(loadType, pointer /*, "PopStack-"*/);
+    auto ret = builder->CreateLoad(loadType, pointer /*, "PopStack-"*/);
+    printvalue(ret);
+    return ret;
   });
 
   auto CI = ConstantInt::get(rsp->getType(), size);
