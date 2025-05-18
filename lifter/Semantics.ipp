@@ -3429,7 +3429,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
   // int cpuInfo[4];
   // ArrayType* CpuInfoTy = ArrayType::get(Type::getInt32Ty(context), 4);
 
-  Value* eax = GetIndexValue(0); // just get eax?
+  Value* eax = GetRegisterValue(Register::EAX);
   // one is eax, other is always 0?
   std::vector<Type*> AsmOutputs = {
       Type::getInt32Ty(context), Type::getInt32Ty(context),
@@ -3454,10 +3454,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
   Value* ecx = builder->CreateExtractValue(cpuidCall, 2, "ecx");
   Value* edx = builder->CreateExtractValue(cpuidCall, 3, "edx");
 
-  SetIndexValue(0, eaxv);
-  SetIndexValue(1, ebx);
-  SetIndexValue(2, ecx);
-  SetIndexValue(3, edx);
+  SetRegisterValue(Register::EAX, eaxv);
+  SetRegisterValue(Register::EBX, ebx);
+  SetRegisterValue(Register::ECX, ecx);
+  SetRegisterValue(Register::EDX, edx);
 }
 
 uint64_t alternative_pext(uint64_t source, uint64_t mask) {
