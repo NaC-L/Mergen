@@ -1977,6 +1977,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
   default: {
     printvalueforce2(magic_enum::enum_name(type));
     printvalueforce2((uint32_t)index);
+    printvalueforce2(current_address);
     UNREACHABLE("idk");
   }
   }
