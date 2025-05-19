@@ -205,7 +205,6 @@ lifting_module.print(OS_noopt, nullptr);
 }
 
 // #define TEST
-
 int main(int argc, char* argv[]) {
 
   std::vector<std::string> args(argv, argv + argc);
