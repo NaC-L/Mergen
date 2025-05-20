@@ -144,7 +144,8 @@ public:
         printvalueforce2("debug this"); // debug this branch l8r
       }
       */
-      assert(key >= Register::RAX && key <= Register::R15 &&
+      assert(((key >= Register::RAX && key <= Register::R15) ||
+              key == Register::EIP || key == Register::RIP) &&
              "Key must be between RAX and R15");
 
       return (static_cast<int>(key) - static_cast<int>(Register::RAX));
