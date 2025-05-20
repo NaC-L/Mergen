@@ -10,7 +10,7 @@
 #define PP_PRIMITIVE_CAT(a, b) a##b
 #define PP_CAT(a, b) PP_PRIMITIVE_CAT(a, b)
 #define PP_FOREACH_0(MACRO, fn)
-#define PP_FOREACH_1(MACRO, fn, A)
+#define PP_FOREACH_1(MACRO, fn, A) MACRO(fn, A)
 #define PP_FOREACH_2(MACRO, fn, A, B) MACRO(fn, A) MACRO(fn, B)
 #define PP_FOREACH_3(MACRO, fn, A, B, C)                                       \
   PP_FOREACH_2(MACRO, fn, A, B) MACRO(fn, C)
