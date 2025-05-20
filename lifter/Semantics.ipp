@@ -18,6 +18,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/VersionTuple.h>
 #include <magic_enum/magic_enum.hpp>
 
 // #include <popcntintrin.h>
@@ -4343,7 +4344,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
     lift_##fn();                                                               \
     break;
 
-#define OPCODE(fn, ...) PP_FOREACH(OPCODE_CASE, fn, __VA_ARGS__)
+#define OPCODE(fn, ...) __VA_OPT__(PP_FOREACH(OPCODE_CASE, fn, __VA_ARGS__))
+
 #include "x86_64_opcodes.x"
 #undef OPCODE
 #undef OPCODE_CASE
@@ -4367,7 +4369,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
   default: {
 
     printvalueforce2(this->counter);
-    std::cout << "not implemented: " << (uint64_t)instruction.mnemonic
+    std::cout << "not implemented: "
+              << magic_enum::enum_name(instruction.mnemonic)
               << " runtime: " << std::hex << current_address << std::endl;
     /*
         std::string Filename = "output_notimplemented.ll";
