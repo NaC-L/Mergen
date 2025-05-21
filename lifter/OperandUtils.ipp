@@ -64,9 +64,12 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
 
   llvm::ICmpInst::Predicate Pred = {};
   Value* A;
-
+#if LLVM_VERSION_MAJOR > 18
   llvm::CmpPredicate CmpPred { Pred };
   if (match(Cond, m_ICmp(CmpPred, m_Value(A), m_Constant()))) {
+#else
+ if (match(Cond, m_ICmp(Pred, m_Value(A), m_Constant()))) {
+#endif
     AddAffected(A);
 
     if (llvm::ICmpInst::isEquality(Pred)) {
