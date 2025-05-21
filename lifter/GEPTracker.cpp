@@ -57,7 +57,7 @@ namespace BinaryOperations {
   bool readMemory(uint64_t addr, unsigned byteSize, APInt& value) {
 
     uint64_t mappedAddr = address_to_mapped_address(addr);
-    uint64_t tempValue;
+    uint64_t tempValue = 0;
     if (mappedAddr > 0) {
       std::memcpy(&tempValue,
                   reinterpret_cast<const void*>(data_g + mappedAddr), byteSize);
