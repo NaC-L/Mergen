@@ -8,6 +8,7 @@
 #include "llvm/IR/PassManager.h"
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/KnownBits.h>

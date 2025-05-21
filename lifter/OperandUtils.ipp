@@ -62,10 +62,11 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
     }
   };
 
-  llvm::ICmpInst::Predicate Pred;
+  llvm::ICmpInst::Predicate Pred = {};
   Value* A;
 
-  if (match(Cond, m_ICmp(Pred, m_Value(A), m_Constant()))) {
+  llvm::CmpPredicate CmpPred { Pred };
+  if (match(Cond, m_ICmp(CmpPred, m_Value(A), m_Constant()))) {
     AddAffected(A);
 
     if (llvm::ICmpInst::isEquality(Pred)) {
@@ -625,11 +626,11 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
 
   switch (opcode) {
   case Instruction::Add: {
-    return KnownBits::computeForAddSub(1, 0, vv1, vv2);
+    return KnownBits::computeForAddSub(true, false, false, vv1, vv2);
     break;
   }
   case Instruction::Sub: {
-    return KnownBits::computeForAddSub(0, 0, vv1, vv2);
+    return KnownBits::computeForAddSub(false, false, false, vv1, vv2);
     break;
   }
   case Instruction::Mul: {
