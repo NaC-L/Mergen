@@ -626,11 +626,19 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
 
   switch (opcode) {
   case Instruction::Add: {
+#if LLVM_VERSION_MAJOR > 18
     return KnownBits::computeForAddSub(true, false, false, vv1, vv2);
+#else
+    return KnownBits::computeForAddSub(true, false, vv1, vv2);
+#endif
     break;
   }
   case Instruction::Sub: {
+#if LLVM_VERSION_MAJOR > 18
     return KnownBits::computeForAddSub(false, false, false, vv1, vv2);
+#else
+    return KnownBits::computeForAddSub(false, false, vv1, vv2);
+#endif
     break;
   }
   case Instruction::Mul: {
