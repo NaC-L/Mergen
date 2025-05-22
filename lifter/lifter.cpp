@@ -103,8 +103,8 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   //configure memory policy - debug for now
   main->getMemoryPolicy()->setDefaultMode(MemoryAccessMode::CONCRETE);
-  main->getMemoryPolicy()->addSectionPolicy(".rodata", MemoryAccessMode::CONCRETE);
-  main->getMemoryPolicy()->addRangeOverride(0x401000, 0x402000, MemoryAccessMode::CONCRETE);
+  //main->getMemoryPolicy()->addSectionPolicy(".rodata", MemoryAccessMode::CONCRETE); //example
+  //main->getMemoryPolicy()->addRangeOverride(0x401000, 0x402000, MemoryAccessMode::CONCRETE); //example
   //configure memory policy - debug for now
 
   // main->InitRegisters(function, runtime_address);
