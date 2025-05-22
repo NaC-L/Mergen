@@ -4,6 +4,7 @@
 #include "OperandUtils.ipp"
 #include "lifterClass.hpp"
 #include "utils.h"
+#include "MemoryPolicy.hpp"
 #include <llvm/Transforms/Utils/SCCPSolver.h>
 
 using namespace llvm;

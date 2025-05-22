@@ -31,10 +31,7 @@ private:
 
 public:
     MemoryPolicy(std::shared_ptr<llvm::Module> mod) : module(mod) {
-        // Default to symbolic mode
         defaultMode = MemoryAccessMode::SYMBOLIC;
-        
-        // Initialize section-based rules
         sectionPolicies[".data"] = MemoryAccessMode::SYMBOLIC;
         sectionPolicies[".text"] = MemoryAccessMode::CONCRETE;
     }
@@ -52,7 +49,6 @@ public:
     }
 
     MemoryAccessMode getAccessMode(uint64_t address) {
-        // First check range overrides
         for (const auto& range : rangeOverrides) {
             if (address >= range.start && address < range.end) {
                 return range.mode;
@@ -60,10 +56,9 @@ public:
         }
 
         //then check section policies
-        // TODO: Implement section lookup based on address
         //this will require parsing ELF/PE headers to map addresses to sections? lmao
+        //TODO: Implement section lookup based on address
 
-        //default to global default
         return defaultMode;
     }
 
