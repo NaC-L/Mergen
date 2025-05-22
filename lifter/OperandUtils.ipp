@@ -60,10 +60,14 @@ static void findAffectedValues(Value* Cond, SmallVectorImpl<Value*>& Affected) {
     }
   };
 
-  llvm::ICmpInst::Predicate Pred;
+  llvm::ICmpInst::Predicate Pred = {};
   Value* A;
-
-  if (match(Cond, m_ICmp(Pred, m_Value(A), m_Constant()))) {
+#if LLVM_VERSION_MAJOR > 18
+  llvm::CmpPredicate CmpPred { Pred };
+  if (match(Cond, m_ICmp(CmpPred, m_Value(A), m_Constant()))) {
+#else
+ if (match(Cond, m_ICmp(Pred, m_Value(A), m_Constant()))) {
+#endif
     AddAffected(A);
 
     if (llvm::ICmpInst::isEquality(Pred)) {
@@ -625,11 +629,19 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
 
   switch (opcode) {
   case Instruction::Add: {
-    return KnownBits::computeForAddSub(1, 0, vv1, vv2);
+#if LLVM_VERSION_MAJOR > 18
+    return KnownBits::computeForAddSub(true, false, false, vv1, vv2);
+#else
+    return KnownBits::computeForAddSub(true, false, vv1, vv2);
+#endif
     break;
   }
   case Instruction::Sub: {
-    return KnownBits::computeForAddSub(0, 0, vv1, vv2);
+#if LLVM_VERSION_MAJOR > 18
+    return KnownBits::computeForAddSub(false, false, false, vv1, vv2);
+#else
+    return KnownBits::computeForAddSub(false, false, vv1, vv2);
+#endif
     break;
   }
   case Instruction::Mul: {
