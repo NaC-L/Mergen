@@ -4,6 +4,8 @@
 #include "lifterClass.hpp"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Module.h>
+
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
