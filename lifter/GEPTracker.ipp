@@ -1,10 +1,10 @@
 #pragma once
 
 #include "GEPTracker.h"
+#include "MemoryPolicy.hpp"
 #include "OperandUtils.ipp"
 #include "lifterClass.hpp"
 #include "utils.h"
-#include "MemoryPolicy.hpp"
 #include <llvm/Transforms/Utils/SCCPSolver.h>
 
 using namespace llvm;
@@ -24,7 +24,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::addValueReference(Value* value,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
                                                        Value* size) {
-  if (!isa<ConstantInt>(src) || !isa<ConstantInt>(dest) || !isa<ConstantInt>(size)) {
+  if (!isa<ConstantInt>(src) || !isa<ConstantInt>(dest) ||
+      !isa<ConstantInt>(size)) {
     printvalue(src);
     printvalue(dest);
     printvalue(size);
@@ -40,7 +41,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
   auto C_size = sizeCI->getZExtValue();
   printvalue2(C_size);
 
-  //check memory policy for source and destination
+  // check memory policy for source and destination
   if (memoryPolicy->isSymbolic(C_src) || memoryPolicy->isSymbolic(C_dest)) {
     // Handle symbolic memory copy
     // TODO: Implement symbolic memcpy

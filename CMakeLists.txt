@@ -72,8 +72,6 @@ FetchContent_MakeAvailable(magic_enum)
 
 # Target: lifter
 set(lifter_SOURCES
-	"lifter/FunctionSignatures.cpp"
-	"lifter/GEPTracker.cpp"
 	"lifter/PathSolver.cpp"
 	"lifter/lifter.cpp"
 	"lifter/test_instructions.cpp"
@@ -94,10 +92,12 @@ set(lifter_SOURCES
 	"lifter/CommonDisassembler.hpp"
 	"lifter/CustomPasses.hpp"
 	"lifter/FunctionSignatures.hpp"
+	"lifter/MemoryPolicy.hpp"
 	"lifter/ZydisDisassembler.hpp"
 	"lifter/fileReader.hpp"
 	"lifter/icedDisassembler.hpp"
 	"lifter/lifterClass.hpp"
+	"lifter/pp_macros.hpp"
 	"lifter/tester.hpp"
 	"lifter/GEPTracker.ipp"
 	"lifter/OperandUtils.ipp"
