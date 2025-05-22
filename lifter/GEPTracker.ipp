@@ -12,8 +12,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::addValueReference(Value* value,
                                                             uint64_t address) {
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
-
-    // BinaryOperations::WriteTo(address + i);
     printvalue2(address + i);
     buffer[address + i] = ValueByteReference(value, i);
     printvalue(value);
@@ -25,28 +23,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::addValueReference(Value* value,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
                                                        Value* size) {
-  // TODO: support full symbolic memcpy
-
-  //
-  // static_cast<Derived*>(this)->createMemcpyImpl();
-  //
-  // auto srcpointer = getPointer(src);
-  // auto destpointer = getPointer(dest);
-
-  // TODO: solve pointers if they are not constants,
-  if (!isa<ConstantInt>(src)) {
-    printvalue(src);
-    printvalue(dest);
-    printvalue(size);
-    return;
-  }
-  if (!isa<ConstantInt>(dest)) {
-    printvalue(src);
-    printvalue(dest);
-    printvalue(size);
-    return;
-  }
-  if (!isa<ConstantInt>(size)) {
+  if (!isa<ConstantInt>(src) || !isa<ConstantInt>(dest) || !isa<ConstantInt>(size)) {
     printvalue(src);
     printvalue(dest);
     printvalue(size);
@@ -57,23 +34,25 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
   auto srcCI = cast<ConstantInt>(src);
   auto sizeCI = cast<ConstantInt>(size);
 
-  //
   auto C_src = srcCI->getZExtValue();
   auto C_dest = destCI->getZExtValue();
   auto C_size = sizeCI->getZExtValue();
   printvalue2(C_size);
 
+  //check memory policy for source and destination
+  if (memoryPolicy->isSymbolic(C_src) || memoryPolicy->isSymbolic(C_dest)) {
+    // Handle symbolic memory copy
+    // TODO: Implement symbolic memcpy
+    return;
+  }
+
   for (int i = 0; i < C_size; i++) {
-
-    // we shouldn't read the buffer directly, because buffer doesnt include
-    // the binary.
-
     if (!buffer.contains(C_src + i)) {
-
       printvalue2(C_src + i);
       printvalue2(C_dest + i);
 
       buffer[C_dest + i] = ValueByteReference();
+      // Handle missing source data
       continue;
     }
     buffer[C_dest + i] = buffer[C_src + i];
@@ -813,7 +792,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
 // 0xCC_DD << 48 => 0xCC_DD_00_00_00_00_00_00 %mask.shifted = 0xFF_FF_FF_FF <<
 // 6*8     => 0xFF_FF_00_00_00_00_00_00 %reverse.mask.shifted =
 // 0x00_00_FF_FF_FF_FF_FF_FF %p1.masked = %p1 & %reverse.mask.shifted =>
-// 0x11_22_33_44_55_66_77_88 & 0x00_00_FF_FF_FF_FF_FF_FF =>
+// 0x11_22_33_44_55_66_77_88 & 0x00_00_FF_FF_FF_FF_FF =>
 // 0x00_00_33_44_55_66_77_88 %retval = %p2.shifted | %p1.masked       =>
 // 0x00_00_33_44_55_66_77_88 | 0xCC_DD_00_00_00_00_00_00 =>
 // 0xCC_DD_33_44_55_66_77_88

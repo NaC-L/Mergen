@@ -4,6 +4,7 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/IR/Value.h>
+#include "MemoryPolicy.hpp"
 
 using namespace llvm;
 

@@ -1,5 +1,5 @@
-
 #include "fileReader.hpp"
+#include "MemoryPolicy.hpp"
 #include "icedDisassembler_registers.h"
 #define MAGIC_ENUM_RANGE_MIN -1000
 #define MAGIC_ENUM_RANGE_MAX 1000
@@ -100,6 +100,13 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
       llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
 
   auto main = new lifterClass(&builder, fileBase);
+
+  //configure memory policy - debug for now
+  main->getMemoryPolicy()->setDefaultMode(MemoryAccessMode::CONCRETE);
+  main->getMemoryPolicy()->addSectionPolicy(".rodata", MemoryAccessMode::CONCRETE);
+  main->getMemoryPolicy()->addRangeOverride(0x401000, 0x402000, MemoryAccessMode::CONCRETE);
+  //configure memory policy - debug for now
+
   // main->InitRegisters(function, runtime_address);
   main->blockInfo = BBInfo(runtime_address, bb);
   main->unvisitedBlocks.push_back(main->blockInfo);
@@ -206,7 +213,6 @@ lifting_module.print(OS_noopt, nullptr);
 
 // #define TEST
 int main(int argc, char* argv[]) {
-
   std::vector<std::string> args(argv, argv + argc);
   argparser::parseArguments(args);
   timer::startTimer();
