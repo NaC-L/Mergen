@@ -170,7 +170,7 @@ public:
 };
 
 class x86_64FileReader : public FileReader<x86_64FileReader> {
-private:
+public: // pain
   win::section_header_t* sectionHeader;
   int numSections;
   win::dos_header_t* dosHeader;
@@ -211,6 +211,7 @@ public:
 
   arch_mode getMode_impl() { return X64; }
   x86_64FileReader(){};
+
   x86_64FileReader(uint8_t* fileBase) { init(fileBase); };
 
   characteristics
@@ -237,6 +238,7 @@ public:
                          });
     if (it == sections_v.begin())
       return 0;
+
     --it;
     if (rva < it->virtual_address + it->virtual_size) {
 

@@ -1,11 +1,12 @@
 #pragma once
 
+#include "utils.h"
 #include <llvm/IR/Value.h>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
-
 
 namespace llvm {
   class Module;
@@ -17,53 +18,65 @@ enum class MemoryAccessMode : uint8_t { SYMBOLIC, CONCRETE };
 struct MemoryRange {
   uint64_t start;
   uint64_t end;
-  MemoryAccessMode mode;
+  bool operator<(MemoryRange const& o) const { return start < o.start; }
 };
 
 class MemoryPolicy {
 private:
   MemoryAccessMode defaultMode;
-  std::map<std::string, MemoryAccessMode> sectionPolicies;
-  std::vector<MemoryRange> rangeOverrides;
-  std::shared_ptr<llvm::Module> module;
+
+  std::set<MemoryRange> symbolicRange;
+  std::set<MemoryRange> concreteRange;
 
 public:
-  MemoryPolicy(std::shared_ptr<llvm::Module> mod) : module(mod) {
-    defaultMode = MemoryAccessMode::SYMBOLIC;
-    sectionPolicies[".data"] = MemoryAccessMode::SYMBOLIC;
-    sectionPolicies[".text"] = MemoryAccessMode::CONCRETE;
-  }
+  MemoryPolicy() { defaultMode = MemoryAccessMode::SYMBOLIC; }
+  MemoryPolicy(MemoryPolicy& other)
+      : symbolicRange(other.symbolicRange), concreteRange(other.concreteRange),
+        defaultMode(other.defaultMode){};
+  MemoryPolicy(MemoryPolicy&& other)
+      : symbolicRange(other.symbolicRange), concreteRange(other.concreteRange),
+        defaultMode(other.defaultMode){};
 
   void setDefaultMode(MemoryAccessMode mode) { defaultMode = mode; }
 
-  void addSectionPolicy(const std::string& section, MemoryAccessMode mode) {
-    sectionPolicies[section] = mode;
+  void addRangeOverrideSymbolic(uint64_t start, uint64_t end) {
+    printvalue2("Adding " + std::to_string(start) + "-" + std::to_string(end));
+    symbolicRange.insert({.start = start, .end = end});
   }
 
-  void addRangeOverride(uint64_t start, uint64_t end, MemoryAccessMode mode) {
-    rangeOverrides.push_back({start, end, mode});
+  void addRangeOverrideConcrete(uint64_t start, uint64_t end) {
+    printvalue2("Adding " + std::to_string(start) + "-" + std::to_string(end));
+    concreteRange.insert({.start = start, .end = end});
   }
 
   MemoryAccessMode getAccessMode(uint64_t address) {
-    for (const auto& range : rangeOverrides) {
-      if (address >= range.start && address < range.end) {
-        return range.mode;
-      }
+    if (isSymbolic(address)) {
+      return MemoryAccessMode::SYMBOLIC;
     }
-
-    // then check section policies
-    // this will require parsing ELF/PE headers to map addresses to sections?
-    // lmao
-    // TODO: Implement section lookup based on address
-
-    return defaultMode;
+    return MemoryAccessMode::CONCRETE;
   }
 
   bool isSymbolic(uint64_t address) {
-    return getAccessMode(address) == MemoryAccessMode::SYMBOLIC;
+    auto it = symbolicRange.upper_bound({address, address});
+    if (it == symbolicRange.begin())
+      return defaultMode == MemoryAccessMode::SYMBOLIC;
+    printvalue2("symbolic");
+    --it;
+    printvalue2(it->end);
+    printvalue2(address <= it->end);
+    printvalue2(address <= it->end ? true
+                                   : defaultMode == MemoryAccessMode::SYMBOLIC);
+    return address <= it->end ? true
+                              : defaultMode == MemoryAccessMode::SYMBOLIC;
   }
 
   bool isConcrete(uint64_t address) {
-    return getAccessMode(address) == MemoryAccessMode::CONCRETE;
+    auto it = concreteRange.upper_bound({address, address});
+    if (it == concreteRange.begin())
+      return defaultMode == MemoryAccessMode::CONCRETE;
+
+    --it;
+    return address <= it->end ? true
+                              : defaultMode == MemoryAccessMode::CONCRETE;
   }
 };
