@@ -1,6 +1,7 @@
-#include "fileReader.hpp"
 #include "MemoryPolicy.hpp"
+#include "fileReader.hpp"
 #include "icedDisassembler_registers.h"
+
 #define MAGIC_ENUM_RANGE_MIN -1000
 #define MAGIC_ENUM_RANGE_MAX 1000
 
@@ -101,11 +102,21 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   auto main = new lifterClass(&builder, fileBase);
 
-  //configure memory policy - debug for now
-  main->getMemoryPolicy()->setDefaultMode(MemoryAccessMode::CONCRETE);
-  //main->getMemoryPolicy()->addSectionPolicy(".rodata", MemoryAccessMode::CONCRETE); //example
-  //main->getMemoryPolicy()->addRangeOverride(0x401000, 0x402000, MemoryAccessMode::CONCRETE); //example
-  //configure memory policy - debug for now
+  // configure memory policy - debug for now
+
+  main->memoryPolicy.setDefaultMode(MemoryAccessMode::SYMBOLIC);
+
+  for (auto& it : main->file.sections_v) {
+    if (it.characteristics.mem_write) {
+      main->memoryPolicy.addRangeOverrideSymbolic(
+          main->file.imageBase + it.virtual_address,
+          main->file.imageBase + it.virtual_address + it.virtual_size);
+    } else {
+      main->memoryPolicy.addRangeOverrideConcrete(
+          main->file.imageBase + it.virtual_address,
+          main->file.imageBase + it.virtual_address + it.virtual_size);
+    }
+  }
 
   // main->InitRegisters(function, runtime_address);
   main->blockInfo = BBInfo(runtime_address, bb);
@@ -201,7 +212,8 @@ lifting_module.print(OS_noopt, nullptr);
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
 
-  final_optpass(function, function->getArg(17), fileData.data());
+  final_optpass(function, function->getArg(17), fileData.data(),
+                main->memoryPolicy);
   const std::string Filename = "output.ll";
   std::error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);

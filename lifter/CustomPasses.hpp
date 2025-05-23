@@ -1,21 +1,20 @@
 #ifndef CUSTOMPASSES_H
 #define CUSTOMPASSES_H
 
-#include "GEPTracker.h"
-#include "OperandUtils.h"
+#include "MemoryPolicy.hpp"
 #include "fileReader.hpp"
 #include "includes.h"
 #include "utils.h"
 #include "llvm/IR/PassManager.h"
+#include <algorithm>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/CFG.h>
-#include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Support/KnownBits.h>
 #include <llvm/Support/raw_ostream.h>
-
-#include <algorithm>
 #include <map>
 #include <string>
 
@@ -171,10 +170,12 @@ public:
 // refactor & template for filereader
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
-  x86_64FileReader file;
-
   Value* mem = nullptr;
+  x86_64FileReader file;
+  MemoryPolicy mempolicy;
   GEPLoadPass(Value* val, uint8_t* filebase) : mem(val), file(filebase){};
+  GEPLoadPass(Value* val, uint8_t* filebase, MemoryPolicy mempolicy)
+      : mem(val), file(filebase), mempolicy(mempolicy){};
 
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
     bool hasChanged = false;
@@ -187,6 +188,9 @@ public:
             if (auto* ConstInt =
                     llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
               uint64_t constintvalue = (uint64_t)ConstInt->getZExtValue();
+              if (mempolicy.isSymbolic(constintvalue)) {
+                continue;
+              }
               if (uint64_t offset =
                       file.address_to_mapped_address(constintvalue)) {
                 for (auto* User : GEP->users()) {

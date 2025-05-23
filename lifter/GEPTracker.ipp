@@ -42,7 +42,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
   printvalue2(C_size);
 
   // check memory policy for source and destination
-  if (memoryPolicy->isSymbolic(C_src) || memoryPolicy->isSymbolic(C_dest)) {
+  if (memoryPolicy.isSymbolic(C_src) || memoryPolicy.isSymbolic(C_dest)) {
     // Handle symbolic memory copy
     // TODO: Implement symbolic memcpy
     return;
@@ -64,6 +64,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     uint64_t startAddress, uint8_t byteCount, LazyValue orgLoad) {
+  printvalue2(startAddress);
+
+  if (memoryPolicy.isSymbolic(startAddress)) {
+    printvalue2(startAddress);
+    auto orgload = orgLoad.get();
+    printvalue(orgload);
+    return orgLoad.get();
+  }
+
   LLVMContext& context = builder->getContext();
   if (byteCount == 0) {
     return nullptr;
