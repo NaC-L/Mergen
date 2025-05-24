@@ -1,5 +1,4 @@
 #pragma once
-#include "CommonDisassembler.hpp"
 #include "llvm/IR/Value.h"
 #include <linuxpe>
 #include <llvm/Support/raw_ostream.h>
@@ -63,14 +62,7 @@ namespace debugging {
       *debugStream << " " << name << " : " << static_cast<int>(v) << "\n";
       debugStream->flush();
       return;
-    } /*
-    if constexpr (std::is_same_v<T, z3::expr>) {
-      *debugStream << " " << name << " : "
-                   << static_cast<z3::expr>(v).to_string() << "\n";
-      debugStream->flush();
-      return;
-    }*/
-    else
+    } else
       *debugStream << " " << name << " : " << v << "\n";
     debugStream->flush();
   }

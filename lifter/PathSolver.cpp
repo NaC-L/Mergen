@@ -1,9 +1,7 @@
 
+#include "PathSolver.h"
 #include "CustomPasses.hpp"
-#include "OperandUtils.h"
-#include "lifterClass.hpp"
 #include "utils.h"
-#include <iostream>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -46,7 +44,10 @@ PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
   return result;
 }
 
-void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase) {
+// not pathsolver, & probably put this in lifter class, & we would utilize
+// templates since geploadpass
+void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase,
+                   MemoryPolicy<> memoryPolicy) {
   llvm::PassBuilder passBuilder;
 
   llvm::LoopAnalysisManager loopAnalysisManager;
@@ -79,9 +80,10 @@ void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase) {
     modulePassManager =
         passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1);
 
-    modulePassManager.addPass(GEPLoadPass(mem, filebase));
+    modulePassManager.addPass(GEPLoadPass(mem, filebase, memoryPolicy));
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
     modulePassManager.addPass(PromotePseudoStackPass(mem));
+    modulePassManager.addPass(PromotePseudoMemory(mem));
 
     modulePassManager.run(*module, moduleAnalysisManager);
 
@@ -93,9 +95,6 @@ void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase) {
 
   modulePassManager =
       passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
-
-  modulePassManager.addPass(ResizeAllocatedStackPass());
-  modulePassManager.addPass(PromotePseudoMemory(mem));
 
   modulePassManager.run(*module, moduleAnalysisManager);
 }

@@ -7,21 +7,21 @@
 #include "ZydisDisassembler.hpp"
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
+#include "fileReader.hpp"
 #include "icedDisassembler.hpp"
 #include "icedDisassembler_mnemonics.h"
 #include "icedDisassembler_registers.h"
 #include "includes.h"
 #include "utils.h"
-#include <llvm/ADT/SmallVector.h>
+
 #include <llvm/Analysis/DomConditionCache.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/Analysis/SimplifyQuery.h>
-#include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
 #include <llvm/Support/KnownBits.h>
 #include <set>
+#include <utility>
 
 #ifndef DEFINE_FUNCTION
 #define DEFINE_FUNCTION(name) void lift_##name()
@@ -144,7 +144,8 @@ public:
         printvalueforce2("debug this"); // debug this branch l8r
       }
       */
-      assert(key >= Register::RAX && key <= Register::R15 &&
+      assert(((key >= Register::RAX && key <= Register::R15) ||
+              key == Register::EIP || key == Register::RIP) &&
              "Key must be between RAX and R15");
 
       return (static_cast<int>(key) - static_cast<int>(Register::RAX));
@@ -204,13 +205,40 @@ public:
 */
 
 struct BBInfo {
-  uint64_t runtime_address;
+  uint64_t block_address;
   llvm::BasicBlock* block;
 
   BBInfo(){};
 
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
-      : runtime_address(runtime_address), block(block) {}
+      : block_address(runtime_address), block(block) {}
+
+  // bool operator==(const BBInfo& other) const {
+  //   if (block_address != other.block_address)
+  //     return false;
+  //   return block == other.block;
+  // }
+
+  // struct BBInfoKeyInfo {
+  //   // Custom hash function
+  //   static inline unsigned getHashValue(const BBInfo& key) {
+  //     return llvm::hash_combine(key.block_address, key.block);
+  //   }
+
+  //   // Equality function
+  //   static inline bool isEqual(const BBInfo& lhs, const BBInfo& rhs) {
+  //     return lhs == rhs;
+  //   }
+
+  //   // Define empty and tombstone keys
+  //   static inline BBInfo getEmptyKey() {
+  //     return BBInfo(-1, static_cast<BasicBlock*>(nullptr));
+  //   }
+
+  //   static inline BBInfo getTombstoneKey() {
+  //     return BBInfo(0, static_cast<BasicBlock*>(nullptr));
+  //   }
+  // };
 };
 
 class LazyValue {
@@ -272,9 +300,9 @@ class lifterClass {
 public:
   using Disassembler = DisassemblerBase<Mnemonic, Register>;
 
-  llvm::IRBuilder<llvm::InstSimplifyFolder>& builder;
+  std::unique_ptr<llvm::IRBuilder<llvm::InstSimplifyFolder>> builder;
   BBInfo blockInfo;
-  uint64_t runtime_address_prev;
+  uint64_t current_address;
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
@@ -285,9 +313,122 @@ public:
   MergenDisassembledInstruction_base<Mnemonic, Register> instruction;
 
   Disassembler dis;
-
+  MemoryPolicy<> memoryPolicy;
   void runDisassembler(void* buffer, size_t size = 15) {
     instruction = dis.disassemble(buffer, size);
+  }
+
+  // handle the file here
+  uint8_t* fileBase;
+
+  // lifts single instruction
+  void liftBytes(void* bytes, size_t size = 15) {
+    // what about the basicblock?
+    runDisassembler(bytes, size);
+    current_address += instruction.length;
+    liftInstructionSemantics();
+    this->counter++;
+  };
+
+  x86_64FileReader file;
+
+  void loadFile(uint8_t* file_start) {
+    fileBase = file_start;
+    file = x86_64FileReader(file_start);
+  }
+
+  // also lifts single inst
+  void liftAddress(uint64_t addr, size_t size = 15) {
+    file.filebase_exists();
+
+    this->current_address = addr;
+    auto offset = file.address_to_mapped_address(addr);
+    // what about the basicblock?
+    printvalue2(offset);
+    printvalue2(*(uint8_t*)offset);
+    runDisassembler((void*)offset, size);
+    const auto ct = (llvm::format_hex_no_prefix(this->counter, 0));
+    const auto runtime_address =
+        (llvm::format_hex_no_prefix(this->current_address, 0));
+    printvalue2(ct);
+    printvalue2(runtime_address);
+#ifndef _NODEV
+    debugging::doIfDebug([&]() { printvalue2(this->instruction.text); });
+#endif
+    // also pass the file to address_to_mapped_address?
+    this->current_address += instruction.length;
+    liftInstruction();
+    this->counter++;
+  };
+
+  void liftBasicBlockFromBytes(std::vector<uint8_t> bytes) {
+    //
+  }
+
+  // refactor: put these stuff in a class (?) so we can properly have a fully
+  // symbolized version
+  struct backup_point {
+    RegisterManager<Register> regs;
+    llvm::DenseMap<uint64_t, ValueByteReference> buffer;
+
+    bool operator==(const backup_point& other) const {
+      if (buffer != other.buffer)
+        return false;
+      return regs == other.regs;
+    }
+    backup_point(){};
+
+    backup_point(backup_point& other)
+        : regs(other.regs), buffer(other.buffer){};
+
+    backup_point(backup_point&& other)
+        : regs(other.regs), buffer(other.buffer){};
+
+    backup_point(RegisterManager<Register> registers,
+                 llvm::DenseMap<uint64_t, ValueByteReference> map)
+        : regs(registers), buffer(map){};
+
+    backup_point& operator=(const backup_point&) = default;
+  };
+  llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
+  void branch_backup(BasicBlock* bb) {
+    //
+    BBbackup[bb] = {Registers, buffer};
+  }
+
+  void load_backup(BasicBlock* bb) {
+    if (BBbackup.contains(bb)) {
+      auto bbinfo = BBbackup[bb];
+      Registers = bbinfo.regs;
+      buffer = bbinfo.buffer;
+    }
+  }
+
+  void liftBasicBlockFromAddress(uint64_t addr) {
+    printvalue2(this->finished);
+    printvalue2(this->run);
+    this->run = 1;
+    while (this->finished == 0 && this->run) {
+      // TODO: refactor logic for finished and run, instead semantics should
+      // return the info about jumps
+      liftAddress(addr);
+      addr = current_address;
+    }
+  }
+
+  bool getUnvisitedAddr(BBInfo& out) {
+    if (unvisitedBlocks.empty())
+      return false;
+    out = std::move(unvisitedBlocks.back());
+    unvisitedBlocks.pop_back();
+    return true;
+  }
+
+  void writeFunctionToFile(const std::string filename) {
+
+    std::error_code EC_noopt;
+    llvm::raw_fd_ostream OS_noopt(filename, EC_noopt);
+    fnc->print(OS_noopt, nullptr);
   }
 
   // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
@@ -354,28 +495,81 @@ public:
   llvm::DenseMap<GEPinfo, Value*, typename GEPinfo::GEPinfoKeyInfo> GEPcache;
   std::vector<llvm::Instruction*> memInfos;
 
-  std::vector<BBInfo> unvisitedAddresses;
+  // todo : std::set
+  std::vector<BBInfo> unvisitedBlocks;
+  std::vector<BBInfo> visitedBlocks;
 
   // global
   llvm::Value* memoryAlloc;
   llvm::Function* fnc;
+  llvm::Module* M;
 
-  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>& irbuilder,
+  lifterClass() {
+
+    llvm::LLVMContext context;
+    std::string mod_name = "lifter_module_default";
+    llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
+
+    std::vector<llvm::Type*> argTypes;
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    argTypes.push_back(llvm::PointerType::get(context, 0));
+    argTypes.push_back(llvm::PointerType::get(context, 0)); // temp fix TEB
+
+    auto functionType =
+        llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
+
+    const std::string function_name = "main";
+    auto function =
+        llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
+                               function_name.c_str(), lifting_module);
+    const std::string block_name = "entry";
+    auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
+
+    llvm::InstSimplifyFolder Folder(lifting_module.getDataLayout());
+    auto irbuilder = llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
+    InitRegisters(builder->GetInsertBlock()->getParent(), 1000);
+  };
+
+  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>* irbuilder,
               uint64_t runtime_addr = 0)
-      : builder(irbuilder) {
+      : builder(irbuilder), M(irbuilder->GetInsertBlock()->getModule()) {
 
-    InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
+    InitRegisters(irbuilder->GetInsertBlock()->getParent(), runtime_addr);
+  };
+
+  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>* irbuilder,
+              uint8_t* fileBase, uint64_t runtime_addr = 0)
+      : builder(irbuilder), file(fileBase), fileBase(fileBase),
+        M(irbuilder->GetInsertBlock()->getModule()) {
+
+    InitRegisters(irbuilder->GetInsertBlock()->getParent(), runtime_addr);
   };
 
   lifterClass(const lifterClass& other)
-      : builder(other.builder), // Reference copied directly
+
+      : M(other.M), builder(other.builder), // Reference copied directly
         blockInfo(
             other.blockInfo), // Assuming BBInfo has a proper copy constructor
-        run(other.run), finished(0), counter(other.counter),
-        isUnreachable(other.isUnreachable),
+        fileBase(other.fileBase), run(other.run), finished(0),
+        counter(other.counter), isUnreachable(other.isUnreachable),
         instruction(other.instruction), // Shallow copy of the pointer
         assumptions(other.assumptions), // Deep copy of assumptions
-        buffer(other.buffer),
+        buffer(other.buffer), file(other.file),
         FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
                                   // constructor
         // RegistersFP(other.RegistersFP), // Assuming RegisterManager has a
@@ -410,7 +604,7 @@ public:
   // getters-setters
   llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
   void setFlagUndef(const Flag flag) {
-    auto undef = UndefValue::get(builder.getInt1Ty());
+    auto undef = UndefValue::get(builder->getInt1Ty());
     FlagList[flag].set(undef); // Set the new value directly
   }
 
@@ -636,150 +830,11 @@ public:
 
   // would look nicer if we didnt have this, and do everything in a macro
   // instead?
-  DEFINE_FUNCTION(movs_X);
-  DEFINE_FUNCTION(movaps);
-  DEFINE_FUNCTION(mov);
 
-  DEFINE_FUNCTION(cmovcc);
-  /*
-  DEFINE_FUNCTION(cmovbz);
-  DEFINE_FUNCTION(cmovnbz);
-  DEFINE_FUNCTION(cmovz);
-  DEFINE_FUNCTION(cmovnz);
-  DEFINE_FUNCTION(cmovl);
-  DEFINE_FUNCTION(cmovnl);
-  DEFINE_FUNCTION(cmovb);
-  DEFINE_FUNCTION(cmovnb);
-  DEFINE_FUNCTION(cmovns);
-  DEFINE_FUNCTION(cmovs);
-  DEFINE_FUNCTION(cmovnle);
-  DEFINE_FUNCTION(cmovle);
-  DEFINE_FUNCTION(cmovo);
-  DEFINE_FUNCTION(cmovno);
-  DEFINE_FUNCTION(cmovp);
-  DEFINE_FUNCTION(cmovnp);
-  */
-  DEFINE_FUNCTION(popcnt);
-  //
-  DEFINE_FUNCTION(call);
-  DEFINE_FUNCTION(ret);
-  DEFINE_FUNCTION(jmp);
-  DEFINE_FUNCTION(jnz);
-  DEFINE_FUNCTION(jz);
-  DEFINE_FUNCTION(js);
-  DEFINE_FUNCTION(jns);
-  DEFINE_FUNCTION(jle);
-  DEFINE_FUNCTION(jl);
-  DEFINE_FUNCTION(jnl);
-  DEFINE_FUNCTION(jnle);
-  DEFINE_FUNCTION(jbe);
-  DEFINE_FUNCTION(jb);
-  DEFINE_FUNCTION(jnb);
-  DEFINE_FUNCTION(jnbe);
-  DEFINE_FUNCTION(jo);
-  DEFINE_FUNCTION(jno);
-  DEFINE_FUNCTION(jp);
-  DEFINE_FUNCTION(jnp);
-  //
-  DEFINE_FUNCTION(sbb);
-  DEFINE_FUNCTION(rcl);
-  DEFINE_FUNCTION(rcr);
-  DEFINE_FUNCTION(not );
-  DEFINE_FUNCTION(neg);
-  DEFINE_FUNCTION(sar);
-  DEFINE_FUNCTION(shr);
-  DEFINE_FUNCTION(shl);
-  DEFINE_FUNCTION(bswap);
-  DEFINE_FUNCTION(cmpxchg);
-  DEFINE_FUNCTION(xchg);
-  DEFINE_FUNCTION(shld);
-  DEFINE_FUNCTION(shrd);
-  DEFINE_FUNCTION(lea);
-  DEFINE_FUNCTION(add_sub);
-  void lift_imul2(const bool isSigned);
-  DEFINE_FUNCTION(imul);
-  DEFINE_FUNCTION(mul);
-  DEFINE_FUNCTION(div2);
-  DEFINE_FUNCTION(div);
-  DEFINE_FUNCTION(idiv2);
-  DEFINE_FUNCTION(idiv);
-  DEFINE_FUNCTION(xor);
-  DEFINE_FUNCTION(or);
-  DEFINE_FUNCTION(and);
-  DEFINE_FUNCTION(andn);
-  DEFINE_FUNCTION(rol);
-  DEFINE_FUNCTION(ror);
-  DEFINE_FUNCTION(inc);
-  DEFINE_FUNCTION(dec);
-  DEFINE_FUNCTION(push);
-  DEFINE_FUNCTION(pushfq);
-  DEFINE_FUNCTION(pop);
-  DEFINE_FUNCTION(popfq);
+#define OPCODE(fncname, ...) DEFINE_FUNCTION(fncname);
+#include "x86_64_opcodes.x"
+#undef OPCODE
 
-  DEFINE_FUNCTION(leave);
-
-  DEFINE_FUNCTION(adc);
-  DEFINE_FUNCTION(xadd);
-  DEFINE_FUNCTION(test);
-  DEFINE_FUNCTION(cmp);
-  DEFINE_FUNCTION(rdtsc);
-  DEFINE_FUNCTION(cpuid);
-  DEFINE_FUNCTION(pext);
-  //
-  DEFINE_FUNCTION(setnz);
-  DEFINE_FUNCTION(seto);
-  DEFINE_FUNCTION(setno);
-  DEFINE_FUNCTION(setnb);
-  DEFINE_FUNCTION(setbe);
-  DEFINE_FUNCTION(setnbe);
-  DEFINE_FUNCTION(setns);
-  DEFINE_FUNCTION(setp);
-  DEFINE_FUNCTION(setnp);
-  DEFINE_FUNCTION(setb);
-  DEFINE_FUNCTION(sets);
-  DEFINE_FUNCTION(stosx);
-  DEFINE_FUNCTION(setz);
-  DEFINE_FUNCTION(setnle);
-  DEFINE_FUNCTION(setle);
-  DEFINE_FUNCTION(setnl);
-  DEFINE_FUNCTION(setl);
-  DEFINE_FUNCTION(bt);
-  DEFINE_FUNCTION(btr);
-  DEFINE_FUNCTION(bts);
-  DEFINE_FUNCTION(lzcnt);
-  DEFINE_FUNCTION(bzhi);
-  DEFINE_FUNCTION(bsr);
-  DEFINE_FUNCTION(bsf);
-  DEFINE_FUNCTION(blsmsk);
-  DEFINE_FUNCTION(pdep);
-  DEFINE_FUNCTION(blsi);
-  DEFINE_FUNCTION(blsr);
-  DEFINE_FUNCTION(tzcnt);
-  DEFINE_FUNCTION(btc);
-  DEFINE_FUNCTION(lahf);
-  DEFINE_FUNCTION(sahf);
-  DEFINE_FUNCTION(std);
-  DEFINE_FUNCTION(stc);
-  DEFINE_FUNCTION(cmc);
-  DEFINE_FUNCTION(clc);
-  DEFINE_FUNCTION(cld);
-  DEFINE_FUNCTION(cli);
-  DEFINE_FUNCTION(cwd);
-  DEFINE_FUNCTION(cdq);
-  DEFINE_FUNCTION(cqo);
-  DEFINE_FUNCTION(cbw);
-  DEFINE_FUNCTION(cwde);
-  DEFINE_FUNCTION(cdqe);
-  DEFINE_FUNCTION(bextr);
-
-  // sse
-  /*
-  DEFINE_FUNCTION(movdqa);
-  DEFINE_FUNCTION(pand);
-  DEFINE_FUNCTION(por);
-  DEFINE_FUNCTION(pxor);
-  DEFINE_FUNCTION(xorps);
-  */
   // end semantics definition
 };
 

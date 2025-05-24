@@ -1,7 +1,7 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
-#include "GEPTracker.h"
-#include "CommonDisassembler.hpp"
+#include "fileReader.hpp"
+#include <iostream>
 #include <map>
 #include <queue>
 #include <string>
@@ -30,6 +30,7 @@ public:
   using funcArgInfos = std::vector<funcsignatures::funcArgInfo>;
   struct functioninfo {
     functioninfo() {}
+
     functioninfo(const std::string& Name) : name(Name) {}
 
     functioninfo(const std::string& Name, std::vector<funcArgInfo> Args)
@@ -60,8 +61,8 @@ public:
     // should SS represent stack ? (rsp+0x20 + (8 * arg) )
     // (SS is always ptr)
     static inline std::vector<uint64_t> offsets;
-    static void add_offset(uint64_t offset) {
-      offsets.push_back(BinaryOperations::fileOffsetToRVA(offset));
+    static void add_offset(x86_64FileReader& file, uint64_t offset) {
+      offsets.push_back(file.fileOffsetToRVA(offset));
     };
     void display() const {
       std::cout << "Function Name: " << name << ", Offsets: ";
@@ -203,13 +204,14 @@ public:
 
   static inline std::unordered_map<std::vector<unsigned char>, functioninfo,
                                    VectorHash>
-  search_signatures(const std::vector<unsigned char>& data) {
+  search_signatures(std::vector<unsigned char>& data) {
+    x86_64FileReader file(data.data());
     AhoCorasick ac(siglookup);
     std::vector<std::pair<int, int>> matches = ac.search(data);
     for (const auto& [pos, id] : matches) {
       auto it = siglookup.find(ac.patterns[id]);
       if (it != siglookup.end()) {
-        it->second.add_offset(pos);
+        it->second.add_offset(file, pos);
       }
     }
     return siglookup;
