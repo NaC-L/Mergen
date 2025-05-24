@@ -313,7 +313,6 @@ public:
   MergenDisassembledInstruction_base<Mnemonic, Register> instruction;
 
   Disassembler dis;
-  MemoryPolicy memoryPolicy;
   void runDisassembler(void* buffer, size_t size = 15) {
     instruction = dis.disassemble(buffer, size);
   }
