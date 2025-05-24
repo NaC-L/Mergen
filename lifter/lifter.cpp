@@ -202,11 +202,6 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
             << " milliseconds has past" << std::endl;
 
   main->writeFunctionToFile("output_no_opts.ll");
-  /* const std::string Filename_noopt = "output_no_opts.ll";
-std::error_code EC_noopt;
-llvm::raw_fd_ostream OS_noopt(Filename_noopt, EC_noopt);
-
-lifting_module.print(OS_noopt, nullptr);
 
 */
   std::cout << "\nwriting complete, " << std::dec << ms
