@@ -108,13 +108,15 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   for (auto& it : main->file.sections_v) {
     if (it.characteristics.mem_write) {
-      main->memoryPolicy.addRangeOverrideSymbolic(
-          main->file.imageBase + it.virtual_address,
-          main->file.imageBase + it.virtual_address + it.virtual_size);
+      main->memoryPolicy.addRange(main->file.imageBase + it.virtual_address,
+                                  main->file.imageBase + it.virtual_address +
+                                      it.virtual_size,
+                                  MemoryAccessMode::SYMBOLIC);
     } else {
-      main->memoryPolicy.addRangeOverrideConcrete(
-          main->file.imageBase + it.virtual_address,
-          main->file.imageBase + it.virtual_address + it.virtual_size);
+      main->memoryPolicy.addRange(main->file.imageBase + it.virtual_address,
+                                  main->file.imageBase + it.virtual_address +
+                                      it.virtual_size,
+                                  MemoryAccessMode::CONCRETE);
     }
   }
 
@@ -203,7 +205,6 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   main->writeFunctionToFile("output_no_opts.ll");
 
-*/
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
 

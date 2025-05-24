@@ -6,6 +6,7 @@
 #include "lifterClass.hpp"
 #include "utils.h"
 #include <llvm/Transforms/Utils/SCCPSolver.h>
+#include <magic_enum/magic_enum.hpp>
 
 using namespace llvm;
 
@@ -66,10 +67,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     uint64_t startAddress, uint8_t byteCount, LazyValue orgLoad) {
   printvalue2(startAddress);
 
-  if (memoryPolicy.isSymbolic(startAddress)) {
-    printvalue2(startAddress);
-    auto orgload = orgLoad.get();
-    printvalue(orgload);
+  if (memoryPolicy.isRangeFullyCovered(startAddress, startAddress + byteCount,
+                                       MemoryAccessMode::SYMBOLIC)) {
+    // early exit: range is fully symbolic
     return orgLoad.get();
   }
 
@@ -81,6 +81,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
   // bool contiguous = true;
   SmallVector<ValueByteReferenceRange, 64>
       values; // we can just create an array here
+  auto lastAccessMode = memoryPolicy.getAccessMode(startAddress);
   for (uint8_t i = 0; i < byteCount; ++i) {
     uint64_t currentAddress = startAddress + i;
 
@@ -96,19 +97,28 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     bool isEmpty = values.empty();
     bool isContained = buffer.contains(currentAddress);
     bool isLastReference = !isEmpty && values.back().isRef;
-    // push if
-    if (isEmpty || (isContained && isLastReference &&
-                    isDifferentReferenceOrDiscontinuousOffset(
-                        values.back(), currentAddress))) {
-      if (buffer.contains(currentAddress)) {
+    // this needs serious refactoring
+    auto currentAccessMode = memoryPolicy.getAccessMode(currentAddress);
+    printvalue2(magic_enum::enum_name(currentAccessMode));
+    printvalue2(magic_enum::enum_name(lastAccessMode));
+    printvalue2(currentAddress);
+
+    if (isEmpty ||
+        (isLastReference && isDifferentReferenceOrDiscontinuousOffset(
+                                values.back(), currentAddress) ||
+         currentAccessMode != lastAccessMode)) {
+      if (buffer.contains(currentAddress) &&
+          currentAccessMode != MemoryAccessMode::SYMBOLIC) {
         values.push_back(
             ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
       } else {
+        printvalue2(currentAddress);
         values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
       }
     } else {
       ++values.back().end;
     }
+    lastAccessMode = memoryPolicy.getAccessMode(startAddress);
   }
 
   Value* result = ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
@@ -120,10 +130,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
 
     uint64_t mem_value;
     printvalue2(v.isRef);
+
     auto read_mem = file.readMemory(v.memoryAddress, bytesize, mem_value);
     printvalue2(read_mem);
     printvalue2(mem_value);
-    if (v.isRef) {
+    if (!v.isRef && memoryPolicy.isSymbolic(v.memoryAddress)) {
+      byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+    } else if (v.isRef) {
       byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
                                v.ref.byteOffset + bytesize);
     } else if (!v.isRef &&
@@ -131,11 +144,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
 
       byteValue = builder->getIntN(bytesize * 8, mem_value);
     } else if (!v.isRef) {
-      // there has been no stores in this region and its not safe to concretize.
 
-      // concretize the read into a constant anyways
-      // byteValue = ConstantInt::get(Type::getIntNTy(context, (bytesize) * 8),
-      // 0); // do not concretize
       byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
     }
     if (byteValue) {
