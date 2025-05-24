@@ -172,9 +172,8 @@ class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
   Value* mem = nullptr;
   x86_64FileReader file;
-  MemoryPolicy mempolicy;
-  GEPLoadPass(Value* val, uint8_t* filebase) : mem(val), file(filebase){};
-  GEPLoadPass(Value* val, uint8_t* filebase, MemoryPolicy mempolicy)
+  MemoryPolicy<> mempolicy;
+  GEPLoadPass(Value* val, uint8_t* filebase, MemoryPolicy<> mempolicy)
       : mem(val), file(filebase), mempolicy(mempolicy){};
 
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
@@ -195,6 +194,7 @@ public:
                       file.address_to_mapped_address(constintvalue)) {
                 for (auto* User : GEP->users()) {
                   if (auto* LoadInst = llvm::dyn_cast<llvm::LoadInst>(User)) {
+                    // todo check if bytes are concrete/symbolic
                     llvm::Type* loadType = LoadInst->getType();
                     unsigned byteSize = loadType->getIntegerBitWidth() / 8;
                     uint64_t tempvalue;

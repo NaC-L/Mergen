@@ -47,7 +47,7 @@ PATH_info getConstraintVal(llvm::Function* function, Value* constraint,
 // not pathsolver, & probably put this in lifter class, & we would utilize
 // templates since geploadpass
 void final_optpass(llvm::Function* clonedFuncx, Value* mem, uint8_t* filebase,
-                   MemoryPolicy memoryPolicy) {
+                   MemoryPolicy<> memoryPolicy) {
   llvm::PassBuilder passBuilder;
 
   llvm::LoopAnalysisManager loopAnalysisManager;
