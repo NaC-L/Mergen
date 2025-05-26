@@ -172,8 +172,8 @@ class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
   Value* mem = nullptr;
   x86_64FileReader file;
-  MemoryPolicy<> mempolicy;
-  GEPLoadPass(Value* val, uint8_t* filebase, MemoryPolicy<> mempolicy)
+  MemoryPolicy mempolicy;
+  GEPLoadPass(Value* val, uint8_t* filebase, MemoryPolicy mempolicy)
       : mem(val), file(filebase), mempolicy(mempolicy){};
 
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
