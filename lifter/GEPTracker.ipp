@@ -95,7 +95,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
         };
 
     bool isEmpty = values.empty();
-    bool isContained = buffer.contains(currentAddress);
     bool isLastReference = !isEmpty && values.back().isRef;
     // this needs serious refactoring
     auto currentAccessMode = memoryPolicy.getAccessMode(currentAddress);

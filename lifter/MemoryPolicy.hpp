@@ -153,7 +153,6 @@ public:
     while (cursor <= end) {
       // 2 - if we're out of ranges, rely on default mode
       if (it == this->range.end() || it->start > cursor) {
-        uint64_t gapStart = cursor;
         uint64_t gapEnd =
             (it != this->range.end()) ? std::min(end, it->start - 1) : end;
 
