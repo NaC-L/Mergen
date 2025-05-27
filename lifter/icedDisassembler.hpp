@@ -4239,7 +4239,7 @@ namespace Mergen {
           };
 
       // printvalueforce2(obj.text);
-      bool secondimm = false;
+
       for (int i = 0; i < 4; i++) {
 
         // converted in rust part

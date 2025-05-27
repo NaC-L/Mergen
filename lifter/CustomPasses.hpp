@@ -36,7 +36,6 @@ public:
     fileStream << "digraph \"" << M.getName().str() << "\" {\n";
 
     std::map<const BasicBlock*, std::string> bbNames;
-    int bbCount = 0;
 
     for (const auto& F : M) {
       for (const BasicBlock& BB : F) {

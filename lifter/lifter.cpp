@@ -43,7 +43,7 @@ arch_mode is64Bit;
 
 void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
 
-  auto data = fileData.data();
+  // auto data = fileData.data();
 
   auto lifter = lifters.back();
   BBInfo bbinfo;
