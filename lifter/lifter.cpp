@@ -5,13 +5,9 @@
 #define MAGIC_ENUM_RANGE_MIN -1000
 #define MAGIC_ENUM_RANGE_MAX 1000
 
-#include "CommonMnemonics.h"
-#include "CommonRegisters.h"
 #include "FunctionSignatures.hpp"
-#include "GEPTracker.h"
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
-#include "icedDisassembler.hpp"
 #include "includes.h"
 #include "lifterClass.hpp"
 #include "nt/nt_headers.hpp"
@@ -33,7 +29,7 @@
 #include "Semantics.ipp"
 
 // #define TEST
-std::vector<lifterClass<>*> lifters;
+
 uint64_t original_address = 0;
 unsigned int pathNo = 0;
 // consider having this function in a class, later we can use multi-threading to
@@ -41,19 +37,21 @@ unsigned int pathNo = 0;
 unsigned int breaking = 0;
 arch_mode is64Bit;
 
-void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
+void asm_to_zydis_to_lift(lifterClass<>* lifter,
+                          std::vector<uint8_t>& fileData) {
 
   // auto data = fileData.data();
 
-  auto lifter = lifters.back();
   BBInfo bbinfo;
 
   while (lifter->getUnvisitedAddr(bbinfo)) {
+
     lifter->load_backup(bbinfo.block);
     lifter->finished = 0;
     auto next_bb_name = bbinfo.block->getName();
     printvalue2(next_bb_name);
     lifter->builder->SetInsertPoint(bbinfo.block);
+
     lifter->liftBasicBlockFromAddress(bbinfo.block_address);
   }
 }
@@ -119,6 +117,14 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
                                   MemoryAccessMode::CONCRETE);
     }
   }
+  main->memoryPolicy.addRange(STACKP_VALUE - 0x1000, STACKP_VALUE + 0x1000,
+                              MemoryAccessMode::CONCRETE);
+  /*   auto addr = 5369843712;
+    main->memoryPolicy.addRange(addr + 2, addr + 0x4,
+    MemoryAccessMode::SYMBOLIC);
+
+    main->memoryPolicy.addRange(addr, addr + 0x1, MemoryAccessMode::CONCRETE);
+  */
 
   // main->InitRegisters(function, runtime_address);
   main->blockInfo = BBInfo(runtime_address, bb);
@@ -132,7 +138,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
     UNREACHABLE("Only PE files are supported");
   }
 
-  auto IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
+  // auto IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
   auto IMAGE_NT_OPTIONAL_HDR64_MAGIC = 0x20b;
 
   auto ntHeaders = (win::nt_headers_t<true>*)(fileBase + dosHeader->e_lfanew);
@@ -178,7 +184,6 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   };
 
   original_address = processHeaders(fileBase + dosHeader->e_lfanew);
-
   main->signatures.search_signatures(fileData);
   main->signatures.createOffsetMap(); // ?
   for (const auto& [key, value] : main->signatures.siglookup) {
@@ -189,14 +194,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   std::cout << "\n" << std::dec << ms << " milliseconds has past" << std::endl;
 
   // main->liftBasicBlockFromAddress(0x1400011C7);
-  // main->writeFunctionToFile("test.ll");
-  // printvalue2("liftbasicBLOCk");
-
-  // blockAddresses->push_back(make_tuple(runtime_address, bb,
-  // RegisterList));
-  lifters.push_back(main);
-
-  asm_to_zydis_to_lift(fileData);
+  asm_to_zydis_to_lift(main, fileData);
 
   ms = timer::getTimer();
 
