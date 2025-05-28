@@ -5,6 +5,7 @@
 #include <array>
 #include <assert.h>
 #include <concepts>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
 #include <vector>
 
@@ -146,26 +147,20 @@ public:
   std::array<llvm::Value*, REGISTER_COUNT> vec;
   std::array<llvm::Value*, FLAGS_END> vecflag;
 
-  RegisterManagerConcolic() { printvalue2("create"); }
+  // llvm::IRBuilder<>& irb;
+  // RegisterManagerConcolic(llvm::IRBuilder<>& builder) : irb(builder) {}
+
+  RegisterManagerConcolic() {}
   RegisterManagerConcolic(RegisterManagerConcolic& other)
-      : vec(other.vec), vecflag(other.vecflag) {
-    printvalue2("copy");
-  }
+      : vec(other.vec), vecflag(other.vecflag) {}
   RegisterManagerConcolic(RegisterManagerConcolic&& other)
-      : vec(other.vec), vecflag(other.vecflag) {
-    printvalue2("move");
-  }
+      : vec(other.vec), vecflag(other.vecflag) {}
   RegisterManagerConcolic(const RegisterManagerConcolic& other)
-      : vec(other.vec), vecflag(other.vecflag) {
-    printvalue2("const copy");
-  }
+      : vec(other.vec), vecflag(other.vecflag) {}
   RegisterManagerConcolic(const RegisterManagerConcolic&& other)
-      : vec(other.vec), vecflag(other.vecflag) {
-    printvalue2("const move?");
-  }
+      : vec(other.vec), vecflag(other.vecflag) {}
 
   RegisterManagerConcolic& operator=(const RegisterManagerConcolic& other) {
-    printvalue2("assign");
     vec = other.vec;
     vecflag = other.vecflag;
     return *this;
