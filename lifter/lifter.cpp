@@ -193,7 +193,6 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   auto ms = timer::getTimer();
   std::cout << "\n" << std::dec << ms << " milliseconds has past" << std::endl;
 
-  // main->liftBasicBlockFromAddress(0x1400011C7);
   asm_to_zydis_to_lift(main, fileData);
 
   ms = timer::getTimer();
