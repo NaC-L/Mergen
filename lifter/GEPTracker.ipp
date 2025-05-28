@@ -104,8 +104,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
 
     if (isEmpty ||
         (isLastReference && isDifferentReferenceOrDiscontinuousOffset(
-                                values.back(), currentAddress) ||
-         currentAccessMode != lastAccessMode)) {
+                                values.back(), currentAddress)) ||
+        currentAccessMode != lastAccessMode) {
       if (buffer.contains(currentAddress) &&
           currentAccessMode != MemoryAccessMode::SYMBOLIC) {
         values.push_back(
