@@ -4,6 +4,7 @@
 #include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
 #include "PathSolver.h"
+#include "RegisterManager.hpp"
 #include "ZydisDisassembler.hpp"
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
@@ -19,7 +20,9 @@
 #include <llvm/Analysis/SimplifyQuery.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LLVMContext.h>
 #include <llvm/Support/KnownBits.h>
+#include <memory>
 #include <set>
 #include <utility>
 
@@ -95,68 +98,6 @@ class floatingPointValue {
 public:
   Value* v1;
   Value* v2;
-};
-
-template <Registers Register> class RegisterManager {
-public:
-  enum RegisterIndex {
-    RAX_ = 0,
-    RCX_ = 1,
-    RDX_ = 2,
-    RBX_ = 3,
-    RSP_ = 4,
-    RBP_ = 5,
-    RSI_ = 6,
-    RDI_ = 7,
-    R8_ = 8,
-    R9_ = 9,
-    R10_ = 10,
-    R11_ = 11,
-    R12_ = 12,
-    R13_ = 13,
-    R14_ = 14,
-    R15_ = 15,
-    RIP_ = 16,
-    RFLAGS_ = 17,
-    REGISTER_COUNT = RFLAGS_ // Total number of registers
-  };
-  std::array<Value*, REGISTER_COUNT> vec;
-
-  RegisterManager() {}
-  RegisterManager(const RegisterManager& other) : vec(other.vec) {}
-
-  // Overload the [] operator for getting register values
-
-  int getRegisterIndex(Register key) const {
-
-    switch (key) {
-    case Register::RIP: {
-      return RIP_;
-    }
-    case Register::RFLAGS: {
-      return RFLAGS_;
-    }
-    default: {
-      // For ordered registers RAX to R15, map directly by offset from RAX
-
-      /*
-      if (!(key >= Register::RAX && key <= Register::R15)) {
-        printvalueforce2("debug this"); // debug this branch l8r
-      }
-      */
-      assert(((key >= Register::RAX && key <= Register::R15) ||
-              key == Register::EIP || key == Register::RIP) &&
-             "Key must be between RAX and R15");
-
-      return (static_cast<int>(key) - static_cast<int>(Register::RAX));
-    }
-    }
-  }
-
-  llvm::Value*& operator[](Register key) {
-    int index = getRegisterIndex(key);
-    return vec[index];
-  }
 };
 
 /*
@@ -252,7 +193,7 @@ public:
   LazyValue() : value(nullptr) {}
   LazyValue(llvm::Value* val) : value(val) {}
   LazyValue(std::function<llvm::Value*()> calc)
-      : computeFunc(calc), value(std::nullopt) {}
+      : value(std::nullopt), computeFunc(calc) {}
 
   // get value, calculate if doesnt exist
   llvm::Value* get() const {
@@ -315,6 +256,7 @@ public:
   Disassembler dis;
   MemoryPolicy memoryPolicy;
   void runDisassembler(void* buffer, size_t size = 15) {
+
     instruction = dis.disassemble(buffer, size);
   }
 
@@ -339,6 +281,7 @@ public:
 
   // also lifts single inst
   void liftAddress(uint64_t addr, size_t size = 15) {
+
     file.filebase_exists();
 
     this->current_address = addr;
@@ -346,7 +289,9 @@ public:
     // what about the basicblock?
     printvalue2(offset);
     printvalue2(*(uint8_t*)offset);
+
     runDisassembler((void*)offset, size);
+
     const auto ct = (llvm::format_hex_no_prefix(this->counter, 0));
     const auto runtime_address =
         (llvm::format_hex_no_prefix(this->current_address, 0));
@@ -355,8 +300,10 @@ public:
 #ifndef _NODEV
     debugging::doIfDebug([&]() { printvalue2(this->instruction.text); });
 #endif
+
     // also pass the file to address_to_mapped_address?
     this->current_address += instruction.length;
+
     liftInstruction();
     this->counter++;
   };
@@ -368,7 +315,7 @@ public:
   // refactor: put these stuff in a class (?) so we can properly have a fully
   // symbolized version
   struct backup_point {
-    RegisterManager<Register> regs;
+    RegisterManagerConcolic<Register> regs;
     llvm::DenseMap<uint64_t, ValueByteReference> buffer;
 
     bool operator==(const backup_point& other) const {
@@ -384,7 +331,7 @@ public:
     backup_point(backup_point&& other)
         : regs(other.regs), buffer(other.buffer){};
 
-    backup_point(RegisterManager<Register> registers,
+    backup_point(RegisterManagerConcolic<Register> registers,
                  llvm::DenseMap<uint64_t, ValueByteReference> map)
         : regs(registers), buffer(map){};
 
@@ -438,7 +385,7 @@ public:
   // llvm::DenseMap<Value*, flagManager> flagbuffer;
 
   flagManager FlagList;
-  RegisterManager<Register> Registers;
+  RegisterManagerConcolic<Register> Registers;
   // RegisterManagerFP RegistersFP;
 
   llvm::DomConditionCache* DC = new llvm::DomConditionCache();
@@ -500,15 +447,14 @@ public:
   std::vector<BBInfo> visitedBlocks;
 
   // global
+  llvm::LLVMContext context;
   llvm::Value* memoryAlloc;
   llvm::Function* fnc;
   llvm::Module* M;
 
   lifterClass() {
-
-    llvm::LLVMContext context;
     std::string mod_name = "lifter_module_default";
-    llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
+    M = new llvm::Module(mod_name.c_str(), context);
 
     std::vector<llvm::Type*> argTypes;
     argTypes.push_back(llvm::Type::getInt64Ty(context));
@@ -534,14 +480,16 @@ public:
         llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
 
     const std::string function_name = "main";
-    auto function =
-        llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
-                               function_name.c_str(), lifting_module);
-    const std::string block_name = "entry";
-    auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
+    fnc = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
+                                 function_name.c_str(), M);
 
-    llvm::InstSimplifyFolder Folder(lifting_module.getDataLayout());
-    auto irbuilder = llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
+    const std::string block_name = "entry";
+    auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), fnc);
+
+    llvm::InstSimplifyFolder Folder(M->getDataLayout());
+    builder =
+        std::make_unique<llvm::IRBuilder<llvm::InstSimplifyFolder>>(bb, Folder);
+
     InitRegisters(builder->GetInsertBlock()->getParent(), 1000);
   };
 
@@ -655,6 +603,14 @@ public:
     default:
       UNREACHABLE("invalid acc");
     }
+  }
+
+  llvm::Value* createLoad(llvm::Value* ptr) {
+    //
+    return nullptr;
+  }
+  void createStore(llvm::Value* ptr, llvm::Value* val) {
+    //
   }
 
   llvm::Value* GetIndexValue(uint8_t index);
