@@ -1553,52 +1553,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getFlag(const Flag flag) {
   return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
 }
 
-MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::InitRegisters(Function* function,
-                                                        const uint64_t rip) {
-
-  // static_cast<Derived*>(this)->InitRegisters_impl();
-
-  // rsp
-  // rsp_unaligned = %rsp % 16
-  // rsp_aligned_to16 = rsp - rsp_unaligned
-  auto reg = Register::RAX;
-  auto argEnd = function->arg_end();
-  for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
-
-    Argument* arg = &*argIt;
-    arg->setName(magic_enum::enum_name(reg));
-
-    if (std::next(argIt) == argEnd) {
-      arg->setName("memory");
-      memoryAlloc = arg;
-    } else {
-      // arg->setName(ZydisRegisterGetString(zydisRegister));
-      printvalue2(magic_enum::enum_name(reg));
-      printvalue(arg);
-      SetRegisterValue(reg, arg);
-      reg = static_cast<Register>(static_cast<int>(reg) + 1);
-    }
-  }
-  printvalue(GetRegisterValue(Register::RAX));
-  Init_Flags();
-  LLVMContext& context = builder->getContext();
-  const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
-
-  auto value =
-      cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
-
-  auto new_rip = createAddFolder(zero, value);
-
-  SetRegisterValue(Register::RIP, new_rip);
-
-  auto stackvalue = cast<Value>(
-      ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));
-  auto new_stack_pointer = createAddFolder(stackvalue, zero);
-
-  SetRegisterValue(Register::RSP, new_stack_pointer);
-  return;
-}
-
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetValueFromHighByteRegister(
     const Register reg) {
 

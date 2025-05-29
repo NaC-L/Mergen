@@ -484,13 +484,10 @@ public:
   llvm::Value* memoryAlloc;
   llvm::Function* fnc;
   llvm::Module* M;
+  llvm::BasicBlock* bb;
 
-  lifterClassBase() {
-    static_assert(lifterConcept<Derived, Register>,
-                  "Derived should satisfy lifterConcept");
-    std::string mod_name = "lifter_module_default";
-    M = new llvm::Module(mod_name.c_str(), context);
-
+private:
+  void createFunction() {
     std::vector<llvm::Type*> argTypes;
     argTypes.push_back(llvm::Type::getInt64Ty(context));
     argTypes.push_back(llvm::Type::getInt64Ty(context));
@@ -517,11 +514,65 @@ public:
     const std::string function_name = "main";
     fnc = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
                                  function_name.c_str(), M);
+  }
 
-    const std::string block_name = "entry";
-    auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), fnc);
+  void InitRegisters(Function* function, const uint64_t rip) {
+
+    // static_cast<Derived*>(this)->InitRegisters_impl();
+
+    // rsp
+    // rsp_unaligned = %rsp % 16
+    // rsp_aligned_to16 = rsp - rsp_unaligned
+    auto reg = Register::RAX;
+    auto argEnd = function->arg_end();
+    for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
+
+      Argument* arg = &*argIt;
+      arg->setName(magic_enum::enum_name(reg));
+
+      if (std::next(argIt) == argEnd) {
+        arg->setName("memory");
+        memoryAlloc = arg;
+      } else {
+        // arg->setName(ZydisRegisterGetString(zydisRegister));
+        printvalue2(magic_enum::enum_name(reg));
+        printvalue(arg);
+        SetRegisterValue(reg, arg);
+        reg = static_cast<Register>(static_cast<int>(reg) + 1);
+      }
+    }
+    printvalue(GetRegisterValue(Register::RAX));
+    Init_Flags();
+    LLVMContext& context = builder->getContext();
+    const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
+
+    auto value =
+        cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
+
+    auto new_rip = createAddFolder(zero, value);
+
+    SetRegisterValue(Register::RIP, new_rip);
+
+    auto stackvalue = cast<Value>(
+        ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));
+    auto new_stack_pointer = createAddFolder(stackvalue, zero);
+
+    SetRegisterValue(Register::RSP, new_stack_pointer);
+
+    return;
+  }
+
+public:
+  lifterClassBase() {
+    static_assert(lifterConcept<Derived, Register>,
+                  "Derived should satisfy lifterConcept");
+    M = new llvm::Module("lifter_module", context);
+    createFunction();
+
+    bb = llvm::BasicBlock::Create(context, "entry", fnc);
 
     llvm::InstSimplifyFolder Folder(M->getDataLayout());
+
     builder =
         std::make_unique<llvm::IRBuilder<llvm::InstSimplifyFolder>>(bb, Folder);
 
@@ -579,7 +630,6 @@ public:
   void setFlag(const Flag flag, std::function<llvm::Value*()> calculation);
   LazyValue getLazyFlag(const Flag flag);
   llvm::Value* getFlag(const Flag flag);
-  void InitRegisters(llvm::Function* function, uint64_t rip);
   llvm::Value* GetValueFromHighByteRegister(Register reg);
   llvm::Value* GetRegisterValueWrapper(const Register key);
 

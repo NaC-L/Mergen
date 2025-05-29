@@ -58,43 +58,6 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
                                        std::vector<uint8_t> fileData) {
 
   auto fileBase = fileData.data();
-  llvm::LLVMContext context;
-  std::string mod_name = "my_lifting_module";
-  llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
-
-  std::vector<llvm::Type*> argTypes;
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::PointerType::get(context, 0));
-  argTypes.push_back(llvm::PointerType::get(context, 0)); // temp fix TEB
-
-  auto functionType =
-      llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
-
-  const std::string function_name = "main";
-  auto function =
-      llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
-                             function_name.c_str(), lifting_module);
-  const std::string block_name = "entry";
-  auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
-
-  llvm::InstSimplifyFolder Folder(lifting_module.getDataLayout());
-  llvm::IRBuilder<llvm::InstSimplifyFolder> builder =
-      llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
 
   auto main = new lifterConcolic();
   main->loadFile(fileBase);
@@ -129,12 +92,10 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
     main->memoryPolicy.addRange(addr, addr + 0x1, MemoryAccessMode::CONCRETE);
   */
+  main->blockInfo = BBInfo(runtime_address, main->bb);
+  main->unvisitedBlocks.push_back(main->blockInfo);
 
   // main->InitRegisters(function, runtime_address);
-  main->blockInfo = BBInfo(runtime_address, bb);
-  main->unvisitedBlocks.push_back(main->blockInfo);
-  main->fnc = function;
-  main->initDomTree(*function);
 
   x86FileReader file(fileBase);
   auto dosHeader = (win::dos_header_t*)fileBase;
@@ -209,14 +170,13 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
 
-  final_optpass(function, function->getArg(17), fileData.data(),
+  final_optpass(main->fnc, main->fnc->getArg(17), fileData.data(),
                 main->memoryPolicy);
   const std::string Filename = "output.ll";
   std::error_code EC;
   llvm::raw_fd_ostream OS(Filename, EC);
 
-  lifting_module.print(OS, nullptr);
-  delete main;
+  main->writeFunctionToFile("output.ll");
   return;
 }
 
