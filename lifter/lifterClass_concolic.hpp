@@ -90,7 +90,8 @@ public:
     vec[keyindex] = val;
   }
 
-  void init_impl(std::vector<std::pair<Register, llvm::Value*>> values) {
+  void init_impl(
+      std::array<std::pair<Register, llvm::Value*>, REGISTER_COUNT> values) {
     for (auto& [reg, val] : values) {
       int index = getRegisterIndex(reg);
       vec[index] = val;
@@ -104,7 +105,8 @@ public:
   void set_flag_impl(Flag key, llvm::Value* val) {
     vecflag[static_cast<uint8_t>(key)] = val;
   }
-  void init_flag_impl(std::vector<std::pair<Flag, llvm::Value*>> values) {
+  void
+  init_flag_impl(std::array<std::pair<Flag, llvm::Value*>, FLAGS_END> values) {
     for (auto& [reg, val] : values) {
       vec[static_cast<uint8_t>(reg)] = val;
     }
@@ -151,6 +153,7 @@ public:
     backup_point(const backup_point&) = default;
     backup_point(const backup_point&&) noexcept = default;
     backup_point& operator=(const backup_point&) = default;
+    backup_point& operator=(backup_point&&) noexcept = default;
   };
 
   llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
