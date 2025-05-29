@@ -3,9 +3,8 @@
 #include "PathSolver.h"
 #include "lifterClass.hpp"
 #include <llvm/IR/Function.h>
-#include <llvm/IR/Value.h>
 #include <llvm/IR/Module.h>
-
+#include <llvm/IR/Value.h>
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
@@ -119,9 +118,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     // this->blockInfo = newblock;
     printvalue(condition);
-    this->assumptions[cast<Instruction>(condition)] = 1;
-
-    assumptions[cast<Instruction>(condition)] = 0;
 
     // lifters.push_back(newlifter);
 
@@ -129,7 +125,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     unvisitedBlocks.push_back(blockInfo);
     unvisitedBlocks.push_back(newblock);
 
+    // fix this later, is ugly
+    assumptions[cast<Instruction>(condition)] = 0;
     branch_backup(blockInfo.block);
+
+    this->assumptions[cast<Instruction>(condition)] = 1;
     branch_backup(newblock.block);
 
     debugging::doIfDebug([&]() {

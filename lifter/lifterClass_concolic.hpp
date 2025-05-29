@@ -120,40 +120,60 @@ public:
     std::array<llvm::Value*, REGISTER_COUNT> vec;
     std::array<llvm::Value*, FLAGS_END> vecflag;
     llvm::DenseMap<uint64_t, ValueByteReference> buffer;
+    InstructionCache cache;
+    llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
+    uint64_t ct;
 
     bool operator==(const backup_point& other) const {
       if (buffer != other.buffer)
         return false;
       return vec == other.vec && vecflag == other.vecflag;
     }
-    backup_point(){};
 
     backup_point(backup_point& other)
-        : vec(other.vec), vecflag(other.vecflag), buffer(other.buffer){};
+        : vec(other.vec), vecflag(other.vecflag), buffer(other.buffer),
+          cache(other.cache), assumptions(other.assumptions), ct(other.ct){};
 
-    backup_point(backup_point&& other)
-        : vec(other.vec), vecflag(other.vecflag), buffer(other.buffer){};
+    backup_point(backup_point&& other) noexcept
+        : vec(std::move(other.vec)), vecflag(std::move(other.vecflag)),
+          buffer(std::move(other.buffer)), cache(std::move(other.cache)),
+          assumptions(other.assumptions), ct(other.ct) {}
 
     backup_point(std::array<llvm::Value*, REGISTER_COUNT> vec,
                  std::array<llvm::Value*, FLAGS_END> vecflag,
-                 llvm::DenseMap<uint64_t, ValueByteReference> buffer)
-        : vec(vec), vecflag(vecflag), buffer(buffer){};
-
+                 llvm::DenseMap<uint64_t, ValueByteReference> buffer,
+                 InstructionCache cc,
+                 llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions,
+                 uint64_t ct)
+        : vec(vec), vecflag(vecflag), buffer(buffer), cache(cc),
+          assumptions(assumptions), ct(ct){};
+    backup_point() = default;
+    backup_point(const backup_point&) = default;
+    backup_point(const backup_point&&) noexcept = default;
     backup_point& operator=(const backup_point&) = default;
   };
 
   llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
   void branch_backup_impl(BasicBlock* bb) {
     //
-    BBbackup[bb] = backup_point(vec, vecflag, this->buffer);
+
+    printvalue2("backing up");
+    printvalue2(this->counter);
+    BBbackup[bb] = backup_point(vec, vecflag, this->buffer, this->cache,
+                                this->assumptions, this->counter);
   }
 
   void load_backup_impl(BasicBlock* bb) {
     if (BBbackup.contains(bb)) {
+
+      printvalue2("loading backup");
       backup_point bbinfo = BBbackup[bb];
       vec = bbinfo.vec;
       vecflag = bbinfo.vecflag;
       this->buffer = bbinfo.buffer;
+      this->cache = bbinfo.cache;
+      this->assumptions = bbinfo.assumptions;
+      this->counter = bbinfo.ct;
     }
   }
 };
