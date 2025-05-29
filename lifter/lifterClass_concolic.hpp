@@ -1,3 +1,5 @@
+#ifndef LIFTERCLASS_CONCRETE_H
+#define LIFTERCLASS_CONCRETE_H
 #include "CommonDisassembler.hpp"
 #include "icedDisassembler.hpp"
 #include "icedDisassembler_mnemonics.h"
@@ -155,3 +157,4 @@ public:
     }
   }
 };
+#endif
