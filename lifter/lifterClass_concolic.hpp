@@ -16,7 +16,7 @@ template <
 #else
 
     Registers Register = Mergen::ZydisRegister,
-    Mnemonics Mnemonic = Mergen::ZydisMnemonics,
+    Mnemonics Mnemonic = Mergen::ZydisMnemonic,
     template <typename, typename> class DisassemblerBase =
         Mergen::ZydisDisassembler
 #endif
