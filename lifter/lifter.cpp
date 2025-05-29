@@ -1,11 +1,9 @@
 #include "MemoryPolicy.hpp"
 #include "fileReader.hpp"
-#include "icedDisassembler_registers.h"
 
 #define MAGIC_ENUM_RANGE_MIN -1000
 #define MAGIC_ENUM_RANGE_MAX 1000
 
-#include "FunctionSignatures.hpp"
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
 #include "includes.h"
@@ -13,6 +11,8 @@
 #include "nt/nt_headers.hpp"
 
 // #include "test_instructions.h"
+#include "Semantics.ipp"
+#include "lifterClass_concolic.hpp"
 #include "utils.h"
 #include <coff/line_number.hpp>
 #include <cstdint>
@@ -26,8 +26,6 @@
 #include <llvm/Support/NativeFormatting.h>
 #include <magic_enum/magic_enum.hpp>
 
-#include "Semantics.ipp"
-
 // #define TEST
 
 uint64_t original_address = 0;
@@ -37,7 +35,7 @@ unsigned int pathNo = 0;
 unsigned int breaking = 0;
 arch_mode is64Bit;
 
-void asm_to_zydis_to_lift(lifterClass<>* lifter,
+void asm_to_zydis_to_lift(lifterConcolic<>* lifter,
                           std::vector<uint8_t>& fileData) {
 
   // auto data = fileData.data();
@@ -98,19 +96,25 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   llvm::IRBuilder<llvm::InstSimplifyFolder> builder =
       llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
 
-  auto main = new lifterClass(&builder, fileBase);
-
+  auto main = new lifterConcolic();
+  main->loadFile(fileBase);
   // configure memory policy - debug for now
 
   main->memoryPolicy.setDefaultMode(MemoryAccessMode::SYMBOLIC);
 
   for (auto& it : main->file.sections_v) {
     if (it.characteristics.mem_write) {
+      // printvalue2(main->file.imageBase + it.virtual_address);
+      // printvalue2(main->file.imageBase + it.virtual_address +
+      // it.virtual_size); printvalue2("symbolic");
       main->memoryPolicy.addRange(main->file.imageBase + it.virtual_address,
                                   main->file.imageBase + it.virtual_address +
                                       it.virtual_size,
                                   MemoryAccessMode::SYMBOLIC);
     } else {
+      // printvalue2(main->file.imageBase + it.virtual_address);
+      // printvalue2(main->file.imageBase + it.virtual_address +
+      // it.virtual_size); printvalue2("concrete");
       main->memoryPolicy.addRange(main->file.imageBase + it.virtual_address,
                                   main->file.imageBase + it.virtual_address +
                                       it.virtual_size,
@@ -131,7 +135,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   main->unvisitedBlocks.push_back(main->blockInfo);
   main->fnc = function;
   main->initDomTree(*function);
-  main->loadFile(fileBase);
+
   x86FileReader file(fileBase);
   auto dosHeader = (win::dos_header_t*)fileBase;
   if (*(unsigned short*)fileBase != 0x5a4d) {
@@ -212,7 +216,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   llvm::raw_fd_ostream OS(Filename, EC);
 
   lifting_module.print(OS, nullptr);
-
+  delete main;
   return;
 }
 

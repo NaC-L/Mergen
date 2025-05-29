@@ -61,46 +61,46 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(std::vector<Value*>)::parseArgs(
     funcsignatures<Register>::functioninfo* funcInfo) {
   auto& context = builder->getContext();
 
-  auto RspRegister = GetRegisterValue(Register::RSP);
+  auto RspRegister = GetRegisterValueWrapper(Register::RSP);
   if (!funcInfo)
-    return {createZExtFolder(GetRegisterValue(Register::RAX),
+    return {createZExtFolder(GetRegisterValueWrapper(Register::RAX),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RCX),
+            createZExtFolder(GetRegisterValueWrapper(Register::RCX),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RDX),
+            createZExtFolder(GetRegisterValueWrapper(Register::RDX),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RBX),
+            createZExtFolder(GetRegisterValueWrapper(Register::RBX),
                              Type::getInt64Ty(context)),
             RspRegister,
-            createZExtFolder(GetRegisterValue(Register::RBP),
+            createZExtFolder(GetRegisterValueWrapper(Register::RBP),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RSI),
+            createZExtFolder(GetRegisterValueWrapper(Register::RSI),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RDI),
+            createZExtFolder(GetRegisterValueWrapper(Register::RDI),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RDI),
+            createZExtFolder(GetRegisterValueWrapper(Register::RDI),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R8),
+            createZExtFolder(GetRegisterValueWrapper(Register::R8),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R9),
+            createZExtFolder(GetRegisterValueWrapper(Register::R9),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R10),
+            createZExtFolder(GetRegisterValueWrapper(Register::R10),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R11),
+            createZExtFolder(GetRegisterValueWrapper(Register::R11),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R12),
+            createZExtFolder(GetRegisterValueWrapper(Register::R12),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R13),
+            createZExtFolder(GetRegisterValueWrapper(Register::R13),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R14),
+            createZExtFolder(GetRegisterValueWrapper(Register::R14),
                              Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R15),
+            createZExtFolder(GetRegisterValueWrapper(Register::R15),
                              Type::getInt64Ty(context)),
             memoryAlloc};
 
   std::vector<Value*> args;
   for (const auto& arg : funcInfo->args) {
-    Value* argValue = GetRegisterValue(arg.reg);
+    Value* argValue = GetRegisterValueWrapper(arg.reg);
     argValue = createZExtOrTruncFolder(
         argValue, Type::getIntNTy(context, 8 << (arg.argtype.size - 1)));
     if (arg.argtype.isPtr)
@@ -326,10 +326,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
   }
   // [e/rsi] = [e/rdi]
 
-  auto sourceReg = GetRegisterValue(Register::RSI);
+  auto sourceReg = GetRegisterValueWrapper(Register::RSI);
   auto sourceVal = GetMemoryValue(sourceReg, byteSizeValue);
 
-  auto destReg = GetRegisterValue(Register::RDI);
+  auto destReg = GetRegisterValueWrapper(Register::RDI);
 
   Value* DF = getFlag(FLAG_DF);
 
@@ -344,7 +344,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
 
   printvalue2(magic_enum::enum_name(instruction.attributes));
   if (instruction.attributes == InstructionPrefix::Rep) {
-    auto sizeReg = GetRegisterValue(Register::RCX);
+    auto sizeReg = GetRegisterValueWrapper(Register::RCX);
 
     // currently it should memcpy properly even if direction is -, but it
     // should work with current impl, but fix it later
@@ -640,7 +640,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   auto rsp = operands[2];        // value that we are pushing
   auto rsp_memory = operands[3]; // value that we are pushing
   */
-  auto RspValue = GetRegisterValue(Register::RSP);
+  auto RspValue = GetRegisterValueWrapper(Register::RSP);
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
                                     file.getMode() == arch_mode::X64 ? 8 : 4);
@@ -700,7 +700,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   SetRegisterValue(Register::RSP, result);
   // sub rsp 8 last,
 
-  auto push_into_rsp = GetRegisterValue(Register::RIP);
+  auto push_into_rsp = GetRegisterValueWrapper(Register::RIP);
 
   SetMemoryValue(getSPaddress(), push_into_rsp);
   // sub rsp 8 last,
@@ -735,7 +735,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   // [2] = rsp
   // [3] = [rsp]
 
-  auto rspvalue = GetRegisterValue(Register::RSP);
+  auto rspvalue = GetRegisterValueWrapper(Register::RSP);
 
   // IMPORTANT, change logic
   auto realval = GetMemoryValue(getSPaddress(), 64); // todo : based on bitness
@@ -769,7 +769,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     // lastinst->eraseFromParent();
     block->setName("real_return-" + std::to_string(current_address) + "-");
 
-    auto rax = GetRegisterValue(Register::RAX);
+    auto rax = GetRegisterValueWrapper(Register::RAX);
     rax = createZExtFolder(
         rax, builder->getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
     // put this in a function
@@ -797,35 +797,35 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     // Use CreateInsertValue for structs
     auto returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::RCX), {1});
+        returnvalue, GetRegisterValueWrapper(Register::RCX), {1});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::RDX), {2});
+        returnvalue, GetRegisterValueWrapper(Register::RDX), {2});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::RBX), {3});
+        returnvalue, GetRegisterValueWrapper(Register::RBX), {3});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::RSP), {4});
+        returnvalue, GetRegisterValueWrapper(Register::RSP), {4});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::RBP), {5});
+        returnvalue, GetRegisterValueWrapper(Register::RBP), {5});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::RSI), {6});
+        returnvalue, GetRegisterValueWrapper(Register::RSI), {6});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::RDI), {7});
+        returnvalue, GetRegisterValueWrapper(Register::RDI), {7});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::R8), {8});
+        returnvalue, GetRegisterValueWrapper(Register::R8), {8});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::R9), {9});
+        returnvalue, GetRegisterValueWrapper(Register::R9), {9});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::R10), {10});
+        returnvalue, GetRegisterValueWrapper(Register::R10), {10});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::R11), {11});
+        returnvalue, GetRegisterValueWrapper(Register::R11), {11});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::R12), {12});
+        returnvalue, GetRegisterValueWrapper(Register::R12), {12});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::R13), {13});
+        returnvalue, GetRegisterValueWrapper(Register::R13), {13});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::R14), {14});
+        returnvalue, GetRegisterValueWrapper(Register::R14), {14});
     returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValue(Register::R15), {15});
+        returnvalue, GetRegisterValueWrapper(Register::R15), {15});
     builder->CreateRet(rax);
     Function* originalFunc_finalnopt = builder->GetInsertBlock()->getParent();
 
@@ -875,7 +875,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
 
   auto Value = GetIndexValue(0);
 
-  auto ripval = GetRegisterValue(Register::RIP);
+  auto ripval = GetRegisterValueWrapper(Register::RIP);
 
   Value = createSExtFolder(Value, ripval->getType());
   // TODO:
@@ -1870,8 +1870,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cmpxchg() {
 
   Register accreg =
       GetAccumulatorRegister(Lvalue->getType()->getIntegerBitWidth());
-  auto accum =
-      GetRegisterValue(accreg); // accumulator register, get depending on size?
+  auto accum = GetRegisterValueWrapper(
+      accreg); // accumulator register, get depending on size?
   printvalue2(magic_enum::enum_name(accreg));
   printvalue(accum);
   printvalue(Rvalue);
@@ -2219,7 +2219,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_add_sub() {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul2() {
   LLVMContext& context = builder->getContext();
   // auto src = operands[0];
-  auto Rvalue = GetRegisterValue(Register::AL);
+  auto Rvalue = GetRegisterValueWrapper(Register::AL);
 
   auto srcsize = GetTypeSize(instruction.types[0]);
 
@@ -2259,7 +2259,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul2() {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mul2() {
   LLVMContext& context = builder->getContext();
   // auto src = operands[0];
-  auto Rvalue = GetRegisterValue(Register::AL);
+  auto Rvalue = GetRegisterValueWrapper(Register::AL);
 
   auto srcsize = GetTypeSize(instruction.types[0]);
 
@@ -2326,7 +2326,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_imul() {
     break;
   case 1:
     Lvalue = GetIndexValue(0);
-    Rvalue = GetRegisterValue(getRegOfSize(Register::RAX, destsize));
+    Rvalue = GetRegisterValueWrapper(getRegOfSize(Register::RAX, destsize));
     printvalue(Rvalue);
     printvalue2(destsize);
     break;
@@ -2454,7 +2454,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mul() {
   printvalue(Rvalue);
   auto keyvalue = getRegOfSize(Register::RAX, srcsize);
   printvalue2(magic_enum::enum_name(keyvalue));
-  Value* Lvalue = createTruncFolder(GetRegisterValue(keyvalue),
+  Value* Lvalue = createTruncFolder(GetRegisterValueWrapper(keyvalue),
                                     builder->getIntNTy(srcsize));
   printvalue(Lvalue);
 
@@ -2506,7 +2506,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_div() {
   auto highreg = getRegOfSize(Register::RDX, srcsize);
   // When operand size is 8 bit
   if (srcsize == 8) {
-    dividend = GetRegisterValue(Register::AX);
+    dividend = GetRegisterValueWrapper(Register::AX);
     divisor = GetIndexValue(0);
 
     divisor = createZExtFolder(divisor, Type::getIntNTy(context, srcsize * 2));
@@ -2528,8 +2528,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_div() {
 
     divisor = GetIndexValue(0);
 
-    Value* dividendLow = GetRegisterValue(lowreg);
-    Value* dividendHigh = GetRegisterValue(highreg);
+    Value* dividendLow = GetRegisterValueWrapper(lowreg);
+    Value* dividendHigh = GetRegisterValueWrapper(highreg);
 
     dividendLow =
         createZExtFolder(dividendLow, Type::getIntNTy(context, srcsize * 2));
@@ -2583,7 +2583,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_idiv() {
   auto srcsize = GetTypeSize(instruction.types[0]);
 
   if (srcsize == 8) {
-    auto dividend = GetRegisterValue(Register::AX);
+    auto dividend = GetRegisterValueWrapper(Register::AX);
 
     Value* divisor = GetIndexValue(0);
     divisor = createSExtFolder(divisor, Type::getIntNTy(context, srcsize * 2));
@@ -2614,11 +2614,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_idiv() {
 
   auto lowreg = getRegOfSize(Register::RAX, srcsize);
   printvalue2(magic_enum::enum_name(lowreg));
-  dividendLow = GetRegisterValue(lowreg);
+  dividendLow = GetRegisterValueWrapper(lowreg);
   printvalue(dividendLow);
   auto highreg = getRegOfSize(Register::RDX, srcsize);
   printvalue2(magic_enum::enum_name(highreg));
-  dividendHigh = GetRegisterValue(highreg);
+  dividendHigh = GetRegisterValueWrapper(highreg);
   printvalue(dividendHigh);
 
   dividendLow =
@@ -3031,7 +3031,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_push() {
 
   auto Rvalue = GetIndexValue(0);
 
-  auto RspValue = GetRegisterValue(Register::RSP);
+  auto RspValue = GetRegisterValueWrapper(Register::RSP);
 
   auto destsize = instruction.stack_growth;
   printvalue2(destsize);
@@ -3076,7 +3076,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pushfq() {
 
   auto Rvalue = GetRFLAGSValue();
   // auto Rvalue = GetRFLAGS(builder);
-  auto RspValue = GetRegisterValue(Register::RSP);
+  auto RspValue = GetRegisterValueWrapper(Register::RSP);
 
   auto srcsize = 64; // based on bitness  ---
 
@@ -3104,7 +3104,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pop() {
 
   auto Rvalue = GetMemoryValue(getSPaddress(), destsize * 8); // [rsp]
 
-  auto RspValue = GetRegisterValue(Register::RSP);
+  auto RspValue = GetRegisterValueWrapper(Register::RSP);
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context), destsize);
   auto result = createAddFolder(RspValue, val,
@@ -3152,7 +3152,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_popfq() {
 
   auto Rvalue = GetMemoryValue(getSPaddress(), destsize); // [rsp]
 
-  auto RspValue = GetRegisterValue(Register::RSP);
+  auto RspValue = GetRegisterValueWrapper(Register::RSP);
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context), destsize / 8);
   auto result = createAddFolder(
@@ -3406,7 +3406,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
   // int cpuInfo[4];
   // ArrayType* CpuInfoTy = ArrayType::get(Type::getInt32Ty(context), 4);
 
-  Value* eax = GetRegisterValue(Register::EAX);
+  Value* eax = GetRegisterValueWrapper(Register::EAX);
   // one is eax, other is always 0?
   std::vector<Type*> AsmOutputs = {
       Type::getInt32Ty(context), Type::getInt32Ty(context),
@@ -4123,10 +4123,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_lahf() {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sahf() {
 
-  auto ah = GetRegisterValue(Register::AH);
+  auto ah = GetRegisterValueWrapper(Register::AH);
   // RFLAGS(SF:ZF:0:AF:0:PF:1:CF) := AH;
   //
-  printvalue(GetRegisterValue(Register::RAX));
+  printvalue(GetRegisterValueWrapper(Register::RAX));
   printvalue(ah);
   Value* one = ConstantInt::get(ah->getType(), 1);
   auto cf = createAndFolder(
@@ -4230,7 +4230,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bts() {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cwd() {
   LLVMContext& context = builder->getContext();
 
-  Value* ax = createZExtOrTruncFolder(GetRegisterValue(Register::AX),
+  Value* ax = createZExtOrTruncFolder(GetRegisterValueWrapper(Register::AX),
                                       Type::getInt16Ty(context));
 
   Value* signBit = computeSignFlag(ax);
@@ -4247,7 +4247,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cdq() {
   LLVMContext& context = builder->getContext();
   // if eax is -, then edx is filled with ones FFFF_FFFF
 
-  Value* eax = createZExtOrTruncFolder(GetRegisterValue(Register::EAX),
+  Value* eax = createZExtOrTruncFolder(GetRegisterValueWrapper(Register::EAX),
                                        Type::getInt32Ty(context));
 
   Value* signBit = computeSignFlag(eax);
@@ -4264,7 +4264,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cqo() {
 
   LLVMContext& context = builder->getContext();
   // if rax is -, then rdx is filled with ones FFFF_FFFF_FFFF_FFFF
-  Value* rax = createZExtOrTruncFolder(GetRegisterValue(Register::RAX),
+  Value* rax = createZExtOrTruncFolder(GetRegisterValueWrapper(Register::RAX),
                                        Type::getInt64Ty(context));
 
   Value* signBit = computeSignFlag(rax);
@@ -4281,7 +4281,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cqo() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cbw() {
   LLVMContext& context = builder->getContext();
-  Value* al = createZExtOrTruncFolder(GetRegisterValue(Register::AL),
+  Value* al = createZExtOrTruncFolder(GetRegisterValueWrapper(Register::AL),
                                       Type::getInt8Ty(context));
 
   Value* ax = createSExtFolder(al, Type::getInt16Ty(context), "cbw");
@@ -4290,7 +4290,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cbw() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cwde() {
   LLVMContext& context = builder->getContext();
-  Value* ax = createZExtOrTruncFolder(GetRegisterValue(Register::AX),
+  Value* ax = createZExtOrTruncFolder(GetRegisterValueWrapper(Register::AX),
                                       Type::getInt16Ty(context));
   printvalue(ax);
   Value* eax = createSExtFolder(ax, Type::getInt32Ty(context), "cwde");
@@ -4301,7 +4301,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cwde() {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cdqe() {
   LLVMContext& context = builder->getContext();
 
-  Value* eax = createZExtOrTruncFolder(GetRegisterValue(Register::EAX),
+  Value* eax = createZExtOrTruncFolder(GetRegisterValueWrapper(Register::EAX),
                                        Type::getInt32Ty(context), "cdqe-trunc");
 
   Value* rax = createSExtFolder(eax, Type::getInt64Ty(context), "cdqe");
@@ -4377,7 +4377,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
                                     current_address);
   SetRegisterValue(Register::RIP, val);
   */
-  auto rsp = GetRegisterValue(Register::RSP);
+  auto rsp = GetRegisterValueWrapper(Register::RSP);
   printvalue(rsp);
   printvalue2(current_address);
 
@@ -4417,7 +4417,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
   // this in solvePath?
 
   if (!isReadable &&
-      cast<ConstantInt>(GetRegisterValue(Register::RSP))->getValue() !=
+      cast<ConstantInt>(GetRegisterValueWrapper(Register::RSP))->getValue() !=
           STACKP_VALUE) {
     printvalueforce2(jump_address);
     auto bb = BasicBlock::Create(context, "returnToOrgCF",

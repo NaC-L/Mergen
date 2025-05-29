@@ -1514,7 +1514,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::Init_Flags() {
   FlagList[FLAG_OF].set(zero);
 
   FlagList[FLAG_RESERVED1].set(one);
-  Registers.set(Register::RFLAGS, two);
+  SetRegisterValue(Register::RFLAGS, two);
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::setFlag(const Flag flag,
@@ -1555,6 +1555,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getFlag(const Flag flag) {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::InitRegisters(Function* function,
                                                         const uint64_t rip) {
+
+  // static_cast<Derived*>(this)->InitRegisters_impl();
+
   // rsp
   // rsp_unaligned = %rsp % 16
   // rsp_aligned_to16 = rsp - rsp_unaligned
@@ -1572,11 +1575,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::InitRegisters(Function* function,
       // arg->setName(ZydisRegisterGetString(zydisRegister));
       printvalue2(magic_enum::enum_name(reg));
       printvalue(arg);
-      Registers.set(reg, arg);
+      SetRegisterValue(reg, arg);
       reg = static_cast<Register>(static_cast<int>(reg) + 1);
     }
   }
-  printvalue(Registers.get(Register::RAX));
+  printvalue(GetRegisterValue(Register::RAX));
   Init_Flags();
   LLVMContext& context = builder->getContext();
   const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
@@ -1586,20 +1589,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::InitRegisters(Function* function,
 
   auto new_rip = createAddFolder(zero, value);
 
-  Registers.set(Register::RIP, new_rip);
+  SetRegisterValue(Register::RIP, new_rip);
 
   auto stackvalue = cast<Value>(
       ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));
   auto new_stack_pointer = createAddFolder(stackvalue, zero);
 
-  Registers.set(Register::RSP, new_stack_pointer);
+  SetRegisterValue(Register::RSP, new_stack_pointer);
   return;
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetValueFromHighByteRegister(
     const Register reg) {
 
-  Value* fullRegisterValue = Registers.get(getBiggestEncoding(reg));
+  Value* fullRegisterValue = GetRegisterValue(getBiggestEncoding(reg));
 
   Value* shiftedValue = createLShrFolder(fullRegisterValue, 8, "highreg");
 
@@ -1639,7 +1642,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRFLAGSValue() {
   return rflags;
 }
 
-MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
+MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValueWrapper(
     const Register key) {
   // printvalue2(magic_enum::enum_name(key));
 
@@ -1679,7 +1682,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
   // semantics
 
   printvalue2(magic_enum::enum_name(largestKey));
-  auto reg = Registers.get(largestKey);
+  auto reg = GetRegisterValue(largestKey);
   printvalue(reg);
   return createZExtOrTruncFolder(reg, builder->getIntNTy(getRegisterSize(key)));
 }
@@ -1690,7 +1693,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToHighByteRegister(
   int shiftValue = 8;
 
   Register fullRegKey = getBiggestEncoding(reg);
-  Value* fullRegisterValue = Registers.get(fullRegKey);
+  Value* fullRegisterValue = GetRegisterValue(fullRegKey);
 
   Value* eightBitValue = createAndFolder(
       value, ConstantInt::get(value->getType(), 0xFF), "eight-bit");
@@ -1714,7 +1717,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_8b(
     const Register reg, Value* value) {
   LLVMContext& context = builder->getContext();
   Register fullRegKey = getBiggestEncoding(reg);
-  Value* fullRegisterValue = Registers.get(fullRegKey);
+  Value* fullRegisterValue = GetRegisterValue(fullRegKey);
   fullRegisterValue =
       createZExtOrTruncFolder(fullRegisterValue, Type::getInt64Ty(context));
 
@@ -1739,7 +1742,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_8b(
   printvalue(fullRegisterValue) printvalue(maskValue) printvalue(maskedFullReg)
       printvalue(extendedValue) printvalue(updatedReg);
 
-  Registers.set(fullRegKey, updatedReg);
+  SetRegisterValue(fullRegKey, updatedReg);
 
   return updatedReg;
 }
@@ -1748,7 +1751,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_16b(
     const Register reg, Value* value) {
 
   Register fullRegKey = getBiggestEncoding(reg);
-  Value* fullRegisterValue = Registers.get(fullRegKey);
+  Value* fullRegisterValue = GetRegisterValue(fullRegKey);
   printvalue(fullRegisterValue);
   Value* last4cleared =
       ConstantInt::get(fullRegisterValue->getType(), 0xFFFFFFFFFFFF0000);
@@ -1761,8 +1764,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_16b(
   return updatedReg;
 }
 
-MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
-                                                           Value* value) {
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValueWrapper(
+    const Register key, Value* value) {
 
   if (key == Register::EIP)
     return;
@@ -1783,7 +1786,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
   printvalue2(magic_enum::enum_name(key));
   printvalue(value);
   Register newKey = getBiggestEncoding(key);
-  Registers.set(newKey, value);
+  SetRegisterValue(newKey, value);
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetEffectiveAddress() {
@@ -1794,14 +1797,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetEffectiveAddress() {
   Value* baseValue = nullptr;
 
   if (instruction.mem_base != Register::None) {
-    baseValue = GetRegisterValue(instruction.mem_base);
+    baseValue = GetRegisterValueWrapper(instruction.mem_base);
     baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
     printvalue(baseValue);
   }
   Value* indexValue = nullptr;
 
   if (instruction.mem_index != Register::None) {
-    indexValue = GetRegisterValue(instruction.mem_index);
+    indexValue = GetRegisterValueWrapper(instruction.mem_index);
 
     indexValue = createZExtFolder(indexValue, Type::getInt64Ty(context));
     printvalue(indexValue);
@@ -1900,7 +1903,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
   case OperandType::Register64: {
     auto reg = instruction.regs[index];
     printvalue2(magic_enum::enum_name(reg));
-    return createZExtOrTruncFolder(GetRegisterValue(reg),
+    return createZExtOrTruncFolder(GetRegisterValueWrapper(reg),
                                    builder->getIntNTy(GetTypeSize(type)));
   }
 
@@ -1989,7 +1992,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetIndexValue(uint8_t index,
     //    createSExtOrTruncFolder(value,
     //    builder->getIntNTy(getRegisterSize(reg)));
 
-    SetRegisterValue(reg, value);
+    SetRegisterValueWrapper(reg, value);
     return;
   }
 
@@ -2060,7 +2063,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::pushFlags(
     const std::vector<Value*>& value, const std::string& address) {
   LLVMContext& context = builder->getContext();
 
-  auto rsp = GetRegisterValue(Register::RSP);
+  auto rsp = GetRegisterValueWrapper(Register::RSP);
 
   for (size_t i = 0; i < value.size(); i += 8) {
     Value* byteVal = ConstantInt::get(Type::getInt8Ty(context), 0);
@@ -2086,7 +2089,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::pushFlags(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::popStack(int size) {
   LLVMContext& context = builder->getContext();
-  auto rsp = GetRegisterValue(Register::RSP);
+  auto rsp = GetRegisterValueWrapper(Register::RSP);
   // should we get a address calculator function, do we need that?
 
   Value* pointer = createGEPFolder(Type::getInt8Ty(context), memoryAlloc, rsp,
