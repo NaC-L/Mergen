@@ -1,3 +1,6 @@
+#ifndef LIFTERCLASS_SYMBOLIC_H
+#define LIFTERCLASS_SYMBOLIC_H
+
 #include "CommonDisassembler.hpp"
 #include "icedDisassembler.hpp"
 #include "icedDisassembler_mnemonics.h"
@@ -97,3 +100,5 @@ public:
     return;
   }
 };
+
+#endif
