@@ -298,7 +298,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::loadMemoryOp(Value* ptr) {
 
 // rename func name to indicate its only for store
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::insertMemoryOp(StoreInst* inst) {
-  memInfos.push_back(inst);
 
   auto ptr = inst->getPointerOperand();
   if (!isa<GetElementPtrInst>(ptr))
