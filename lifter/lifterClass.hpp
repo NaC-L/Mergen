@@ -76,9 +76,12 @@ struct InstructionKey {
 };
 
 class InstructionCache {
-public:
-  InstructionCache() {}
+private:
+  using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
+                                       InstructionKey::InstructionKeyInfo>;
+  std::array<CacheMap, 256> opcodeCaches;
 
+public:
   void insert(uint8_t opcode, const InstructionKey& key, Value* value) {
     // Insert the key-value pair into the cache for the given opcode
     opcodeCaches[opcode][key] = value;
@@ -89,11 +92,53 @@ public:
     auto it = cache.find(key);
     return it != cache.end() ? it->second : nullptr;
   }
+  InstructionCache() = default;
+  InstructionCache(InstructionCache& other) {
 
-private:
-  using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
-                                       InstructionKey::InstructionKeyInfo>;
-  std::array<CacheMap, 256> opcodeCaches; // this should be faster
+    // we want to copy each SmallDenseMap individually
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+      // reserve because its faster
+      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
+      for (auto& kv : other.opcodeCaches[i]) {
+        opcodeCaches[i].try_emplace(kv.first, kv.second);
+      }
+    }
+  };
+  InstructionCache(const InstructionCache& other) {
+    // we want to copy each SmallDenseMap individually
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+      // reserve because its faster
+      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
+      for (auto& kv : other.opcodeCaches[i]) {
+        opcodeCaches[i].try_emplace(kv.first, kv.second);
+      }
+    }
+  }
+  InstructionCache& operator=(const InstructionCache& other) {
+    if (this == &other)
+      return *this;
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+      opcodeCaches[i].clear();
+      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
+      for (auto& kv : other.opcodeCaches[i]) {
+        opcodeCaches[i].try_emplace(kv.first, kv.second);
+      }
+    }
+    return *this;
+  }
+  InstructionCache(InstructionCache&&) = default;
+  InstructionCache& operator=(InstructionCache& other) {
+    if (this == &other)
+      return *this;
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+      opcodeCaches[i].clear();
+      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
+      for (auto& kv : other.opcodeCaches[i]) {
+        opcodeCaches[i].try_emplace(kv.first, kv.second);
+      }
+    }
+    return *this;
+  }
 };
 
 class floatingPointValue {
