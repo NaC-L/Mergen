@@ -5,6 +5,8 @@
 #include "OperandUtils.ipp"
 #include "lifterClass.hpp"
 #include "utils.h"
+#include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/TargetParser/Triple.h>
 #include <llvm/Transforms/Utils/SCCPSolver.h>
 #include <magic_enum/magic_enum.hpp>
 
