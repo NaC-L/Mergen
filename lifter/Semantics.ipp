@@ -795,37 +795,37 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     auto myStruct = UndefValue::get(myStructType);
 
     // Use CreateInsertValue for structs
-    auto returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::RCX), {1});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::RDX), {2});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::RBX), {3});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::RSP), {4});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::RBP), {5});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::RSI), {6});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::RDI), {7});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::R8), {8});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::R9), {9});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::R10), {10});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::R11), {11});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::R12), {12});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::R13), {13});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::R14), {14});
-    returnvalue = builder->CreateInsertValue(
-        returnvalue, GetRegisterValueWrapper(Register::R15), {15});
+    // auto returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::RCX), {1});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::RDX), {2});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::RBX), {3});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::RSP), {4});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::RBP), {5});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::RSI), {6});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::RDI), {7});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::R8), {8});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::R9), {9});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::R10), {10});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::R11), {11});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::R12), {12});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::R13), {13});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::R14), {14});
+    // returnvalue = builder->CreateInsertValue(
+    //     returnvalue, GetRegisterValueWrapper(Register::R15), {15});
     builder->CreateRet(rax);
     Function* originalFunc_finalnopt = builder->GetInsertBlock()->getParent();
 
