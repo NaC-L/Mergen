@@ -1,5 +1,5 @@
-#ifndef LIFTERCLASS_H
-#define LIFTERCLASS_H
+#ifndef LIFTERCLASSBASE_H
+#define LIFTERCLASSBASE_H
 #include "CommonDisassembler.hpp"
 #include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
@@ -15,6 +15,7 @@
 #include "includes.h"
 #include "utils.h"
 
+#include <concepts>
 #include <llvm/Analysis/DomConditionCache.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/Analysis/SimplifyQuery.h>
@@ -24,6 +25,7 @@
 #include <llvm/Support/KnownBits.h>
 #include <memory>
 #include <set>
+#include <type_traits>
 #include <utility>
 
 #ifndef DEFINE_FUNCTION
@@ -216,28 +218,44 @@ public:
   }
 };
 
+template <typename T, typename R>
+concept lifterConcept = Registers<R> && requires(T t) {
+  { t.GetRegisterValue_impl(std::declval<R>()) } -> std::same_as<llvm::Value*>;
+  {
+    t.SetRegisterValue_impl(std::declval<R>(), std::declval<llvm::Value*>())
+  } -> std::same_as<void>;
+  {
+    t.branch_backup_impl(std::declval<llvm::BasicBlock*>())
+  } -> std::same_as<void>;
+  {
+    t.branch_backup_impl(std::declval<llvm::BasicBlock*>())
+  } -> std::same_as<void>;
+};
+
 #define MERGEN_LIFTER_DEFINITION_TEMPLATES(ret)                                \
-  template <Mnemonics Mnemonic, Registers Register,                            \
+  template <typename Derived, Mnemonics Mnemonic, Registers Register,          \
             template <typename, typename> class DisassemblerBase>              \
     requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,      \
                           Register>                                            \
-  ret lifterClass<Mnemonic, Register, DisassemblerBase>
+  ret lifterClassBase<Derived, Mnemonic, Register, DisassemblerBase>
 
 // main lifter
+template <typename Derived = void,
 #ifdef ICED_FOUND
-template <Mnemonics Mnemonic = Mergen::IcedMnemonics,
+          Mnemonics Mnemonic = Mergen::IcedMnemonics,
           Registers Register = Mergen::IcedRegister,
           template <typename, typename> class DisassemblerBase =
-              Mergen::icedDisassembler>
+              Mergen::icedDisassembler
 #else
-template <Mnemonics Mnemonic = Mergen::ZydisMnemonic,
+          Mnemonics Mnemonic = Mergen::ZydisMnemonic,
           Registers Register = Mergen::ZydisRegister,
           template <typename, typename> class DisassemblerBase =
-              Mergen::ZydisDisassembler>
+              Mergen::ZydisDisassembler
 #endif
+          >
   requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,
                         Register>
-class lifterClass {
+class lifterClassBase {
 public:
   using Disassembler = DisassemblerBase<Mnemonic, Register>;
 
@@ -312,43 +330,13 @@ public:
     //
   }
 
-  // refactor: put these stuff in a class (?) so we can properly have a fully
-  // symbolized version
-  struct backup_point {
-    RegisterManagerConcolic<Register> regs;
-    llvm::DenseMap<uint64_t, ValueByteReference> buffer;
-
-    bool operator==(const backup_point& other) const {
-      if (buffer != other.buffer)
-        return false;
-      return regs == other.regs;
-    }
-    backup_point(){};
-
-    backup_point(backup_point& other)
-        : regs(other.regs), buffer(other.buffer){};
-
-    backup_point(backup_point&& other)
-        : regs(other.regs), buffer(other.buffer){};
-
-    backup_point(RegisterManagerConcolic<Register> registers,
-                 llvm::DenseMap<uint64_t, ValueByteReference> map)
-        : regs(registers), buffer(map){};
-
-    backup_point& operator=(const backup_point&) = default;
-  };
-  llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
+  // useless in symbolic?
   void branch_backup(BasicBlock* bb) {
-    //
-    BBbackup[bb] = {Registers, buffer};
+    static_cast<Derived*>(this)->branch_backup_impl(bb);
   }
-
+  // useless in symbolic?
   void load_backup(BasicBlock* bb) {
-    if (BBbackup.contains(bb)) {
-      auto bbinfo = BBbackup[bb];
-      Registers = bbinfo.regs;
-      buffer = bbinfo.buffer;
-    }
+    static_cast<Derived*>(this)->load_backup_impl(bb);
   }
 
   void liftBasicBlockFromAddress(uint64_t addr) {
@@ -452,7 +440,9 @@ public:
   llvm::Function* fnc;
   llvm::Module* M;
 
-  lifterClass() {
+  lifterClassBase() {
+    static_assert(lifterConcept<Derived, Register>,
+                  "Derived should satisfy lifterConcept");
     std::string mod_name = "lifter_module_default";
     M = new llvm::Module(mod_name.c_str(), context);
 
@@ -493,22 +483,7 @@ public:
     InitRegisters(builder->GetInsertBlock()->getParent(), 1000);
   };
 
-  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>* irbuilder,
-              uint64_t runtime_addr = 0)
-      : builder(irbuilder), M(irbuilder->GetInsertBlock()->getModule()) {
-
-    InitRegisters(irbuilder->GetInsertBlock()->getParent(), runtime_addr);
-  };
-
-  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>* irbuilder,
-              uint8_t* fileBase, uint64_t runtime_addr = 0)
-      : builder(irbuilder), file(fileBase), fileBase(fileBase),
-        M(irbuilder->GetInsertBlock()->getModule()) {
-
-    InitRegisters(irbuilder->GetInsertBlock()->getParent(), runtime_addr);
-  };
-
-  lifterClass(const lifterClass& other)
+  lifterClassBase(const lifterClassBase& other)
 
       : M(other.M), builder(other.builder), // Reference copied directly
         blockInfo(
@@ -561,7 +536,17 @@ public:
   llvm::Value* getFlag(const Flag flag);
   void InitRegisters(llvm::Function* function, uint64_t rip);
   llvm::Value* GetValueFromHighByteRegister(Register reg);
-  llvm::Value* GetRegisterValue(const Register key);
+  llvm::Value* GetRegisterValueWrapper(const Register key);
+
+private:
+  llvm::Value* GetRegisterValue(const Register key) {
+    return static_cast<Derived*>(this)->GetRegisterValue_impl(key);
+  }
+  void SetRegisterValue(const Register key, llvm::Value* val) {
+    return static_cast<Derived*>(this)->SetRegisterValue_impl(key, val);
+  }
+
+public:
   llvm::Value* GetMemoryValue(llvm::Value* address, uint8_t size);
   llvm::Value* SetValueToHighByteRegister(const Register reg,
                                           llvm::Value* value);
@@ -573,7 +558,7 @@ public:
   // current implementation cant be encapsulated in a class very efficently
   void createMemcpy(llvm::Value* src, llvm::Value* dest, llvm::Value* size);
 
-  void SetRegisterValue(const Register key, llvm::Value* value);
+  void SetRegisterValueWrapper(const Register key, llvm::Value* value);
   void SetMemoryValue(llvm::Value* address, llvm::Value* value);
   void SetRFLAGSValue(llvm::Value* value);
   PATH_info solvePath(llvm::Function* function, uint64_t& dest,
@@ -626,7 +611,7 @@ public:
                                  */
   llvm::Value* GetRFLAGSValue();
 
-  llvm::Value* getSPaddress() { return GetRegisterValue(Register::RSP); }
+  llvm::Value* getSPaddress() { return GetRegisterValueWrapper(Register::RSP); }
   llvm::Value* getSP() { return getPointer(getSPaddress()); };
   // end getters-setters
   // misc
@@ -793,8 +778,6 @@ public:
 
   // end semantics definition
 };
-
-extern std::vector<lifterClass<>*> lifters;
 
 #undef DEFINE_FUNCTION
 #endif // LIFTERCLASS_H
