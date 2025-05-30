@@ -16,6 +16,7 @@
 #include "utils.h"
 
 #include <concepts>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/Analysis/DomConditionCache.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/Analysis/SimplifyQuery.h>
@@ -396,11 +397,28 @@ public:
     }
   }
 
+  bool addUnvisitedAddr(BBInfo& bb) {
+    printvalue2(bb.block_address);
+    if (visitedAddresses.contains(bb.block_address)) {
+      printvalue2("not added");
+      return false;
+    }
+    printvalue2("added");
+    unvisitedBlocks.push_back(bb);
+    return true;
+  }
+
   bool getUnvisitedAddr(BBInfo& out) {
     if (unvisitedBlocks.empty())
       return false;
     out = std::move(unvisitedBlocks.back());
     unvisitedBlocks.pop_back();
+    if (visitedAddresses.contains(out.block_address)) {
+      printvalue2("cuck");
+      return getUnvisitedAddr(out);
+    }
+
+    visitedAddresses.insert(out.block_address);
     return true;
   }
 
@@ -408,7 +426,7 @@ public:
 
     std::error_code EC_noopt;
     llvm::raw_fd_ostream OS_noopt(filename, EC_noopt);
-    fnc->print(OS_noopt, nullptr);
+    fnc->getParent()->print(OS_noopt, nullptr);
   }
 
   // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
@@ -477,7 +495,18 @@ public:
 
   // todo : std::set
   std::vector<BBInfo> unvisitedBlocks;
-  std::vector<BBInfo> visitedBlocks;
+  std::set<uint64_t> visitedAddresses;
+  llvm::DenseMap<uint64_t, llvm::BasicBlock*> addrToBB;
+
+  BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
+    auto it = addrToBB.find(addr);
+    if (it != addrToBB.end()) {
+      return it->getSecond();
+    }
+    auto bb = BasicBlock::Create(context, name, fnc);
+    addrToBB[addr] = bb;
+    return bb;
+  }
 
   // global
   llvm::LLVMContext context;
@@ -486,80 +515,14 @@ public:
   llvm::Module* M;
   llvm::BasicBlock* bb;
 
-private:
+protected:
   void createFunction() {
-    std::vector<llvm::Type*> argTypes;
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::PointerType::get(context, 0));
-    argTypes.push_back(llvm::PointerType::get(context, 0)); // temp fix TEB
-
-    auto functionType =
-        llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
-
-    const std::string function_name = "main";
-    fnc = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
-                                 function_name.c_str(), M);
+    return static_cast<Derived*>(this)->createFunction_impl();
   }
 
-  void InitRegisters(Function* function, const uint64_t rip) {
+  void InitRegisters() {
 
-    // static_cast<Derived*>(this)->InitRegisters_impl();
-
-    // rsp
-    // rsp_unaligned = %rsp % 16
-    // rsp_aligned_to16 = rsp - rsp_unaligned
-    auto reg = Register::RAX;
-    auto argEnd = function->arg_end();
-    for (auto argIt = function->arg_begin(); argIt != argEnd; ++argIt) {
-
-      Argument* arg = &*argIt;
-      arg->setName(magic_enum::enum_name(reg));
-
-      if (std::next(argIt) == argEnd) {
-        arg->setName("memory");
-        memoryAlloc = arg;
-      } else {
-        // arg->setName(ZydisRegisterGetString(zydisRegister));
-        printvalue2(magic_enum::enum_name(reg));
-        printvalue(arg);
-        SetRegisterValue(reg, arg);
-        reg = static_cast<Register>(static_cast<int>(reg) + 1);
-      }
-    }
-    printvalue(GetRegisterValue(Register::RAX));
-    Init_Flags();
-    LLVMContext& context = builder->getContext();
-    const auto zero = ConstantInt::getSigned(Type::getInt64Ty(context), 0);
-
-    auto value =
-        cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
-
-    auto new_rip = createAddFolder(zero, value);
-
-    SetRegisterValue(Register::RIP, new_rip);
-
-    auto stackvalue = cast<Value>(
-        ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));
-    auto new_stack_pointer = createAddFolder(stackvalue, zero);
-
-    SetRegisterValue(Register::RSP, new_stack_pointer);
-
-    return;
+    return static_cast<Derived*>(this)->InitRegisters_impl();
   }
 
 public:
@@ -567,8 +530,8 @@ public:
     static_assert(lifterConcept<Derived, Register>,
                   "Derived should satisfy lifterConcept");
     M = new llvm::Module("lifter_module", context);
-    createFunction();
 
+    createFunction();
     bb = llvm::BasicBlock::Create(context, "entry", fnc);
 
     llvm::InstSimplifyFolder Folder(M->getDataLayout());
@@ -576,7 +539,7 @@ public:
     builder =
         std::make_unique<llvm::IRBuilder<llvm::InstSimplifyFolder>>(bb, Folder);
 
-    InitRegisters(builder->GetInsertBlock()->getParent(), 1000);
+    InitRegisters();
   };
 
   lifterClassBase(const lifterClassBase& other)
@@ -614,7 +577,6 @@ public:
                     const int numbered, const bool reverse = false);
 
   // init
-  void Init_Flags();
   void initDomTree(llvm::Function& F) { DT = new llvm::DominatorTree(F); }
   // end init
 
@@ -633,7 +595,7 @@ public:
   llvm::Value* GetValueFromHighByteRegister(Register reg);
   llvm::Value* GetRegisterValueWrapper(const Register key);
 
-private:
+protected:
   llvm::Value* GetRegisterValue(const Register key) {
     return static_cast<Derived*>(this)->GetRegisterValue_impl(key);
   }

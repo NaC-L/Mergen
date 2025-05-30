@@ -1,8 +1,10 @@
-#include "MemoryPolicy.hpp"
-#include "fileReader.hpp"
 
 #define MAGIC_ENUM_RANGE_MIN -1000
 #define MAGIC_ENUM_RANGE_MAX 1000
+
+#include "MemoryPolicy.hpp"
+#include "fileReader.hpp"
+#include "lifterClass_symbolic.hpp"
 
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
@@ -35,7 +37,7 @@ unsigned int pathNo = 0;
 unsigned int breaking = 0;
 arch_mode is64Bit;
 
-void asm_to_zydis_to_lift(lifterConcolic<>* lifter,
+void asm_to_zydis_to_lift(lifterSymbolic<>* lifter,
                           std::vector<uint8_t>& fileData) {
 
   // auto data = fileData.data();
@@ -59,7 +61,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   auto fileBase = fileData.data();
 
-  auto main = new lifterConcolic();
+  auto main = new lifterSymbolic();
   main->loadFile(fileBase);
   // configure memory policy - debug for now
 
@@ -170,7 +172,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
 
-  final_optpass(main->fnc, main->fnc->getArg(17), fileData.data(),
+  final_optpass(main->fnc, main->fnc->getArg(1), fileData.data(),
                 main->memoryPolicy);
   const std::string Filename = "output.ll";
   std::error_code EC;

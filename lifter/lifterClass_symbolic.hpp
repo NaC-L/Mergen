@@ -6,6 +6,10 @@
 #include "icedDisassembler_mnemonics.h"
 #include "icedDisassembler_registers.h"
 #include "lifterClass.hpp"
+#include <llvm/IR/Attributes.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Metadata.h>
+#include <magic_enum/magic_enum.hpp>
 
 template <
 #ifdef ICED_FOUND
@@ -74,22 +78,30 @@ public:
     }
     }
   }
+  llvm::Value* ctx;
+  StructType* type;
 
   llvm::Value* GetRegisterValue_impl(Register key) {
     int index = getRegisterIndex(key);
-    // pretty sure it will get biggest reg but whatever
-    auto size = getRegisterSize(key);
-    auto v =
-        this->builder->CreateLoad(this->builder->getIntNTy(size), vec[index]);
-    return v;
-    // load value
+    // auto size = getRegisterSize(key);
+
+    llvm::Value* fieldPtr =
+        this->builder->CreateStructGEP(type, ctx, index, "reg_ptr");
+
+    llvm::Value* val = this->builder->CreateLoad(
+        llvm::Type::getInt64Ty(this->context), fieldPtr, "reg_val");
+
+    return val;
   }
 
   void SetRegisterValue_impl(Register key, llvm::Value* val) {
-    this->builder->CreateStore(vec[key], val);
-    // store value
-  }
+    int index = getRegisterIndex(key);
 
+    llvm::Value* fieldPtr =
+        this->builder->CreateStructGEP(type, ctx, (uint64_t)index, "reg_ptr");
+
+    this->builder->CreateStore(val, fieldPtr);
+  }
   void branch_backup_impl(BasicBlock* bb) {
     //
     return;
@@ -97,6 +109,76 @@ public:
 
   void load_backup_impl(BasicBlock* bb) {
     //
+    return;
+  }
+  void createFunction_impl() {
+    std::vector<llvm::Type*> argTypes;
+
+    std::vector<llvm::Type*> structTypes;
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    type = StructType::create(structTypes, "CTX");
+
+    // returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
+    // builder->CreateExtractValue(Value * Agg, ArrayRef<unsigned int> Idxs)
+    llvm::PointerType* ctxPtrType = llvm::PointerType::getUnqual(type);
+    argTypes.push_back(ctxPtrType);
+    argTypes.push_back(
+        llvm::PointerType::get(this->context, 0)); // temp fix TEB
+
+    auto functionType = llvm::FunctionType::get(
+        llvm::Type::getInt64Ty(this->context), argTypes, 0);
+
+    const std::string function_name = "main";
+    this->fnc =
+        llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
+                               function_name.c_str(), this->M);
+
+    ctx = this->fnc->getArg(0);
+    this->memoryAlloc = this->fnc->getArg(1);
+
+    this->fnc->addParamAttr(0,
+                            Attribute::getWithByValType(this->context, type));
+  }
+
+  void InitRegisters_impl() {
+    // rsp
+    // rsp_unaligned = %rsp % 16
+    // rsp_aligned_to16 = rsp - rsp_unaligned
+    // auto reg = Register::RAX;
+    // auto argEnd = this->fnc->arg_end();
+    // for (auto argIt = this->fnc->arg_begin(); argIt != argEnd; ++argIt) {
+
+    //   Argument* arg = &*argIt;
+    //   arg->setName(magic_enum::enum_name(reg));
+
+    //   if (std::next(argIt) == argEnd) {
+    //     arg->setName("memory");
+    //     this->memoryAlloc = arg;
+    //   } else {
+    //     // arg->setName(ZydisRegisterGetString(zydisRegister));
+    //     printvalue2(magic_enum::enum_name(reg));
+    //     printvalue(arg);
+    //     // int index = getRegisterIndex(reg);
+    //     // vec[index] = arg;
+    //     reg = static_cast<Register>(static_cast<int>(reg) + 1);
+    //   }
+    // }
+    // printvalue(GetRegisterValue(Register::RAX));
     return;
   }
 };
