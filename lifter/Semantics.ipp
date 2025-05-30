@@ -756,7 +756,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
 
   uint64_t destination = 0;
 
-  uint8_t rop_result = ROP_return;
+  uint8_t rop_result = REAL_return;
 
   if (llvm::ConstantInt* constInt =
           llvm::dyn_cast<llvm::ConstantInt>(rspvalue)) {
@@ -793,7 +793,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     auto myStructType = StructType::create(context, argTypes, "returnStruct");
 
     auto myStruct = UndefValue::get(myStructType);
-
     // Use CreateInsertValue for structs
     // auto returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
     // returnvalue = builder->CreateInsertValue(
@@ -872,29 +871,22 @@ int jmpcount = 0;
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   LLVMContext& context = builder->getContext();
   // auto dest = operands[0];
-
   auto Value = GetIndexValue(0);
-
   auto ripval = GetRegisterValueWrapper(Register::RIP);
-
   Value = createSExtFolder(Value, ripval->getType());
   // TODO:
   // if its an imm, sext
   // if its r/m then we probably need to zext
-
   auto newRip = createAddFolder(
       Value, ripval, "jump-xd-" + std::to_string(current_address) + "-");
-
   jmpcount++;
   auto targetv = Value;
-
   auto trunc = createSExtOrTruncFolder(targetv, Type::getInt64Ty(context),
                                        "jmp-register");
   printvalue(ripval);
   printvalue(trunc);
   uint64_t destination = 0;
   auto function = builder->GetInsertBlock()->getParent();
-
   switch (instruction.types[0]) {
   case OperandType::Immediate8:
   case OperandType::Immediate16: // todo: test 8 and 16
@@ -906,11 +898,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   default:
     break;
   }
-
   solvePath(function, destination, trunc);
   printvalue2(destination);
   printvalue(newRip);
-  SetRegisterValue(Register::RIP, newRip);
+  // SetRegisterValue(Register::RIP, newRip);
 }
 
 int branchnumber = 0;

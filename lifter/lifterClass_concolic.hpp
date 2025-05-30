@@ -179,5 +179,93 @@ public:
       this->counter = bbinfo.ct;
     }
   }
+
+  void createFunction_impl() {
+    std::vector<llvm::Type*> argTypes;
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    argTypes.push_back(llvm::PointerType::get(this->context, 0));
+    argTypes.push_back(
+        llvm::PointerType::get(this->context, 0)); // temp fix TEB
+
+    auto functionType = llvm::FunctionType::get(
+        llvm::Type::getInt64Ty(this->context), argTypes, 0);
+
+    const std::string function_name = "main";
+    this->fnc =
+        llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
+                               function_name.c_str(), this->M);
+  }
+
+  void InitRegisters_impl() {
+    // rsp
+    // rsp_unaligned = %rsp % 16
+    // rsp_aligned_to16 = rsp - rsp_unaligned
+    auto reg = Register::RAX;
+    auto argEnd = this->fnc->arg_end();
+    for (auto argIt = this->fnc->arg_begin(); argIt != argEnd; ++argIt) {
+
+      Argument* arg = &*argIt;
+      arg->setName(magic_enum::enum_name(reg));
+
+      if (std::next(argIt) == argEnd) {
+        arg->setName("memory");
+        this->memoryAlloc = arg;
+      } else {
+        // arg->setName(ZydisRegisterGetString(zydisRegister));
+        printvalue2(magic_enum::enum_name(reg));
+        printvalue(arg);
+        this->SetRegisterValue(reg, arg);
+        reg = static_cast<Register>(static_cast<int>(reg) + 1);
+      }
+    }
+    // printvalue(GetRegisterValue(Register::RAX));
+
+    LLVMContext& context = this->builder->getContext();
+    auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
+    auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
+    auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
+
+    this->FlagList[FLAG_CF].set(zero);
+    this->FlagList[FLAG_PF].set(zero);
+    this->FlagList[FLAG_AF].set(zero);
+    this->FlagList[FLAG_ZF].set(zero);
+    this->FlagList[FLAG_SF].set(zero);
+    this->FlagList[FLAG_TF].set(zero);
+    this->FlagList[FLAG_IF].set(one);
+    this->FlagList[FLAG_DF].set(zero);
+    this->FlagList[FLAG_OF].set(zero);
+
+    this->FlagList[FLAG_RESERVED1].set(one);
+    this->SetRegisterValue(Register::RFLAGS, two);
+
+    // auto value =
+    //     cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
+
+    // auto new_rip = createAddFolder(zero, value);
+
+    // SetRegisterValue(Register::RIP, new_rip);
+
+    auto stackvalue = cast<Value>(
+        ConstantInt::getSigned(Type::getInt64Ty(context), STACKP_VALUE));
+
+    this->SetRegisterValue(Register::RSP, stackvalue);
+
+    return;
+  }
 };
 #endif

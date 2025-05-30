@@ -1497,26 +1497,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtOrTruncFolder(
 %maskedreg14 = and i64 %newreg9, -256
 */
 
-MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::Init_Flags() {
-  LLVMContext& context = builder->getContext();
-  auto zero = ConstantInt::getSigned(Type::getInt1Ty(context), 0);
-  auto one = ConstantInt::getSigned(Type::getInt1Ty(context), 1);
-  auto two = ConstantInt::getSigned(Type::getInt1Ty(context), 2);
-
-  FlagList[FLAG_CF].set(zero);
-  FlagList[FLAG_PF].set(zero);
-  FlagList[FLAG_AF].set(zero);
-  FlagList[FLAG_ZF].set(zero);
-  FlagList[FLAG_SF].set(zero);
-  FlagList[FLAG_TF].set(zero);
-  FlagList[FLAG_IF].set(one);
-  FlagList[FLAG_DF].set(zero);
-  FlagList[FLAG_OF].set(zero);
-
-  FlagList[FLAG_RESERVED1].set(one);
-  SetRegisterValue(Register::RFLAGS, two);
-}
-
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::setFlag(const Flag flag,
                                                     Value* newValue) {
   LLVMContext& context = builder->getContext();

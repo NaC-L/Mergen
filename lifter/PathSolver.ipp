@@ -63,10 +63,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     unvisitedBlocks.push_back(blockInfo);
   }
   if (pv.size() == 2) {
-    auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
-                                       builder->GetInsertBlock()->getParent());
-    auto bb_true = BasicBlock::Create(function->getContext(), "bb_true",
-                                      builder->GetInsertBlock()->getParent());
+
+    // auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
+    //                                    builder->GetInsertBlock()->getParent());
+    // auto bb_true = BasicBlock::Create(function->getContext(), "bb_true",
+    //                                   builder->GetInsertBlock()->getParent());
+
+    auto bb_false = getOrCreateBB(pv[0].getZExtValue(), "bb_false");
+    auto bb_true = getOrCreateBB(pv[1].getZExtValue(), "bb_true");
 
     auto firstcase = pv[0];
     auto secondcase = pv[1];
@@ -94,6 +98,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     if (auto can_simplify = try_simplify(firstcase, simplifyValue))
       condition = can_simplify.value();
     else if (auto can_simplify2 = try_simplify(secondcase, simplifyValue)) {
+      // TODO:
       std::swap(firstcase, secondcase);
       condition = can_simplify2.value();
     } else
@@ -122,8 +127,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     // lifters.push_back(newlifter);
 
     // store mem&reg info for BB
-    unvisitedBlocks.push_back(blockInfo);
-    unvisitedBlocks.push_back(newblock);
+    addUnvisitedAddr(blockInfo);
+    addUnvisitedAddr(newblock);
 
     // fix this later, is ugly
     assumptions[cast<Instruction>(condition)] = 0;
