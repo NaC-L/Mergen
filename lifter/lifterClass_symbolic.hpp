@@ -102,6 +102,30 @@ public:
 
     this->builder->CreateStore(val, fieldPtr);
   }
+
+  llvm::Value* GetFlagValue_impl(Flag key) {
+    int index = key + 16;
+    // auto size = getRegisterSize(key);
+
+    llvm::Value* fieldPtr =
+        this->builder->CreateStructGEP(type, ctx, index, "reg_ptr");
+
+    llvm::Value* val = this->builder->CreateLoad(this->builder->getInt1Ty(),
+                                                 fieldPtr, "reg_val");
+
+    return val;
+  }
+
+  void SetFlagValue_impl(Flag key, llvm::Value* val) {
+    int index = key + 16;
+
+    llvm::Value* fieldPtr =
+        this->builder->CreateStructGEP(type, ctx, (uint64_t)index, "reg_ptr");
+
+    this->builder->CreateStore(
+        this->builder->CreateTrunc(val, this->builder->getInt1Ty()), fieldPtr);
+  }
+
   void branch_backup_impl(BasicBlock* bb) {
     //
     return;
@@ -131,12 +155,29 @@ public:
     structTypes.push_back(llvm::Type::getInt64Ty(this->context));
     structTypes.push_back(llvm::Type::getInt64Ty(this->context));
     structTypes.push_back(llvm::Type::getInt64Ty(this->context));
+
+    // 12 flags
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+    structTypes.push_back(llvm::Type::getInt1Ty(this->context));
+
     type = StructType::create(structTypes, "CTX");
 
     // returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
     // builder->CreateExtractValue(Value * Agg, ArrayRef<unsigned int> Idxs)
-    llvm::PointerType* ctxPtrType = llvm::PointerType::getUnqual(type);
-    argTypes.push_back(ctxPtrType);
+    // llvm::PointerType* ctxPtrType = llvm::PointerType::getUnqual(type);
+    // argTypes.push_back(ctxPtrType);
+    argTypes.push_back(type); // temp fix TEB
     argTypes.push_back(
         llvm::PointerType::get(this->context, 0)); // temp fix TEB
 
@@ -151,8 +192,7 @@ public:
     ctx = this->fnc->getArg(0);
     this->memoryAlloc = this->fnc->getArg(1);
 
-    this->fnc->addParamAttr(0,
-                            Attribute::getWithByValType(this->context, type));
+    this->fnc->addParamAttr(1, Attribute::NoAlias);
   }
 
   void InitRegisters_impl() {
@@ -179,6 +219,10 @@ public:
     //   }
     // }
     // printvalue(GetRegisterValue(Register::RAX));
+
+    ctx = this->builder->CreateAlloca(type);
+
+    this->builder->CreateStore(this->fnc->getArg(0), ctx);
     return;
   }
 };
