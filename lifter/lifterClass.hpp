@@ -392,6 +392,8 @@ public:
     while (this->finished == 0 && this->run) {
       // TODO: refactor logic for finished and run, instead semantics should
       // return the info about jumps
+      auto currentblock = builder->GetInsertBlock()->getName();
+      printvalue2(currentblock);
       liftAddress(addr);
       addr = current_address;
     }
@@ -399,24 +401,28 @@ public:
 
   bool addUnvisitedAddr(BBInfo& bb) {
     printvalue2(bb.block_address);
-    if (visitedAddresses.contains(bb.block_address)) {
-      printvalue2("not added");
-      return false;
-    }
     printvalue2("added");
     unvisitedBlocks.push_back(bb);
     return true;
   }
 
-  bool getUnvisitedAddr(BBInfo& out) {
+  /*
+  filter : filter for empty blocks
+  */
+  bool getUnvisitedAddr(BBInfo& out, bool filter = 0) {
     if (unvisitedBlocks.empty())
       return false;
+
     out = std::move(unvisitedBlocks.back());
     unvisitedBlocks.pop_back();
-    if (visitedAddresses.contains(out.block_address)) {
-      printvalue2("cuck");
+
+    if (!(out.block->empty()) && filter) {
+      printvalue2("not empty ;D ");
       return getUnvisitedAddr(out);
     }
+
+    printvalue2("adding :" + std::to_string(out.block_address) +
+                out.block->getName());
 
     visitedAddresses.insert(out.block_address);
     return true;
@@ -501,7 +507,7 @@ public:
   BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
     auto it = addrToBB.find(addr);
     if (it != addrToBB.end()) {
-      return it->getSecond();
+      return it->second;
     }
     auto bb = BasicBlock::Create(context, name, fnc);
     addrToBB[addr] = bb;
@@ -525,6 +531,13 @@ protected:
     return static_cast<Derived*>(this)->InitRegisters_impl();
   }
 
+  llvm::Value* getFlagValue(Flag f) {
+    return static_cast<Derived*>(this)->GetFlagValue_impl(f);
+  }
+  void setFlagValue(Flag f, Value* v) {
+    return static_cast<Derived*>(this)->SetFlagValue_impl(f, v);
+  }
+
 public:
   lifterClassBase() {
     static_assert(lifterConcept<Derived, Register>,
@@ -532,13 +545,12 @@ public:
     M = new llvm::Module("lifter_module", context);
 
     createFunction();
-    bb = llvm::BasicBlock::Create(context, "entry", fnc);
+    this->bb = llvm::BasicBlock::Create(this->context, "entry", this->fnc);
 
-    llvm::InstSimplifyFolder Folder(M->getDataLayout());
+    llvm::InstSimplifyFolder Folder(this->M->getDataLayout());
 
-    builder =
-        std::make_unique<llvm::IRBuilder<llvm::InstSimplifyFolder>>(bb, Folder);
-
+    this->builder = std::make_unique<llvm::IRBuilder<llvm::InstSimplifyFolder>>(
+        this->bb, Folder);
     InitRegisters();
   };
 
