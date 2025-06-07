@@ -556,7 +556,7 @@ public:
   std::optional<llvm::Value*> evaluateLLVMExpression(llvm::Value* value);
 
   // getters-setters
-  llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
+  void setFlag(const Flag flag, llvm::Value* newValue);
   void setFlagUndef(const Flag flag) {
     auto undef = UndefValue::get(builder->getInt1Ty());
     FlagList[flag].set(undef); // Set the new value directly
