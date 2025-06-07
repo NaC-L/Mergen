@@ -99,6 +99,8 @@ set(lifter_SOURCES
 	"lifter/fileReader.hpp"
 	"lifter/icedDisassembler.hpp"
 	"lifter/lifterClass.hpp"
+	"lifter/lifterClass_concolic.hpp"
+	"lifter/lifterClass_symbolic.hpp"
 	"lifter/pp_macros.hpp"
 	"lifter/tester.hpp"
 	"lifter/GEPTracker.ipp"
