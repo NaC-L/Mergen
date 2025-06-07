@@ -542,34 +542,7 @@ public:
     InitRegisters();
   };
 
-  lifterClassBase(const lifterClassBase& other)
-
-      : M(other.M), builder(other.builder), // Reference copied directly
-        blockInfo(
-            other.blockInfo), // Assuming BBInfo has a proper copy constructor
-        fileBase(other.fileBase), run(other.run), finished(0),
-        counter(other.counter), isUnreachable(other.isUnreachable),
-        instruction(other.instruction), // Shallow copy of the pointer
-        assumptions(other.assumptions), // Deep copy of assumptions
-        buffer(other.buffer), file(other.file),
-        FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
-                                  // constructor
-        // RegistersFP(other.RegistersFP), // Assuming RegisterManager has a
-        // copy constructor
-        Registers(other.Registers), // Assuming RegisterManager has a copy
-                                    // constructor
-        DC(other.DC),               // Deep copy of DC
-        instct(other.instct),
-        cachedquery(other.cachedquery), // Assuming raw pointer, copied directly
-        DT(other.DT),                   // Assuming pointer, copied directly
-        lastBB(other.lastBB), BIlistsize(other.BIlistsize),
-        pageMap(other.pageMap), // Deep copy handled by map's copy constructor
-        BIlist(other.BIlist), // Deep copy handled by vector's copy constructor
-        cache(other.cache), // Deep copy handled by DenseMap's copy constructor
-        memInfos(
-            other.memInfos), // Deep copy handled by vector's copy constructor
-        memoryAlloc(other.memoryAlloc), // Shallow copy of the pointer
-        fnc(other.fnc) {}
+  lifterClassBase(const lifterClassBase& other) = delete;
 
   void liftInstruction();
   void liftInstructionSemantics();
