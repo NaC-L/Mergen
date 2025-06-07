@@ -43,9 +43,15 @@ void asm_to_zydis_to_lift(lifterSymbolic<>* lifter,
   // auto data = fileData.data();
 
   BBInfo bbinfo;
+  bool filter = 0;
+  while (lifter->getUnvisitedAddr(bbinfo, filter)) {
 
-  while (lifter->getUnvisitedAddr(bbinfo)) {
-
+    printvalueforce2("exploring " + std::to_string(bbinfo.block_address));
+    if (!(bbinfo.block->empty()) && filter) {
+      printvalue2("not empty");
+      continue;
+    };
+    filter = 1;
     lifter->load_backup(bbinfo.block);
     lifter->finished = 0;
     auto next_bb_name = bbinfo.block->getName();
@@ -174,9 +180,6 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   final_optpass(main->fnc, main->fnc->getArg(1), fileData.data(),
                 main->memoryPolicy);
-  const std::string Filename = "output.ll";
-  std::error_code EC;
-  llvm::raw_fd_ostream OS(Filename, EC);
 
   main->writeFunctionToFile("output.ll");
   return;
