@@ -1497,40 +1497,24 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtOrTruncFolder(
 %maskedreg14 = and i64 %newreg9, -256
 */
 
-MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::setFlag(const Flag flag,
-                                                    Value* newValue) {
-  LLVMContext& context = builder->getContext();
-  newValue = createTruncFolder(newValue, Type::getInt1Ty(context));
-  // printvalue2((int32_t)flag) printvalue(newValue);
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
-    return nullptr;
-
-  FlagList[flag].set(newValue); // Set the new value directly
-  return newValue;
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::setFlag(const Flag flag,
+                                                  Value* newValue) {
+  return setFlagValue(flag, newValue);
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::setFlag(
     const Flag flag, std::function<Value*()> calculation) {
-  // If the flag is one of the reserved ones, do not modify
-  if (flag == FLAG_RESERVED1 || flag == FLAG_RESERVED5 || flag == FLAG_IF)
-    return;
-
-  // lazy calculation
-  FlagList[flag].setCalculation(calculation);
+  return setFlagValue(flag, calculation());
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(LazyValue)::getLazyFlag(const Flag flag) {
   //
-  return FlagList[flag];
+  return LazyValue(getFlagValue(flag));
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getFlag(const Flag flag) {
-  Value* result = FlagList[flag].get(); // Retrieve the value,
-  if (result) // if its somehow nullptr, just return False as value
-    return createTruncFolder(result, builder->getInt1Ty());
 
-  LLVMContext& context = builder->getContext();
-  return ConstantInt::getSigned(Type::getInt1Ty(context), 0);
+  return getFlagValue(flag);
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetValueFromHighByteRegister(
@@ -1701,7 +1685,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_16b(
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValueWrapper(
     const Register key, Value* value) {
 
-  if (key == Register::EIP)
+  if (key == Register::EIP || key == Register::RIP)
     return;
 
   if ((key >= Register::AL) && (key <= Register::R15B)) {
