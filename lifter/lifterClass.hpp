@@ -82,9 +82,10 @@ struct InstructionKey {
 };
 
 class InstructionCache {
-private:
+public:
   using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
                                        InstructionKey::InstructionKeyInfo>;
+
   std::array<CacheMap, 100> opcodeCaches;
 
 public:
@@ -103,7 +104,8 @@ public:
     // we want to copy each SmallDenseMap individually
     // crash on last item, why?
     // FIXME: last item on array is corrupted.
-    for (size_t i = 0; i < opcodeCaches.size() - 1; ++i) {
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+
       // reserve because its faster
 
       auto src = other.opcodeCaches[i];
@@ -116,7 +118,7 @@ public:
   };
   InstructionCache(const InstructionCache& other) {
     // we want to copy each SmallDenseMap individually
-    for (size_t i = 0; i < opcodeCaches.size() - 1; ++i) {
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
       // reserve because its faster
       opcodeCaches[i].reserve(other.opcodeCaches[i].size());
       for (auto& kv : other.opcodeCaches[i]) {
@@ -127,7 +129,7 @@ public:
   InstructionCache& operator=(const InstructionCache& other) {
     if (this == &other)
       return *this;
-    for (size_t i = 0; i < opcodeCaches.size() - 1; ++i) {
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
       opcodeCaches[i].clear();
       opcodeCaches[i].reserve(other.opcodeCaches[i].size());
       for (auto& kv : other.opcodeCaches[i]) {
@@ -137,18 +139,7 @@ public:
     return *this;
   }
   InstructionCache(InstructionCache&&) = default;
-  InstructionCache& operator=(InstructionCache& other) {
-    if (this == &other)
-      return *this;
-    for (size_t i = 0; i < opcodeCaches.size() - 1; ++i) {
-      opcodeCaches[i].clear();
-      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
-      for (auto& kv : other.opcodeCaches[i]) {
-        opcodeCaches[i].try_emplace(kv.first, kv.second);
-      }
-    }
-    return *this;
-  }
+  InstructionCache& operator=(InstructionCache&&) = default;
 };
 
 class floatingPointValue {
@@ -354,7 +345,8 @@ public:
 
   // also lifts single inst
   void liftAddress(uint64_t addr, size_t size = 15) {
-
+    InstructionKey key;
+    printvalue(cache.lookup(99, key));
     file.filebase_exists();
 
     this->current_address = addr;
