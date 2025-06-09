@@ -82,7 +82,7 @@ struct InstructionKey {
 };
 
 class InstructionCache {
-public:
+private:
   using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
                                        InstructionKey::InstructionKeyInfo>;
 
