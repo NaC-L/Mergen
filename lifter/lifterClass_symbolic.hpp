@@ -126,6 +126,8 @@ public:
         this->builder->CreateTrunc(val, this->builder->getInt1Ty()), fieldPtr);
   }
 
+  constexpr ControlFlow getControlFlow_impl() { return ControlFlow::Basic; }
+
   void branch_backup_impl(BasicBlock* bb) {
     //
     return;
