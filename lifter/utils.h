@@ -41,7 +41,8 @@
 
 #define printvalueforce2(x)                                                    \
   do {                                                                         \
-    llvm::outs() << " " #x " : " << x << __FILE__ << __LINE__ << "\n";         \
+    llvm::outs() << " " #x " : " << x << " " << __FILE__ << ":" << __LINE__    \
+                 << "\n";                                                      \
     llvm::outs().flush();                                                      \
   } while (0);
 
