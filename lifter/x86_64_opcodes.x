@@ -1,8 +1,9 @@
-
+#ifdef _MSC_VER
 #undef xor
 #undef and
 #undef or
 #undef not
+#endif
 
 OPCODE(mov, MOVZX, MOVSX, MOVSXD, MOV)
 
