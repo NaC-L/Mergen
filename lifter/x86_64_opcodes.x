@@ -1,4 +1,9 @@
 
+#undef xor
+#undef and
+#undef or
+#undef not
+
 OPCODE(mov, MOVZX, MOVSX, MOVSXD, MOV)
 
 OPCODE(movs_X, MOVSB, MOVSW, MOVSD, MOVSQ)
