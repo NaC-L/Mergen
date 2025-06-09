@@ -125,6 +125,12 @@ target_compile_features(lifter PRIVATE
 	cxx_std_20
 )
 
+if(MSVC) # msvc
+	target_compile_options(lifter PRIVATE
+		"/Zc:preprocessor"
+	)
+endif()
+
 target_link_libraries(lifter PRIVATE
 	LLVM-Wrapper
 	linux-pe
