@@ -161,7 +161,7 @@ public:
           assumptions(assumptions), ct(ct){};
     backup_point() = default;
     backup_point(const backup_point&) = default;
-    backup_point(const backup_point&&) noexcept = default;
+    // backup_point(const backup_point&&) = default;
     backup_point& operator=(const backup_point&) = default;
     backup_point& operator=(backup_point&&) noexcept = default;
   };
