@@ -398,13 +398,12 @@ inline bool isCast(uint8_t opcode) {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
     const InstructionKey& key, uint8_t opcode, const Twine& Name) {
+
   auto it = cache.lookup(opcode, key);
   if (it) {
     return it;
   }
-
   Value* newInstruction = nullptr;
-
   if (isCast(opcode) == 0) {
     // Binary instruction
     if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand1)) {
@@ -419,7 +418,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
                                  select_inst->getFalseValue(), key.operand2),
             "lola-");
     }
-
     if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand2)) {
       printvalue2(
           analyzeValueKnownBits(select_inst->getCondition(), select_inst));
@@ -432,6 +430,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
                                  key.operand1, select_inst->getFalseValue()),
             "lolb-");
     }
+
     Value *cnd1, *lhs1, *rhs1;
     if (match(key.operand1, m_TruncOrSelf(m_Select(m_Value(cnd1), m_Value(lhs1),
                                                    m_Value(rhs1))))) {
@@ -445,11 +444,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
               builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                                    rhs1, select_inst->getFalseValue()),
               "lol2-");
-    }
-
-    else if (match(key.operand1,
-                   m_ZExtOrSExtOrSelf(m_Select(m_Value(cnd1), m_Value(lhs1),
-                                               m_Value(rhs1))))) {
+    } else if (match(key.operand1,
+                     m_ZExtOrSExtOrSelf(m_Select(m_Value(cnd1), m_Value(lhs1),
+                                                 m_Value(rhs1))))) {
       if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand2))
         if (select_inst && cnd1 == select_inst->getCondition()) // also check
                                                                 // if inversed
@@ -461,7 +458,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
                                    rhs1, select_inst->getFalseValue()),
               "lol2-");
     }
-
     Value *cnd, *lhs, *rhs;
     if (match(key.operand2, m_TruncOrSelf(m_Select(m_Value(cnd), m_Value(lhs),
                                                    m_Value(rhs))))) {
@@ -493,12 +489,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
         builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                              key.operand1, key.operand2, Name);
   } else if (isCast(opcode)) {
+    printvalue2("iscast:D");
     // Cast instruction
     switch (opcode) {
 
     case Instruction::Trunc:
     case Instruction::ZExt:
     case Instruction::SExt:
+      printvalue(key.operand1);
       if (auto select_inst = dyn_cast<llvm::SelectInst>(key.operand1)) {
         return createSelectFolder(
             select_inst->getCondition(),
@@ -508,7 +506,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
                                 select_inst->getFalseValue(), key.destType),
             "lol-");
       }
-
       newInstruction =
           builder->CreateCast(static_cast<Instruction::CastOps>(opcode),
                               key.operand1, key.destType);
@@ -518,7 +515,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
       UNREACHABLE("Unsupported cast opcode");
     }
   }
-
   cache.insert(opcode, key, newInstruction);
   return newInstruction;
 }
@@ -1548,7 +1544,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRFLAGSValue() {
   LLVMContext& context = builder->getContext();
   Value* rflags = ConstantInt::get(Type::getInt64Ty(context), 0);
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
+    printvalue2(magic_enum::enum_name((Flag)flag));
     Value* flagValue = getFlag((Flag)flag);
+    printvalue(flagValue);
     int shiftAmount = flag;
     Value* shiftedFlagValue = createShlFolder(
 

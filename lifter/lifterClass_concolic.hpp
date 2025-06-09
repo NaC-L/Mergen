@@ -1,6 +1,7 @@
 #ifndef LIFTERCLASS_CONCRETE_H
 #define LIFTERCLASS_CONCRETE_H
 #include "CommonDisassembler.hpp"
+#include "RegisterManager.hpp"
 #include "icedDisassembler.hpp"
 #include "icedDisassembler_mnemonics.h"
 #include "icedDisassembler_registers.h"
@@ -99,7 +100,10 @@ public:
   }
 
   llvm::Value* get_flag_impl(Flag key) {
-    return vecflag[static_cast<uint8_t>(key)];
+    auto val = vecflag[static_cast<uint8_t>(key)];
+    if (val)
+      return val;
+    return ConstantInt::getSigned(Type::getInt1Ty(this->context), 0);
   }
 
   void set_flag_impl(Flag key, llvm::Value* val) {
@@ -117,6 +121,12 @@ public:
 
     set_impl(key, val);
   }
+
+  llvm::Value* GetFlagValue_impl(Flag key) { return get_flag_impl(key); }
+
+  void SetFlagValue_impl(Flag key, llvm::Value* v) { set_flag_impl(key, v); }
+
+  constexpr ControlFlow getControlFlow_impl() { return ControlFlow::Unflatten; }
 
   struct backup_point {
     std::array<llvm::Value*, REGISTER_COUNT> vec;
@@ -162,8 +172,10 @@ public:
 
     printvalue2("backing up");
     printvalue2(this->counter);
+    printvalueforce2("dbg1");
     BBbackup[bb] = backup_point(vec, vecflag, this->buffer, this->cache,
                                 this->assumptions, this->counter);
+    printvalueforce2("dbg2");
   }
 
   void load_backup_impl(BasicBlock* bb) {
@@ -254,7 +266,8 @@ public:
     this->SetRegisterValue(Register::RFLAGS, two);
 
     // auto value =
-    //     cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context), rip));
+    //     cast<Value>(ConstantInt::getSigned(Type::getInt64Ty(context),
+    //     rip));
 
     // auto new_rip = createAddFolder(zero, value);
 

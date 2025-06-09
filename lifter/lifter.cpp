@@ -4,6 +4,7 @@
 
 #include "MemoryPolicy.hpp"
 #include "fileReader.hpp"
+#include "lifterClass_concolic.hpp"
 #include "lifterClass_symbolic.hpp"
 
 #include "PathSolver.h"
@@ -36,7 +37,7 @@ unsigned int pathNo = 0;
 unsigned int breaking = 0;
 arch_mode is64Bit;
 
-void asm_to_zydis_to_lift(lifterSymbolic<>* lifter,
+void asm_to_zydis_to_lift(lifterConcolic<>* lifter,
                           std::vector<uint8_t>& fileData) {
 
   // auto data = fileData.data();
@@ -45,11 +46,13 @@ void asm_to_zydis_to_lift(lifterSymbolic<>* lifter,
   bool filter = 0;
   while (lifter->getUnvisitedAddr(bbinfo, filter)) {
 
-    printvalueforce2("exploring " + std::to_string(bbinfo.block_address));
+    // printvalueforce2("exploring " + std::to_string(bbinfo.block_address));
+
     if (!(bbinfo.block->empty()) && filter) {
       printvalue2("not empty");
       continue;
     };
+
     filter = 1;
     lifter->load_backup(bbinfo.block);
     lifter->finished = 0;
@@ -66,7 +69,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   auto fileBase = fileData.data();
 
-  auto main = new lifterSymbolic();
+  auto main = new lifterConcolic<>();
   main->loadFile(fileBase);
   // configure memory policy - debug for now
 
@@ -177,7 +180,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
 
-  final_optpass(main->fnc, main->fnc->getArg(1), fileData.data(),
+  final_optpass(main->fnc, main->fnc->getArg(17), fileData.data(),
                 main->memoryPolicy);
 
   main->writeFunctionToFile("output.ll");

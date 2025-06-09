@@ -33,6 +33,11 @@
 #define DEFINE_FUNCTION(name) void lift_##name()
 #endif
 
+enum class ControlFlow {
+  Basic,
+  Unflatten,
+};
+
 struct InstructionKey {
   Value* operand1;
   union {
@@ -80,7 +85,7 @@ class InstructionCache {
 private:
   using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
                                        InstructionKey::InstructionKeyInfo>;
-  std::array<CacheMap, 256> opcodeCaches;
+  std::array<CacheMap, 100> opcodeCaches;
 
 public:
   void insert(uint8_t opcode, const InstructionKey& key, Value* value) {
@@ -95,11 +100,15 @@ public:
   }
   InstructionCache() = default;
   InstructionCache(InstructionCache& other) {
-
     // we want to copy each SmallDenseMap individually
-    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+    // crash on last item, why?
+    // FIXME: last item on array is corrupted.
+    for (size_t i = 0; i < opcodeCaches.size() - 1; ++i) {
       // reserve because its faster
-      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
+
+      auto src = other.opcodeCaches[i];
+      opcodeCaches[i].reserve(src.size());
+
       for (auto& kv : other.opcodeCaches[i]) {
         opcodeCaches[i].try_emplace(kv.first, kv.second);
       }
@@ -107,7 +116,7 @@ public:
   };
   InstructionCache(const InstructionCache& other) {
     // we want to copy each SmallDenseMap individually
-    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+    for (size_t i = 0; i < opcodeCaches.size() - 1; ++i) {
       // reserve because its faster
       opcodeCaches[i].reserve(other.opcodeCaches[i].size());
       for (auto& kv : other.opcodeCaches[i]) {
@@ -118,7 +127,7 @@ public:
   InstructionCache& operator=(const InstructionCache& other) {
     if (this == &other)
       return *this;
-    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+    for (size_t i = 0; i < opcodeCaches.size() - 1; ++i) {
       opcodeCaches[i].clear();
       opcodeCaches[i].reserve(other.opcodeCaches[i].size());
       for (auto& kv : other.opcodeCaches[i]) {
@@ -131,7 +140,7 @@ public:
   InstructionCache& operator=(InstructionCache& other) {
     if (this == &other)
       return *this;
-    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+    for (size_t i = 0; i < opcodeCaches.size() - 1; ++i) {
       opcodeCaches[i].clear();
       opcodeCaches[i].reserve(other.opcodeCaches[i].size());
       for (auto& kv : other.opcodeCaches[i]) {
@@ -416,7 +425,8 @@ public:
     out = std::move(unvisitedBlocks.back());
     unvisitedBlocks.pop_back();
 
-    if (!(out.block->empty()) && filter) {
+    if (getControlFlow() == ControlFlow::Basic && !(out.block->empty()) &&
+        filter) {
       printvalue2("not empty ;D ");
       return getUnvisitedAddr(out);
     }
@@ -469,6 +479,12 @@ public:
     GEPinfo(Value* addr, uint8_t type, bool TEB)
         : addr(addr), type(type), TEB(TEB){};
 
+    GEPinfo(const GEPinfo& other)
+        : addr(other.addr), type(other.type), TEB(other.TEB){};
+
+    GEPinfo(GEPinfo& other)
+        : addr(other.addr), type(other.type), TEB(other.TEB){};
+
     bool operator==(const GEPinfo& other) const {
       if (addr != other.addr)
         return false;
@@ -505,9 +521,11 @@ public:
   llvm::DenseMap<uint64_t, llvm::BasicBlock*> addrToBB;
 
   BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
-    auto it = addrToBB.find(addr);
-    if (it != addrToBB.end()) {
-      return it->second;
+    if (getControlFlow() == ControlFlow::Basic) {
+      auto it = addrToBB.find(addr);
+      if (it != addrToBB.end()) {
+        return it->second;
+      }
     }
     auto bb = BasicBlock::Create(context, name, fnc);
     addrToBB[addr] = bb;
@@ -536,6 +554,10 @@ protected:
   }
   void setFlagValue(Flag f, Value* v) {
     return static_cast<Derived*>(this)->SetFlagValue_impl(f, v);
+  }
+
+  constexpr ControlFlow getControlFlow() {
+    return static_cast<Derived*>(this)->getControlFlow_impl();
   }
 
 public:
@@ -810,9 +832,6 @@ public:
                            Value* const op1);
 
   // end folders
-
-  // would look nicer if we didnt have this, and do everything in a macro
-  // instead?
 
 #define OPCODE(fncname, ...) DEFINE_FUNCTION(fncname);
 #include "x86_64_opcodes.x"

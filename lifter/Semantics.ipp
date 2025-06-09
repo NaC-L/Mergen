@@ -651,6 +651,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
 
   std::string block_name = "jmp_call-" + std::to_string(jump_address) + "-";
 
+  auto registerValue = GetIndexValue(0);
   switch (instruction.types[0]) {
   case OperandType::Immediate8:
   case OperandType::Immediate16: // todo : pretty sure this 8 and 16 will cause
@@ -658,12 +659,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   case OperandType::Immediate32:
   case OperandType::Immediate64: {
 
-    if (auto imm = dyn_cast<ConstantInt>(GetIndexValue(0))) {
-      jump_address += imm->getSExtValue();
-      break;
-    }
-    UNREACHABLE("wont reach");
-    break;
+    // if (auto imm = dyn_cast<ConstantInt>(GetIndexValue(0))) {
+    //   jump_address += imm->getSExtValue();
+    //   break;
+    // }
+    // UNREACHABLE("wont reach");
+    // break;
   }
   case OperandType::Memory8:
   case OperandType::Memory16: // todo : pretty sure this 8 and 16 will cause
@@ -674,8 +675,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   case OperandType::Register16:
   case OperandType::Register32:
   case OperandType::Register64: {
-    auto registerValue = GetIndexValue(0);
-    if (!isa<ConstantInt>(registerValue)) {
+    registerValue =
+        createAddFolder(registerValue, GetRegisterValueWrapper(Register::RIP));
+    // auto registerValue = GetIndexValue(0);
+    if (getControlFlow() == ControlFlow::Basic ||
+        !isa<ConstantInt>(registerValue)) {
 
       std::cout << "did call";
       registerValue->print(outs());
@@ -697,28 +701,32 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
     break;
   }
 
-  SetRegisterValue(Register::RSP, result);
-  // sub rsp 8 last,
+  // if inlining call
+  // TODO:
+  if (getControlFlow() == ControlFlow::Unflatten) {
+    SetRegisterValue(Register::RSP, result);
+    // // sub rsp 8 last,
 
-  auto push_into_rsp = GetRegisterValueWrapper(Register::RIP);
+    auto push_into_rsp = GetRegisterValueWrapper(Register::RIP);
 
-  SetMemoryValue(getSPaddress(), push_into_rsp);
-  // sub rsp 8 last,
+    SetMemoryValue(getSPaddress(), push_into_rsp);
+    // // sub rsp 8 last,
 
-  auto bb = BasicBlock::Create(context, block_name.c_str(),
-                               builder->GetInsertBlock()->getParent());
-  // if its trying to jump somewhere else than our binary, call it and
-  // continue from [rsp]
+    auto bb = BasicBlock::Create(context, block_name.c_str(),
+                                 builder->GetInsertBlock()->getParent());
+    // if its trying to jump somewhere else than our binary, call it and
+    // continue from [rsp]
 
-  // TODO: add some of this code to solvePath
-  builder->CreateBr(bb);
+    // // TODO: add some of this code to solvePath
+    builder->CreateBr(bb);
 
-  printvalue2(jump_address);
+    // printvalue2(jump_address);
 
-  blockInfo = BBInfo(jump_address, bb);
-  printvalue2("pushing block");
-  unvisitedBlocks.push_back(blockInfo);
-  run = 0;
+    blockInfo = BBInfo(jump_address, bb);
+    printvalue2("pushing block");
+    addUnvisitedAddr(blockInfo);
+    run = 0;
+  }
 }
 
 int ret_count = 0;
@@ -828,20 +836,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     builder->CreateRet(rax);
     Function* originalFunc_finalnopt = builder->GetInsertBlock()->getParent();
 
-    debugging::doIfDebug([&]() {
-      std::string Filename_finalnopt = "output_finalnoopt.ll";
-      std::error_code EC_finalnopt;
-      raw_fd_ostream OS_finalnopt(Filename_finalnopt, EC_finalnopt);
-      originalFunc_finalnopt->print(OS_finalnopt);
-    });
-    // function->print(outs());
-
-    debugging::doIfDebug([&]() {
-      std::string Filename = "output_finalopt.ll";
-      std::error_code EC;
-      raw_fd_ostream OS(Filename, EC);
-      originalFunc_finalnopt->print(OS);
-    });
     run = 0;
     finished = 1;
     printvalue2(finished);
@@ -901,7 +895,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   solvePath(function, destination, trunc);
   printvalue2(destination);
   printvalue(newRip);
-  // SetRegisterValue(Register::RIP, newRip);
+  // SetRegisterValueWrapper(Register::RIP, newRip);
 }
 
 int branchnumber = 0;
@@ -1101,13 +1095,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jnbe() {
 
   auto cf = getFlag(FLAG_CF);
   auto zf = getFlag(FLAG_ZF);
-  printvalue(cf) printvalue(zf) // auto dest = operands[0];
+  printvalue(cf) printvalue(zf); // auto dest = operands[0];
 
-      // auto Value = GetIndexValue( dest, 64);
-      // auto ripval = GetRegisterValue( Register::RIP);
-      // auto newRip = createAddFolder( Value, ripval, "jbe");
+  // auto Value = GetIndexValue( dest, 64);
+  // auto ripval = GetRegisterValue( Register::RIP);
+  // auto newRip = createAddFolder( Value, ripval, "jbe");
 
-      auto condition = createOrFolder(cf, zf, "jbe_Condition");
+  auto condition = createOrFolder(cf, zf, "jnbe_Condition");
 
   branchHelper(condition, "jnbe", branchnumber, 1);
 
@@ -3347,7 +3341,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_rdtsc() {
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
   LLVMContext& context = builder->getContext();
-  // operands[0] = eax
+
+  // operands[0]  = eax
   // operands[1] = ebx
   // operands[2] = ecx
   // operands[3] = edx
@@ -3398,6 +3393,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
   // ArrayType* CpuInfoTy = ArrayType::get(Type::getInt32Ty(context), 4);
 
   Value* eax = GetRegisterValueWrapper(Register::EAX);
+
   // one is eax, other is always 0?
   std::vector<Type*> AsmOutputs = {
       Type::getInt32Ty(context), Type::getInt32Ty(context),
@@ -4332,7 +4328,27 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
   case Mnemonic::NOP: {
     break;
   }
+  case Mnemonic::Invalid: {
 
+    printvalueforce2(this->counter);
+    std::cout << "invalid: " << magic_enum::enum_name(instruction.mnemonic)
+              << " runtime: " << std::hex << current_address << std::endl;
+    /*
+        std::string Filename = "output_notimplemented.ll";
+        std::error_code EC;
+        raw_fd_ostream OS(Filename, EC);
+        builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+        */
+    // UNREACHABLE("Instruction not implemented");
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("invalid", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    break;
+  }
   default: {
 
     printvalueforce2(this->counter);
@@ -4353,6 +4369,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
     builder->CreateRet(builder->CreateCall(externFunc));
     run = 0;
     finished = 1;
+    break;
   }
   }
 }
