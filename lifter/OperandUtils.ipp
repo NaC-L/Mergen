@@ -489,7 +489,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getOrCreate(
         builder->CreateBinOp(static_cast<Instruction::BinaryOps>(opcode),
                              key.operand1, key.operand2, Name);
   } else if (isCast(opcode)) {
-    printvalue2("iscast:D");
     // Cast instruction
     switch (opcode) {
 
