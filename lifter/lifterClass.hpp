@@ -592,13 +592,13 @@ public:
   LazyValue getLazyFlag(const Flag flag);
   llvm::Value* getFlag(const Flag flag);
   llvm::Value* GetValueFromHighByteRegister(Register reg);
-  llvm::Value* GetRegisterValueWrapper(const Register key);
+  llvm::Value* GetRegisterValue(const Register key);
 
 protected:
-  llvm::Value* GetRegisterValue(const Register key) {
+  llvm::Value* GetRegisterValue_internal(const Register key) {
     return static_cast<Derived*>(this)->GetRegisterValue_impl(key);
   }
-  void SetRegisterValue(const Register key, llvm::Value* val) {
+  void SetRegisterValue_internal(const Register key, llvm::Value* val) {
     return static_cast<Derived*>(this)->SetRegisterValue_impl(key, val);
   }
 
@@ -614,7 +614,7 @@ public:
   // current implementation cant be encapsulated in a class very efficently
   void createMemcpy(llvm::Value* src, llvm::Value* dest, llvm::Value* size);
 
-  void SetRegisterValueWrapper(const Register key, llvm::Value* value);
+  void SetRegisterValue(const Register key, llvm::Value* value);
   void SetMemoryValue(llvm::Value* address, llvm::Value* value);
   void SetRFLAGSValue(llvm::Value* value);
   PATH_info solvePath(llvm::Function* function, uint64_t& dest,
@@ -667,7 +667,7 @@ public:
                                  */
   llvm::Value* GetRFLAGSValue();
 
-  llvm::Value* getSPaddress() { return GetRegisterValueWrapper(Register::RSP); }
+  llvm::Value* getSPaddress() { return GetRegisterValue(Register::RSP); }
   llvm::Value* getSP() { return getPointer(getSPaddress()); };
   // end getters-setters
   // misc

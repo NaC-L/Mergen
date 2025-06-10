@@ -1515,7 +1515,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getFlag(const Flag flag) {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetValueFromHighByteRegister(
     const Register reg) {
 
-  Value* fullRegisterValue = GetRegisterValue(getBiggestEncoding(reg));
+  Value* fullRegisterValue = GetRegisterValue_internal(getBiggestEncoding(reg));
 
   Value* shiftedValue = createLShrFolder(fullRegisterValue, 8, "highreg");
 
@@ -1557,7 +1557,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRFLAGSValue() {
   return rflags;
 }
 
-MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValueWrapper(
+MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
     const Register key) {
   // printvalue2(magic_enum::enum_name(key));
 
@@ -1597,7 +1597,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValueWrapper(
   // semantics
 
   printvalue2(magic_enum::enum_name(largestKey));
-  auto reg = GetRegisterValue(largestKey);
+  auto reg = GetRegisterValue_internal(largestKey);
   printvalue(reg);
   return createZExtOrTruncFolder(reg, builder->getIntNTy(getRegisterSize(key)));
 }
@@ -1608,7 +1608,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToHighByteRegister(
   int shiftValue = 8;
 
   Register fullRegKey = getBiggestEncoding(reg);
-  Value* fullRegisterValue = GetRegisterValue(fullRegKey);
+  Value* fullRegisterValue = GetRegisterValue_internal(fullRegKey);
 
   Value* eightBitValue = createAndFolder(
       value, ConstantInt::get(value->getType(), 0xFF), "eight-bit");
@@ -1632,7 +1632,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_8b(
     const Register reg, Value* value) {
   LLVMContext& context = builder->getContext();
   Register fullRegKey = getBiggestEncoding(reg);
-  Value* fullRegisterValue = GetRegisterValue(fullRegKey);
+  Value* fullRegisterValue = GetRegisterValue_internal(fullRegKey);
   fullRegisterValue =
       createZExtOrTruncFolder(fullRegisterValue, Type::getInt64Ty(context));
 
@@ -1657,7 +1657,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_8b(
   printvalue(fullRegisterValue) printvalue(maskValue) printvalue(maskedFullReg)
       printvalue(extendedValue) printvalue(updatedReg);
 
-  SetRegisterValue(fullRegKey, updatedReg);
+  SetRegisterValue_internal(fullRegKey, updatedReg);
 
   return updatedReg;
 }
@@ -1666,7 +1666,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_16b(
     const Register reg, Value* value) {
 
   Register fullRegKey = getBiggestEncoding(reg);
-  Value* fullRegisterValue = GetRegisterValue(fullRegKey);
+  Value* fullRegisterValue = GetRegisterValue_internal(fullRegKey);
   printvalue(fullRegisterValue);
   Value* last4cleared =
       ConstantInt::get(fullRegisterValue->getType(), 0xFFFFFFFFFFFF0000);
@@ -1679,8 +1679,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_16b(
   return updatedReg;
 }
 
-MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValueWrapper(
-    const Register key, Value* value) {
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
+                                                           Value* value) {
 
   if (key == Register::EIP || key == Register::RIP)
     return;
@@ -1701,7 +1701,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValueWrapper(
   printvalue2(magic_enum::enum_name(key));
   printvalue(value);
   Register newKey = getBiggestEncoding(key);
-  SetRegisterValue(newKey, value);
+  SetRegisterValue_internal(newKey, value);
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetEffectiveAddress() {
@@ -1712,14 +1712,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetEffectiveAddress() {
   Value* baseValue = nullptr;
 
   if (instruction.mem_base != Register::None) {
-    baseValue = GetRegisterValueWrapper(instruction.mem_base);
+    baseValue = GetRegisterValue(instruction.mem_base);
     baseValue = createZExtFolder(baseValue, Type::getInt64Ty(context));
     printvalue(baseValue);
   }
   Value* indexValue = nullptr;
 
   if (instruction.mem_index != Register::None) {
-    indexValue = GetRegisterValueWrapper(instruction.mem_index);
+    indexValue = GetRegisterValue(instruction.mem_index);
 
     indexValue = createZExtFolder(indexValue, Type::getInt64Ty(context));
     printvalue(indexValue);
@@ -1818,7 +1818,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
   case OperandType::Register64: {
     auto reg = instruction.regs[index];
     printvalue2(magic_enum::enum_name(reg));
-    return createZExtOrTruncFolder(GetRegisterValueWrapper(reg),
+    return createZExtOrTruncFolder(GetRegisterValue(reg),
                                    builder->getIntNTy(GetTypeSize(type)));
   }
 
@@ -1907,7 +1907,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetIndexValue(uint8_t index,
     //    createSExtOrTruncFolder(value,
     //    builder->getIntNTy(getRegisterSize(reg)));
 
-    SetRegisterValueWrapper(reg, value);
+    SetRegisterValue(reg, value);
     return;
   }
 
@@ -1978,7 +1978,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::pushFlags(
     const std::vector<Value*>& value, const std::string& address) {
   LLVMContext& context = builder->getContext();
 
-  auto rsp = GetRegisterValueWrapper(Register::RSP);
+  auto rsp = GetRegisterValue(Register::RSP);
 
   for (size_t i = 0; i < value.size(); i += 8) {
     Value* byteVal = ConstantInt::get(Type::getInt8Ty(context), 0);
@@ -2004,7 +2004,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::pushFlags(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::popStack(int size) {
   LLVMContext& context = builder->getContext();
-  auto rsp = GetRegisterValueWrapper(Register::RSP);
+  auto rsp = GetRegisterValue(Register::RSP);
   // should we get a address calculator function, do we need that?
 
   Value* pointer = createGEPFolder(Type::getInt8Ty(context), memoryAlloc, rsp,
@@ -2018,7 +2018,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::popStack(int size) {
   });
 
   auto CI = ConstantInt::get(rsp->getType(), size);
-  SetRegisterValue(Register::RSP, createAddFolder(rsp, CI));
+  SetRegisterValue_internal(Register::RSP, createAddFolder(rsp, CI));
 
   Value* solvedLoad =
       solveLoad(returnValue, pointer, loadType->getIntegerBitWidth());
