@@ -823,6 +823,7 @@ public:
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
                            Value* const op1);
 
+  void run_opts();
   // end folders
 
 #define OPCODE(fncname, ...) DEFINE_FUNCTION(fncname);

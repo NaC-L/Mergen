@@ -3,15 +3,16 @@
 #define MAGIC_ENUM_RANGE_MAX 1000
 
 #include "MemoryPolicy.hpp"
-#include "fileReader.hpp"
-#include "lifterClass_concolic.hpp"
-#include "lifterClass_symbolic.hpp"
-
+#include "MergenPB.hpp"
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
+#include "fileReader.hpp"
 #include "includes.h"
 #include "lifterClass.hpp"
+#include "lifterClass_concolic.hpp"
+#include "lifterClass_symbolic.hpp"
 #include "nt/nt_headers.hpp"
+
 
 // #include "test_instructions.h"
 #include "Semantics.ipp"
@@ -180,9 +181,9 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
 
-  final_optpass(main->fnc, main->fnc->getArg(17), fileData.data(),
-                main->memoryPolicy);
-
+  // final_optpass(main->fnc, main->fnc->getArg(main->fnc->arg_size()),
+  //               fileData.data(), main->memoryPolicy);
+  main->run_opts();
   main->writeFunctionToFile("output.ll");
   return;
 }
