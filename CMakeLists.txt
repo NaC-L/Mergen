@@ -94,6 +94,7 @@ set(lifter_SOURCES
 	"lifter/FunctionSignatures.hpp"
 	"lifter/InlinePolicy.hpp"
 	"lifter/MemoryPolicy.hpp"
+	"lifter/MergenPB.hpp"
 	"lifter/RegisterManager.hpp"
 	"lifter/ZydisDisassembler.hpp"
 	"lifter/fileReader.hpp"
