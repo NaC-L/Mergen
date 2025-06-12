@@ -625,12 +625,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
         res.insert(falseValues.begin(), falseValues.end());
         return res;
       }
-      if (kb.isNonZero()) {
-        auto falseValues = computePossibleValues(falseValue, Depth + 1);
-
-        res.insert(falseValues.begin(), falseValues.end());
-        return res;
-      }
       auto trueValues = computePossibleValues(trueValue, Depth + 1);
       // Combine all possible values from both branches
       res.insert(trueValues.begin(), trueValues.end());
