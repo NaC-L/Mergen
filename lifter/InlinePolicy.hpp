@@ -51,22 +51,70 @@ public:
 };
 
 // Dynamic mode, for when we need concolic execution
-class FunctionInlinePolicyDynamic
-    : public FunctionInlinePolicyBase<FunctionInlinePolicyDynamic> {
+// inline by default
+class FunctionInlinePolicyDynamicInlineDefault
+    : public FunctionInlinePolicyBase<
+          FunctionInlinePolicyDynamicInlineDefault> {
 public:
   // inline by default
   // keep track of outlines, everything else is inline?
   std::set<uint64_t> range;
   FunctionInlineMode defaultMode;
 
-  FunctionInlinePolicyDynamic() { defaultMode = FunctionInlineMode::INLINE; }
+  FunctionInlinePolicyDynamicInlineDefault() {
+    defaultMode = FunctionInlineMode::INLINE;
+  }
 
-  FunctionInlinePolicyDynamic(FunctionInlinePolicyDynamic& other) {
+  FunctionInlinePolicyDynamicInlineDefault(
+      FunctionInlinePolicyDynamicInlineDefault& other) {
     range = other.range;
     defaultMode = other.defaultMode;
   };
 
-  FunctionInlinePolicyDynamic(FunctionInlinePolicyDynamic&& other) {
+  FunctionInlinePolicyDynamicInlineDefault(
+      FunctionInlinePolicyDynamicInlineDefault&& other) {
+    range = std::move(other.range);
+    defaultMode = std::move(other.defaultMode);
+  };
+
+  // void setDefaultMode_impl(FunctionInlineMode mode) { defaultMode = mode; }
+
+  void addAddress_impl(uint64_t address) { range.insert(address); }
+
+  FunctionInlineMode getAccessMode_impl(uint64_t address) const {
+    auto it = range.upper_bound(address);
+    if (it != range.begin()) {
+      --it;
+      if (address >= *it && address <= *it)
+        return FunctionInlineMode::OUTLINE;
+    }
+    return this->defaultMode;
+  }
+};
+
+// Dynamic mode, for when we need concolic execution
+// outline by default
+class FunctionInlinePolicyDynamicOutlineDefault
+    : public FunctionInlinePolicyBase<
+          FunctionInlinePolicyDynamicOutlineDefault> {
+public:
+  // inline by default
+  // keep track of outlines, everything else is inline?
+  std::set<uint64_t> range;
+  FunctionInlineMode defaultMode;
+
+  FunctionInlinePolicyDynamicOutlineDefault() {
+    defaultMode = FunctionInlineMode::INLINE;
+  }
+
+  FunctionInlinePolicyDynamicOutlineDefault(
+      FunctionInlinePolicyDynamicOutlineDefault& other) {
+    range = other.range;
+    defaultMode = other.defaultMode;
+  };
+
+  FunctionInlinePolicyDynamicOutlineDefault(
+      FunctionInlinePolicyDynamicOutlineDefault&& other) {
     range = std::move(other.range);
     defaultMode = std::move(other.defaultMode);
   };
@@ -128,4 +176,4 @@ public:
   }
 };
 
-using FunctionInlinePolicy = FunctionInlinePolicyDynamic;
+using FunctionInlinePolicy = FunctionInlinePolicyDynamicInlineDefault;
