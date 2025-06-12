@@ -607,7 +607,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
     return res;
   }
   if (auto v_inst = dyn_cast<Instruction>(V)) {
-
+    if (v_inst->getOpcode() == Instruction::Alloca) {
+      return {};
+    }
     if (v_inst->getNumOperands() == 1)
       return computePossibleValues(v_inst->getOperand(0), Depth + 1);
 
