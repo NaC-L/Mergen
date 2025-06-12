@@ -345,8 +345,7 @@ public:
 
   // also lifts single inst
   void liftAddress(uint64_t addr, size_t size = 15) {
-    InstructionKey key;
-    printvalue(cache.lookup(99, key));
+
     file.filebase_exists();
 
     this->current_address = addr;
