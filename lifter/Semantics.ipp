@@ -4385,8 +4385,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
                                     current_address);
   SetRegisterValueWrapper(Register::RIP, val);
   */
-  auto rsp = GetRegisterValue(Register::RSP);
-  printvalue(rsp);
+  // auto rsp = GetRegisterValue(Register::RSP);
+  // printvalue(rsp);
   printvalue2(current_address);
 
   auto funcInfo = signatures.getFunctionInfo(current_address);
