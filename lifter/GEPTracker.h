@@ -6,7 +6,6 @@
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/IR/Value.h>
 
-
 using namespace llvm;
 
 enum Assumption { Real, Assumed }; // add None
