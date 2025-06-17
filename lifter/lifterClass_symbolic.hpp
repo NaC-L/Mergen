@@ -85,11 +85,12 @@ public:
     int index = getRegisterIndex(key);
     // auto size = getRegisterSize(key);
 
-    llvm::Value* fieldPtr =
-        this->builder->CreateStructGEP(type, ctx, index, "reg_ptr");
+    llvm::Value* fieldPtr = this->builder->CreateStructGEP(
+        type, ctx, index, "reg_ptr" + magic_enum::enum_name(key));
 
     llvm::Value* val = this->builder->CreateLoad(
-        llvm::Type::getInt64Ty(this->context), fieldPtr, "reg_val");
+        llvm::Type::getInt64Ty(this->context), fieldPtr,
+        "reg_val" + magic_enum::enum_name(key));
 
     return val;
   }
@@ -97,21 +98,24 @@ public:
   void SetRegisterValue_impl(Register key, llvm::Value* val) {
     int index = getRegisterIndex(key);
 
-    llvm::Value* fieldPtr =
-        this->builder->CreateStructGEP(type, ctx, (uint64_t)index, "reg_ptr");
+    llvm::Value* fieldPtr = this->builder->CreateStructGEP(
+        type, ctx, index, "reg_ptr" + magic_enum::enum_name(key));
 
-    this->builder->CreateStore(val, fieldPtr);
+    auto valext =
+        this->createZExtFolder(val, llvm::Type::getInt64Ty(this->context));
+    this->builder->CreateStore(valext, fieldPtr);
   }
 
   llvm::Value* GetFlagValue_impl(Flag key) {
     int index = key + 16;
     // auto size = getRegisterSize(key);
 
-    llvm::Value* fieldPtr =
-        this->builder->CreateStructGEP(type, ctx, index, "reg_ptr");
+    llvm::Value* fieldPtr = this->builder->CreateStructGEP(
+        type, ctx, index, "reg_ptr" + magic_enum::enum_name(key));
 
-    llvm::Value* val = this->builder->CreateLoad(this->builder->getInt1Ty(),
-                                                 fieldPtr, "reg_val");
+    llvm::Value* val =
+        this->builder->CreateLoad(this->builder->getInt1Ty(), fieldPtr,
+                                  "reg_val" + magic_enum::enum_name(key));
 
     return val;
   }
@@ -119,8 +123,8 @@ public:
   void SetFlagValue_impl(Flag key, llvm::Value* val) {
     int index = key + 16;
 
-    llvm::Value* fieldPtr =
-        this->builder->CreateStructGEP(type, ctx, (uint64_t)index, "reg_ptr");
+    llvm::Value* fieldPtr = this->builder->CreateStructGEP(
+        type, ctx, (uint64_t)index, "reg_ptr" + magic_enum::enum_name(key));
 
     this->builder->CreateStore(
         this->builder->CreateTrunc(val, this->builder->getInt1Ty()), fieldPtr);
