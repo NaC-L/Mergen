@@ -10,6 +10,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/CommandLine.h>
 
 using namespace llvm;
 
@@ -40,6 +41,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
   modulePassManager.run(*module, moduleAnalysisManager);
   */
   bool changed = 0;
+  //   const char* a = "-jump-threading-across-loop-headers=1";
+  //   llvm::cl::ParseCommandLineOptions(1, &a);
+
   do {
     changed = false;
 
@@ -52,16 +56,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
                                           this->fileBase, memoryPolicy));
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
     modulePassManager.addPass(
-        PromotePseudoStackPass(fnc->getArg(fnc->arg_size())));
+        PromotePseudoStackPass(fnc->getArg(fnc->arg_size() - 1)));
     modulePassManager.addPass(
-        PromotePseudoMemory(fnc->getArg(fnc->arg_size())));
+        PromotePseudoMemory(fnc->getArg(fnc->arg_size() - 1)));
 
     modulePassManager.run(*module, moduleAnalysisManager);
 
     const size_t afterSize = module->getInstructionCount();
 
     changed = beforeSize != afterSize;
-
   } while (changed);
 
   modulePassManager =
