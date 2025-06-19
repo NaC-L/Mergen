@@ -49,7 +49,6 @@
 namespace debugging {
   int increaseInstCounter();
   void enableDebug(const std::string& filename);
-  void printLLVMValue(llvm::Value* v, const char* name);
   void doIfDebug(const std::function<void(void)>& dothis);
 
   extern bool shouldDebug;
@@ -65,6 +64,19 @@ namespace debugging {
       return;
     } else
       *debugStream << " " << name << " : " << v << "\n";
+    debugStream->flush();
+  }
+  template <typename T>
+  concept Printable = requires(T t, llvm::raw_ostream& os) {
+    { t.print(os) } -> std::same_as<void>;
+  };
+
+  template <Printable T> void printLLVMValue(T* v, const char* name) {
+    if (!shouldDebug || !debugStream)
+      return;
+    *debugStream << " " << name << " : ";
+    v->print(*debugStream);
+    *debugStream << "\n";
     debugStream->flush();
   }
 
