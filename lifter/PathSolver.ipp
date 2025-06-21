@@ -1,10 +1,19 @@
 #pragma once
 
+#include "CommonDisassembler.hpp"
 #include "PathSolver.h"
 #include "lifterClass.hpp"
+#include "utils.h"
+#include <llvm/Analysis/AliasAnalysis.h>
+#include <llvm/Analysis/MemorySSA.h>
+#include <llvm/Analysis/MemorySSAUpdater.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/Support/Casting.h>
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
@@ -17,9 +26,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     dest = constInt->getZExtValue();
     result = PATH_solved;
     run = 0;
-    auto bb_solved = BasicBlock::Create(
-        function->getContext(), "bb_constraint-" + std::to_string(dest) + "-",
-        builder->GetInsertBlock()->getParent());
+
+    auto bb_solved = getOrCreateBB(dest, "bb_solved_const");
 
     builder->CreateBr(bb_solved);
     blockInfo = BBInfo(dest, bb_solved);
@@ -34,9 +42,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       run = 0;
       std::cout << "Solved the constraint and moving to next path\n"
                 << std::flush;
-      auto bb_solved = BasicBlock::Create(
-          function->getContext(), "bb_constraint-" + std::to_string(dest) + "-",
-          builder->GetInsertBlock()->getParent());
+
+      auto bb_solved = getOrCreateBB(dest, "bb_solved");
 
       builder->CreateBr(bb_solved);
       blockInfo = BBInfo(dest, bb_solved);
@@ -54,9 +61,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   std::vector<APInt> pv(pvset.begin(), pvset.end());
   if (pv.size() == 1) {
     printvalue2(pv[0]);
+    /*
     auto bb_solved = BasicBlock::Create(function->getContext(), "bb_false",
                                         builder->GetInsertBlock()->getParent());
+    */
 
+    auto bb_solved = getOrCreateBB(pv[0].getZExtValue(), "bb_single");
     builder->CreateBr(bb_solved);
     blockInfo = BBInfo(pv[0].getZExtValue(), bb_solved);
     printvalue2("pushing block");
@@ -69,9 +79,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     // auto bb_true = BasicBlock::Create(function->getContext(), "bb_true",
     //                                   builder->GetInsertBlock()->getParent());
 
-    auto bb_false = getOrCreateBB(pv[0].getZExtValue(), "bb_false");
-    auto bb_true = getOrCreateBB(pv[1].getZExtValue(), "bb_true");
-
     auto firstcase = pv[0];
     auto secondcase = pv[1];
 
@@ -80,8 +87,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       if (auto si = dyn_cast<SelectInst>(simplifyv)) {
         auto firstcase_v = builder->getIntN(
             simplifyv->getType()->getIntegerBitWidth(), c1.getZExtValue());
-        if (si->getTrueValue() == firstcase_v)
+        if (si->getTrueValue() == firstcase_v) {
+          printvalue(si);
+          printvalue(firstcase_v);
           return si->getCondition();
+        }
       }
       return std::nullopt;
     };
@@ -95,17 +105,29 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     // values
     // 2- create a hacky compare for condition == potentialvalue
 
-    if (auto can_simplify = try_simplify(firstcase, simplifyValue))
+    printvalue2(firstcase);
+    printvalue2(secondcase);
+
+    if (auto can_simplify = try_simplify(firstcase, simplifyValue)) {
+      printvalue2("b");
       condition = can_simplify.value();
-    else if (auto can_simplify2 = try_simplify(secondcase, simplifyValue)) {
-      // TODO:
+    } else if (auto can_simplify2 = try_simplify(secondcase, simplifyValue)) {
+      // TODO: fix?
+      printvalue2("c");
       std::swap(firstcase, secondcase);
       condition = can_simplify2.value();
-    } else
+    } else {
+      printvalue2("a");
       condition = createICMPFolder(
           llvm::CmpInst::ICMP_EQ, simplifyValue,
           builder->getIntN(simplifyValue->getType()->getIntegerBitWidth(),
                            firstcase.getZExtValue()));
+    }
+
+    printvalue2(firstcase);
+    printvalue2(secondcase);
+    auto bb_true = getOrCreateBB(firstcase.getZExtValue(), "bb_true");
+    auto bb_false = getOrCreateBB(secondcase.getZExtValue(), "bb_false");
     printvalue(condition);
     auto BR = builder->CreateCondBr(condition, bb_true, bb_false);
 

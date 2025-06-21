@@ -14,15 +14,23 @@
 #include "icedDisassembler_registers.h"
 #include "includes.h"
 #include "utils.h"
+#include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 
 #include <concepts>
 #include <llvm/ADT/DenseMap.h>
+#include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/DomConditionCache.h>
+#include <llvm/Analysis/DomTreeUpdater.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
+#include <llvm/Analysis/MemorySSAUpdater.h>
+#include <llvm/Analysis/PostDominators.h>
 #include <llvm/Analysis/SimplifyQuery.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/PatternMatch.h>
 #include <llvm/Support/KnownBits.h>
 #include <memory>
 #include <set>
@@ -426,6 +434,7 @@ public:
                 out.block->getName());
 
     visitedAddresses.insert(out.block_address);
+    blockInfo = out;
     return true;
   }
 
@@ -451,7 +460,6 @@ public:
   unsigned int instct = 0;
   llvm::SimplifyQuery* cachedquery;
 
-  llvm::DominatorTree* DT;
   llvm::BasicBlock* lastBB = nullptr;
   unsigned int BIlistsize = 0;
 
@@ -511,10 +519,13 @@ public:
   std::set<uint64_t> visitedAddresses;
   llvm::DenseMap<uint64_t, llvm::BasicBlock*> addrToBB;
 
+  // creates an edge to created bb
+  // TODO: wrapper for createbr, condbr, switch and update it there.
   BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
     if (getControlFlow() == ControlFlow::Basic) {
       auto it = addrToBB.find(addr);
       if (it != addrToBB.end()) {
+        // also might have to update here,
         return it->second;
       }
     }
@@ -552,6 +563,15 @@ protected:
   }
 
 public:
+  AliasAnalysis* AA;
+  DominatorTree* DT;
+  PostDominatorTree* PDT;
+  DomTreeUpdater* DTU;
+  MemorySSA* MSSA;
+  MemorySSAUpdater* MSSAU;
+  TargetLibraryInfo* TLI;
+  AssumptionCache* AC;
+  TargetTransformInfo* TTI;
   lifterClassBase() {
     static_assert(lifterConcept<Derived, Register>,
                   "Derived should satisfy lifterConcept");
@@ -565,6 +585,18 @@ public:
     this->builder = std::make_unique<llvm::IRBuilder<llvm::InstSimplifyFolder>>(
         this->bb, Folder);
     InitRegisters();
+    TargetLibraryInfoImpl TLIImpl(Triple(fnc->getParent()->getTargetTriple()));
+    TLI = new TargetLibraryInfo(TLIImpl);
+
+    AA = new AliasAnalysis(*TLI);
+    DT = new DominatorTree(*fnc);
+    PDT = new PostDominatorTree(*fnc);
+    DTU = new DomTreeUpdater(DT, PDT, DomTreeUpdater::UpdateStrategy::Lazy);
+    MSSA = new MemorySSA(*fnc, AA, DT);
+    MSSAU = new MemorySSAUpdater(MSSA);
+
+    TTI = new TargetTransformInfo(fnc->getParent()->getDataLayout());
+    AC = new AssumptionCache(*fnc, TTI);
   };
 
   lifterClassBase(const lifterClassBase& other) = delete;
@@ -573,10 +605,6 @@ public:
   void liftInstructionSemantics();
   void branchHelper(llvm::Value* condition, const std::string& instname,
                     const int numbered, const bool reverse = false);
-
-  // init
-  void initDomTree(llvm::Function& F) { DT = new llvm::DominatorTree(F); }
-  // end init
 
   std::optional<llvm::Value*> evaluateLLVMExpression(llvm::Value* value);
 
@@ -614,6 +642,85 @@ public:
   void createMemcpy(llvm::Value* src, llvm::Value* dest, llvm::Value* size);
 
   void SetRegisterValue(const Register key, llvm::Value* value);
+
+  template <uint8_t count, bool little_endian = true>
+  Value* LoadValueFromMemByBytes(llvm::Value* address) {
+    llvm::Value* returnv = builder->getIntN(count * 8, 0);
+    for (int i = 0; i < count; i++) {
+
+      auto offset =
+          builder->getIntN(address->getType()->getIntegerBitWidth(), i);
+
+      auto pointer = getPointer(createAddFolder(address, offset));
+
+      loadMemoryOp(pointer);
+      printvalue(pointer);
+      LazyValue retval([this, pointer]() {
+        auto ret = builder->CreateLoad(builder->getIntNTy(8),
+                                       pointer /*, "Loadxd-" + address + "-"*/);
+        return ret;
+      });
+
+      if (Value* solvedLoad = solveLoad(retval, pointer, 8)) {
+        printvalue(solvedLoad);
+        if constexpr (little_endian) {
+          // shl by i,
+          solvedLoad = createShlFolder(
+              createZExtFolder(solvedLoad, builder->getIntNTy(count * 8)),
+              i * 8);
+
+        } else {
+          // shl by count-i-1*8
+          solvedLoad = createShlFolder(
+              createZExtFolder(solvedLoad, builder->getIntNTy(count * 8)),
+              (count - 1 - i) * 8);
+        }
+        printvalue(returnv);
+        printvalue(solvedLoad);
+        Value* lhsPrev;
+        ConstantInt* ci = builder->getIntN(count * 8, 0);
+        if (llvm::PatternMatch::match(
+                returnv, llvm::PatternMatch::m_ZExt(llvm::PatternMatch::m_Trunc(
+                             llvm::PatternMatch::m_Value(lhsPrev)))) &&
+            llvm::PatternMatch::match(solvedLoad,
+                                      llvm::PatternMatch::m_ConstantInt(ci))) {
+          printvalue2("0, postreturn");
+          returnv = createTruncFolder(lhsPrev, builder->getIntNTy(count * 8));
+        } else {
+          printvalue2("1, postreturn");
+
+          returnv = createOrFolder(returnv, solvedLoad);
+        }
+      } else {
+        returnv = createOrFolder(returnv, retval.get());
+      }
+    }
+    return returnv;
+  }
+
+  template <int count, bool little_endian = true>
+  void StoreValueToMemByBytes(llvm::Value* address, llvm::Value* value) {
+    printvalue(value);
+    for (int i = 0; i < count; i++) {
+      llvm::Value* storeval = nullptr;
+      auto offset =
+          builder->getIntN(address->getType()->getIntegerBitWidth(), i);
+      auto pointer = getPointer(createAddFolder(address, offset));
+      if constexpr (little_endian) {
+
+        storeval = createTruncFolder(createLShrFolder(value, (i) * 8),
+                                     builder->getIntNTy(8));
+      } else {
+        storeval =
+            createTruncFolder(createLShrFolder(value, (count - 1 - i) * 8),
+                              builder->getIntNTy(8));
+      }
+      printvalue(storeval);
+      auto store = builder->CreateStore(storeval, pointer);
+      insertMemoryOp(cast<StoreInst>(store));
+    }
+  }
+
   void SetMemoryValue(llvm::Value* address, llvm::Value* value);
   void SetRFLAGSValue(llvm::Value* value);
   PATH_info solvePath(llvm::Function* function, uint64_t& dest,
@@ -703,19 +810,6 @@ public:
   void RegisterBranch(llvm::BranchInst* BI) {
     //
     BIlist.push_back(BI);
-  }
-
-  llvm::DominatorTree* getDomTree() { return DT; }
-
-  void updateDomTree(llvm::Function& F) {
-    // should only recalculate if we
-
-    auto getLastBB = &(F.back());
-
-    if (getLastBB != lastBB)
-      DT->recalculate(F);
-
-    lastBB = getLastBB;
   }
 
   void markMemPaged(const int64_t start, const int64_t end) {
