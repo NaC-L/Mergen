@@ -5,7 +5,11 @@
 #include "OperandUtils.ipp"
 #include "lifterClass.hpp"
 #include "utils.h"
+#include "llvm/Analysis/MemorySSA.h"
+#include <llvm/Analysis/AliasAnalysis.h>
+#include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
+#include <llvm/IR/Dominators.h>
 #include <llvm/TargetParser/Triple.h>
 #include <llvm/Transforms/Utils/SCCPSolver.h>
 #include <magic_enum/magic_enum.hpp>
@@ -737,6 +741,37 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
             retrieveCombinedValue(
                 cast<ConstantInt>(select_inst->getFalseValue())->getZExtValue(),
                 cloadsize, load));
+    }
+    if (getControlFlow() == ControlFlow::Unflatten) {
+      auto possibleValues = computePossibleValues(loadOffset, 0);
+
+      llvm::Value* selectedValue = nullptr;
+
+      for (auto possibleValue : possibleValues) { // rename
+
+        auto isPaged = isMemPaged(possibleValue.getZExtValue());
+        if (!isPaged)
+          continue;
+        printvalue2(possibleValue);
+        auto possible_values_from_mem = retrieveCombinedValue(
+            possibleValue.getZExtValue(), cloadsize, load);
+        printvalue2((uint64_t)cloadsize);
+        printvalue(possible_values_from_mem);
+
+        if (selectedValue == nullptr) {
+          selectedValue = possible_values_from_mem;
+        } else {
+
+          llvm::Value* comparison = createICMPFolder(
+              CmpInst::ICMP_EQ, loadOffset,
+              llvm::ConstantInt::get(loadOffset->getType(), possibleValue));
+          printvalue(comparison);
+          selectedValue =
+              createSelectFolder(comparison, possible_values_from_mem,
+                                 selectedValue, "conditional-mem-load");
+        }
+      }
+      return selectedValue;
     }
   }
 
