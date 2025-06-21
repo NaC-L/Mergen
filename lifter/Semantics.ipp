@@ -712,8 +712,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
     SetMemoryValue(getSPaddress(), push_into_rsp);
     // // sub rsp 8 last,
 
-    auto bb = BasicBlock::Create(context, block_name.c_str(),
-                                 builder->GetInsertBlock()->getParent());
+    auto bb = getOrCreateBB(jump_address, "bb_call");
     // if its trying to jump somewhere else than our binary, call it and
     // continue from [rsp]
 
@@ -871,8 +870,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   // TODO:
   // if its an imm, sext
   // if its r/m then we probably need to zext
-  auto newRip = createAddFolder(
-      Value, ripval, "jump-xd-" + std::to_string(current_address) + "-");
+  // auto newRip = createAddFolder(
+  //    Value, ripval, "jump-xd-" + std::to_string(current_address) + "-");
   jmpcount++;
   auto targetv = Value;
   auto trunc = createSExtOrTruncFolder(targetv, Type::getInt64Ty(context),
@@ -894,7 +893,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   }
   solvePath(function, destination, trunc);
   printvalue2(destination);
-  printvalue(newRip);
+  // printvalue(newRip);
   // SetRegisterValueWrapper(Register::RIP, newRip);
 }
 
@@ -4405,8 +4404,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
     auto RIP_value = cast<ConstantInt>(next_jump);
     auto jump_address = RIP_value->getZExtValue();
 
-    auto bb = BasicBlock::Create(context, "returnToOrgCF",
-                                 builder->GetInsertBlock()->getParent());
+    auto bb = getOrCreateBB(jump_address, "bb_call");
     builder->CreateBr(bb);
 
     blockInfo = BBInfo(jump_address, bb);
@@ -4428,8 +4426,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
       cast<ConstantInt>(GetRegisterValue(Register::RSP))->getValue() !=
           STACKP_VALUE) {
     printvalueforce2(jump_address);
-    auto bb = BasicBlock::Create(context, "returnToOrgCF",
-                                 builder->GetInsertBlock()->getParent());
+
+    // TODO: ideally remove this part
+    auto bb = getOrCreateBB(jump_address, "bb_indirectly_called");
     // actually call the function first
 
     auto functionName = file.getName(jump_address);
