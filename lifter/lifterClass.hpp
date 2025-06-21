@@ -531,6 +531,8 @@ public:
     }
     auto bb = BasicBlock::Create(context, name, fnc);
     addrToBB[addr] = bb;
+    DTU->applyUpdates({{DominatorTree::Insert, this->blockInfo.block, bb}});
+
     return bb;
   }
 
