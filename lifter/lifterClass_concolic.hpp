@@ -107,6 +107,8 @@ public:
   }
 
   void set_flag_impl(Flag key, llvm::Value* val) {
+    if (val->getType()->getIntegerBitWidth() > 1)
+      val = this->builder->CreateTrunc(val, this->builder->getIntNTy(1));
     vecflag[static_cast<uint8_t>(key)] = val;
   }
   void
@@ -213,6 +215,8 @@ public:
     argTypes.push_back(llvm::PointerType::get(this->context, 0));
     argTypes.push_back(
         llvm::PointerType::get(this->context, 0)); // temp fix TEB
+
+    // TODO: replace stack with alloca to get rid of alias issues.
 
     auto functionType = llvm::FunctionType::get(
         llvm::Type::getInt64Ty(this->context), argTypes, 0);
