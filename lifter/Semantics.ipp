@@ -693,6 +693,19 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
       break;
     }
     auto registerCValue = cast<ConstantInt>(registerValue);
+    if (inlinePolicy.isOutline(registerCValue->getZExtValue())) {
+
+      std::cout << "did call";
+      registerValue->print(outs());
+      std::cout << "\n";
+      auto idltvm =
+          builder->CreateIntToPtr(registerValue, PointerType::get(context, 0));
+
+      builder->CreateCall(parseArgsType(nullptr, context), idltvm,
+                          parseArgs(nullptr));
+
+      break;
+    }
     jump_address = registerCValue->getZExtValue();
     break;
   }
