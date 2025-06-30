@@ -3,6 +3,7 @@
 #include "CommonDisassembler.hpp"
 #include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
+#include "InlinePolicy.hpp"
 #include "PathSolver.h"
 #include "RegisterManager.hpp"
 #include "ZydisDisassembler.hpp"
@@ -327,6 +328,8 @@ public:
 
   Disassembler dis;
   MemoryPolicy memoryPolicy;
+  FunctionInlinePolicy inlinePolicy;
+
   void runDisassembler(void* buffer, size_t size = 15) {
 
     instruction = dis.disassemble(buffer, size);
