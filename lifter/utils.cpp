@@ -5,6 +5,7 @@
 #include <llvm/Analysis/ValueLattice.h>
 #include <llvm/Support/KnownBits.h>
 #include <map>
+#include <utility>
 // #include <z3++.h>
 
 /*
@@ -98,14 +99,6 @@ namespace debugging {
       debugStream = &llvm::outs();
     }
     llvm::outs() << "Debugging enabled\n";
-  }
-  void printLLVMValue(llvm::Value* v, const char* name) {
-    if (!shouldDebug || !debugStream)
-      return;
-    *debugStream << " " << name << " : ";
-    v->print(*debugStream);
-    *debugStream << "\n";
-    debugStream->flush();
   }
 
   // Other functions remain the same, but use debugStream instead of

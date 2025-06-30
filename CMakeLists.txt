@@ -72,8 +72,6 @@ FetchContent_MakeAvailable(magic_enum)
 
 # Target: lifter
 set(lifter_SOURCES
-	"lifter/FunctionSignatures.cpp"
-	"lifter/GEPTracker.cpp"
 	"lifter/PathSolver.cpp"
 	"lifter/lifter.cpp"
 	"lifter/test_instructions.cpp"
@@ -94,9 +92,17 @@ set(lifter_SOURCES
 	"lifter/CommonDisassembler.hpp"
 	"lifter/CustomPasses.hpp"
 	"lifter/FunctionSignatures.hpp"
+	"lifter/InlinePolicy.hpp"
+	"lifter/MemoryPolicy.hpp"
+	"lifter/MergenPB.hpp"
+	"lifter/RegisterManager.hpp"
 	"lifter/ZydisDisassembler.hpp"
+	"lifter/fileReader.hpp"
 	"lifter/icedDisassembler.hpp"
 	"lifter/lifterClass.hpp"
+	"lifter/lifterClass_concolic.hpp"
+	"lifter/lifterClass_symbolic.hpp"
+	"lifter/pp_macros.hpp"
 	"lifter/tester.hpp"
 	"lifter/GEPTracker.ipp"
 	"lifter/OperandUtils.ipp"
@@ -119,6 +125,12 @@ endif()
 target_compile_features(lifter PRIVATE
 	cxx_std_20
 )
+
+if(MSVC) # msvc
+	target_compile_options(lifter PRIVATE
+		"/Zc:preprocessor"
+	)
+endif()
 
 target_link_libraries(lifter PRIVATE
 	LLVM-Wrapper

@@ -1,31 +1,51 @@
-#ifndef LIFTERCLASS_H
-#define LIFTERCLASS_H
+#ifndef LIFTERCLASSBASE_H
+#define LIFTERCLASSBASE_H
 #include "CommonDisassembler.hpp"
 #include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
+#include "InlinePolicy.hpp"
 #include "PathSolver.h"
+#include "RegisterManager.hpp"
 #include "ZydisDisassembler.hpp"
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
+#include "fileReader.hpp"
 #include "icedDisassembler.hpp"
 #include "icedDisassembler_mnemonics.h"
 #include "icedDisassembler_registers.h"
 #include "includes.h"
 #include "utils.h"
-#include <llvm/ADT/SmallVector.h>
+#include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
+
+#include <concepts>
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/DomConditionCache.h>
+#include <llvm/Analysis/DomTreeUpdater.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
+#include <llvm/Analysis/MemorySSAUpdater.h>
+#include <llvm/Analysis/PostDominators.h>
 #include <llvm/Analysis/SimplifyQuery.h>
-#include <llvm/IR/Constants.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/PatternMatch.h>
 #include <llvm/Support/KnownBits.h>
+#include <memory>
 #include <set>
+#include <type_traits>
+#include <utility>
 
 #ifndef DEFINE_FUNCTION
 #define DEFINE_FUNCTION(name) void lift_##name()
 #endif
+
+enum class ControlFlow {
+  Basic,
+  Unflatten,
+};
 
 struct InstructionKey {
   Value* operand1;
@@ -71,9 +91,13 @@ struct InstructionKey {
 };
 
 class InstructionCache {
-public:
-  InstructionCache() {}
+private:
+  using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
+                                       InstructionKey::InstructionKeyInfo>;
 
+  std::array<CacheMap, 100> opcodeCaches;
+
+public:
   void insert(uint8_t opcode, const InstructionKey& key, Value* value) {
     // Insert the key-value pair into the cache for the given opcode
     opcodeCaches[opcode][key] = value;
@@ -84,78 +108,53 @@ public:
     auto it = cache.find(key);
     return it != cache.end() ? it->second : nullptr;
   }
+  InstructionCache() = default;
+  InstructionCache(InstructionCache& other) {
+    // we want to copy each SmallDenseMap individually
+    // crash on last item, why?
+    // FIXME: last item on array is corrupted.
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
 
-private:
-  using CacheMap = llvm::SmallDenseMap<InstructionKey, Value*, 4,
-                                       InstructionKey::InstructionKeyInfo>;
-  std::array<CacheMap, 256> opcodeCaches; // this should be faster
+      // reserve because its faster
+
+      auto src = other.opcodeCaches[i];
+      opcodeCaches[i].reserve(src.size());
+
+      for (auto& kv : other.opcodeCaches[i]) {
+        opcodeCaches[i].try_emplace(kv.first, kv.second);
+      }
+    }
+  };
+  InstructionCache(const InstructionCache& other) {
+    // we want to copy each SmallDenseMap individually
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+      // reserve because its faster
+      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
+      for (auto& kv : other.opcodeCaches[i]) {
+        opcodeCaches[i].try_emplace(kv.first, kv.second);
+      }
+    }
+  }
+  InstructionCache& operator=(const InstructionCache& other) {
+    if (this == &other)
+      return *this;
+    for (size_t i = 0; i < opcodeCaches.size(); ++i) {
+      opcodeCaches[i].clear();
+      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
+      for (auto& kv : other.opcodeCaches[i]) {
+        opcodeCaches[i].try_emplace(kv.first, kv.second);
+      }
+    }
+    return *this;
+  }
+  InstructionCache(InstructionCache&&) = default;
+  InstructionCache& operator=(InstructionCache&&) = default;
 };
 
 class floatingPointValue {
 public:
   Value* v1;
   Value* v2;
-};
-
-template <Registers Register> class RegisterManager {
-public:
-  enum RegisterIndex {
-    RAX_ = 0,
-    RCX_ = 1,
-    RDX_ = 2,
-    RBX_ = 3,
-    RSP_ = 4,
-    RBP_ = 5,
-    RSI_ = 6,
-    RDI_ = 7,
-    R8_ = 8,
-    R9_ = 9,
-    R10_ = 10,
-    R11_ = 11,
-    R12_ = 12,
-    R13_ = 13,
-    R14_ = 14,
-    R15_ = 15,
-    RIP_ = 16,
-    RFLAGS_ = 17,
-    REGISTER_COUNT = RFLAGS_ // Total number of registers
-  };
-  std::array<Value*, REGISTER_COUNT> vec;
-
-  RegisterManager() {}
-  RegisterManager(const RegisterManager& other) : vec(other.vec) {}
-
-  // Overload the [] operator for getting register values
-
-  int getRegisterIndex(Register key) const {
-
-    switch (key) {
-    case Register::RIP: {
-      return RIP_;
-    }
-    case Register::RFLAGS: {
-      return RFLAGS_;
-    }
-    default: {
-      // For ordered registers RAX to R15, map directly by offset from RAX
-
-      /*
-      if (!(key >= Register::RAX && key <= Register::R15)) {
-        printvalueforce2("debug this"); // debug this branch l8r
-      }
-      */
-      assert(key >= Register::RAX && key <= Register::R15 &&
-             "Key must be between RAX and R15");
-
-      return (static_cast<int>(key) - static_cast<int>(Register::RAX));
-    }
-    }
-  }
-
-  llvm::Value*& operator[](Register key) {
-    int index = getRegisterIndex(key);
-    return vec[index];
-  }
 };
 
 /*
@@ -204,13 +203,40 @@ public:
 */
 
 struct BBInfo {
-  uint64_t runtime_address;
+  uint64_t block_address;
   llvm::BasicBlock* block;
 
   BBInfo(){};
 
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
-      : runtime_address(runtime_address), block(block) {}
+      : block_address(runtime_address), block(block) {}
+
+  // bool operator==(const BBInfo& other) const {
+  //   if (block_address != other.block_address)
+  //     return false;
+  //   return block == other.block;
+  // }
+
+  // struct BBInfoKeyInfo {
+  //   // Custom hash function
+  //   static inline unsigned getHashValue(const BBInfo& key) {
+  //     return llvm::hash_combine(key.block_address, key.block);
+  //   }
+
+  //   // Equality function
+  //   static inline bool isEqual(const BBInfo& lhs, const BBInfo& rhs) {
+  //     return lhs == rhs;
+  //   }
+
+  //   // Define empty and tombstone keys
+  //   static inline BBInfo getEmptyKey() {
+  //     return BBInfo(-1, static_cast<BasicBlock*>(nullptr));
+  //   }
+
+  //   static inline BBInfo getTombstoneKey() {
+  //     return BBInfo(0, static_cast<BasicBlock*>(nullptr));
+  //   }
+  // };
 };
 
 class LazyValue {
@@ -224,7 +250,7 @@ public:
   LazyValue() : value(nullptr) {}
   LazyValue(llvm::Value* val) : value(val) {}
   LazyValue(std::function<llvm::Value*()> calc)
-      : computeFunc(calc), value(std::nullopt) {}
+      : value(std::nullopt), computeFunc(calc) {}
 
   // get value, calculate if doesnt exist
   llvm::Value* get() const {
@@ -247,34 +273,50 @@ public:
   }
 };
 
+template <typename T, typename R>
+concept lifterConcept = Registers<R> && requires(T t) {
+  { t.GetRegisterValue_impl(std::declval<R>()) } -> std::same_as<llvm::Value*>;
+  {
+    t.SetRegisterValue_impl(std::declval<R>(), std::declval<llvm::Value*>())
+  } -> std::same_as<void>;
+  {
+    t.branch_backup_impl(std::declval<llvm::BasicBlock*>())
+  } -> std::same_as<void>;
+  {
+    t.branch_backup_impl(std::declval<llvm::BasicBlock*>())
+  } -> std::same_as<void>;
+};
+
 #define MERGEN_LIFTER_DEFINITION_TEMPLATES(ret)                                \
-  template <Mnemonics Mnemonic, Registers Register,                            \
+  template <typename Derived, Mnemonics Mnemonic, Registers Register,          \
             template <typename, typename> class DisassemblerBase>              \
     requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,      \
                           Register>                                            \
-  ret lifterClass<Mnemonic, Register, DisassemblerBase>
+  ret lifterClassBase<Derived, Mnemonic, Register, DisassemblerBase>
 
 // main lifter
+template <typename Derived = void,
 #ifdef ICED_FOUND
-template <Mnemonics Mnemonic = Mergen::IcedMnemonics,
+          Mnemonics Mnemonic = Mergen::IcedMnemonics,
           Registers Register = Mergen::IcedRegister,
           template <typename, typename> class DisassemblerBase =
-              Mergen::icedDisassembler>
+              Mergen::icedDisassembler
 #else
-template <Mnemonics Mnemonic = Mergen::ZydisMnemonic,
+          Mnemonics Mnemonic = Mergen::ZydisMnemonic,
           Registers Register = Mergen::ZydisRegister,
           template <typename, typename> class DisassemblerBase =
-              Mergen::ZydisDisassembler>
+              Mergen::ZydisDisassembler
 #endif
+          >
   requires Disassembler<DisassemblerBase<Mnemonic, Register>, Mnemonic,
                         Register>
-class lifterClass {
+class lifterClassBase {
 public:
   using Disassembler = DisassemblerBase<Mnemonic, Register>;
 
-  llvm::IRBuilder<llvm::InstSimplifyFolder>& builder;
+  std::unique_ptr<llvm::IRBuilder<llvm::InstSimplifyFolder>> builder;
   BBInfo blockInfo;
-  uint64_t runtime_address_prev;
+  uint64_t current_address;
   bool run = 0;      // we may set 0 so to trigger jumping to next basic block
   bool finished = 0; // finished, unfinished, unreachable
   bool isUnreachable = 0;
@@ -285,9 +327,125 @@ public:
   MergenDisassembledInstruction_base<Mnemonic, Register> instruction;
 
   Disassembler dis;
+  MemoryPolicy memoryPolicy;
+  FunctionInlinePolicy inlinePolicy;
 
   void runDisassembler(void* buffer, size_t size = 15) {
+
     instruction = dis.disassemble(buffer, size);
+  }
+
+  // handle the file here
+  uint8_t* fileBase;
+
+  // lifts single instruction
+  void liftBytes(void* bytes, size_t size = 15) {
+    // what about the basicblock?
+    runDisassembler(bytes, size);
+    current_address += instruction.length;
+    liftInstructionSemantics();
+    this->counter++;
+  };
+
+  x86_64FileReader file;
+
+  void loadFile(uint8_t* file_start) {
+    fileBase = file_start;
+    file = x86_64FileReader(file_start);
+  }
+
+  // also lifts single inst
+  void liftAddress(uint64_t addr, size_t size = 15) {
+
+    file.filebase_exists();
+
+    this->current_address = addr;
+    auto offset = file.address_to_mapped_address(addr);
+    // what about the basicblock?
+    printvalue2(offset);
+    printvalue2(*(uint8_t*)offset);
+
+    runDisassembler((void*)offset, size);
+
+    const auto ct = (llvm::format_hex_no_prefix(this->counter, 0));
+    const auto runtime_address =
+        (llvm::format_hex_no_prefix(this->current_address, 0));
+    printvalue2(ct);
+    printvalue2(runtime_address);
+#ifndef _NODEV
+    debugging::doIfDebug([&]() { printvalue2(this->instruction.text); });
+#endif
+
+    // also pass the file to address_to_mapped_address?
+    this->current_address += instruction.length;
+
+    liftInstruction();
+    this->counter++;
+  };
+
+  void liftBasicBlockFromBytes(std::vector<uint8_t> bytes) {
+    //
+  }
+
+  // useless in symbolic?
+  void branch_backup(BasicBlock* bb) {
+    static_cast<Derived*>(this)->branch_backup_impl(bb);
+  }
+  // useless in symbolic?
+  void load_backup(BasicBlock* bb) {
+    static_cast<Derived*>(this)->load_backup_impl(bb);
+  }
+
+  void liftBasicBlockFromAddress(uint64_t addr) {
+    printvalue2(this->finished);
+    printvalue2(this->run);
+    this->run = 1;
+    while (this->finished == 0 && this->run) {
+      // TODO: refactor logic for finished and run, instead semantics should
+      // return the info about jumps
+      auto currentblock = builder->GetInsertBlock()->getName();
+      printvalue2(currentblock);
+      liftAddress(addr);
+      addr = current_address;
+    }
+  }
+
+  bool addUnvisitedAddr(BBInfo& bb) {
+    printvalue2(bb.block_address);
+    printvalue2("added");
+    unvisitedBlocks.push_back(bb);
+    return true;
+  }
+
+  /*
+  filter : filter for empty blocks
+  */
+  bool getUnvisitedAddr(BBInfo& out, bool filter = 0) {
+    if (unvisitedBlocks.empty())
+      return false;
+
+    out = std::move(unvisitedBlocks.back());
+    unvisitedBlocks.pop_back();
+
+    if (getControlFlow() == ControlFlow::Basic && !(out.block->empty()) &&
+        filter) {
+      printvalue2("not empty ;D ");
+      return getUnvisitedAddr(out);
+    }
+
+    printvalue2("adding :" + std::to_string(out.block_address) +
+                out.block->getName());
+
+    visitedAddresses.insert(out.block_address);
+    blockInfo = out;
+    return true;
+  }
+
+  void writeFunctionToFile(const std::string filename) {
+
+    std::error_code EC_noopt;
+    llvm::raw_fd_ostream OS_noopt(filename, EC_noopt);
+    fnc->getParent()->print(OS_noopt, nullptr);
   }
 
   // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
@@ -297,7 +455,7 @@ public:
   // llvm::DenseMap<Value*, flagManager> flagbuffer;
 
   flagManager FlagList;
-  RegisterManager<Register> Registers;
+  RegisterManagerConcolic<Register> Registers;
   // RegisterManagerFP RegistersFP;
 
   llvm::DomConditionCache* DC = new llvm::DomConditionCache();
@@ -305,7 +463,6 @@ public:
   unsigned int instct = 0;
   llvm::SimplifyQuery* cachedquery;
 
-  llvm::DominatorTree* DT;
   llvm::BasicBlock* lastBB = nullptr;
   unsigned int BIlistsize = 0;
 
@@ -323,6 +480,12 @@ public:
 
     GEPinfo(Value* addr, uint8_t type, bool TEB)
         : addr(addr), type(type), TEB(TEB){};
+
+    GEPinfo(const GEPinfo& other)
+        : addr(other.addr), type(other.type), TEB(other.TEB){};
+
+    GEPinfo(GEPinfo& other)
+        : addr(other.addr), type(other.type), TEB(other.TEB){};
 
     bool operator==(const GEPinfo& other) const {
       if (addr != other.addr)
@@ -354,72 +517,124 @@ public:
   llvm::DenseMap<GEPinfo, Value*, typename GEPinfo::GEPinfoKeyInfo> GEPcache;
   std::vector<llvm::Instruction*> memInfos;
 
-  std::vector<BBInfo> unvisitedAddresses;
+  // todo : std::set
+  std::vector<BBInfo> unvisitedBlocks;
+  std::set<uint64_t> visitedAddresses;
+  llvm::DenseMap<uint64_t, llvm::BasicBlock*> addrToBB;
+
+  // creates an edge to created bb
+  // TODO: wrapper for createbr, condbr, switch and update it there.
+  BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
+    if (getControlFlow() == ControlFlow::Basic) {
+      auto it = addrToBB.find(addr);
+      if (it != addrToBB.end()) {
+        // also might have to update here,
+        return it->second;
+      }
+    }
+    auto bb = BasicBlock::Create(context, name, fnc);
+    addrToBB[addr] = bb;
+    DTU->applyUpdates({{DominatorTree::Insert, this->blockInfo.block, bb}});
+
+    return bb;
+  }
 
   // global
+  llvm::LLVMContext context;
   llvm::Value* memoryAlloc;
   llvm::Function* fnc;
+  llvm::Module* M;
+  llvm::BasicBlock* bb;
 
-  lifterClass(llvm::IRBuilder<llvm::InstSimplifyFolder>& irbuilder,
-              uint64_t runtime_addr = 0)
-      : builder(irbuilder) {
+protected:
+  void createFunction() {
+    return static_cast<Derived*>(this)->createFunction_impl();
+  }
 
-    InitRegisters(irbuilder.GetInsertBlock()->getParent(), runtime_addr);
+  void InitRegisters() {
+
+    return static_cast<Derived*>(this)->InitRegisters_impl();
+  }
+
+  llvm::Value* getFlagValue(Flag f) {
+    return static_cast<Derived*>(this)->GetFlagValue_impl(f);
+  }
+  void setFlagValue(Flag f, Value* v) {
+    return static_cast<Derived*>(this)->SetFlagValue_impl(f, v);
+  }
+
+  constexpr ControlFlow getControlFlow() {
+    return static_cast<Derived*>(this)->getControlFlow_impl();
+  }
+
+public:
+  AliasAnalysis* AA;
+  DominatorTree* DT;
+  PostDominatorTree* PDT;
+  DomTreeUpdater* DTU;
+  MemorySSA* MSSA;
+  MemorySSAUpdater* MSSAU;
+  TargetLibraryInfo* TLI;
+  AssumptionCache* AC;
+  TargetTransformInfo* TTI;
+  lifterClassBase() {
+    static_assert(lifterConcept<Derived, Register>,
+                  "Derived should satisfy lifterConcept");
+    M = new llvm::Module("lifter_module", context);
+
+    createFunction();
+    this->bb = llvm::BasicBlock::Create(this->context, "entry", this->fnc);
+
+    llvm::InstSimplifyFolder Folder(this->M->getDataLayout());
+
+    this->builder = std::make_unique<llvm::IRBuilder<llvm::InstSimplifyFolder>>(
+        this->bb, Folder);
+    InitRegisters();
+    TargetLibraryInfoImpl TLIImpl(Triple(fnc->getParent()->getTargetTriple()));
+    TLI = new TargetLibraryInfo(TLIImpl);
+
+    AA = new AliasAnalysis(*TLI);
+    DT = new DominatorTree(*fnc);
+    PDT = new PostDominatorTree(*fnc);
+    DTU = new DomTreeUpdater(DT, PDT, DomTreeUpdater::UpdateStrategy::Lazy);
+    MSSA = new MemorySSA(*fnc, AA, DT);
+    MSSAU = new MemorySSAUpdater(MSSA);
+
+    TTI = new TargetTransformInfo(fnc->getParent()->getDataLayout());
+    AC = new AssumptionCache(*fnc, TTI);
   };
 
-  lifterClass(const lifterClass& other)
-      : builder(other.builder), // Reference copied directly
-        blockInfo(
-            other.blockInfo), // Assuming BBInfo has a proper copy constructor
-        run(other.run), finished(0), counter(other.counter),
-        isUnreachable(other.isUnreachable),
-        instruction(other.instruction), // Shallow copy of the pointer
-        assumptions(other.assumptions), // Deep copy of assumptions
-        buffer(other.buffer),
-        FlagList(other.FlagList), // Deep copy handled by unordered_map's copy
-                                  // constructor
-        // RegistersFP(other.RegistersFP), // Assuming RegisterManager has a
-        // copy constructor
-        Registers(other.Registers), // Assuming RegisterManager has a copy
-                                    // constructor
-        DC(other.DC),               // Deep copy of DC
-        instct(other.instct),
-        cachedquery(other.cachedquery), // Assuming raw pointer, copied directly
-        DT(other.DT),                   // Assuming pointer, copied directly
-        lastBB(other.lastBB), BIlistsize(other.BIlistsize),
-        pageMap(other.pageMap), // Deep copy handled by map's copy constructor
-        BIlist(other.BIlist), // Deep copy handled by vector's copy constructor
-        cache(other.cache), // Deep copy handled by DenseMap's copy constructor
-        memInfos(
-            other.memInfos), // Deep copy handled by vector's copy constructor
-        memoryAlloc(other.memoryAlloc), // Shallow copy of the pointer
-        fnc(other.fnc) {}
+  lifterClassBase(const lifterClassBase& other) = delete;
 
   void liftInstruction();
   void liftInstructionSemantics();
   void branchHelper(llvm::Value* condition, const std::string& instname,
                     const int numbered, const bool reverse = false);
 
-  // init
-  void Init_Flags();
-  void initDomTree(llvm::Function& F) { DT = new llvm::DominatorTree(F); }
-  // end init
-
   std::optional<llvm::Value*> evaluateLLVMExpression(llvm::Value* value);
 
   // getters-setters
-  llvm::Value* setFlag(const Flag flag, llvm::Value* newValue = nullptr);
+  void setFlag(const Flag flag, llvm::Value* newValue);
   void setFlagUndef(const Flag flag) {
-    auto undef = UndefValue::get(builder.getInt1Ty());
+    auto undef = UndefValue::get(builder->getInt1Ty());
     FlagList[flag].set(undef); // Set the new value directly
   }
 
   void setFlag(const Flag flag, std::function<llvm::Value*()> calculation);
   LazyValue getLazyFlag(const Flag flag);
   llvm::Value* getFlag(const Flag flag);
-  void InitRegisters(llvm::Function* function, uint64_t rip);
   llvm::Value* GetValueFromHighByteRegister(Register reg);
   llvm::Value* GetRegisterValue(const Register key);
+
+protected:
+  llvm::Value* GetRegisterValue_internal(const Register key) {
+    return static_cast<Derived*>(this)->GetRegisterValue_impl(key);
+  }
+  void SetRegisterValue_internal(const Register key, llvm::Value* val) {
+    return static_cast<Derived*>(this)->SetRegisterValue_impl(key, val);
+  }
+
+public:
   llvm::Value* GetMemoryValue(llvm::Value* address, uint8_t size);
   llvm::Value* SetValueToHighByteRegister(const Register reg,
                                           llvm::Value* value);
@@ -432,6 +647,85 @@ public:
   void createMemcpy(llvm::Value* src, llvm::Value* dest, llvm::Value* size);
 
   void SetRegisterValue(const Register key, llvm::Value* value);
+
+  template <uint8_t count, bool little_endian = true>
+  Value* LoadValueFromMemByBytes(llvm::Value* address) {
+    llvm::Value* returnv = builder->getIntN(count * 8, 0);
+    for (int i = 0; i < count; i++) {
+
+      auto offset =
+          builder->getIntN(address->getType()->getIntegerBitWidth(), i);
+
+      auto pointer = getPointer(createAddFolder(address, offset));
+
+      loadMemoryOp(pointer);
+      printvalue(pointer);
+      LazyValue retval([this, pointer]() {
+        auto ret = builder->CreateLoad(builder->getIntNTy(8),
+                                       pointer /*, "Loadxd-" + address + "-"*/);
+        return ret;
+      });
+
+      if (Value* solvedLoad = solveLoad(retval, pointer, 8)) {
+        printvalue(solvedLoad);
+        if constexpr (little_endian) {
+          // shl by i,
+          solvedLoad = createShlFolder(
+              createZExtFolder(solvedLoad, builder->getIntNTy(count * 8)),
+              i * 8);
+
+        } else {
+          // shl by count-i-1*8
+          solvedLoad = createShlFolder(
+              createZExtFolder(solvedLoad, builder->getIntNTy(count * 8)),
+              (count - 1 - i) * 8);
+        }
+        printvalue(returnv);
+        printvalue(solvedLoad);
+        Value* lhsPrev;
+        ConstantInt* ci = builder->getIntN(count * 8, 0);
+        if (llvm::PatternMatch::match(
+                returnv, llvm::PatternMatch::m_ZExt(llvm::PatternMatch::m_Trunc(
+                             llvm::PatternMatch::m_Value(lhsPrev)))) &&
+            llvm::PatternMatch::match(solvedLoad,
+                                      llvm::PatternMatch::m_ConstantInt(ci))) {
+          printvalue2("0, postreturn");
+          returnv = createTruncFolder(lhsPrev, builder->getIntNTy(count * 8));
+        } else {
+          printvalue2("1, postreturn");
+
+          returnv = createOrFolder(returnv, solvedLoad);
+        }
+      } else {
+        returnv = createOrFolder(returnv, retval.get());
+      }
+    }
+    return returnv;
+  }
+
+  template <int count, bool little_endian = true>
+  void StoreValueToMemByBytes(llvm::Value* address, llvm::Value* value) {
+    printvalue(value);
+    for (int i = 0; i < count; i++) {
+      llvm::Value* storeval = nullptr;
+      auto offset =
+          builder->getIntN(address->getType()->getIntegerBitWidth(), i);
+      auto pointer = getPointer(createAddFolder(address, offset));
+      if constexpr (little_endian) {
+
+        storeval = createTruncFolder(createLShrFolder(value, (i) * 8),
+                                     builder->getIntNTy(8));
+      } else {
+        storeval =
+            createTruncFolder(createLShrFolder(value, (count - 1 - i) * 8),
+                              builder->getIntNTy(8));
+      }
+      printvalue(storeval);
+      auto store = builder->CreateStore(storeval, pointer);
+      insertMemoryOp(cast<StoreInst>(store));
+    }
+  }
+
   void SetMemoryValue(llvm::Value* address, llvm::Value* value);
   void SetRFLAGSValue(llvm::Value* value);
   PATH_info solvePath(llvm::Function* function, uint64_t& dest,
@@ -461,6 +755,14 @@ public:
     default:
       UNREACHABLE("invalid acc");
     }
+  }
+
+  llvm::Value* createLoad(llvm::Value* ptr) {
+    //
+    return nullptr;
+  }
+  void createStore(llvm::Value* ptr, llvm::Value* val) {
+    //
   }
 
   llvm::Value* GetIndexValue(uint8_t index);
@@ -513,19 +815,6 @@ public:
   void RegisterBranch(llvm::BranchInst* BI) {
     //
     BIlist.push_back(BI);
-  }
-
-  llvm::DominatorTree* getDomTree() { return DT; }
-
-  void updateDomTree(llvm::Function& F) {
-    // should only recalculate if we
-
-    auto getLastBB = &(F.back());
-
-    if (getLastBB != lastBB)
-      DT->recalculate(F);
-
-    lastBB = getLastBB;
   }
 
   void markMemPaged(const int64_t start, const int64_t end) {
@@ -632,158 +921,15 @@ public:
   Value* doPatternMatching(Instruction::BinaryOps const I, Value* const op0,
                            Value* const op1);
 
+  void run_opts();
   // end folders
 
-  // would look nicer if we didnt have this, and do everything in a macro
-  // instead?
-  DEFINE_FUNCTION(movs_X);
-  DEFINE_FUNCTION(movaps);
-  DEFINE_FUNCTION(mov);
+#define OPCODE(fncname, ...) DEFINE_FUNCTION(fncname);
+#include "x86_64_opcodes.x"
+#undef OPCODE
 
-  DEFINE_FUNCTION(cmovcc);
-  /*
-  DEFINE_FUNCTION(cmovbz);
-  DEFINE_FUNCTION(cmovnbz);
-  DEFINE_FUNCTION(cmovz);
-  DEFINE_FUNCTION(cmovnz);
-  DEFINE_FUNCTION(cmovl);
-  DEFINE_FUNCTION(cmovnl);
-  DEFINE_FUNCTION(cmovb);
-  DEFINE_FUNCTION(cmovnb);
-  DEFINE_FUNCTION(cmovns);
-  DEFINE_FUNCTION(cmovs);
-  DEFINE_FUNCTION(cmovnle);
-  DEFINE_FUNCTION(cmovle);
-  DEFINE_FUNCTION(cmovo);
-  DEFINE_FUNCTION(cmovno);
-  DEFINE_FUNCTION(cmovp);
-  DEFINE_FUNCTION(cmovnp);
-  */
-  DEFINE_FUNCTION(popcnt);
-  //
-  DEFINE_FUNCTION(call);
-  DEFINE_FUNCTION(ret);
-  DEFINE_FUNCTION(jmp);
-  DEFINE_FUNCTION(jnz);
-  DEFINE_FUNCTION(jz);
-  DEFINE_FUNCTION(js);
-  DEFINE_FUNCTION(jns);
-  DEFINE_FUNCTION(jle);
-  DEFINE_FUNCTION(jl);
-  DEFINE_FUNCTION(jnl);
-  DEFINE_FUNCTION(jnle);
-  DEFINE_FUNCTION(jbe);
-  DEFINE_FUNCTION(jb);
-  DEFINE_FUNCTION(jnb);
-  DEFINE_FUNCTION(jnbe);
-  DEFINE_FUNCTION(jo);
-  DEFINE_FUNCTION(jno);
-  DEFINE_FUNCTION(jp);
-  DEFINE_FUNCTION(jnp);
-  //
-  DEFINE_FUNCTION(sbb);
-  DEFINE_FUNCTION(rcl);
-  DEFINE_FUNCTION(rcr);
-  DEFINE_FUNCTION(not );
-  DEFINE_FUNCTION(neg);
-  DEFINE_FUNCTION(sar);
-  DEFINE_FUNCTION(shr);
-  DEFINE_FUNCTION(shl);
-  DEFINE_FUNCTION(bswap);
-  DEFINE_FUNCTION(cmpxchg);
-  DEFINE_FUNCTION(xchg);
-  DEFINE_FUNCTION(shld);
-  DEFINE_FUNCTION(shrd);
-  DEFINE_FUNCTION(lea);
-  DEFINE_FUNCTION(add_sub);
-  void lift_imul2(const bool isSigned);
-  DEFINE_FUNCTION(imul);
-  DEFINE_FUNCTION(mul);
-  DEFINE_FUNCTION(div2);
-  DEFINE_FUNCTION(div);
-  DEFINE_FUNCTION(idiv2);
-  DEFINE_FUNCTION(idiv);
-  DEFINE_FUNCTION(xor);
-  DEFINE_FUNCTION(or);
-  DEFINE_FUNCTION(and);
-  DEFINE_FUNCTION(andn);
-  DEFINE_FUNCTION(rol);
-  DEFINE_FUNCTION(ror);
-  DEFINE_FUNCTION(inc);
-  DEFINE_FUNCTION(dec);
-  DEFINE_FUNCTION(push);
-  DEFINE_FUNCTION(pushfq);
-  DEFINE_FUNCTION(pop);
-  DEFINE_FUNCTION(popfq);
-
-  DEFINE_FUNCTION(leave);
-
-  DEFINE_FUNCTION(adc);
-  DEFINE_FUNCTION(xadd);
-  DEFINE_FUNCTION(test);
-  DEFINE_FUNCTION(cmp);
-  DEFINE_FUNCTION(rdtsc);
-  DEFINE_FUNCTION(cpuid);
-  DEFINE_FUNCTION(pext);
-  //
-  DEFINE_FUNCTION(setnz);
-  DEFINE_FUNCTION(seto);
-  DEFINE_FUNCTION(setno);
-  DEFINE_FUNCTION(setnb);
-  DEFINE_FUNCTION(setbe);
-  DEFINE_FUNCTION(setnbe);
-  DEFINE_FUNCTION(setns);
-  DEFINE_FUNCTION(setp);
-  DEFINE_FUNCTION(setnp);
-  DEFINE_FUNCTION(setb);
-  DEFINE_FUNCTION(sets);
-  DEFINE_FUNCTION(stosx);
-  DEFINE_FUNCTION(setz);
-  DEFINE_FUNCTION(setnle);
-  DEFINE_FUNCTION(setle);
-  DEFINE_FUNCTION(setnl);
-  DEFINE_FUNCTION(setl);
-  DEFINE_FUNCTION(bt);
-  DEFINE_FUNCTION(btr);
-  DEFINE_FUNCTION(bts);
-  DEFINE_FUNCTION(lzcnt);
-  DEFINE_FUNCTION(bzhi);
-  DEFINE_FUNCTION(bsr);
-  DEFINE_FUNCTION(bsf);
-  DEFINE_FUNCTION(blsmsk);
-  DEFINE_FUNCTION(pdep);
-  DEFINE_FUNCTION(blsi);
-  DEFINE_FUNCTION(blsr);
-  DEFINE_FUNCTION(tzcnt);
-  DEFINE_FUNCTION(btc);
-  DEFINE_FUNCTION(lahf);
-  DEFINE_FUNCTION(sahf);
-  DEFINE_FUNCTION(std);
-  DEFINE_FUNCTION(stc);
-  DEFINE_FUNCTION(cmc);
-  DEFINE_FUNCTION(clc);
-  DEFINE_FUNCTION(cld);
-  DEFINE_FUNCTION(cli);
-  DEFINE_FUNCTION(cwd);
-  DEFINE_FUNCTION(cdq);
-  DEFINE_FUNCTION(cqo);
-  DEFINE_FUNCTION(cbw);
-  DEFINE_FUNCTION(cwde);
-  DEFINE_FUNCTION(cdqe);
-  DEFINE_FUNCTION(bextr);
-
-  // sse
-  /*
-  DEFINE_FUNCTION(movdqa);
-  DEFINE_FUNCTION(pand);
-  DEFINE_FUNCTION(por);
-  DEFINE_FUNCTION(pxor);
-  DEFINE_FUNCTION(xorps);
-  */
   // end semantics definition
 };
-
-extern std::vector<lifterClass<>*> lifters;
 
 #undef DEFINE_FUNCTION
 #endif // LIFTERCLASS_H
