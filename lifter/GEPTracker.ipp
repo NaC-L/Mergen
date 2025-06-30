@@ -1,24 +1,18 @@
 #pragma once
 
 #include "GEPTracker.h"
+#include "MemoryPolicy.hpp"
 #include "OperandUtils.ipp"
 #include "lifterClass.hpp"
 #include "utils.h"
-#include <iostream>
-#include <llvm/ADT/DenseSet.h>
+#include "llvm/Analysis/MemorySSA.h"
 #include <llvm/Analysis/AliasAnalysis.h>
-#include <llvm/Analysis/AssumptionCache.h>
-#include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
-#include <llvm/Analysis/ValueTracking.h>
-#include <llvm/Analysis/WithCache.h>
-#include <llvm/IR/ConstantRange.h>
-#include <llvm/IR/InstrTypes.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/Support/ErrorHandling.h>
-#include <llvm/Support/KnownBits.h>
+#include <llvm/IR/Dominators.h>
 #include <llvm/TargetParser/Triple.h>
 #include <llvm/Transforms/Utils/SCCPSolver.h>
+#include <magic_enum/magic_enum.hpp>
 
 using namespace llvm;
 
@@ -26,8 +20,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::addValueReference(Value* value,
                                                             uint64_t address) {
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
-
-    BinaryOperations::WriteTo(address + i);
     printvalue2(address + i);
     buffer[address + i] = ValueByteReference(value, i);
     printvalue(value);
@@ -39,28 +31,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::addValueReference(Value* value,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
                                                        Value* size) {
-  // TODO: support full symbolic memcpy
-
-  //
-  // static_cast<Derived*>(this)->createMemcpyImpl();
-  //
-  // auto srcpointer = getPointer(src);
-  // auto destpointer = getPointer(dest);
-
-  // TODO: solve pointers if they are not constants,
-  if (!isa<ConstantInt>(src)) {
-    printvalue(src);
-    printvalue(dest);
-    printvalue(size);
-    return;
-  }
-  if (!isa<ConstantInt>(dest)) {
-    printvalue(src);
-    printvalue(dest);
-    printvalue(size);
-    return;
-  }
-  if (!isa<ConstantInt>(size)) {
+  if (!isa<ConstantInt>(src) || !isa<ConstantInt>(dest) ||
+      !isa<ConstantInt>(size)) {
     printvalue(src);
     printvalue(dest);
     printvalue(size);
@@ -71,23 +43,25 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
   auto srcCI = cast<ConstantInt>(src);
   auto sizeCI = cast<ConstantInt>(size);
 
-  //
   auto C_src = srcCI->getZExtValue();
   auto C_dest = destCI->getZExtValue();
   auto C_size = sizeCI->getZExtValue();
   printvalue2(C_size);
 
+  // check memory policy for source and destination
+  if (memoryPolicy.isSymbolic(C_src) || memoryPolicy.isSymbolic(C_dest)) {
+    // Handle symbolic memory copy
+    // TODO: Implement symbolic memcpy
+    return;
+  }
+
   for (int i = 0; i < C_size; i++) {
-
-    // we shouldn't read the buffer directly, because buffer doesnt include
-    // the binary.
-
     if (!buffer.contains(C_src + i)) {
-
       printvalue2(C_src + i);
       printvalue2(C_dest + i);
 
       buffer[C_dest + i] = ValueByteReference();
+      // Handle missing source data
       continue;
     }
     buffer[C_dest + i] = buffer[C_src + i];
@@ -97,7 +71,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     uint64_t startAddress, uint8_t byteCount, LazyValue orgLoad) {
-  LLVMContext& context = builder.getContext();
+  printvalue2(startAddress);
+
+  if (memoryPolicy.isRangeFullyCovered(startAddress, startAddress + byteCount,
+                                       MemoryAccessMode::SYMBOLIC)) {
+    // early exit: range is fully symbolic
+    return orgLoad.get();
+  }
+
+  LLVMContext& context = builder->getContext();
   if (byteCount == 0) {
     return nullptr;
   }
@@ -105,6 +87,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
   // bool contiguous = true;
   SmallVector<ValueByteReferenceRange, 64>
       values; // we can just create an array here
+  auto lastAccessMode = memoryPolicy.getAccessMode(startAddress);
   for (uint8_t i = 0; i < byteCount; ++i) {
     uint64_t currentAddress = startAddress + i;
 
@@ -118,21 +101,29 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
         };
 
     bool isEmpty = values.empty();
-    bool isContained = buffer.contains(currentAddress);
     bool isLastReference = !isEmpty && values.back().isRef;
-    // push if
-    if (isEmpty || (isContained && isLastReference &&
-                    isDifferentReferenceOrDiscontinuousOffset(
-                        values.back(), currentAddress))) {
-      if (buffer.contains(currentAddress)) {
+    // this needs serious refactoring
+    auto currentAccessMode = memoryPolicy.getAccessMode(currentAddress);
+    printvalue2(magic_enum::enum_name(currentAccessMode));
+    printvalue2(magic_enum::enum_name(lastAccessMode));
+    printvalue2(currentAddress);
+
+    if (isEmpty ||
+        (isLastReference && isDifferentReferenceOrDiscontinuousOffset(
+                                values.back(), currentAddress)) ||
+        currentAccessMode != lastAccessMode) {
+      if (buffer.contains(currentAddress) &&
+          currentAccessMode != MemoryAccessMode::SYMBOLIC) {
         values.push_back(
             ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
       } else {
+        printvalue2(currentAddress);
         values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
       }
     } else {
       ++values.back().end;
     }
+    lastAccessMode = memoryPolicy.getAccessMode(startAddress);
   }
 
   Value* result = ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
@@ -142,25 +133,23 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     Value* byteValue = nullptr;
     uint8_t bytesize = v.end - v.start;
 
-    APInt mem_value(1, 0);
+    uint64_t mem_value;
     printvalue2(v.isRef);
-    auto read_mem =
-        BinaryOperations::readMemory(v.memoryAddress, bytesize, mem_value);
+
+    auto read_mem = file.readMemory(v.memoryAddress, bytesize, mem_value);
     printvalue2(read_mem);
     printvalue2(mem_value);
-    if (v.isRef) {
+    if (!v.isRef && memoryPolicy.isSymbolic(v.memoryAddress)) {
+      byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+    } else if (v.isRef) {
       byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
                                v.ref.byteOffset + bytesize);
-    } else if (!v.isRef && BinaryOperations::readMemory(v.memoryAddress,
-                                                        bytesize, mem_value)) {
+    } else if (!v.isRef &&
+               file.readMemory(v.memoryAddress, bytesize, mem_value)) {
 
-      byteValue = builder.getIntN(bytesize * 8, mem_value.getZExtValue());
+      byteValue = builder->getIntN(bytesize * 8, mem_value);
     } else if (!v.isRef) {
-      // there has been no stores in this region and its not safe to concretize.
 
-      // concretize the read into a constant anyways
-      // byteValue = ConstantInt::get(Type::getIntNTy(context, (bytesize) * 8),
-      // 0); // do not concretize
       byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
     }
     if (byteValue) {
@@ -174,14 +163,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     }
     m += bytesize;
   }
-
+  printvalue(result);
   return result;
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::extractBytes(Value* value,
                                                          uint8_t startOffset,
                                                          uint8_t endOffset) {
-  LLVMContext& context = builder.getContext();
+  LLVMContext& context = builder->getContext();
 
   if (!value) {
     return ConstantInt::get(
@@ -313,7 +302,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::loadMemoryOp(Value* ptr) {
 
 // rename func name to indicate its only for store
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::insertMemoryOp(StoreInst* inst) {
-  memInfos.push_back(inst);
 
   auto ptr = inst->getPointerOperand();
   if (!isa<GetElementPtrInst>(ptr))
@@ -361,7 +349,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::insertMemoryOp(StoreInst* inst) {
   auto gepOffsetCI = cast<ConstantInt>(gepOffset);
 
   addValueReference(inst->getValueOperand(), gepOffsetCI->getZExtValue());
-  BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
+  // BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
 }
 
 inline bool overlaps(uint64_t addr1, uint64_t size1, uint64_t addr2,
@@ -448,7 +436,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
       std::string Filename = "output_too_many_unk.ll";
       std::error_code EC;
       raw_fd_ostream OS(Filename, EC);
-      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+      builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
     printvalueforce2(max_unknown);
     UNREACHABLE("There is a very huge chance that this shouldnt happen");
@@ -612,7 +600,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
       std::string Filename = "output_depth_exceeded.ll";
       std::error_code EC;
       raw_fd_ostream OS(Filename, EC);
-      builder.GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+      builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
     UNREACHABLE("Depth exceeded");
   }
@@ -623,7 +611,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
     return res;
   }
   if (auto v_inst = dyn_cast<Instruction>(V)) {
-
+    if (v_inst->getOpcode() == Instruction::Alloca) {
+      return {};
+    }
     if (v_inst->getNumOperands() == 1)
       return computePossibleValues(v_inst->getOperand(0), Depth + 1);
 
@@ -642,9 +632,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
         return res;
       }
       if (kb.isNonZero()) {
-        auto falseValues = computePossibleValues(falseValue, Depth + 1);
+        auto trueValues = computePossibleValues(trueValue, Depth + 1);
 
-        res.insert(falseValues.begin(), falseValues.end());
+        res.insert(trueValues.begin(), trueValues.end());
         return res;
       }
       auto trueValues = computePossibleValues(trueValue, Depth + 1);
@@ -752,6 +742,37 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
                 cast<ConstantInt>(select_inst->getFalseValue())->getZExtValue(),
                 cloadsize, load));
     }
+    if (getControlFlow() == ControlFlow::Unflatten) {
+      auto possibleValues = computePossibleValues(loadOffset, 0);
+
+      llvm::Value* selectedValue = nullptr;
+
+      for (auto possibleValue : possibleValues) { // rename
+
+        auto isPaged = isMemPaged(possibleValue.getZExtValue());
+        if (!isPaged)
+          continue;
+        printvalue2(possibleValue);
+        auto possible_values_from_mem = retrieveCombinedValue(
+            possibleValue.getZExtValue(), cloadsize, load);
+        printvalue2((uint64_t)cloadsize);
+        printvalue(possible_values_from_mem);
+
+        if (selectedValue == nullptr) {
+          selectedValue = possible_values_from_mem;
+        } else {
+
+          llvm::Value* comparison = createICMPFolder(
+              CmpInst::ICMP_EQ, loadOffset,
+              llvm::ConstantInt::get(loadOffset->getType(), possibleValue));
+          printvalue(comparison);
+          selectedValue =
+              createSelectFolder(comparison, possible_values_from_mem,
+                                 selectedValue, "conditional-mem-load");
+        }
+      }
+      return selectedValue;
+    }
   }
 
   return nullptr;
@@ -828,7 +849,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
 // 0xCC_DD << 48 => 0xCC_DD_00_00_00_00_00_00 %mask.shifted = 0xFF_FF_FF_FF <<
 // 6*8     => 0xFF_FF_00_00_00_00_00_00 %reverse.mask.shifted =
 // 0x00_00_FF_FF_FF_FF_FF_FF %p1.masked = %p1 & %reverse.mask.shifted =>
-// 0x11_22_33_44_55_66_77_88 & 0x00_00_FF_FF_FF_FF_FF_FF =>
+// 0x11_22_33_44_55_66_77_88 & 0x00_00_FF_FF_FF_FF_FF =>
 // 0x00_00_33_44_55_66_77_88 %retval = %p2.shifted | %p1.masked       =>
 // 0x00_00_33_44_55_66_77_88 | 0xCC_DD_00_00_00_00_00_00 =>
 // 0xCC_DD_33_44_55_66_77_88

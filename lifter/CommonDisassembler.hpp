@@ -5,9 +5,10 @@
 #include "CommonRegisters.h"
 #include "ZydisDisassembler_mnemonics.h"
 #include "ZydisDisassembler_registers.h"
+#include <array>
 #include <concepts>
 #include <cstdint>
-#include <iostream>
+#include <string>
 
 // #include <string>
 
@@ -59,7 +60,7 @@ inline uint8_t GetTypeSize(OperandType op) {
   return 0;
 }
 
-template <Registers Register> inline Register getBiggestEncoding(Register reg) {
+template <Registers Register> Register getBiggestEncoding(Register reg) {
 
   switch (reg) {
 
@@ -170,6 +171,159 @@ template <Registers Register> inline Register getBiggestEncoding(Register reg) {
   case Register::EIP:
   case Register::RIP:
     return Register::RIP;
+
+  default:
+    return Register::None;
+  }
+}
+
+template <Registers Register>
+inline Register getRegOfSize(Register reg, uint8_t size) {
+
+  auto size2index = [](uint8_t size) {
+    switch (size) {
+    case 64:
+      return 3;
+    case 32:
+      return 2;
+    case 16:
+      return 1;
+    case 8:
+      return 0;
+    }
+
+    return -1;
+  };
+
+  uint8_t index = size2index(size);
+  // pray god this is inlined so this switch case is optimized out
+  switch (reg) {
+
+  case Register::AL:
+  case Register::AH:
+  case Register::AX:
+  case Register::EAX:
+  case Register::RAX:
+    return std::array{Register::AL, Register::AX, Register::EAX,
+                      Register::RAX}[index];
+
+  case Register::CL:
+  case Register::CH:
+  case Register::CX:
+  case Register::ECX:
+  case Register::RCX:
+    return std::array{Register::CL, Register::CX, Register::ECX,
+                      Register::RCX}[index];
+
+  case Register::DL:
+  case Register::DH:
+  case Register::DX:
+  case Register::EDX:
+  case Register::RDX:
+    return std::array{Register::DL, Register::DX, Register::EDX,
+                      Register::RDX}[index];
+
+  case Register::BL:
+  case Register::BH:
+  case Register::BX:
+  case Register::EBX:
+  case Register::RBX:
+    return std::array{Register::BL, Register::BX, Register::EBX,
+                      Register::RBX}[index];
+
+  case Register::SPL:
+  case Register::SP:
+  case Register::ESP:
+  case Register::RSP:
+    return std::array{Register::SPL, Register::SP, Register::ESP,
+                      Register::RSP}[index];
+
+  case Register::BPL:
+  case Register::BP:
+  case Register::EBP:
+  case Register::RBP:
+    return std::array{Register::BPL, Register::BP, Register::EBP,
+                      Register::RBP}[index];
+
+  case Register::SIL:
+  case Register::SI:
+  case Register::ESI:
+  case Register::RSI:
+    return std::array{Register::SIL, Register::SI, Register::ESI,
+                      Register::RSI}[index];
+
+  case Register::DIL:
+  case Register::DI:
+  case Register::EDI:
+  case Register::RDI:
+    return std::array{Register::DIL, Register::DI, Register::EDI,
+                      Register::RDI}[index];
+
+  case Register::R8B:
+  case Register::R8W:
+  case Register::R8D:
+  case Register::R8:
+    return std::array{Register::R8B, Register::R8W, Register::R8D,
+                      Register::R8}[index];
+
+  case Register::R9B:
+  case Register::R9W:
+  case Register::R9D:
+  case Register::R9:
+    return std::array{Register::R9B, Register::R9W, Register::R9D,
+                      Register::R9}[index];
+
+  case Register::R10B:
+  case Register::R10W:
+  case Register::R10D:
+  case Register::R10:
+    return std::array{Register::R10B, Register::R10W, Register::R10D,
+                      Register::R10}[index];
+
+  case Register::R11B:
+  case Register::R11W:
+  case Register::R11D:
+  case Register::R11:
+    return std::array{Register::R11B, Register::R11W, Register::R11D,
+                      Register::R11}[index];
+
+  case Register::R12B:
+  case Register::R12W:
+  case Register::R12D:
+  case Register::R12:
+    return std::array{Register::R12B, Register::R12W, Register::R12D,
+                      Register::R12}[index];
+
+  case Register::R13B:
+  case Register::R13W:
+  case Register::R13D:
+  case Register::R13:
+    return std::array{Register::R13B, Register::R13W, Register::R13D,
+                      Register::R13}[index];
+
+  case Register::R14B:
+  case Register::R14W:
+  case Register::R14D:
+  case Register::R14:
+    return std::array{Register::R14B, Register::R14W, Register::R14D,
+                      Register::R14}[index];
+
+  case Register::R15B:
+  case Register::R15W:
+  case Register::R15D:
+  case Register::R15:
+    return std::array{Register::R15B, Register::R15B, Register::R15D,
+                      Register::R15}[index];
+
+  case Register::EFLAGS:
+  case Register::RFLAGS:
+    return std::array{Register::None, Register::None, Register::EFLAGS,
+                      Register::RFLAGS}[index];
+
+  case Register::EIP:
+  case Register::RIP:
+    return std::array{Register::None, Register::None, Register::EIP,
+                      Register::RIP}[index];
 
   default:
     return Register::None;

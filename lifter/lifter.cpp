@@ -2,18 +2,20 @@
 #define MAGIC_ENUM_RANGE_MIN -1000
 #define MAGIC_ENUM_RANGE_MAX 1000
 
-#include "CommonMnemonics.h"
-#include "CommonRegisters.h"
-#include "FunctionSignatures.hpp"
-#include "GEPTracker.h"
+#include "MemoryPolicy.hpp"
+#include "MergenPB.hpp"
 #include "PathSolver.h"
 #include "ZydisDisassembler.hpp"
-#include "icedDisassembler.hpp"
+#include "fileReader.hpp"
 #include "includes.h"
 #include "lifterClass.hpp"
+#include "lifterClass_concolic.hpp"
+#include "lifterClass_symbolic.hpp"
 #include "nt/nt_headers.hpp"
 
+
 // #include "test_instructions.h"
+#include "Semantics.ipp"
 #include "utils.h"
 #include <coff/line_number.hpp>
 #include <cstdint>
@@ -27,11 +29,8 @@
 #include <llvm/Support/NativeFormatting.h>
 #include <magic_enum/magic_enum.hpp>
 
-#include "OperandUtils.ipp"
-#include "Semantics.ipp"
-
 // #define TEST
-std::vector<lifterClass<>*> lifters;
+
 uint64_t original_address = 0;
 unsigned int pathNo = 0;
 // consider having this function in a class, later we can use multi-threading to
@@ -39,125 +38,30 @@ unsigned int pathNo = 0;
 unsigned int breaking = 0;
 arch_mode is64Bit;
 
-void asm_to_zydis_to_lift(std::vector<uint8_t>& fileData) {
+void asm_to_zydis_to_lift(lifterConcolic<>* lifter,
+                          std::vector<uint8_t>& fileData) {
 
-  auto data = fileData.data();
-  BinaryOperations::initBases(data, is64Bit);
+  // auto data = fileData.data();
 
-  // Initialize the context structure
+  BBInfo bbinfo;
+  bool filter = 0;
+  while (lifter->getUnvisitedAddr(bbinfo, filter)) {
 
-  while (lifters.size() > 0) {
-    auto lifter = lifters.back();
-    uint64_t offset = BinaryOperations::address_to_mapped_address(
-        lifter->blockInfo.runtime_address);
-    debugging::doIfDebug([&]() {
-      const auto printv =
-          "runtime_addr: " + std::to_string(lifter->blockInfo.runtime_address) +
-          " offset:" + std::to_string(offset) + " byte there: 0x" +
-          std::to_string((int)*(data + offset)) + "\n" +
-          "offset: " + std::to_string(offset) +
-          " file_base: " + std::to_string(original_address) +
-          " runtime: " + std::to_string(lifter->blockInfo.runtime_address) +
-          "\n";
-      printvalue2(printv);
-    });
+    // printvalueforce2("exploring " + std::to_string(bbinfo.block_address));
 
-    lifter->builder.SetInsertPoint(lifter->blockInfo.block);
+    if (!(bbinfo.block->empty()) && filter) {
+      printvalue2("not empty");
+      continue;
+    };
 
-    lifter->run = 1;
-    while ((lifter->run && !lifter->finished)) {
+    filter = 1;
+    lifter->load_backup(bbinfo.block);
+    lifter->finished = 0;
+    auto next_bb_name = bbinfo.block->getName();
+    printvalue2(next_bb_name);
+    lifter->builder->SetInsertPoint(bbinfo.block);
 
-      // ZydisDecodedInstruction instruction;
-
-      if (BinaryOperations::isWrittenTo(lifter->blockInfo.runtime_address)) {
-        printvalueforce2(lifter->blockInfo.runtime_address);
-        UNREACHABLE("Found Self Modifying Code! we dont support it");
-      }
-      ++(lifter->counter);
-
-      auto counter = debugging::increaseInstCounter() - 1;
-      /*
-      ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-       ZydisDecoderDecodeFull(&decoder, data + offset, 15, &(instruction),
-                              operands);
-
-
-
-       debugging::doIfDebug([&]() {
-         ZydisFormatter formatter;
-
-         ZydisFormatterInit(&formatter, ZYDIS_FORMATTER_STYLE_INTEL);
-         char buffer[256];
-         ZyanU64 runtime_address = 0;
-         ZydisFormatterFormatInstruction(
-             &formatter, &(instruction), operands,
-             lifter->instruction.operand_count_visible, &buffer[0],
-             sizeof(buffer), runtime_address, ZYAN_NULL);
-         const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));
-         printvalue2(ct);
-         const auto inst = buffer;
-         printvalue2(inst);
-         const auto runtime = lifter->blockInfo.runtime_address;
-         printvalue2(runtime);
-       });
-       */
-      lifter->runDisassembler(data + offset);
-      /*
-      icedDisassembler<MnemonicZydis, RegisterZydis> dis;
-      auto res = dis.disassemble(data + offset);
-
-      for (int i = 0; i < 4; i++) {
-        auto typecheck = res.types[i] == lifter->instruction.types[i];
-        if (!typecheck) {
-          printvalueforce2(res.text);
-          printvalueforce2(i);
-          printvalueforce2(uint32_t(res.types[i]));
-          printvalueforce2(magic_enum::enum_name(res.types[i]));
-          printvalueforce2(magic_enum::enum_name(lifter->instruction.types[i]));
-          printvalueforce2(magic_enum::enum_name(lifter->instruction.regs[i]));
-        }
-      }
-    */
-      const auto ct = (llvm::format_hex_no_prefix(lifter->counter, 0));
-
-      const auto runtime_address =
-          (llvm::format_hex_no_prefix(lifter->blockInfo.runtime_address, 0));
-
-      printvalue2(ct);
-      printvalue2(runtime_address);
-
-#ifndef _NODEV
-      debugging::doIfDebug([&]() { printvalue2(lifter->instruction.text); });
-#endif
-
-      // printvalue2(lifter->instruction.text);
-
-      // lifter->instruction = runDisassembler(disas, data + offset);
-      lifter->blockInfo.runtime_address += lifter->instruction.length;
-
-      lifter->liftInstruction();
-      lifter->runtime_address_prev = lifter->blockInfo.runtime_address;
-      printvalue2(lifter->finished);
-      if (lifter->finished) {
-        lifter->run = 0;
-        lifters.pop_back();
-
-        debugging::doIfDebug([&]() {
-          std::string Filename =
-              "output_path_" + std::to_string(++pathNo) + ".ll";
-          std::error_code EC;
-          llvm::raw_fd_ostream OS(Filename, EC);
-          lifter->fnc->getParent()->print(OS, nullptr);
-        });
-        auto nextlift = "next lifter instance\n";
-        printvalue2(nextlift);
-
-        delete lifter;
-        break;
-      }
-
-      offset += lifter->instruction.length;
-    }
+    lifter->liftBasicBlockFromAddress(bbinfo.block_address);
   }
 }
 
@@ -165,58 +69,52 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
                                        std::vector<uint8_t> fileData) {
 
   auto fileBase = fileData.data();
-  llvm::LLVMContext context;
-  std::string mod_name = "my_lifting_module";
-  llvm::Module lifting_module = llvm::Module(mod_name.c_str(), context);
 
-  std::vector<llvm::Type*> argTypes;
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::Type::getInt64Ty(context));
-  argTypes.push_back(llvm::PointerType::get(context, 0));
-  argTypes.push_back(llvm::PointerType::get(context, 0)); // temp fix TEB
+  auto main = new lifterConcolic<>();
+  main->loadFile(fileBase);
+  // configure memory policy - debug for now
 
-  auto functionType =
-      llvm::FunctionType::get(llvm::Type::getInt64Ty(context), argTypes, 0);
+  main->memoryPolicy.setDefaultMode(MemoryAccessMode::SYMBOLIC);
 
-  const std::string function_name = "main";
-  auto function =
-      llvm::Function::Create(functionType, llvm::Function::ExternalLinkage,
-                             function_name.c_str(), lifting_module);
-  const std::string block_name = "entry";
-  auto bb = llvm::BasicBlock::Create(context, block_name.c_str(), function);
+  for (auto& it : main->file.sections_v) {
+    if (it.characteristics.mem_write) {
+      // printvalue2(main->file.imageBase + it.virtual_address);
+      // printvalue2(main->file.imageBase + it.virtual_address +
+      // it.virtual_size); printvalue2("symbolic");
+      main->memoryPolicy.addRange(main->file.imageBase + it.virtual_address,
+                                  main->file.imageBase + it.virtual_address +
+                                      it.virtual_size,
+                                  MemoryAccessMode::SYMBOLIC);
+    } else {
+      // printvalue2(main->file.imageBase + it.virtual_address);
+      // printvalue2(main->file.imageBase + it.virtual_address +
+      // it.virtual_size); printvalue2("concrete");
+      main->memoryPolicy.addRange(main->file.imageBase + it.virtual_address,
+                                  main->file.imageBase + it.virtual_address +
+                                      it.virtual_size,
+                                  MemoryAccessMode::CONCRETE);
+    }
+  }
+  main->memoryPolicy.addRange(STACKP_VALUE - 0x1000, STACKP_VALUE + 0x1000,
+                              MemoryAccessMode::CONCRETE);
+  /*   auto addr = 5369843712;
+    main->memoryPolicy.addRange(addr + 2, addr + 0x4,
+    MemoryAccessMode::SYMBOLIC);
 
-  llvm::InstSimplifyFolder Folder(lifting_module.getDataLayout());
-  llvm::IRBuilder<llvm::InstSimplifyFolder> builder =
-      llvm::IRBuilder<llvm::InstSimplifyFolder>(bb, Folder);
+    main->memoryPolicy.addRange(addr, addr + 0x1, MemoryAccessMode::CONCRETE);
+  */
+  main->blockInfo = BBInfo(runtime_address, main->bb);
+  main->unvisitedBlocks.push_back(main->blockInfo);
 
-  // auto RegisterList = InitRegisters(builder, function, runtime_address);
+  // main->InitRegisters(function, runtime_address);
 
-  auto main = new lifterClass(builder);
-  main->InitRegisters(function, runtime_address);
-  main->blockInfo = BBInfo(runtime_address, bb);
-
-  main->fnc = function;
-  main->initDomTree(*function);
+  x86FileReader file(fileBase);
   auto dosHeader = (win::dos_header_t*)fileBase;
   if (*(unsigned short*)fileBase != 0x5a4d) {
     UNREACHABLE("Only PE files are supported");
   }
 
-  auto IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
+  // auto IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10b;
   auto IMAGE_NT_OPTIONAL_HDR64_MAGIC = 0x20b;
 
   auto ntHeaders = (win::nt_headers_t<true>*)(fileBase + dosHeader->e_lfanew);
@@ -224,7 +122,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   is64Bit = (arch_mode)(PEmagic == IMAGE_NT_OPTIONAL_HDR64_MAGIC);
 
-  auto processHeaders = [fileBase, runtime_address,
+  auto processHeaders = [fileBase, runtime_address, &file,
                          main](const void* ntHeadersBase) -> uint64_t {
     uint64_t address, imageSize, stackSize;
 
@@ -243,8 +141,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
     }
 
     const uint64_t RVA = static_cast<uint64_t>(runtime_address - address);
-    const uint64_t fileOffset =
-        BinaryOperations::RvaToFileOffset(ntHeadersBase, RVA);
+    const uint64_t fileOffset = file.RvaToFileOffset(RVA);
     const uint8_t* dataAtAddress =
         reinterpret_cast<const uint8_t*>(fileBase) + fileOffset;
 
@@ -263,48 +160,36 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
   };
 
   original_address = processHeaders(fileBase + dosHeader->e_lfanew);
-
   main->signatures.search_signatures(fileData);
   main->signatures.createOffsetMap(); // ?
   for (const auto& [key, value] : main->signatures.siglookup) {
     value.display();
   }
+
   auto ms = timer::getTimer();
   std::cout << "\n" << std::dec << ms << " milliseconds has past" << std::endl;
 
-  // blockAddresses->push_back(make_tuple(runtime_address, bb,
-  // RegisterList));
-  lifters.push_back(main);
-
-  asm_to_zydis_to_lift(fileData);
+  asm_to_zydis_to_lift(main, fileData);
 
   ms = timer::getTimer();
 
   std::cout << "\nlifting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
-  const std::string Filename_noopt = "output_no_opts.ll";
-  std::error_code EC_noopt;
-  llvm::raw_fd_ostream OS_noopt(Filename_noopt, EC_noopt);
 
-  lifting_module.print(OS_noopt, nullptr);
+  main->writeFunctionToFile("output_no_opts.ll");
 
   std::cout << "\nwriting complete, " << std::dec << ms
             << " milliseconds has past" << std::endl;
 
-  final_optpass(function, function->getArg(17), fileData.data());
-  const std::string Filename = "output.ll";
-  std::error_code EC;
-  llvm::raw_fd_ostream OS(Filename, EC);
-
-  lifting_module.print(OS, nullptr);
-
+  // final_optpass(main->fnc, main->fnc->getArg(main->fnc->arg_size()),
+  //               fileData.data(), main->memoryPolicy);
+  main->run_opts();
+  main->writeFunctionToFile("output.ll");
   return;
 }
 
 // #define TEST
-
 int main(int argc, char* argv[]) {
-
   std::vector<std::string> args(argv, argv + argc);
   argparser::parseArguments(args);
   timer::startTimer();
