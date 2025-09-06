@@ -312,7 +312,7 @@ inline Register getRegOfSize(Register reg, uint8_t size) {
   case Register::R15W:
   case Register::R15D:
   case Register::R15:
-    return std::array{Register::R15B, Register::R15B, Register::R15D,
+    return std::array{Register::R15B, Register::R15W, Register::R15D,
                       Register::R15}[index];
 
   case Register::EFLAGS:
