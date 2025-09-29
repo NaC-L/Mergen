@@ -60,15 +60,17 @@ public:
   int getRegisterIndex(Register key) const {
 
     switch (key) {
-    case Register::EIP:
     case Register::RIP: {
       return RIP_;
     }
-    case Register::EFLAGS:
     case Register::RFLAGS: {
       return RFLAGS_;
     }
     default: {
+      assert(((key >= Register::RAX && key <= Register::R15) ||
+              key == Register::EIP || key == Register::RIP) &&
+             "Key must be between RAX and R15");
+
       return (static_cast<int>(key) - static_cast<int>(Register::RAX));
     }
     }
