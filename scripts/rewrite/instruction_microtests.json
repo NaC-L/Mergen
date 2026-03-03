@@ -1,0 +1,39 @@
+{
+  "samples": [
+    {
+      "name": "branch",
+      "symbol": "branch_target",
+      "patterns": ["select i1", "mul i32 %0, 3", "add i32 %0, 100", "xor i32"]
+    },
+    {
+      "name": "stack",
+      "symbol": "stack_target",
+      "patterns": ["ret i64 1717986918"]
+    },
+    {
+      "name": "indirect",
+      "symbol": "jump_target",
+      "patterns": ["ret i64 53"]
+    },
+    {
+      "name": "instr_add",
+      "symbol": "instr_add_target",
+      "patterns": ["ret i64 12"]
+    },
+    {
+      "name": "instr_sub",
+      "symbol": "instr_sub_target",
+      "patterns": ["ret i64 42"]
+    },
+    {
+      "name": "instr_xor",
+      "symbol": "instr_xor_target",
+      "patterns": ["ret i64 90"]
+    },
+    {
+      "name": "instr_rol",
+      "symbol": "instr_rol_target",
+      "patterns": ["ret i64 34"]
+    }
+  ]
+}

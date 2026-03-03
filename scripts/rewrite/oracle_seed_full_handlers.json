@@ -1,0 +1,2726 @@
+{
+  "schema": "mergen-oracle-seed-v1",
+  "base_seed": "scripts\\rewrite\\oracle_seed_vectors.json",
+  "generator": "build_full_handler_seed.py",
+  "cases": [
+    {
+      "name": "add_rax_rcx_basic",
+      "handler": "add_sub",
+      "instruction_bytes": [
+        72,
+        1,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x5",
+          "RCX": "0x7"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {
+          "FLAG_CF": null,
+          "FLAG_OF": null,
+          "FLAG_ZF": null,
+          "FLAG_SF": null,
+          "FLAG_PF": null,
+          "FLAG_AF": null
+        }
+      }
+    },
+    {
+      "name": "add_rax_rcx_carry_magic",
+      "handler": "add_sub",
+      "instruction_bytes": [
+        72,
+        1,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0xffffffffffffffff",
+          "RCX": "0x1"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {
+          "FLAG_CF": null,
+          "FLAG_OF": null,
+          "FLAG_ZF": null,
+          "FLAG_SF": null,
+          "FLAG_PF": null,
+          "FLAG_AF": null
+        }
+      }
+    },
+    {
+      "name": "sub_rax_rcx_borrow_magic",
+      "handler": "add_sub",
+      "instruction_bytes": [
+        72,
+        41,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x0",
+          "RCX": "0x1"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {
+          "FLAG_CF": null,
+          "FLAG_OF": null,
+          "FLAG_ZF": null,
+          "FLAG_SF": null,
+          "FLAG_PF": null,
+          "FLAG_AF": null
+        }
+      }
+    },
+    {
+      "name": "xor_rax_rcx_magic",
+      "handler": "xor",
+      "instruction_bytes": [
+        72,
+        49,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0xf0f0f0f0f0f0f0f0",
+          "RCX": "0xaaaaaaaaaaaaaaaa"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {
+          "FLAG_CF": null,
+          "FLAG_OF": null
+        }
+      }
+    },
+    {
+      "name": "xor_rax_rax_zero",
+      "handler": "xor",
+      "instruction_bytes": [
+        72,
+        49,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0xdeadbeefcafebabe"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {
+          "FLAG_CF": null,
+          "FLAG_OF": null
+        }
+      }
+    },
+    {
+      "name": "rol_rax_1_carry_probe",
+      "handler": "rol",
+      "instruction_bytes": [
+        72,
+        209,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x8000000000000001"
+        },
+        "flags": {
+          "FLAG_CF": 0
+        }
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {
+          "FLAG_CF": null,
+          "FLAG_OF": null
+        }
+      }
+    },
+    {
+      "name": "smoke_adc_adc",
+      "handler": "adc",
+      "instruction_bytes": [
+        20,
+        49
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_and_and",
+      "handler": "and",
+      "instruction_bytes": [
+        37,
+        119,
+        250,
+        20,
+        234
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_andn_andn",
+      "handler": "andn",
+      "instruction_bytes": [
+        196,
+        162,
+        136,
+        242,
+        199
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_bextr_bextr",
+      "handler": "bextr",
+      "instruction_bytes": [
+        196,
+        130,
+        64,
+        247,
+        220
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_blsi_blsi",
+      "handler": "blsi",
+      "instruction_bytes": [
+        196,
+        226,
+        64,
+        243,
+        88,
+        128
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1000",
+          "RCX": "0x2000",
+          "R14": "0x3000"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_blsmsk_blsmsk",
+      "handler": "blsmsk",
+      "instruction_bytes": [
+        196,
+        2,
+        32,
+        243,
+        86,
+        228
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1000",
+          "RCX": "0x2000",
+          "R14": "0x3000"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_blsr_blsr",
+      "handler": "blsr",
+      "instruction_bytes": [
+        196,
+        226,
+        32,
+        243,
+        9
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1000",
+          "RCX": "0x2000",
+          "R14": "0x3000"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_bsf_bsf",
+      "handler": "bsf",
+      "instruction_bytes": [
+        15,
+        188,
+        248
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_bsr_bsr",
+      "handler": "bsr",
+      "instruction_bytes": [
+        69,
+        15,
+        189,
+        226
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_bswap_bswap",
+      "handler": "bswap",
+      "instruction_bytes": [
+        15,
+        201
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_bt_bt",
+      "handler": "bt",
+      "instruction_bytes": [
+        15,
+        163,
+        194
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_btc_btc",
+      "handler": "btc",
+      "instruction_bytes": [
+        15,
+        187,
+        236
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_btr_btr",
+      "handler": "btr",
+      "instruction_bytes": [
+        15,
+        179,
+        229
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_bts_bts",
+      "handler": "bts",
+      "instruction_bytes": [
+        15,
+        171,
+        235
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_bzhi_bzhi",
+      "handler": "bzhi",
+      "instruction_bytes": [
+        196,
+        34,
+        128,
+        245,
+        216
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_call_call",
+      "handler": "call",
+      "instruction_bytes": [
+        232,
+        238,
+        10,
+        110,
+        73
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cbw_cbw",
+      "handler": "cbw",
+      "instruction_bytes": [
+        102,
+        152
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cdq_cdq",
+      "handler": "cdq",
+      "instruction_bytes": [
+        153
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cdqe_cdqe",
+      "handler": "cdqe",
+      "instruction_bytes": [
+        76,
+        152
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_clc_clc",
+      "handler": "clc",
+      "instruction_bytes": [
+        248
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cld_cld",
+      "handler": "cld",
+      "instruction_bytes": [
+        252
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cli_cli",
+      "handler": "cli",
+      "instruction_bytes": [
+        250
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cmc_cmc",
+      "handler": "cmc",
+      "instruction_bytes": [
+        245
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cmovcc_cmovl",
+      "handler": "cmovcc",
+      "instruction_bytes": [
+        15,
+        76,
+        232
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cmp_cmp",
+      "handler": "cmp",
+      "instruction_bytes": [
+        60,
+        198
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cmpxchg_cmpxchg",
+      "handler": "cmpxchg",
+      "instruction_bytes": [
+        15,
+        176,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cpuid_cpuid",
+      "handler": "cpuid",
+      "instruction_bytes": [
+        15,
+        162
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cqo_cqo",
+      "handler": "cqo",
+      "instruction_bytes": [
+        79,
+        153
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cwd_cwd",
+      "handler": "cwd",
+      "instruction_bytes": [
+        102,
+        153
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_cwde_cwde",
+      "handler": "cwde",
+      "instruction_bytes": [
+        152
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_dec_dec",
+      "handler": "dec",
+      "instruction_bytes": [
+        255,
+        204
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_div_div",
+      "handler": "div",
+      "instruction_bytes": [
+        247,
+        240
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_div2_div",
+      "handler": "div2",
+      "instruction_bytes": [
+        72,
+        247,
+        241
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x10",
+          "RDX": "0x0",
+          "RCX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_idiv_idiv",
+      "handler": "idiv",
+      "instruction_bytes": [
+        246,
+        251
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_idiv2_idiv",
+      "handler": "idiv2",
+      "instruction_bytes": [
+        72,
+        247,
+        249
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x10",
+          "RDX": "0x0",
+          "RCX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_imul_imul",
+      "handler": "imul",
+      "instruction_bytes": [
+        105,
+        248,
+        168,
+        241,
+        22,
+        33
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_imul2_imul",
+      "handler": "imul2",
+      "instruction_bytes": [
+        72,
+        247,
+        233
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x7",
+          "RDX": "0x0",
+          "RCX": "0x3"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_inc_inc",
+      "handler": "inc",
+      "instruction_bytes": [
+        254,
+        197
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jb_jb",
+      "handler": "jb",
+      "instruction_bytes": [
+        114,
+        196
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jbe_jbe",
+      "handler": "jbe",
+      "instruction_bytes": [
+        118,
+        88
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jl_jl",
+      "handler": "jl",
+      "instruction_bytes": [
+        124,
+        95
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jle_jle",
+      "handler": "jle",
+      "instruction_bytes": [
+        126,
+        180
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jmp_jmp",
+      "handler": "jmp",
+      "instruction_bytes": [
+        233,
+        93,
+        27,
+        108,
+        210
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnb_jnb",
+      "handler": "jnb",
+      "instruction_bytes": [
+        115,
+        106
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnbe_jnbe",
+      "handler": "jnbe",
+      "instruction_bytes": [
+        119,
+        13
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnl_jnl",
+      "handler": "jnl",
+      "instruction_bytes": [
+        125,
+        202
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnle_jnle",
+      "handler": "jnle",
+      "instruction_bytes": [
+        127,
+        75
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jno_jno",
+      "handler": "jno",
+      "instruction_bytes": [
+        113,
+        141
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnp_jnp",
+      "handler": "jnp",
+      "instruction_bytes": [
+        123,
+        100
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jns_jns",
+      "handler": "jns",
+      "instruction_bytes": [
+        54,
+        121,
+        209
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnz_jnz",
+      "handler": "jnz",
+      "instruction_bytes": [
+        117,
+        63
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jo_jo",
+      "handler": "jo",
+      "instruction_bytes": [
+        112,
+        243
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jp_jp",
+      "handler": "jp",
+      "instruction_bytes": [
+        122,
+        57
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_js_js",
+      "handler": "js",
+      "instruction_bytes": [
+        120,
+        136
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jz_jz",
+      "handler": "jz",
+      "instruction_bytes": [
+        116,
+        21
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_lahf_lahf",
+      "handler": "lahf",
+      "instruction_bytes": [
+        159
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_lea_lea",
+      "handler": "lea",
+      "instruction_bytes": [
+        141,
+        38
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_leave_leave",
+      "handler": "leave",
+      "instruction_bytes": [
+        201
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_lzcnt_lzcnt",
+      "handler": "lzcnt",
+      "instruction_bytes": [
+        243,
+        15,
+        189,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_mov_movzx",
+      "handler": "mov",
+      "instruction_bytes": [
+        15,
+        183,
+        244
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_movs_x_movsq",
+      "handler": "movs_x",
+      "instruction_bytes": [
+        72,
+        165
+      ],
+      "initial": {
+        "registers": {
+          "RSI": "0x2000",
+          "RDI": "0x3000",
+          "RAX": "0x1122334455667788"
+        },
+        "flags": {
+          "FLAG_DF": "0x0"
+        }
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_mul_mul",
+      "handler": "mul",
+      "instruction_bytes": [
+        101,
+        247,
+        224
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_mul2_mul",
+      "handler": "mul2",
+      "instruction_bytes": [
+        72,
+        247,
+        225
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x7",
+          "RDX": "0x0",
+          "RCX": "0x3"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_neg_neg",
+      "handler": "neg",
+      "instruction_bytes": [
+        246,
+        217
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_not_not",
+      "handler": "not",
+      "instruction_bytes": [
+        247,
+        209
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_or_or",
+      "handler": "or",
+      "instruction_bytes": [
+        13,
+        172,
+        4,
+        162,
+        50
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_pdep_pdep",
+      "handler": "pdep",
+      "instruction_bytes": [
+        196,
+        226,
+        235,
+        245,
+        193
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_pext_pext",
+      "handler": "pext",
+      "instruction_bytes": [
+        196,
+        98,
+        10,
+        245,
+        225
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_pop_pop",
+      "handler": "pop",
+      "instruction_bytes": [
+        89
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_popcnt_popcnt",
+      "handler": "popcnt",
+      "instruction_bytes": [
+        243,
+        15,
+        184,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_popfq_popf",
+      "handler": "popfq",
+      "instruction_bytes": [
+        46,
+        102,
+        157
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_push_push",
+      "handler": "push",
+      "instruction_bytes": [
+        104,
+        246,
+        167,
+        230,
+        158
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_pushfq_pushf",
+      "handler": "pushfq",
+      "instruction_bytes": [
+        102,
+        156
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_rcl_rcl",
+      "handler": "rcl",
+      "instruction_bytes": [
+        208,
+        215
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_rcr_rcr",
+      "handler": "rcr",
+      "instruction_bytes": [
+        210,
+        223
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_rdtsc_rdtsc",
+      "handler": "rdtsc",
+      "instruction_bytes": [
+        15,
+        49
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_ret_ret",
+      "handler": "ret",
+      "instruction_bytes": [
+        195
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_ror_ror",
+      "handler": "ror",
+      "instruction_bytes": [
+        192,
+        201,
+        81
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_sahf_sahf",
+      "handler": "sahf",
+      "instruction_bytes": [
+        158
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_sar_sar",
+      "handler": "sar",
+      "instruction_bytes": [
+        211,
+        254
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_sbb_sbb",
+      "handler": "sbb",
+      "instruction_bytes": [
+        29,
+        216,
+        166,
+        249,
+        101
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setb_setb",
+      "handler": "setb",
+      "instruction_bytes": [
+        15,
+        146,
+        230
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setbe_setbe",
+      "handler": "setbe",
+      "instruction_bytes": [
+        15,
+        150,
+        224
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setl_setl",
+      "handler": "setl",
+      "instruction_bytes": [
+        15,
+        156,
+        247
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setle_setle",
+      "handler": "setle",
+      "instruction_bytes": [
+        15,
+        158,
+        255
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setnb_setnb",
+      "handler": "setnb",
+      "instruction_bytes": [
+        15,
+        147,
+        218
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setnbe_setnbe",
+      "handler": "setnbe",
+      "instruction_bytes": [
+        15,
+        151,
+        229
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setnl_setnl",
+      "handler": "setnl",
+      "instruction_bytes": [
+        15,
+        157,
+        234
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setnle_setnle",
+      "handler": "setnle",
+      "instruction_bytes": [
+        15,
+        159,
+        240
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setno_setno",
+      "handler": "setno",
+      "instruction_bytes": [
+        15,
+        145,
+        249
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setnp_setnp",
+      "handler": "setnp",
+      "instruction_bytes": [
+        15,
+        155,
+        221
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setns_setns",
+      "handler": "setns",
+      "instruction_bytes": [
+        15,
+        153,
+        210
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setnz_setnz",
+      "handler": "setnz",
+      "instruction_bytes": [
+        15,
+        149,
+        245
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_seto_seto",
+      "handler": "seto",
+      "instruction_bytes": [
+        15,
+        144,
+        254
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setp_setp",
+      "handler": "setp",
+      "instruction_bytes": [
+        15,
+        154,
+        228
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_sets_sets",
+      "handler": "sets",
+      "instruction_bytes": [
+        15,
+        152,
+        203
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_setz_setz",
+      "handler": "setz",
+      "instruction_bytes": [
+        15,
+        148,
+        194
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_shl_shl",
+      "handler": "shl",
+      "instruction_bytes": [
+        210,
+        226
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_shld_shld",
+      "handler": "shld",
+      "instruction_bytes": [
+        15,
+        164,
+        200,
+        69
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_shr_shr",
+      "handler": "shr",
+      "instruction_bytes": [
+        210,
+        237
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_shrd_shrd",
+      "handler": "shrd",
+      "instruction_bytes": [
+        15,
+        173,
+        195
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_stc_stc",
+      "handler": "stc",
+      "instruction_bytes": [
+        249
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_std_std",
+      "handler": "std",
+      "instruction_bytes": [
+        253
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_stosx_stosq",
+      "handler": "stosx",
+      "instruction_bytes": [
+        46,
+        78,
+        171
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_test_test",
+      "handler": "test",
+      "instruction_bytes": [
+        168,
+        221
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_tzcnt_tzcnt",
+      "handler": "tzcnt",
+      "instruction_bytes": [
+        243,
+        15,
+        188,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_xadd_xadd",
+      "handler": "xadd",
+      "instruction_bytes": [
+        15,
+        193,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_xchg_xchg",
+      "handler": "xchg",
+      "instruction_bytes": [
+        145
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    }
+  ]
+}

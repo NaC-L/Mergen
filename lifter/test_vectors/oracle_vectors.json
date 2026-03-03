@@ -1,0 +1,256 @@
+{
+  "schema": "mergen-oracle-v1",
+  "generated_at_utc": "2026-03-03T16:46:25.964598+00:00",
+  "source_seed_schema": "mergen-oracle-seed-v1",
+  "providers": [
+    "unicorn"
+  ],
+  "cases": [
+    {
+      "name": "add_rax_rcx_basic",
+      "handler": "add_sub",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        72,
+        1,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x5",
+          "RCX": "0x7"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": "0xc"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 1,
+          "FLAG_AF": 0
+        }
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0xc"
+          },
+          "flags": {
+            "FLAG_CF": 0,
+            "FLAG_OF": 0,
+            "FLAG_ZF": 0,
+            "FLAG_SF": 0,
+            "FLAG_PF": 1,
+            "FLAG_AF": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "add_rax_rcx_carry_magic",
+      "handler": "add_sub",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        72,
+        1,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0xffffffffffffffff",
+          "RCX": "0x1"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 1,
+          "FLAG_AF": 1
+        }
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x0"
+          },
+          "flags": {
+            "FLAG_CF": 1,
+            "FLAG_OF": 0,
+            "FLAG_ZF": 1,
+            "FLAG_SF": 0,
+            "FLAG_PF": 1,
+            "FLAG_AF": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "sub_rax_rcx_borrow_magic",
+      "handler": "add_sub",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        72,
+        41,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x0",
+          "RCX": "0x1"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": "0xffffffffffffffff"
+        },
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 1,
+          "FLAG_PF": 1,
+          "FLAG_AF": 1
+        }
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0xffffffffffffffff"
+          },
+          "flags": {
+            "FLAG_CF": 1,
+            "FLAG_OF": 0,
+            "FLAG_ZF": 0,
+            "FLAG_SF": 1,
+            "FLAG_PF": 1,
+            "FLAG_AF": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "xor_rax_rcx_magic",
+      "handler": "xor",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        72,
+        49,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0xf0f0f0f0f0f0f0f0",
+          "RCX": "0xaaaaaaaaaaaaaaaa"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": "0x5a5a5a5a5a5a5a5a"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0
+        }
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x5a5a5a5a5a5a5a5a"
+          },
+          "flags": {
+            "FLAG_CF": 0,
+            "FLAG_OF": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "xor_rax_rax_zero",
+      "handler": "xor",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        72,
+        49,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0xdeadbeefcafebabe"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0
+        }
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x0"
+          },
+          "flags": {
+            "FLAG_CF": 0,
+            "FLAG_OF": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "rol_rax_1_carry_probe",
+      "handler": "rol",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        72,
+        209,
+        192
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x8000000000000001"
+        },
+        "flags": {
+          "FLAG_CF": 0
+        }
+      },
+      "expected": {
+        "registers": {
+          "RAX": "0x3"
+        },
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_OF": 1
+        }
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x3"
+          },
+          "flags": {
+            "FLAG_CF": 1,
+            "FLAG_OF": 1
+          }
+        }
+      }
+    }
+  ]
+}
