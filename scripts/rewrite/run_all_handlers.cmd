@@ -1,0 +1,28 @@
+@echo off
+setlocal
+
+call "%~dp0..\dev\build_iced.cmd"
+if errorlevel 1 exit /b 1
+
+set "CMAKE_EXE=%ProgramFiles%\CMake\bin\cmake.exe"
+if not exist "%CMAKE_EXE%" (
+    echo ERROR: CMake executable not found at "%CMAKE_EXE%"
+    exit /b 1
+)
+
+"%CMAKE_EXE%" --build "%~dp0..\..\build_iced" --target rewrite_microtests
+if errorlevel 1 exit /b 1
+
+set "FULL_SEED=%~dp0oracle_seed_full_handlers.json"
+set "FULL_VECTORS=%~dp0..\..\lifter\test_vectors\oracle_vectors_full_handlers.json"
+
+call "%~dp0build_full_handler_seed.cmd" --out-seed "%FULL_SEED%"
+if errorlevel 1 exit /b 1
+
+call "%~dp0generate_oracle_vectors.cmd" --seed "%FULL_SEED%" --out "%FULL_VECTORS%"
+if errorlevel 1 exit /b 1
+
+set "MERGEN_TEST_VECTORS=%FULL_VECTORS%"
+set "SKIP_ORACLE_GENERATION=1"
+call "%~dp0run_microtests.cmd" %*
+exit /b %errorlevel%
