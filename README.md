@@ -8,6 +8,13 @@ This tool is designed for:
 
 To build and run the project, take a look at [**docs/BUILDING.md**](https://github.com/NaC-L/Mergen/blob/main/docs/BUILDING.md).
 
+## Rewrite baseline gate
+
+Rewrite work should keep the baseline regression gate green. The gate builds focused PE samples, runs `lifter`, and verifies lifted IR outputs.
+
+- Workflow doc: [**docs/REWRITE_BASELINE.md**](docs/REWRITE_BASELINE.md)
+- One-command gate: `scripts\\rewrite\\run.cmd`
+
 ## Core Objectives:
 
 - ### Deobfuscation

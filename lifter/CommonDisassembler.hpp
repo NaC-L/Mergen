@@ -471,7 +471,7 @@ struct MergenDisassembledInstruction_base {
 // using MergenDisassembledInstruction = MergenDisassembledInstruction_base<>;
 
 template <typename T, typename T2, typename T3>
-concept Disassembler = requires(T d, void* buffer, size_t size) {
+concept Disassembler = requires(T d, const void* buffer, size_t size) {
   {
     d.disassemble(buffer, size)
   } -> std::same_as<MergenDisassembledInstruction_base<T2, T3>>;
@@ -481,7 +481,7 @@ template <typename T, typename T2 = MnemonicInternal,
           typename T3 = RegisterInternal>
   requires Disassembler<T, T2, T3>
 inline MergenDisassembledInstruction_base<T2, T3>
-runDisassembler(T& dis, void* buffer, size_t size = 15) {
+runDisassembler(T& dis, const void* buffer, size_t size = 15) {
   return dis.disassemble(buffer, size);
 }
 

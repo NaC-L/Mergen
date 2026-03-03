@@ -275,27 +275,55 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::branchHelper(
   // "\n";
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bextr() {
-  /*
-  auto src2 = operands[2];
-  auto src1 = operands[1];
-  auto dst = operands[0];
-
-  */
   auto info = GetIndexValue(2);
   auto source = GetIndexValue(1);
 
-  auto len = createTruncFolder(
-      createLShrFolder(info, ConstantInt::get(info->getType(), 8)),
-      Type::getInt8Ty(fnc->getContext()));
+  auto infoType = info->getType();
+  auto sourceType = source->getType();
+  auto operandBitWidth = sourceType->getIntegerBitWidth();
 
-  Value* bitmask = createAShrFolder(
-      createShlFolder(ConstantInt::get(len->getType(), 1), len), len);
-  auto source2 =
-      createAndFolder(source, createZExtFolder(bitmask, source->getType()));
+  auto start = createAndFolder(info, ConstantInt::get(infoType, 0xFF), "bextr_start");
+  auto len = createAndFolder(
+      createLShrFolder(info, ConstantInt::get(infoType, 8)),
+      ConstantInt::get(infoType, 0xFF), "bextr_len");
 
-  SetIndexValue(0, source2);
-  setFlag(FLAG_ZF, createICMPFolder(CmpInst::ICMP_EQ, source2,
-                                    ConstantInt::get(source->getType(), 0)));
+  auto startInRange = createICMPFolder(
+      CmpInst::ICMP_ULT, start, ConstantInt::get(infoType, operandBitWidth),
+      "bextr_start_in_range");
+  auto safeStart = createSelectFolder(
+      startInRange, start, ConstantInt::get(infoType, 0), "bextr_safe_start");
+  auto shifted =
+      createLShrFolder(source, createZExtOrTruncFolder(safeStart, sourceType),
+                       "bextr_shifted");
+
+  auto lenClamped = createSelectFolder(
+      createICMPFolder(CmpInst::ICMP_UGT, len,
+                       ConstantInt::get(infoType, operandBitWidth),
+                       "bextr_len_gt_width"),
+      ConstantInt::get(infoType, operandBitWidth), len, "bextr_len_clamped");
+  auto lenClampedSource = createZExtOrTruncFolder(lenClamped, sourceType);
+  auto lenIsZero = createICMPFolder(
+      CmpInst::ICMP_EQ, lenClampedSource, ConstantInt::get(sourceType, 0),
+      "bextr_len_is_zero");
+  auto safeLen = createSelectFolder(
+      lenIsZero, ConstantInt::get(sourceType, 1), lenClampedSource,
+      "bextr_safe_len");
+
+  auto maskShift = createSubFolder(
+      ConstantInt::get(sourceType, operandBitWidth), safeLen, "bextr_mask_shift");
+  auto maskRaw = createLShrFolder(Constant::getAllOnesValue(sourceType), maskShift,
+                                  "bextr_mask_raw");
+  auto mask = createSelectFolder(
+      lenIsZero, ConstantInt::get(sourceType, 0), maskRaw, "bextr_mask");
+  auto extracted = createAndFolder(shifted, mask, "bextr_extracted");
+  auto result = createSelectFolder(
+      startInRange, extracted, ConstantInt::get(sourceType, 0), "bextr_result");
+
+  SetIndexValue(0, result);
+  setFlag(FLAG_ZF, createICMPFolder(CmpInst::ICMP_EQ, result,
+                                    ConstantInt::get(sourceType, 0)));
+  setFlag(FLAG_CF, builder->getInt1(0));
+  setFlag(FLAG_OF, builder->getInt1(0));
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
@@ -1684,16 +1712,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shr() {
           "shrcf"),
       builder->getInt1Ty());
 
-  Value* isCountOne =
-      createICMPFolder(CmpInst::ICMP_EQ, clampedCount,
-                       ConstantInt::get(clampedCount->getType(), 1));
-
-  Value* of = createICMPFolder(CmpInst::ICMP_SLT, Lvalue,
-                               ConstantInt::get(Lvalue->getType(), 0));
-
-  of = createSelectFolder(isCountOne, of, getFlag(FLAG_OF), "of");
-
   Value* isNotZero = createICMPFolder(CmpInst::ICMP_NE, clampedCount, zero);
+
+  Value* originalMSB = createICMPFolder(
+      CmpInst::ICMP_SLT, Lvalue, ConstantInt::get(Lvalue->getType(), 0));
+  Value* of = createSelectFolder(isNotZero, originalMSB, getFlag(FLAG_OF), "of");
 
   Value* oldcf = getFlag(FLAG_CF);
 
@@ -1770,30 +1793,17 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shl() {
       countIsNotZero, createZExtOrTruncFolder(cfLow, Type::getInt1Ty(context)),
       getFlag(FLAG_CF));
 
-  Value* isCountOne =
-      createICMPFolder(CmpInst::ICMP_EQ, clampedCountValue,
-                       ConstantInt::get(clampedCountValue->getType(), 1));
-
-  Value* originalMSB = createLShrFolder(
-      Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlmsb");
-  originalMSB = createAndFolder(
-      originalMSB, ConstantInt::get(Lvalue->getType(), 1), "shlmsb");
-  originalMSB = createZExtOrTruncFolder(originalMSB, Type::getInt1Ty(context));
-
-  Value* cfAsMSB = createZExtOrTruncFolder(
-      createLShrFolder(Lvalue,
-                       ConstantInt::get(Lvalue->getType(), bitWidth - 1),
-                       "shlcfasmsb"),
-      Type::getInt1Ty(context));
-
   Value* resultMSB = createZExtOrTruncFolder(
       createLShrFolder(result,
                        ConstantInt::get(result->getType(), bitWidth - 1),
                        "shlresultmsb"),
       Type::getInt1Ty(context));
 
+  auto countIsOne = createICMPFolder(
+      CmpInst::ICMP_EQ, clampedCountValue,
+      ConstantInt::get(clampedCountValue->getType(), 1));
   Value* ofValue = createSelectFolder(
-      isCountOne, createXorFolder(resultMSB, cfAsMSB), getFlag(FLAG_OF));
+      countIsOne, createXorFolder(resultMSB, cfValue), getFlag(FLAG_OF));
 
   if (instruction.mnemonic != Mnemonic::SHLX) {
     setFlag(FLAG_CF, cfValue);
@@ -1805,7 +1815,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shl() {
     printvalue(Lvalue);
     printvalue(countValue);
     printvalue(clampedCountValue);
-    printvalue(isCountOne);
     printvalue(result);
     printvalue(ofValue);
     printvalue(cfValue);
@@ -1973,15 +1982,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_popcnt() {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shld() {
   LLVMContext& context = builder->getContext();
 
-  /*
-  auto dest = operands[0];
-  auto source = operands[1];
-  auto count = operands[2];
-  */
   auto Lvalue = GetIndexValue(0);
   auto sourceValue = GetIndexValue(1);
-
-  auto countValue = GetIndexValue(2); // zext
+  auto countValue = GetIndexValue(2);
 
   countValue = createZExtFolder(countValue, Lvalue->getType());
 
@@ -1990,7 +1993,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shld() {
   auto effectiveCountValue = createURemFolder(
       countValue, ConstantInt::get(countValue->getType(), mask),
       "effectiveShiftCount");
-  // 16 bit is usually undefined?
 
   auto shiftedDest =
       createShlFolder(Lvalue, effectiveCountValue, "shiftedDest");
@@ -2016,36 +2018,40 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shld() {
       getFlag(FLAG_CF));
   resultValue = createSelectFolder(countIsNotZero, resultValue, Lvalue);
 
-  auto isOne =
-      createICMPFolder(CmpInst::ICMP_EQ, effectiveCountValue,
-                       ConstantInt::get(effectiveCountValue->getType(), 1));
-  auto newOF = createXorFolder(
-      createLShrFolder(
-          Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "subof"),
+  auto destMSB = createAndFolder(
+      createLShrFolder(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),
+                       "shldof_dest_msb"),
+      ConstantInt::get(Lvalue->getType(), 1), "shldof_dest_mask");
+  auto resultMSB = createAndFolder(
       createLShrFolder(resultValue,
                        ConstantInt::get(resultValue->getType(), bitWidth - 1),
-                       "subof2"),
-      "subxorof");
+                       "shldof_result_msb"),
+      ConstantInt::get(resultValue->getType(), 1), "shldof_result_mask");
+  auto ofComputed = createXorFolder(destMSB, resultMSB, "shldof");
+  auto countIsOne = createICMPFolder(
+      CmpInst::ICMP_EQ, effectiveCountValue,
+      ConstantInt::get(effectiveCountValue->getType(), 1));
   auto of = createSelectFolder(
-      isOne, createZExtOrTruncFolder(newOF, Type::getInt1Ty(context)),
+      countIsOne, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
       getFlag(FLAG_OF));
 
-  //  CF := BIT[DEST, SIZE – COUNT]; if shifted,
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  setFlag(FLAG_SF, computeSignFlag(resultValue));
-  setFlag(FLAG_ZF, computeZeroFlag(resultValue));
-  setFlag(FLAG_PF, computeParityFlag(resultValue));
+  setFlag(FLAG_SF, createSelectFolder(
+                       countIsNotZero, computeSignFlag(resultValue),
+                       getFlag(FLAG_SF)));
+  setFlag(FLAG_ZF, createSelectFolder(
+                       countIsNotZero, computeZeroFlag(resultValue),
+                       getFlag(FLAG_ZF)));
+  setFlag(FLAG_PF, createSelectFolder(
+                       countIsNotZero, computeParityFlag(resultValue),
+                       getFlag(FLAG_PF)));
 
   SetIndexValue(0, resultValue);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shrd() {
   LLVMContext& context = builder->getContext();
-
-  /*  auto dest = operands[0];
-   auto source = operands[1];
-   auto count = operands[2]; */
 
   auto Lvalue = GetIndexValue(0);
   auto sourceValue = GetIndexValue(1);
@@ -2058,8 +2064,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shrd() {
   auto effectiveCountValue = createURemFolder(
       countValue, ConstantInt::get(countValue->getType(), mask),
       "effectiveShiftCount");
-  // 16 bit is usually undefined?
-  //
+
   auto shiftedDest =
       createLShrFolder(Lvalue, effectiveCountValue, "shiftedDest");
   auto complementCount =
@@ -2069,48 +2074,51 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shrd() {
       createShlFolder(sourceValue, complementCount, "shiftedSource");
   auto resultValue = createOrFolder(shiftedDest, shiftedSource, "shrdResult");
 
-  // Calculate CF
-  // x >> 1
-  // msb of x would be cf
-  // so x >> 0
-  // conclusion:
-  // x >> (count - 1) = cf
-  auto cfBitPosition = createSubFolder(
-      effectiveCountValue, ConstantInt::get(effectiveCountValue->getType(), 1));
+  auto countIsNotZero =
+      createICMPFolder(CmpInst::ICMP_NE, effectiveCountValue,
+                       ConstantInt::get(effectiveCountValue->getType(), 0));
+
+  auto cfBitPosition = createSelectFolder(
+      countIsNotZero,
+      createSubFolder(effectiveCountValue,
+                      ConstantInt::get(effectiveCountValue->getType(), 1)),
+      ConstantInt::get(effectiveCountValue->getType(), 0));
   Value* cf = createLShrFolder(Lvalue, cfBitPosition);
   cf = createAndFolder(cf, ConstantInt::get(cf->getType(), 1), "shrdcf");
   cf = createZExtOrTruncFolder(cf, Type::getInt1Ty(context));
+  cf = createSelectFolder(countIsNotZero, cf, getFlag(FLAG_CF));
 
-  // Calculate OF, only when count is 1
-  Value* isCountOne =
-      createICMPFolder(CmpInst::ICMP_EQ, effectiveCountValue,
-                       ConstantInt::get(effectiveCountValue->getType(), 1));
-  Value* mostSignificantBitOfDest = createLShrFolder(
-      Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1), "shlmsbdest");
-  mostSignificantBitOfDest = createAndFolder(
-      mostSignificantBitOfDest,
-      ConstantInt::get(mostSignificantBitOfDest->getType(), 1), "shrdmsb");
-  Value* mostSignificantBitOfResult = createLShrFolder(
-      resultValue, ConstantInt::get(resultValue->getType(), bitWidth - 1),
-      "shlmsbresult");
-  mostSignificantBitOfResult = createAndFolder(
-      mostSignificantBitOfResult,
-      ConstantInt::get(mostSignificantBitOfResult->getType(), 1), "shrdmsb2");
-  Value* of =
-      createXorFolder(mostSignificantBitOfDest, mostSignificantBitOfResult);
-  of = createZExtOrTruncFolder(of, Type::getInt1Ty(context));
+  resultValue = createSelectFolder(countIsNotZero, resultValue, Lvalue);
 
-  // TODO: wrapper for undef behaviour?
-  of =
-      createSelectFolder(isCountOne, of, UndefValue::get(builder->getInt1Ty()));
-  of = createZExtFolder(of, Type::getInt1Ty(context));
+  auto destMSB = createAndFolder(
+      createLShrFolder(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),
+                       "shrdof_dest_msb"),
+      ConstantInt::get(Lvalue->getType(), 1), "shrdof_dest_mask");
+  auto resultMSB = createAndFolder(
+      createLShrFolder(resultValue,
+                       ConstantInt::get(resultValue->getType(), bitWidth - 1),
+                       "shrdof_result_msb"),
+      ConstantInt::get(resultValue->getType(), 1), "shrdof_result_mask");
+  auto ofComputed = createXorFolder(destMSB, resultMSB, "shrdof");
+  auto countIsOne = createICMPFolder(
+      CmpInst::ICMP_EQ, effectiveCountValue,
+      ConstantInt::get(effectiveCountValue->getType(), 1));
+  auto of = createSelectFolder(
+      countIsOne, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
+      getFlag(FLAG_OF));
 
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_OF, of);
 
-  setFlag(FLAG_SF, computeSignFlag(resultValue));
-  setFlag(FLAG_ZF, computeZeroFlag(resultValue));
-  setFlag(FLAG_PF, computeParityFlag(resultValue));
+  setFlag(FLAG_SF, createSelectFolder(
+                       countIsNotZero, computeSignFlag(resultValue),
+                       getFlag(FLAG_SF)));
+  setFlag(FLAG_ZF, createSelectFolder(
+                       countIsNotZero, computeZeroFlag(resultValue),
+                       getFlag(FLAG_ZF)));
+  setFlag(FLAG_PF, createSelectFolder(
+                       countIsNotZero, computeParityFlag(resultValue),
+                       getFlag(FLAG_PF)));
 
   SetIndexValue(0, resultValue);
 }
@@ -2756,20 +2764,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_and() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_andn() {
-  // LLVMContext& context = builder->getContext();
-  /*   auto dest = operands[0];
-    auto src = operands[1]; */
-  auto Lvalue = GetIndexValue(0);
-  auto Rvalue = GetIndexValue(1);
+  // ANDN (VEX): dest = ~src1 & src2, so operands map to [dest, src1, src2].
+  auto src1 = GetIndexValue(1);
+  auto src2 = GetIndexValue(2);
 
-  auto result =
-      createAndFolder(createNotFolder(Lvalue), Rvalue,
-                      "realand-" + std::to_string(current_address) + "-");
-
-  // auto pf = computeParityFlag(result);
-
-  // The OF and CF flags are cleared; the SF, ZF, and PF flags are set
-  // according to the result. The state of the AF flag is undefined.
+  auto result = createAndFolder(
+      createNotFolder(src1), src2,
+      "realand-" + std::to_string(current_address) + "-");
 
   setFlag(FLAG_SF, [this, result]() { return computeSignFlag(result); });
   setFlag(FLAG_ZF, [this, result]() { return computeZeroFlag(result); });
@@ -2782,7 +2783,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_andn() {
     return ConstantInt::getSigned(Type::getInt1Ty(builder->getContext()), 0);
   });
 
-  printvalue(Lvalue) printvalue(Rvalue) printvalue(result);
+  printvalue(src1) printvalue(src2) printvalue(result);
 
   SetIndexValue(0, result);
 }
@@ -3120,24 +3121,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pop() {
                                   */
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_leave() {
-  // LLVMContext& context = builder->getContext();
-  /*   auto src2 = operands[0]; // [xsp]
-    auto src1 = operands[1]; // xbp
-    auto dest = operands[2]; // xsp */
-  // first xbp to xsp
-  // then [xsp] to xbp
+  const auto stackRegisterSize = file.getMode() == arch_mode::X64 ? 64 : 32;
+  const auto stackRegister = getRegOfSize(Register::RSP, stackRegisterSize);
+  const auto frameRegister = getRegOfSize(Register::RBP, stackRegisterSize);
 
-  auto xbp = GetIndexValue(1);
+  auto frameValue = GetRegisterValue(frameRegister);
+  SetRegisterValue(stackRegister, frameValue);
 
-  SetIndexValue(2, xbp); // move xbp to xsp
-
-  auto destsize = GetTypeSize(instruction.types[0]);
-
-  auto popstack = popStack(destsize / 8);
-
-  SetIndexValue(1, popstack); // then add rsp 8
-
-  // mov val, rsp first
+  auto poppedFrame = popStack(stackRegisterSize / 8);
+  poppedFrame = createZExtOrTruncFolder(poppedFrame, frameValue->getType());
+  SetRegisterValue(frameRegister, poppedFrame);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_popfq() {
   LLVMContext& context = builder->getContext();
@@ -3617,23 +3610,42 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sets() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_stosx() {
+  LLVMContext& context = builder->getContext();
 
-  // auto dest = operands[0]; // xdi
-  Value* destValue = GetIndexValue(0);
+  int byteSizeValue = 0;
+  switch (instruction.mnemonic) {
+  case Mnemonic::STOSB:
+    byteSizeValue = 1;
+    break;
+  case Mnemonic::STOSW:
+    byteSizeValue = 2;
+    break;
+  case Mnemonic::STOSD:
+    byteSizeValue = 4;
+    break;
+  case Mnemonic::STOSQ:
+    byteSizeValue = 8;
+    break;
+  default:
+    UNREACHABLE("unreachable case on lift_stosx");
+  }
+
+  const auto addressRegisterSize = file.getMode() == arch_mode::X64 ? 64 : 32;
+  const auto addressRegister = getRegOfSize(Register::RDI, addressRegisterSize);
+  const auto sourceRegister = getRegOfSize(Register::RAX, byteSizeValue * 8);
+
+  auto destAddress = GetRegisterValue(addressRegister);
+  auto sourceValue = GetRegisterValue(sourceRegister);
+  auto storeType = Type::getIntNTy(context, byteSizeValue * 8);
+  auto storeValue = createZExtOrTruncFolder(sourceValue, storeType);
+  SetMemoryValue(destAddress, storeValue);
+
   Value* DF = getFlag(FLAG_DF);
-  // if df is 1, +
-  // else -
-  auto destsize = GetTypeSize(instruction.types[0]);
-  auto destbitwidth = destsize;
+  auto step = ConstantInt::get(destAddress->getType(), byteSizeValue);
+  auto nextAddress = createSelectFolder(
+      DF, createSubFolder(destAddress, step), createAddFolder(destAddress, step));
 
-  auto one = ConstantInt::get(DF->getType(), 1);
-  Value* Direction =
-      createSubFolder(createMulFolder(DF, createAddFolder(DF, one)), one);
-
-  Value* result = createAddFolder(
-      destValue, createMulFolder(
-                     Direction, ConstantInt::get(DF->getType(), destbitwidth)));
-  SetIndexValue(0, result);
+  SetRegisterValue(addressRegister, nextAddress);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setz() {
   LLVMContext& context = builder->getContext();
@@ -3785,46 +3797,23 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btr() {
   printvalue(mask);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_lzcnt() {
-  // check
-  /*   auto dest = operands[0];
-    auto src = operands[1]; */
+  Value* source = GetIndexValue(1);
+  auto zero = ConstantInt::get(source->getType(), 0);
 
-  Value* Rvalue = GetIndexValue(1);
-  Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
-                                   ConstantInt::get(Rvalue->getType(), 0));
+  auto ctlzDecl = Intrinsic::getDeclaration(
+      builder->GetInsertBlock()->getModule(), Intrinsic::ctlz, source->getType());
+  auto isZeroUndef = ConstantInt::getFalse(builder->getContext());
+  Value* lzcntValue = builder->CreateCall(ctlzDecl, {source, isZeroUndef});
+  lzcntValue = simplifyValue(
+      lzcntValue,
+      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
 
-  auto destsize = GetTypeSize(instruction.types[0]);
+  SetIndexValue(0, lzcntValue);
 
-  Value* isOperandSize = createICMPFolder(
-      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), destsize));
-  setFlag(FLAG_ZF, isZero);
-  setFlag(FLAG_CF, isOperandSize);
-
-  unsigned bitWidth = Rvalue->getType()->getIntegerBitWidth();
-
-  Value* index = ConstantInt::get(Rvalue->getType(), bitWidth - 1);
-  Value* zeroVal = ConstantInt::get(Rvalue->getType(), 0);
-  Value* oneVal = ConstantInt::get(Rvalue->getType(), 1);
-
-  Value* bitPosition = ConstantInt::get(Rvalue->getType(), -1);
-
-  for (unsigned i = 0; i < bitWidth; ++i) {
-
-    Value* mask = createShlFolder(oneVal, index);
-
-    Value* test = createAndFolder(Rvalue, mask, "bsrtest");
-    Value* isBitSet = createICMPFolder(CmpInst::ICMP_NE, test, zeroVal);
-
-    Value* tmpPosition = createSelectFolder(isBitSet, index, bitPosition);
-
-    Value* isPositionUnset = createICMPFolder(
-        CmpInst::ICMP_EQ, bitPosition, ConstantInt::get(Rvalue->getType(), -1));
-    bitPosition = createSelectFolder(isPositionUnset, tmpPosition, bitPosition);
-
-    index = createSubFolder(index, oneVal);
-  }
-
-  SetIndexValue(0, bitPosition);
+  auto isInputZero = createICMPFolder(CmpInst::ICMP_EQ, source, zero);
+  auto isOutputZero = createICMPFolder(CmpInst::ICMP_EQ, lzcntValue, zero);
+  setFlag(FLAG_CF, isInputZero);
+  setFlag(FLAG_ZF, isOutputZero);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsr() {
   // check
@@ -3953,26 +3942,32 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_blsmsk() {
   setFlag(FLAG_CF, createICMPFolder(llvm::CmpInst::ICMP_EQ, source, zero));
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bzhi() {
-  /*
-  auto dst = operands[0];
-  auto src = operands[1];
-  auto src2 = operands[2]; // TOFIX: this isnt used? */
-
   Value* source = GetIndexValue(1);
+  Value* index = GetIndexValue(2);
 
-  Value* source2 = createAndFolder(
-      source, builder->getIntN(source->getType()->getIntegerBitWidth(), 7));
-  auto one = ConstantInt::get(source2->getType(), 1);
-  auto bitmask = createAShrFolder(createShlFolder(one, source2), source2);
-  auto result = createAndFolder(source, bitmask);
+  auto operandBitWidth = source->getType()->getIntegerBitWidth();
+  auto indexType = index->getType();
+  auto index8Mask = ConstantInt::get(indexType, 0xFF);
+  auto saturatedLimit = ConstantInt::get(indexType, operandBitWidth - 1);
+  auto indexLow8 = createAndFolder(index, index8Mask, "bzhi_index8");
+
+  auto indexInRange =
+      createICMPFolder(CmpInst::ICMP_ULE, indexLow8, saturatedLimit, "bzhi_indexInRange");
+  auto clampedIndex =
+      createSelectFolder(indexInRange, indexLow8, saturatedLimit, "bzhi_clampedIndex");
+
+  auto one = ConstantInt::get(indexType, 1);
+  auto lowMask = createSubFolder(createShlFolder(one, clampedIndex), one, "bzhi_lowMask");
+  auto lowMaskSized = createZExtOrTruncFolder(lowMask, source->getType());
+
+  auto maskedResult = createAndFolder(source, lowMaskSized, "bzhi_masked");
+  auto result = maskedResult;
+
   SetIndexValue(0, result);
   setFlag(FLAG_ZF, computeZeroFlag(result));
   setFlag(FLAG_SF, computeSignFlag(result));
-  setFlag(FLAG_OF, ConstantInt::get(source->getType(), 0));
-  auto dstsize = GetTypeSize(instruction.types[0]);
-  auto CF = createICMPFolder(CmpInst::ICMP_SGE, source2,
-                             ConstantInt::get(source->getType(), dstsize - 1));
-  setFlag(FLAG_CF, CF);
+  setFlag(FLAG_OF, builder->getInt1(0));
+  setFlag(FLAG_CF, createNotFolder(indexInRange));
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsf() {
   // TODOs
@@ -4014,47 +4009,23 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsf() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_tzcnt() {
-  LLVMContext& context = builder->getContext();
-  /*   auto dest = operands[0];
-    auto src = operands[1]; */
+  Value* source = GetIndexValue(1);
+  auto zero = ConstantInt::get(source->getType(), 0);
 
-  Value* Rvalue = GetIndexValue(1);
+  auto cttzDecl = Intrinsic::getDeclaration(
+      builder->GetInsertBlock()->getModule(), Intrinsic::cttz, source->getType());
+  auto isZeroUndef = ConstantInt::getFalse(builder->getContext());
+  Value* tzcntValue = builder->CreateCall(cttzDecl, {source, isZeroUndef});
+  tzcntValue = simplifyValue(
+      tzcntValue,
+      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
 
-  Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
-                                   ConstantInt::get(Rvalue->getType(), 0));
-  setFlag(FLAG_ZF, isZero);
+  SetIndexValue(0, tzcntValue);
 
-  auto srcsize = GetTypeSize(instruction.types[1]);
-
-  Value* isEq2OperandSize = createICMPFolder(
-      CmpInst::ICMP_EQ, Rvalue, ConstantInt::get(Rvalue->getType(), srcsize));
-
-  setFlag(FLAG_CF, isEq2OperandSize);
-
-  Type* intType = Rvalue->getType();
-  uint64_t intWidth = intType->getIntegerBitWidth();
-
-  Value* result = ConstantInt::get(intType, intWidth);
-  Value* one = ConstantInt::get(intType, 1);
-
-  Value* continuecounting = ConstantInt::get(Type::getInt1Ty(context), 1);
-  for (uint64_t i = 0; i < intWidth; ++i) {
-    Value* bitMask = createShlFolder(one, ConstantInt::get(intType, i));
-    Value* bitSet = createAndFolder(Rvalue, bitMask, "bsfbitset");
-    Value* isBitZero = createICMPFolder(CmpInst::ICMP_EQ, bitSet,
-                                        ConstantInt::get(intType, 0));
-    // continue until isBitZero is 1
-    // 0010
-    // if continuecounting, select
-    Value* possibleResult = ConstantInt::get(intType, i);
-    Value* condition =
-        createAndFolder(continuecounting, isBitZero, "bsfcondition");
-    continuecounting = createNotFolder(isBitZero);
-    result = createSelectFolder(condition, result, possibleResult,
-                                "updateResultOnFirstNonZeroBit");
-  }
-
-  SetIndexValue(0, result);
+  auto isInputZero = createICMPFolder(CmpInst::ICMP_EQ, source, zero);
+  auto isOutputZero = createICMPFolder(CmpInst::ICMP_EQ, tzcntValue, zero);
+  setFlag(FLAG_CF, isInputZero);
+  setFlag(FLAG_ZF, isOutputZero);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_btc() {
   /*   auto base = operands[0];

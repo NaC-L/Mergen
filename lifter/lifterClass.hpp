@@ -330,7 +330,7 @@ public:
   MemoryPolicy memoryPolicy;
   FunctionInlinePolicy inlinePolicy;
 
-  void runDisassembler(void* buffer, size_t size = 15) {
+  void runDisassembler(const void* buffer, size_t size = 15) {
 
     instruction = dis.disassemble(buffer, size);
   }
@@ -339,7 +339,7 @@ public:
   uint8_t* fileBase;
 
   // lifts single instruction
-  void liftBytes(void* bytes, size_t size = 15) {
+  void liftBytes(const void* bytes, size_t size = 15) {
     // what about the basicblock?
     runDisassembler(bytes, size);
     current_address += instruction.length;
@@ -510,7 +510,7 @@ public:
       static inline GEPinfo getEmptyKey() { return GEPinfo(nullptr, 0, 0); }
 
       static inline GEPinfo getTombstoneKey() {
-        return GEPinfo(nullptr, -1, -1);
+        return GEPinfo(nullptr, static_cast<uint8_t>(-1), true);
       }
     };
   };
