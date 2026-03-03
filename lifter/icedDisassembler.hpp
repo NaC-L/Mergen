@@ -4180,7 +4180,7 @@ namespace Mergen {
     icedDisassembler(){};
 
     MergenDisassembledInstruction_base<Mnemonic, Register>
-    disassemble(void* buffer, size_t size = 15) {
+    disassemble(const void* buffer, size_t size = 15) {
 
       icedObj obj;
 

@@ -1799,8 +1799,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shl() {
                        "shlresultmsb"),
       Type::getInt1Ty(context));
 
+  auto countIsOne = createICMPFolder(
+      CmpInst::ICMP_EQ, clampedCountValue,
+      ConstantInt::get(clampedCountValue->getType(), 1));
   Value* ofValue = createSelectFolder(
-      countIsNotZero, createXorFolder(resultMSB, cfValue), getFlag(FLAG_OF));
+      countIsOne, createXorFolder(resultMSB, cfValue), getFlag(FLAG_OF));
 
   if (instruction.mnemonic != Mnemonic::SHLX) {
     setFlag(FLAG_CF, cfValue);
@@ -2015,19 +2018,21 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shld() {
       getFlag(FLAG_CF));
   resultValue = createSelectFolder(countIsNotZero, resultValue, Lvalue);
 
+  auto destMSB = createAndFolder(
+      createLShrFolder(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),
+                       "shldof_dest_msb"),
+      ConstantInt::get(Lvalue->getType(), 1), "shldof_dest_mask");
   auto resultMSB = createAndFolder(
       createLShrFolder(resultValue,
                        ConstantInt::get(resultValue->getType(), bitWidth - 1),
-                       "shldof_msb"),
-      ConstantInt::get(resultValue->getType(), 1), "shldof_msb_mask");
-  auto resultNextMSB = createAndFolder(
-      createLShrFolder(resultValue,
-                       ConstantInt::get(resultValue->getType(), bitWidth - 2),
-                       "shldof_msb2"),
-      ConstantInt::get(resultValue->getType(), 1), "shldof_msb2_mask");
-  auto ofComputed = createXorFolder(resultMSB, resultNextMSB, "shldof");
+                       "shldof_result_msb"),
+      ConstantInt::get(resultValue->getType(), 1), "shldof_result_mask");
+  auto ofComputed = createXorFolder(destMSB, resultMSB, "shldof");
+  auto countIsOne = createICMPFolder(
+      CmpInst::ICMP_EQ, effectiveCountValue,
+      ConstantInt::get(effectiveCountValue->getType(), 1));
   auto of = createSelectFolder(
-      countIsNotZero, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
+      countIsOne, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
       getFlag(FLAG_OF));
 
   setFlag(FLAG_CF, cf);
@@ -2085,19 +2090,21 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shrd() {
 
   resultValue = createSelectFolder(countIsNotZero, resultValue, Lvalue);
 
+  auto destMSB = createAndFolder(
+      createLShrFolder(Lvalue, ConstantInt::get(Lvalue->getType(), bitWidth - 1),
+                       "shrdof_dest_msb"),
+      ConstantInt::get(Lvalue->getType(), 1), "shrdof_dest_mask");
   auto resultMSB = createAndFolder(
       createLShrFolder(resultValue,
                        ConstantInt::get(resultValue->getType(), bitWidth - 1),
-                       "shrdof_msb"),
-      ConstantInt::get(resultValue->getType(), 1), "shrdof_msb_mask");
-  auto resultNextMSB = createAndFolder(
-      createLShrFolder(resultValue,
-                       ConstantInt::get(resultValue->getType(), bitWidth - 2),
-                       "shrdof_msb2"),
-      ConstantInt::get(resultValue->getType(), 1), "shrdof_msb2_mask");
-  auto ofComputed = createXorFolder(resultMSB, resultNextMSB, "shrdof");
+                       "shrdof_result_msb"),
+      ConstantInt::get(resultValue->getType(), 1), "shrdof_result_mask");
+  auto ofComputed = createXorFolder(destMSB, resultMSB, "shrdof");
+  auto countIsOne = createICMPFolder(
+      CmpInst::ICMP_EQ, effectiveCountValue,
+      ConstantInt::get(effectiveCountValue->getType(), 1));
   auto of = createSelectFolder(
-      countIsNotZero, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
+      countIsOne, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
       getFlag(FLAG_OF));
 
   setFlag(FLAG_CF, cf);
@@ -2757,6 +2764,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_and() {
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_andn() {
+  // ANDN (VEX): dest = ~src1 & src2, so operands map to [dest, src1, src2].
   auto src1 = GetIndexValue(1);
   auto src2 = GetIndexValue(2);
 
@@ -3113,12 +3121,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pop() {
                                   */
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_leave() {
-  // LEAVE: RSP <- RBP; RBP <- pop()
-  auto rbpValue = GetRegisterValue(Register::RBP);
-  SetRegisterValue(Register::RSP, rbpValue);
+  const auto stackRegisterSize = file.getMode() == arch_mode::X64 ? 64 : 32;
+  const auto stackRegister = getRegOfSize(Register::RSP, stackRegisterSize);
+  const auto frameRegister = getRegOfSize(Register::RBP, stackRegisterSize);
 
-  auto poppedRbp = popStack(8);
-  SetRegisterValue(Register::RBP, poppedRbp);
+  auto frameValue = GetRegisterValue(frameRegister);
+  SetRegisterValue(stackRegister, frameValue);
+
+  auto poppedFrame = popStack(stackRegisterSize / 8);
+  poppedFrame = createZExtOrTruncFolder(poppedFrame, frameValue->getType());
+  SetRegisterValue(frameRegister, poppedFrame);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_popfq() {
   LLVMContext& context = builder->getContext();
@@ -3618,20 +3630,22 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_stosx() {
     UNREACHABLE("unreachable case on lift_stosx");
   }
 
-  auto destAddress = GetRegisterValue(Register::RDI);
-  auto raxValue = GetRegisterValue(Register::RAX);
+  const auto addressRegisterSize = file.getMode() == arch_mode::X64 ? 64 : 32;
+  const auto addressRegister = getRegOfSize(Register::RDI, addressRegisterSize);
+  const auto sourceRegister = getRegOfSize(Register::RAX, byteSizeValue * 8);
+
+  auto destAddress = GetRegisterValue(addressRegister);
+  auto sourceValue = GetRegisterValue(sourceRegister);
   auto storeType = Type::getIntNTy(context, byteSizeValue * 8);
-  auto storeValue = createZExtOrTruncFolder(raxValue, storeType);
+  auto storeValue = createZExtOrTruncFolder(sourceValue, storeType);
   SetMemoryValue(destAddress, storeValue);
 
   Value* DF = getFlag(FLAG_DF);
   auto step = ConstantInt::get(destAddress->getType(), byteSizeValue);
   auto nextAddress = createSelectFolder(
-      DF,
-      createSubFolder(destAddress, step),
-      createAddFolder(destAddress, step));
+      DF, createSubFolder(destAddress, step), createAddFolder(destAddress, step));
 
-  SetRegisterValue(Register::RDI, nextAddress);
+  SetRegisterValue(addressRegister, nextAddress);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setz() {
   LLVMContext& context = builder->getContext();

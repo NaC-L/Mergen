@@ -49,10 +49,10 @@ inline void reportLiftCompletionTiming(double elapsedMilliseconds) {
   std::cout << "\nlifting complete, " << std::dec << elapsedMilliseconds
             << " milliseconds has past" << std::endl;
 }
-inline void emitLiftOutputs(lifterConcolic<>* lifter, uint64_t ms) {
+inline void emitLiftOutputs(lifterConcolic<>* lifter, double elapsedMilliseconds) {
   lifter->writeFunctionToFile("output_no_opts.ll");
 
-  std::cout << "\nwriting complete, " << std::dec << ms
+  std::cout << "\nwriting complete, " << std::dec << elapsedMilliseconds
             << " milliseconds has past" << std::endl;
 
   lifter->run_opts();

@@ -4224,7 +4224,7 @@ namespace Mergen {
     };
 
     MergenDisassembledInstruction_base<Mnemonic, Register>
-    disassemble(void* buffer, size_t size = 15) {
+    disassemble(const void* buffer, size_t size = 15) {
       ZydisDecodedInstruction instruction;
 
       ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];

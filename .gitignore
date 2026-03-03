@@ -31,3 +31,6 @@ output_finalnoopt.ll
 output_no_opts.ll
 /rewrite-regression-work/
 /icpped_rust
+
+/lifter/test_vectors/oracle_vectors_full_handlers.json
+/lifter/test_vectors/oracle_vectors_flagstress.json
