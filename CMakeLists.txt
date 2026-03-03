@@ -89,13 +89,21 @@ set(lifter_SOURCES
 	"lifter/includes.h"
 	"lifter/test_instructions.h"
 	"lifter/utils.h"
+	"lifter/CommandLineHelpers.hpp"
 	"lifter/CommonDisassembler.hpp"
 	"lifter/CustomPasses.hpp"
 	"lifter/FunctionSignatures.hpp"
 	"lifter/InlinePolicy.hpp"
+	"lifter/LiftDriver.hpp"
+	"lifter/LifterApplication.hpp"
+	"lifter/LifterPipeline.hpp"
+	"lifter/LifterPipelineStages.hpp"
+	"lifter/LifterStages.hpp"
 	"lifter/MemoryPolicy.hpp"
+	"lifter/MemoryPolicySetup.hpp"
 	"lifter/MergenPB.hpp"
 	"lifter/RegisterManager.hpp"
+	"lifter/RuntimeImageContext.hpp"
 	"lifter/ZydisDisassembler.hpp"
 	"lifter/fileReader.hpp"
 	"lifter/icedDisassembler.hpp"
@@ -126,11 +134,9 @@ target_compile_features(lifter PRIVATE
 	cxx_std_20
 )
 
-if(MSVC) # msvc
-	target_compile_options(lifter PRIVATE
-		"/Zc:preprocessor"
-	)
-endif()
+target_compile_options(lifter PRIVATE
+	"$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CXX_COMPILER_ID:Clang>>>:/Zc:preprocessor>"
+)
 
 target_link_libraries(lifter PRIVATE
 	LLVM-Wrapper
@@ -159,4 +165,59 @@ endif()
 get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
 if(NOT CMKR_VS_STARTUP_PROJECT)
 	set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT lifter)
+endif()
+
+# Target: rewrite_microtests
+set(rewrite_microtests_SOURCES
+	"lifter/PathSolver.cpp"
+	"lifter/lifter.cpp"
+	"lifter/test_instructions.cpp"
+	"lifter/utils.cpp"
+	cmake.toml
+)
+
+add_executable(rewrite_microtests)
+
+target_sources(rewrite_microtests PRIVATE ${rewrite_microtests_SOURCES})
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${rewrite_microtests_SOURCES})
+
+target_compile_definitions(rewrite_microtests PRIVATE
+	MERGEN_TEST
+)
+
+target_compile_features(rewrite_microtests PRIVATE
+	cxx_std_20
+)
+
+target_compile_options(rewrite_microtests PRIVATE
+	"$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CXX_COMPILER_ID:Clang>>>:/Zc:preprocessor>"
+)
+
+target_link_libraries(rewrite_microtests PRIVATE
+	LLVM-Wrapper
+	linux-pe
+	magic_enum
+)
+
+if(ICED_NOT_FOUND) # NOTE: unnamed condition
+	target_link_libraries(rewrite_microtests PRIVATE
+		Zydis
+	)
+endif()
+
+if(ICED_FOUND) # NOTE: unnamed condition
+	target_link_libraries(rewrite_microtests PRIVATE
+		Iced_Wrapper
+	)
+endif()
+
+if(WIN32) # windows
+	target_link_libraries(rewrite_microtests PRIVATE
+		Ws2_32
+	)
+endif()
+
+get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
+if(NOT CMKR_VS_STARTUP_PROJECT)
+	set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT rewrite_microtests)
 endif()

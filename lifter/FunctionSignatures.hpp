@@ -115,9 +115,9 @@ public:
       build();
     };
 
-    std::vector<std::pair<int, int>>
+    std::vector<std::pair<uint64_t, int>>
     search(const std::vector<unsigned char>& text) {
-      std::vector<std::pair<int, int>> results;
+      std::vector<std::pair<uint64_t, int>> results;
       int current = 0;
       for (uint64_t i = 0; i < text.size(); ++i) {
         while (current != -1 && trie[current].children.count(text[i]) == 0) {
@@ -207,7 +207,7 @@ public:
   search_signatures(std::vector<unsigned char>& data) {
     x86_64FileReader file(data.data());
     AhoCorasick ac(siglookup);
-    std::vector<std::pair<int, int>> matches = ac.search(data);
+    std::vector<std::pair<uint64_t, int>> matches = ac.search(data);
     for (const auto& [pos, id] : matches) {
       auto it = siglookup.find(ac.patterns[id]);
       if (it != siglookup.end()) {

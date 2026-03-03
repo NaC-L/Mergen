@@ -250,7 +250,7 @@ public:
   uint64_t fileOffsetToRVA(uint64_t offset) {
     auto it =
         std::upper_bound(sections_v.begin(), sections_v.end(), offset,
-                         [](uint32_t val, const win::section_header_t& s) {
+                         [](uint64_t val, const win::section_header_t& s) {
                            return val < s.virtual_address;
                          });
     if (it == sections_v.begin()) {
