@@ -28,18 +28,34 @@ jobs:
           choco install nasm --no-progress -y
           choco install ninja --no-progress -y
 
-      - name: Resolve LLVM_DIR from Visual Studio
+      - name: Resolve LLVM_DIR
         shell: pwsh
         run: |
+          $llvmConfigCandidates = @(
+            "C:\Program Files\LLVM\lib\cmake\llvm\LLVMConfig.cmake",
+            "${env:ProgramFiles(x86)}\LLVM\lib\cmake\llvm\LLVMConfig.cmake"
+          )
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (!(Test-Path $vswhere)) { throw "vswhere.exe not found: $vswhere" }
-          $vsRoot = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if ([string]::IsNullOrWhiteSpace($vsRoot)) { throw "Visual Studio with VC tools not found" }
-          $llvmDir = Join-Path $vsRoot "VC\Tools\Llvm\x64\lib\cmake\llvm"
-          if (!(Test-Path (Join-Path $llvmDir "LLVMConfig.cmake"))) { throw "LLVMConfig.cmake not found under $llvmDir" }
-          $llvmBin = Join-Path $vsRoot "VC\Tools\Llvm\x64\bin"
+          if (Test-Path $vswhere) {
+            $vsRoots = & $vswhere -products * -property installationPath
+            foreach ($vsRoot in $vsRoots) {
+              $llvmConfigCandidates += Join-Path $vsRoot "VC\Tools\Llvm\x64\lib\cmake\llvm\LLVMConfig.cmake"
+            }
+          }
+          $llvmConfig = $llvmConfigCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $llvmConfig) {
+            $scanRoots = @("C:\Program Files", "C:\Program Files (x86)", "C:\hostedtoolcache")
+            $llvmConfig = (Get-ChildItem -Path $scanRoots -Filter LLVMConfig.cmake -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          }
+          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found on runner" }
+          $llvmDir = Split-Path -Parent $llvmConfig
+          $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmDir))
+          $llvmBin = Join-Path $llvmRoot "bin"
           "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          if (Test-Path (Join-Path $llvmBin "clang-cl.exe")) {
+            $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+          Write-Host "Resolved LLVM_DIR=$llvmDir"
       - name: Configure iced build
         run: cmd /c scripts\dev\configure_iced.cmd
 
@@ -66,18 +82,34 @@ jobs:
           choco install nasm --no-progress -y
           choco install ninja --no-progress -y
 
-      - name: Resolve LLVM_DIR from Visual Studio
+      - name: Resolve LLVM_DIR
         shell: pwsh
         run: |
+          $llvmConfigCandidates = @(
+            "C:\Program Files\LLVM\lib\cmake\llvm\LLVMConfig.cmake",
+            "${env:ProgramFiles(x86)}\LLVM\lib\cmake\llvm\LLVMConfig.cmake"
+          )
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (!(Test-Path $vswhere)) { throw "vswhere.exe not found: $vswhere" }
-          $vsRoot = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if ([string]::IsNullOrWhiteSpace($vsRoot)) { throw "Visual Studio with VC tools not found" }
-          $llvmDir = Join-Path $vsRoot "VC\Tools\Llvm\x64\lib\cmake\llvm"
-          if (!(Test-Path (Join-Path $llvmDir "LLVMConfig.cmake"))) { throw "LLVMConfig.cmake not found under $llvmDir" }
-          $llvmBin = Join-Path $vsRoot "VC\Tools\Llvm\x64\bin"
+          if (Test-Path $vswhere) {
+            $vsRoots = & $vswhere -products * -property installationPath
+            foreach ($vsRoot in $vsRoots) {
+              $llvmConfigCandidates += Join-Path $vsRoot "VC\Tools\Llvm\x64\lib\cmake\llvm\LLVMConfig.cmake"
+            }
+          }
+          $llvmConfig = $llvmConfigCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $llvmConfig) {
+            $scanRoots = @("C:\Program Files", "C:\Program Files (x86)", "C:\hostedtoolcache")
+            $llvmConfig = (Get-ChildItem -Path $scanRoots -Filter LLVMConfig.cmake -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          }
+          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found on runner" }
+          $llvmDir = Split-Path -Parent $llvmConfig
+          $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmDir))
+          $llvmBin = Join-Path $llvmRoot "bin"
           "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          if (Test-Path (Join-Path $llvmBin "clang-cl.exe")) {
+            $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+          Write-Host "Resolved LLVM_DIR=$llvmDir"
       - name: Configure iced build
         run: cmd /c scripts\dev\configure_iced.cmd
 
