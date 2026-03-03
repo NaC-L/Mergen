@@ -17,7 +17,9 @@ inline bool parseStartAddressArg(const std::string& rawStartAddress,
     size_t parsedLength = 0;
     outStartAddress = stoull(rawStartAddress, &parsedLength, 0);
     return parsedLength == rawStartAddress.size();
-  } catch (...) {
+  } catch (const std::exception& ex) {
+    std::cerr << "Failed to parse start address '" << rawStartAddress
+              << "': " << ex.what() << std::endl;
     return false;
   }
 }

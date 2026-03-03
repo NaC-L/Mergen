@@ -36,7 +36,7 @@ void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   auto stageContext = prepareLifterStageContext(runtime_address, fileData);
   runLifterPipeline(stageContext.lifter.get(), stageContext.runtimeContext,
-                    stageContext.fileBase, fileData);
+                    fileData.data(), fileData);
   return;
 }
 
@@ -60,8 +60,9 @@ int main(int argc, char* argv[]) {
       if (args.size() > 4) {
         randomSeed = std::stoull(args[4], nullptr, 0);
       }
-    } catch (...) {
-      std::cerr << "Invalid build-full-seed numeric arguments" << std::endl;
+    } catch (const std::exception& ex) {
+      std::cerr << "Invalid build-full-seed numeric arguments: " << ex.what()
+                << std::endl;
       return 1;
     }
 

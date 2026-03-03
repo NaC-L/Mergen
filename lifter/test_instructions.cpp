@@ -185,7 +185,7 @@ HandlerMnemonicMap parseOpcodeHandlers(const std::string& opcodePath,
 std::optional<std::string> decodeMnemonicFromCandidate(
     LifterUnderTest& lifter, const std::array<uint8_t, 15>& candidate,
     std::vector<uint8_t>& outInstructionBytes) {
-  lifter.runDisassembler(const_cast<uint8_t*>(candidate.data()), candidate.size());
+  lifter.runDisassembler(candidate.data(), candidate.size());
   if (lifter.instruction.length == 0 || lifter.instruction.length > candidate.size()) {
     return std::nullopt;
   }

@@ -330,7 +330,7 @@ public:
   MemoryPolicy memoryPolicy;
   FunctionInlinePolicy inlinePolicy;
 
-  void runDisassembler(void* buffer, size_t size = 15) {
+  void runDisassembler(const void* buffer, size_t size = 15) {
 
     instruction = dis.disassemble(buffer, size);
   }
