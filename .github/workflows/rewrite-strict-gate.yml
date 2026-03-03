@@ -6,9 +6,22 @@ on:
   workflow_dispatch:
 
 jobs:
-  rewrite-strict-gate:
+  rewrite-gate:
     runs-on: windows-latest
-    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          - job_name: rewrite-strict-gate
+            timeout_minutes: 120
+            test_command: python test.py all --check-flags
+            install_python_deps: true
+          - job_name: rewrite-quick-gate
+            timeout_minutes: 90
+            test_command: python test.py quick
+            install_python_deps: false
+    name: ${{ matrix.gate.job_name }}
+    timeout-minutes: ${{ matrix.gate.timeout_minutes }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,59 +35,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Python dependencies
+        if: ${{ matrix.gate.install_python_deps }}
         run: python -m pip install --upgrade pip capstone unicorn
-      - name: Install native dependencies
-        run: |
-          choco install nasm --no-progress -y
-          choco install ninja --no-progress -y
-          choco install 7zip --no-progress -y
-
-      - name: Resolve LLVM_DIR
-        shell: pwsh
-        run: |
-          $llvmVersion = "18.1.8"
-          $llvmArchiveName = "llvm-$llvmVersion-windows-amd64-msvc17-msvcrt.7z"
-          $llvmUrl = "https://github.com/vovkos/llvm-package-windows/releases/download/llvm-$llvmVersion/$llvmArchiveName"
-          $llvmWork = Join-Path $env:RUNNER_TEMP "llvm-package"
-          $llvmArchive = Join-Path $llvmWork $llvmArchiveName
-          if (Test-Path $llvmWork) { Remove-Item -Recurse -Force $llvmWork }
-          New-Item -ItemType Directory -Path $llvmWork | Out-Null
-          Invoke-WebRequest -Uri $llvmUrl -OutFile $llvmArchive
-          $sevenZip = Join-Path $env:ProgramFiles "7-Zip\7z.exe"
-          if (!(Test-Path $sevenZip)) { throw "7z.exe not found at $sevenZip" }
-          & $sevenZip x -y $llvmArchive "-o$llvmWork" | Out-Null
-          $llvmConfig = (Get-ChildItem -Path $llvmWork -Filter LLVMConfig.cmake -Recurse -File | Select-Object -First 1).FullName
-          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found after extracting $llvmArchiveName" }
-          $llvmDir = Split-Path -Parent $llvmConfig
-          $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmDir))
-          $llvmBin = Join-Path $llvmRoot "bin"
-          "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          if (Test-Path (Join-Path $llvmBin "clang-cl.exe")) {
-            $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          }
-          Write-Host "Resolved LLVM_DIR=$llvmDir"
-      - name: Configure iced build
-        run: cmd /c scripts\dev\configure_iced.cmd
-
-      - name: Build lifter
-        run: cmd /c scripts\dev\build_iced.cmd
-      - name: Run strict rewrite gate
-        run: python test.py all --check-flags
-
-  rewrite-quick-gate:
-    runs-on: windows-latest
-    timeout-minutes: 90
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
 
       - name: Install native dependencies
         run: |
@@ -106,10 +68,12 @@ jobs:
             $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           }
           Write-Host "Resolved LLVM_DIR=$llvmDir"
+
       - name: Configure iced build
         run: cmd /c scripts\dev\configure_iced.cmd
 
       - name: Build lifter
         run: cmd /c scripts\dev\build_iced.cmd
-      - name: Run quick rewrite gate
-        run: python test.py quick
+
+      - name: Run rewrite gate
+        run: ${{ matrix.gate.test_command }}
