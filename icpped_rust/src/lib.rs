@@ -1,5 +1,6 @@
-use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, MemorySize, Mnemonic, NasmFormatter, OpKind, Register, SpecializedFormatter, SpecializedFormatterTraitOptions};
-use std::slice;
+#![allow(non_snake_case)]
+
+use iced_x86::{Decoder, DecoderOptions, Instruction, OpKind, Register, SpecializedFormatter, SpecializedFormatterTraitOptions};
 use std::ffi::CString;
 use std::os::raw::c_char;
 use memoffset::offset_of;
