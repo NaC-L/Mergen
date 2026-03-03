@@ -27,27 +27,24 @@ jobs:
         run: |
           choco install nasm --no-progress -y
           choco install ninja --no-progress -y
+          choco install 7zip --no-progress -y
 
       - name: Resolve LLVM_DIR
         shell: pwsh
         run: |
-          $llvmConfigCandidates = @(
-            "C:\Program Files\LLVM\lib\cmake\llvm\LLVMConfig.cmake",
-            "${env:ProgramFiles(x86)}\LLVM\lib\cmake\llvm\LLVMConfig.cmake"
-          )
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (Test-Path $vswhere) {
-            $vsRoots = & $vswhere -products * -property installationPath
-            foreach ($vsRoot in $vsRoots) {
-              $llvmConfigCandidates += Join-Path $vsRoot "VC\Tools\Llvm\x64\lib\cmake\llvm\LLVMConfig.cmake"
-            }
-          }
-          $llvmConfig = $llvmConfigCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $llvmConfig) {
-            $scanRoots = @("C:\Program Files", "C:\Program Files (x86)", "C:\hostedtoolcache")
-            $llvmConfig = (Get-ChildItem -Path $scanRoots -Filter LLVMConfig.cmake -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-          }
-          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found on runner" }
+          $llvmVersion = "18.1.8"
+          $llvmArchiveName = "llvm-$llvmVersion-windows-amd64-msvc17-msvcrt.7z"
+          $llvmUrl = "https://github.com/vovkos/llvm-package-windows/releases/download/llvm-$llvmVersion/$llvmArchiveName"
+          $llvmWork = Join-Path $env:RUNNER_TEMP "llvm-package"
+          $llvmArchive = Join-Path $llvmWork $llvmArchiveName
+          if (Test-Path $llvmWork) { Remove-Item -Recurse -Force $llvmWork }
+          New-Item -ItemType Directory -Path $llvmWork | Out-Null
+          Invoke-WebRequest -Uri $llvmUrl -OutFile $llvmArchive
+          $sevenZip = Join-Path $env:ProgramFiles "7-Zip\7z.exe"
+          if (!(Test-Path $sevenZip)) { throw "7z.exe not found at $sevenZip" }
+          & $sevenZip x -y $llvmArchive "-o$llvmWork" | Out-Null
+          $llvmConfig = (Get-ChildItem -Path $llvmWork -Filter LLVMConfig.cmake -Recurse -File | Select-Object -First 1).FullName
+          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found after extracting $llvmArchiveName" }
           $llvmDir = Split-Path -Parent $llvmConfig
           $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmDir))
           $llvmBin = Join-Path $llvmRoot "bin"
@@ -81,27 +78,24 @@ jobs:
         run: |
           choco install nasm --no-progress -y
           choco install ninja --no-progress -y
+          choco install 7zip --no-progress -y
 
       - name: Resolve LLVM_DIR
         shell: pwsh
         run: |
-          $llvmConfigCandidates = @(
-            "C:\Program Files\LLVM\lib\cmake\llvm\LLVMConfig.cmake",
-            "${env:ProgramFiles(x86)}\LLVM\lib\cmake\llvm\LLVMConfig.cmake"
-          )
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (Test-Path $vswhere) {
-            $vsRoots = & $vswhere -products * -property installationPath
-            foreach ($vsRoot in $vsRoots) {
-              $llvmConfigCandidates += Join-Path $vsRoot "VC\Tools\Llvm\x64\lib\cmake\llvm\LLVMConfig.cmake"
-            }
-          }
-          $llvmConfig = $llvmConfigCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $llvmConfig) {
-            $scanRoots = @("C:\Program Files", "C:\Program Files (x86)", "C:\hostedtoolcache")
-            $llvmConfig = (Get-ChildItem -Path $scanRoots -Filter LLVMConfig.cmake -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
-          }
-          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found on runner" }
+          $llvmVersion = "18.1.8"
+          $llvmArchiveName = "llvm-$llvmVersion-windows-amd64-msvc17-msvcrt.7z"
+          $llvmUrl = "https://github.com/vovkos/llvm-package-windows/releases/download/llvm-$llvmVersion/$llvmArchiveName"
+          $llvmWork = Join-Path $env:RUNNER_TEMP "llvm-package"
+          $llvmArchive = Join-Path $llvmWork $llvmArchiveName
+          if (Test-Path $llvmWork) { Remove-Item -Recurse -Force $llvmWork }
+          New-Item -ItemType Directory -Path $llvmWork | Out-Null
+          Invoke-WebRequest -Uri $llvmUrl -OutFile $llvmArchive
+          $sevenZip = Join-Path $env:ProgramFiles "7-Zip\7z.exe"
+          if (!(Test-Path $sevenZip)) { throw "7z.exe not found at $sevenZip" }
+          & $sevenZip x -y $llvmArchive "-o$llvmWork" | Out-Null
+          $llvmConfig = (Get-ChildItem -Path $llvmWork -Filter LLVMConfig.cmake -Recurse -File | Select-Object -First 1).FullName
+          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found after extracting $llvmArchiveName" }
           $llvmDir = Split-Path -Parent $llvmConfig
           $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmDir))
           $llvmBin = Join-Path $llvmRoot "bin"
