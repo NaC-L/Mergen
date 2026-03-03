@@ -56,6 +56,8 @@ jobs:
       - name: Configure iced build
         run: cmd /c scripts\dev\configure_iced.cmd
 
+      - name: Build lifter
+        run: cmd /c scripts\dev\build_iced.cmd
       - name: Run strict rewrite gate
         run: python test.py all --check-flags
 
@@ -107,5 +109,7 @@ jobs:
       - name: Configure iced build
         run: cmd /c scripts\dev\configure_iced.cmd
 
+      - name: Build lifter
+        run: cmd /c scripts\dev\build_iced.cmd
       - name: Run quick rewrite gate
         run: python test.py quick
