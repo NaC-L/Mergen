@@ -94,7 +94,7 @@ private:
       lifter.SetFlagValue_impl(flag.flag, lifter.builder->getInt1(flag.value));
     }
 
-    lifter.liftBytes(const_cast<uint8_t*>(testCase.instructionBytes.data()),
+    lifter.liftBytes(testCase.instructionBytes.data(),
                     testCase.instructionBytes.size());
 
     std::ostringstream errors;

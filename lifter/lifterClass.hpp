@@ -339,7 +339,7 @@ public:
   uint8_t* fileBase;
 
   // lifts single instruction
-  void liftBytes(void* bytes, size_t size = 15) {
+  void liftBytes(const void* bytes, size_t size = 15) {
     // what about the basicblock?
     runDisassembler(bytes, size);
     current_address += instruction.length;
