@@ -37,3 +37,33 @@ jobs:
 
       - name: Run strict rewrite gate
         run: python test.py all --check-flags
+
+  rewrite-quick-gate:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      LLVM_DIR: C:\Program Files\LLVM\lib\cmake\llvm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install native dependencies
+        run: |
+          choco install nasm --no-progress -y
+          choco install llvm --no-progress -y
+          choco install ninja --no-progress -y
+
+      - name: Configure iced build
+        run: cmd /c scripts\dev\configure_iced.cmd
+
+      - name: Run quick rewrite gate
+        run: python test.py quick
