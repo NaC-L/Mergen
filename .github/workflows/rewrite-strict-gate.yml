@@ -1,0 +1,39 @@
+name: Rewrite Strict Gate
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  rewrite-strict-gate:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      LLVM_DIR: C:\Program Files\LLVM\lib\cmake\llvm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip capstone unicorn
+      - name: Install native dependencies
+        run: |
+          choco install nasm --no-progress -y
+          choco install llvm --no-progress -y
+          choco install ninja --no-progress -y
+
+      - name: Configure iced build
+        run: cmd /c scripts\dev\configure_iced.cmd
+
+      - name: Run strict rewrite gate
+        run: python test.py all --check-flags
