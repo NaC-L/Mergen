@@ -31,7 +31,7 @@ jobs:
       - name: Resolve LLVM_DIR from Visual Studio
         shell: pwsh
         run: |
-          $vswhere = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           if (!(Test-Path $vswhere)) { throw "vswhere.exe not found: $vswhere" }
           $vsRoot = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if ([string]::IsNullOrWhiteSpace($vsRoot)) { throw "Visual Studio with VC tools not found" }
@@ -69,7 +69,7 @@ jobs:
       - name: Resolve LLVM_DIR from Visual Studio
         shell: pwsh
         run: |
-          $vswhere = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           if (!(Test-Path $vswhere)) { throw "vswhere.exe not found: $vswhere" }
           $vsRoot = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if ([string]::IsNullOrWhiteSpace($vsRoot)) { throw "Visual Studio with VC tools not found" }
