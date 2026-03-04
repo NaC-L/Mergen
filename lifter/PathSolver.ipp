@@ -61,16 +61,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   std::vector<APInt> pv(pvset.begin(), pvset.end());
   if (pv.size() == 1) {
     printvalue2(pv[0]);
-    /*
-    auto bb_solved = BasicBlock::Create(function->getContext(), "bb_false",
-                                        builder->GetInsertBlock()->getParent());
-    */
+    dest = pv[0].getZExtValue();
+    result = PATH_solved;
 
-    auto bb_solved = getOrCreateBB(pv[0].getZExtValue(), "bb_single");
+    auto bb_solved = getOrCreateBB(dest, "bb_single");
     builder->CreateBr(bb_solved);
-    blockInfo = BBInfo(pv[0].getZExtValue(), bb_solved);
+    blockInfo = BBInfo(dest, bb_solved);
     printvalue2("pushing block");
     unvisitedBlocks.push_back(blockInfo);
+    return result;
   }
   if (pv.size() == 2) {
 
