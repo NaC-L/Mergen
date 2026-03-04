@@ -97,6 +97,11 @@ NO_FLAG_HANDLERS = {
     "lahf", "sahf",
 }
 
+# Handlers where OF is undefined when shift/rotate count > 1.
+# We exclude OF from checked flags for these handlers since the
+# test oracle (Unicorn) and hardware may differ for count > 1.
+UNDEFINED_OF_HANDLERS = {"shrd", "shld", "rcl", "rcr", "ror", "rol"}
+
 
 @dataclass
 class InsnAnalysis:
@@ -232,6 +237,10 @@ def enrich_case(case: dict) -> dict:
         check_flags = ARITH_FLAGS
     elif analysis.writes_flags:
         check_flags = ARITH_FLAGS
+
+    # Exclude OF for handlers where it is undefined for count > 1
+    if handler in UNDEFINED_OF_HANDLERS and "FLAG_OF" in check_flags:
+        check_flags = [f for f in check_flags if f != "FLAG_OF"]
 
     # Build enriched case
     case["oracle"] = "unicorn"

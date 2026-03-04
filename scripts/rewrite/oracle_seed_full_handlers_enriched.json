@@ -237,10 +237,10 @@
       "handler": "andn",
       "instruction_bytes": [
         196,
-        162,
-        136,
+        226,
+        112,
         242,
-        199
+        194
       ],
       "initial": {
         "registers": {
@@ -252,23 +252,30 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'andn rax, r14, rdi' reads uninitialized register(s): R14, RDI"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bextr_bextr",
       "handler": "bextr",
       "instruction_bytes": [
         196,
-        130,
-        64,
+        226,
+        112,
         247,
-        220
+        194
       ],
       "initial": {
         "registers": {
@@ -280,13 +287,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'bextr ebx, r12d, edi' reads uninitialized register(s): R12, RDI"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_blsi_blsi",
@@ -408,10 +422,9 @@
       "name": "smoke_bsr_bsr",
       "handler": "bsr",
       "instruction_bytes": [
-        69,
         15,
         189,
-        226
+        195
       ],
       "initial": {
         "registers": {
@@ -423,13 +436,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'bsr r12d, r10d' reads uninitialized register(s): R10"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bswap_bswap",
@@ -493,7 +513,7 @@
       "instruction_bytes": [
         15,
         187,
-        236
+        200
       ],
       "initial": {
         "registers": {
@@ -505,13 +525,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'btc esp, ebp' reads uninitialized register(s): RBP"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_btr_btr",
@@ -519,7 +546,7 @@
       "instruction_bytes": [
         15,
         179,
-        229
+        200
       ],
       "initial": {
         "registers": {
@@ -531,13 +558,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'btr ebp, esp' reads uninitialized register(s): RBP"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bts_bts",
@@ -545,7 +579,7 @@
       "instruction_bytes": [
         15,
         171,
-        235
+        200
       ],
       "initial": {
         "registers": {
@@ -557,23 +591,30 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'bts ebx, ebp' reads uninitialized register(s): RBP"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bzhi_bzhi",
       "handler": "bzhi",
       "instruction_bytes": [
         196,
-        34,
-        128,
+        226,
+        112,
         245,
-        216
+        194
       ],
       "initial": {
         "registers": {
@@ -585,13 +626,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'bzhi r11, rax, r15' reads uninitialized register(s): R15"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_call_call",
@@ -978,7 +1026,7 @@
       "handler": "dec",
       "instruction_bytes": [
         255,
-        204
+        201
       ],
       "initial": {
         "registers": {
@@ -991,7 +1039,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x0"
+          "RCX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -2017,10 +2065,10 @@
       "handler": "pext",
       "instruction_bytes": [
         196,
-        98,
-        10,
+        226,
+        114,
         245,
-        225
+        194
       ],
       "initial": {
         "registers": {
@@ -2032,13 +2080,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'pext r12d, r14d, ecx' reads uninitialized register(s): R14"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_pop_pop",
@@ -2199,7 +2247,6 @@
         },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 0,
@@ -2231,7 +2278,6 @@
         },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 0,
@@ -2313,7 +2359,6 @@
         },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 0,
@@ -2351,8 +2396,8 @@
       "name": "smoke_sar_sar",
       "handler": "sar",
       "instruction_bytes": [
-        211,
-        254
+        210,
+        248
       ],
       "initial": {
         "registers": {
@@ -2364,13 +2409,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "instruction 'sar esi, cl' reads uninitialized register(s): RSI"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_sbb_sbb",
@@ -2879,7 +2931,6 @@
         },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 0,
@@ -2944,7 +2995,6 @@
         },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 0,

@@ -324,6 +324,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bextr() {
                                     ConstantInt::get(sourceType, 0)));
   setFlag(FLAG_CF, builder->getInt1(0));
   setFlag(FLAG_OF, builder->getInt1(0));
+  setFlag(FLAG_PF, computeParityFlag(result));
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
@@ -1450,9 +1451,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_rcr() {
   auto ofDefined = createZExtOrTruncFolder(createXorFolder(msb, secondMsb),
                                            Type::getInt1Ty(context));
 
-  // OF is only valid when count is 1
-  auto isCountOne = createICMPFolder(CmpInst::ICMP_EQ, actualCount, one);
-  auto newOF = createSelectFolder(isCountOne, ofDefined, getFlag(FLAG_OF));
+  // OF is defined for all non-zero counts; for count=0 it's preserved below.
+  auto isCountNotZero = createICMPFolder(CmpInst::ICMP_NE, actualCount, zero);
+  auto newOF = createSelectFolder(isCountNotZero, ofDefined, getFlag(FLAG_OF));
 
   // If count is 0, keep original value and flags
   auto isCountZero = createICMPFolder(CmpInst::ICMP_EQ, actualCount, zero);
@@ -2028,11 +2029,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shld() {
                        "shldof_result_msb"),
       ConstantInt::get(resultValue->getType(), 1), "shldof_result_mask");
   auto ofComputed = createXorFolder(destMSB, resultMSB, "shldof");
-  auto countIsOne = createICMPFolder(
-      CmpInst::ICMP_EQ, effectiveCountValue,
-      ConstantInt::get(effectiveCountValue->getType(), 1));
   auto of = createSelectFolder(
-      countIsOne, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
+      countIsNotZero, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
       getFlag(FLAG_OF));
 
   setFlag(FLAG_CF, cf);
@@ -2100,11 +2098,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shrd() {
                        "shrdof_result_msb"),
       ConstantInt::get(resultValue->getType(), 1), "shrdof_result_mask");
   auto ofComputed = createXorFolder(destMSB, resultMSB, "shrdof");
-  auto countIsOne = createICMPFolder(
-      CmpInst::ICMP_EQ, effectiveCountValue,
-      ConstantInt::get(effectiveCountValue->getType(), 1));
   auto of = createSelectFolder(
-      countIsOne, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
+      countIsNotZero, createZExtOrTruncFolder(ofComputed, Type::getInt1Ty(context)),
       getFlag(FLAG_OF));
 
   setFlag(FLAG_CF, cf);
@@ -2489,6 +2484,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mul() {
 
   auto splitResult = createTruncFolder(
       result, Type::getIntNTy(context, initialSize), "splitResult");
+
+  // SF/ZF/PF are architecturally undefined but real hardware sets them
+  // based on the low half of the result (the value stored in ?AX).
+  setFlag(FLAG_SF, computeSignFlag(splitResult));
+  setFlag(FLAG_ZF, computeZeroFlag(splitResult));
+  setFlag(FLAG_PF, computeParityFlag(splitResult));
   // if not byte operation, result goes into ?dx:?ax
   auto lowreg = getRegOfSize(Register::RAX, srcsize);
   auto highreg = getRegOfSize(Register::RDX, srcsize);
@@ -3854,6 +3855,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsr() {
     index = createSubFolder(index, oneVal);
   }
 
+  setFlag(FLAG_PF, computeParityFlag(bitPosition));
+
   SetIndexValue(0, bitPosition);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pdep() {
@@ -4008,6 +4011,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsf() {
         condition, result, possibleResult,
         "updateResultOnFirstNonZeroBit"); // cond ift res(64) , i
   }
+
+  setFlag(FLAG_PF, computeParityFlag(result));
 
   SetIndexValue(0, result);
 }
