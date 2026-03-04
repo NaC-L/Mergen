@@ -90,53 +90,81 @@ def _parse_int(v, default=0):
     return int(str(v), 0)
 
 
+def _get_initial_register(initial: dict, name: str, default: Optional[int] = None) -> int:
+    regs = initial.get("registers", {})
+    if not isinstance(regs, dict):
+        raise ValueError("initial.registers must be an object")
+    if name in regs:
+        return _parse_int(regs[name])
+    if default is not None:
+        return default
+    raise ValueError(f"missing required initial register '{name}'")
+
+
+def _get_initial_flag(initial: dict, name: str, default: Optional[int] = None) -> int:
+    flags = initial.get("flags", {})
+    if not isinstance(flags, dict):
+        raise ValueError("initial.flags must be an object")
+    if name in flags:
+        return _parse_int(flags[name])
+    if default is not None:
+        return default
+    raise ValueError(f"missing required initial flag '{name}'")
+
+
 def _compute_push(initial):
-    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    rsp = _get_initial_register(initial, "RSP", STACKP_VALUE)
     return {"registers": {"RSP": hex(rsp - 8)}, "flags": {}}
+
 
 def _compute_pop(initial):
-    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    rsp = _get_initial_register(initial, "RSP", STACKP_VALUE)
     return {"registers": {"RSP": hex(rsp + 8)}, "flags": {}}
+
 
 def _compute_pushfq(initial):
-    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    rsp = _get_initial_register(initial, "RSP", STACKP_VALUE)
     return {"registers": {"RSP": hex(rsp - 8)}, "flags": {}}
+
 
 def _compute_popfq(initial):
-    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    rsp = _get_initial_register(initial, "RSP", STACKP_VALUE)
     return {"registers": {"RSP": hex(rsp + 8)}, "flags": {}}
+
 
 def _compute_leave(initial):
-    rbp = _parse_int(initial.get("registers", {}).get("RBP"), 0)
+    rbp = _get_initial_register(initial, "RBP")
     return {"registers": {"RSP": hex(rbp + 8)}, "flags": {}}
 
+
 def _compute_call(initial):
-    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    rsp = _get_initial_register(initial, "RSP", STACKP_VALUE)
     return {"registers": {"RSP": hex(rsp - 8)}, "flags": {}}
 
-def _compute_ret(initial):
-    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
-    return {"registers": {"RSP": hex(rsp + 8)}, "flags": {}}
 
 def _compute_jmp(_initial):
     # jmp doesn't modify registers or flags, just control flow
     return {"registers": {}, "flags": {}}
 
+
 def _compute_movs_x(initial):
-    rsi = _parse_int(initial.get("registers", {}).get("RSI"), 0)
-    rdi = _parse_int(initial.get("registers", {}).get("RDI"), 0)
-    df = _parse_int(initial.get("flags", {}).get("FLAG_DF"), 0)
+    rsi = _get_initial_register(initial, "RSI")
+    rdi = _get_initial_register(initial, "RDI")
+    df = _get_initial_flag(initial, "FLAG_DF", 0)
     step = -8 if df else 8  # movsq = 8 bytes
     return {"registers": {"RSI": hex(rsi + step), "RDI": hex(rdi + step)}, "flags": {}}
 
+
 def _compute_stosx(initial):
-    rdi = _parse_int(initial.get("registers", {}).get("RDI"), 0)
-    df = _parse_int(initial.get("flags", {}).get("FLAG_DF"), 0)
+    rdi = _get_initial_register(initial, "RDI")
+    df = _get_initial_flag(initial, "FLAG_DF", 0)
     step = -8 if df else 8  # stosq = 8 bytes
     return {"registers": {"RDI": hex(rdi + step)}, "flags": {}}
 
+
 def _compute_cli(_initial):
     return {"registers": {}, "flags": {"FLAG_IF": 0}}
+
 
 COMPUTED_HANDLERS = {
     "push":   _compute_push,
@@ -255,19 +283,20 @@ def enrich_case(case: dict) -> dict:
     if oracle and oracle != "none":
         return case
     expected = case.get("expected", {})
-    if expected.get("registers") or expected.get("flags"):
+    if not isinstance(expected, dict):
+        raise ValueError(f"case '{case.get('name', '<unnamed>')}': expected must be an object")
+    if expected.get("registers") or expected.get("flags") or ("branch_taken" in expected):
         return case
 
     # Conditional-jump handlers: compute branch_taken from initial flags
     if handler in JCC_HANDLERS:
         initial_flags = case.get("initial", {}).get("flags", {})
+        if not isinstance(initial_flags, dict):
+            raise ValueError(f"case '{case.get('name', '<unnamed>')}': initial.flags must be an object")
         # Convert flag values to int (may be hex strings or ints)
         flags_int = {}
         for k, v in initial_flags.items():
-            if isinstance(v, str):
-                flags_int[k] = int(v, 0)
-            else:
-                flags_int[k] = int(v)
+            flags_int[k] = _parse_int(v, 0)
         condition = JCC_HANDLERS[handler]
         taken = condition(flags_int)
         case["oracle"] = "computed"
@@ -281,7 +310,12 @@ def enrich_case(case: dict) -> dict:
     # Computed-handler enrichment (stack, string, cli, call/ret/jmp)
     if handler in COMPUTED_HANDLERS:
         initial = case.get("initial", {})
-        computed = COMPUTED_HANDLERS[handler](initial)
+        if not isinstance(initial, dict):
+            raise ValueError(f"case '{case.get('name', '<unnamed>')}': initial must be an object")
+        try:
+            computed = COMPUTED_HANDLERS[handler](initial)
+        except ValueError as exc:
+            raise ValueError(f"case '{case.get('name', '<unnamed>')}': {exc}") from exc
         case["oracle"] = "computed"
         case["expected"] = computed
         return case
@@ -385,7 +419,11 @@ def main():
     out_path = Path(args.out) if args.out else seed_path
 
     payload = json.loads(seed_path.read_text(encoding="utf-8"))
-    cases = payload.get("cases", [])
+    if payload.get("schema") != "mergen-oracle-seed-v1":
+        raise SystemExit("Seed schema must be 'mergen-oracle-seed-v1'")
+    cases = payload.get("cases")
+    if not isinstance(cases, list):
+        raise SystemExit("Seed payload must contain a 'cases' array")
 
     enriched = 0
     skipped = 0

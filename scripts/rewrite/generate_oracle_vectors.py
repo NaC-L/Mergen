@@ -248,39 +248,42 @@ def main():
                 raise OracleError(
                     f"Case '{case['name']}' has invalid expected payload for oracle=none"
                 )
-            expected.setdefault("registers", {})
-            expected.setdefault("flags", {})
+            expected_registers = expected.get("registers", {})
+            expected_flags = expected.get("flags", {})
+            if not isinstance(expected_registers, dict) or not isinstance(expected_flags, dict):
+                raise OracleError(
+                    f"Case '{case['name']}' expected.registers/expected.flags must be objects"
+                )
+            expected["registers"] = expected_registers
+            expected["flags"] = expected_flags
         elif oracle_mode == "unicorn":
-            emulation_failed = False
-            emulation_error = ""
             for provider in providers:
                 try:
                     case_results[provider.name] = provider.emulate(case)
                 except Exception as exc:
-                    emulation_error = str(exc)
-                    print(
-                        f"WARNING: emulation failed for case '{case['name']}' "
-                        f"with provider '{provider.name}': {emulation_error}"
-                    )
-                    emulation_failed = True
-                    break
+                    raise OracleError(
+                        f"Emulation failed for case '{case['name']}' with provider "
+                        f"'{provider.name}': {exc}"
+                    ) from exc
 
-            if emulation_failed:
-                expected = case.get("expected", {})
-                expected.setdefault("registers", {})
-                expected.setdefault("flags", {})
-                oracle_mode = "none"
-                case["skip"] = True
-                case["skip_reason"] = f"emulation failed: {emulation_error}"
-            else:
-                compare_results(case_results, case["name"])
-                consensus = case_results[providers[0].name]
-                expected = normalize_expected(case, consensus)
+            compare_results(case_results, case["name"])
+            consensus = case_results[providers[0].name]
+            expected = normalize_expected(case, consensus)
         elif oracle_mode == "computed":
             # Pre-computed expected values (e.g., jcc branch_taken)
             expected = case.get("expected", {})
-            expected.setdefault("registers", {})
-            expected.setdefault("flags", {})
+            if not isinstance(expected, dict):
+                raise OracleError(
+                    f"Case '{case['name']}' has invalid expected payload for oracle=computed"
+                )
+            expected_registers = expected.get("registers", {})
+            expected_flags = expected.get("flags", {})
+            if not isinstance(expected_registers, dict) or not isinstance(expected_flags, dict):
+                raise OracleError(
+                    f"Case '{case['name']}' expected.registers/expected.flags must be objects"
+                )
+            expected["registers"] = expected_registers
+            expected["flags"] = expected_flags
         else:
             raise OracleError(
                 f"Case '{case['name']}' has unsupported oracle mode '{oracle_mode}'"

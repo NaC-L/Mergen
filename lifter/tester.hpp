@@ -84,6 +84,8 @@ private:
     }
 
     LifterUnderTest lifter;
+    lifter.hadConditionalBranch = false;
+    lifter.lastBranchTaken = false;
 
     for (const auto& reg : testCase.initialRegisters) {
       lifter.SetRegisterValue(

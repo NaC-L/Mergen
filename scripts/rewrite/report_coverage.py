@@ -63,7 +63,7 @@ def main():
     skipped_handler_set = {c.get("handler", "").lower() for c in skipped_cases}
 
     # Coverage
-    covered = set(active_handlers.keys())
+    covered = set(active_handlers.keys()) & all_handlers
     uncovered = all_handlers - covered - skipped_handler_set
     total_handlers = len(all_handlers)
     covered_count = len(covered)
@@ -88,7 +88,8 @@ def main():
         print("Mergen Handler Test Coverage Report")
         print("=" * 60)
         print(f"Total handlers in x86_64_opcodes.x: {total_handlers}")
-        print(f"Covered (active with oracle):       {covered_count} ({covered_count/total_handlers*100:.0f}%)")
+        coverage_pct_text = (covered_count / total_handlers * 100) if total_handlers else 0.0
+        print(f"Covered (active with oracle):       {covered_count} ({coverage_pct_text:.0f}%)")
         print(f"Skipped (need special setup):       {skipped_count}")
         print(f"Uncovered (no test case):           {uncovered_count}")
         print(f"Active test cases:                  {len(active_cases)}")
