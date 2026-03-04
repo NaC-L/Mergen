@@ -56,26 +56,44 @@ LOGIC_FLAGS = ["FLAG_CF", "FLAG_OF", "FLAG_ZF", "FLAG_SF", "FLAG_PF"]
 # Handlers that are control flow (change RIP/RSP fundamentally)
 # These are now tested with computed assertions - no longer skipped.
 
-# Conditional-jump handlers: maps handler name -> (condition_lambda, description).
-# condition_lambda(flags_dict) -> bool (True = branch taken).
-# flags_dict values are 0 or 1 integers.
+# Conditional-jump handlers: maps handler name -> condition lambda.
+# Required input flags are validated via JCC_REQUIRED_FLAGS before evaluation.
 JCC_HANDLERS = {
-    "jz":   lambda f: f.get("FLAG_ZF", 0) == 1,
-    "jnz":  lambda f: f.get("FLAG_ZF", 0) == 0,
-    "jb":   lambda f: f.get("FLAG_CF", 0) == 1,
-    "jnb":  lambda f: f.get("FLAG_CF", 0) == 0,
-    "jbe":  lambda f: f.get("FLAG_CF", 0) == 1 or f.get("FLAG_ZF", 0) == 1,
-    "jnbe": lambda f: f.get("FLAG_CF", 0) == 0 and f.get("FLAG_ZF", 0) == 0,
-    "jl":   lambda f: f.get("FLAG_SF", 0) != f.get("FLAG_OF", 0),
-    "jnl":  lambda f: f.get("FLAG_SF", 0) == f.get("FLAG_OF", 0),
-    "jle":  lambda f: f.get("FLAG_ZF", 0) == 1 or f.get("FLAG_SF", 0) != f.get("FLAG_OF", 0),
-    "jnle": lambda f: f.get("FLAG_ZF", 0) == 0 and f.get("FLAG_SF", 0) == f.get("FLAG_OF", 0),
-    "js":   lambda f: f.get("FLAG_SF", 0) == 1,
-    "jns":  lambda f: f.get("FLAG_SF", 0) == 0,
-    "jo":   lambda f: f.get("FLAG_OF", 0) == 1,
-    "jno":  lambda f: f.get("FLAG_OF", 0) == 0,
-    "jp":   lambda f: f.get("FLAG_PF", 0) == 1,
-    "jnp":  lambda f: f.get("FLAG_PF", 0) == 0,
+    "jz":   lambda f: f["FLAG_ZF"] == 1,
+    "jnz":  lambda f: f["FLAG_ZF"] == 0,
+    "jb":   lambda f: f["FLAG_CF"] == 1,
+    "jnb":  lambda f: f["FLAG_CF"] == 0,
+    "jbe":  lambda f: f["FLAG_CF"] == 1 or f["FLAG_ZF"] == 1,
+    "jnbe": lambda f: f["FLAG_CF"] == 0 and f["FLAG_ZF"] == 0,
+    "jl":   lambda f: f["FLAG_SF"] != f["FLAG_OF"],
+    "jnl":  lambda f: f["FLAG_SF"] == f["FLAG_OF"],
+    "jle":  lambda f: f["FLAG_ZF"] == 1 or f["FLAG_SF"] != f["FLAG_OF"],
+    "jnle": lambda f: f["FLAG_ZF"] == 0 and f["FLAG_SF"] == f["FLAG_OF"],
+    "js":   lambda f: f["FLAG_SF"] == 1,
+    "jns":  lambda f: f["FLAG_SF"] == 0,
+    "jo":   lambda f: f["FLAG_OF"] == 1,
+    "jno":  lambda f: f["FLAG_OF"] == 0,
+    "jp":   lambda f: f["FLAG_PF"] == 1,
+    "jnp":  lambda f: f["FLAG_PF"] == 0,
+}
+
+JCC_REQUIRED_FLAGS = {
+    "jz": {"FLAG_ZF"},
+    "jnz": {"FLAG_ZF"},
+    "jb": {"FLAG_CF"},
+    "jnb": {"FLAG_CF"},
+    "jbe": {"FLAG_CF", "FLAG_ZF"},
+    "jnbe": {"FLAG_CF", "FLAG_ZF"},
+    "jl": {"FLAG_SF", "FLAG_OF"},
+    "jnl": {"FLAG_SF", "FLAG_OF"},
+    "jle": {"FLAG_ZF", "FLAG_SF", "FLAG_OF"},
+    "jnle": {"FLAG_ZF", "FLAG_SF", "FLAG_OF"},
+    "js": {"FLAG_SF"},
+    "jns": {"FLAG_SF"},
+    "jo": {"FLAG_OF"},
+    "jno": {"FLAG_OF"},
+    "jp": {"FLAG_PF"},
+    "jnp": {"FLAG_PF"},
 }
 
 # Handlers with computed register-side-effect assertions (no Unicorn needed).
@@ -216,6 +234,8 @@ NO_FLAG_HANDLERS = {
 # We exclude OF from checked flags for these handlers since the
 # test oracle (Unicorn) and hardware may differ for count > 1.
 UNDEFINED_OF_HANDLERS = {"shrd", "shld", "rcl", "rcr", "ror", "rol"}
+# Handlers whose status flags are architecturally undefined.
+UNDEFINED_STATUS_FLAG_HANDLERS = {"div", "div2", "idiv", "idiv2"}
 
 
 @dataclass
@@ -294,10 +314,14 @@ def enrich_case(case: dict) -> dict:
         initial_flags = case.get("initial", {}).get("flags", {})
         if not isinstance(initial_flags, dict):
             raise ValueError(f"case '{case.get('name', '<unnamed>')}': initial.flags must be an object")
-        # Convert flag values to int (may be hex strings or ints)
-        flags_int = {}
-        for k, v in initial_flags.items():
-            flags_int[k] = _parse_int(v, 0)
+        required_flags = JCC_REQUIRED_FLAGS[handler]
+        missing_flags = sorted(flag for flag in required_flags if flag not in initial_flags)
+        if missing_flags:
+            raise ValueError(
+                f"case '{case.get('name', '<unnamed>')}': missing required JCC flags: "
+                + ", ".join(missing_flags)
+            )
+        flags_int = {flag: _parse_int(initial_flags[flag], 0) for flag in required_flags}
         condition = JCC_HANDLERS[handler]
         taken = condition(flags_int)
         case["oracle"] = "computed"
@@ -391,6 +415,9 @@ def enrich_case(case: dict) -> dict:
     # Exclude OF for handlers where it is undefined for count > 1
     if handler in UNDEFINED_OF_HANDLERS and "FLAG_OF" in check_flags:
         check_flags = [f for f in check_flags if f != "FLAG_OF"]
+    # Exclude all status flags for instructions where they are undefined.
+    if handler in UNDEFINED_STATUS_FLAG_HANDLERS:
+        check_flags = []
 
     # Build enriched case
     case["oracle"] = "unicorn"
