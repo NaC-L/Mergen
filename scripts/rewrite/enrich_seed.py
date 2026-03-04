@@ -53,9 +53,7 @@ ARITH_FLAGS = ["FLAG_CF", "FLAG_OF", "FLAG_ZF", "FLAG_SF", "FLAG_PF", "FLAG_AF"]
 LOGIC_FLAGS = ["FLAG_CF", "FLAG_OF", "FLAG_ZF", "FLAG_SF", "FLAG_PF"]
 
 # Handlers that are control flow (change RIP/RSP fundamentally)
-CONTROL_FLOW_HANDLERS = {
-    "call", "ret", "jmp", "leave",
-}
+# These are now tested with computed assertions - no longer skipped.
 
 # Conditional-jump handlers: maps handler name -> (condition_lambda, description).
 # condition_lambda(flags_dict) -> bool (True = branch taken).
@@ -79,17 +77,86 @@ JCC_HANDLERS = {
     "jnp":  lambda f: f.get("FLAG_PF", 0) == 0,
 }
 
-# Stack-modifying handlers
-STACK_HANDLERS = {"push", "pop", "pushfq", "popfq"}
+# Handlers with computed register-side-effect assertions (no Unicorn needed).
+# Each maps handler_name -> function(initial) -> {registers: {}, flags: {}}.
+STACKP_VALUE = 0x14FEA0
 
-# Non-deterministic system instructions
+def _parse_int(v, default=0):
+    """Parse a value that may be int, hex string, or decimal string."""
+    if v is None:
+        return default
+    if isinstance(v, int):
+        return v
+    return int(str(v), 0)
+
+
+def _compute_push(initial):
+    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    return {"registers": {"RSP": hex(rsp - 8)}, "flags": {}}
+
+def _compute_pop(initial):
+    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    return {"registers": {"RSP": hex(rsp + 8)}, "flags": {}}
+
+def _compute_pushfq(initial):
+    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    return {"registers": {"RSP": hex(rsp - 8)}, "flags": {}}
+
+def _compute_popfq(initial):
+    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    return {"registers": {"RSP": hex(rsp + 8)}, "flags": {}}
+
+def _compute_leave(initial):
+    rbp = _parse_int(initial.get("registers", {}).get("RBP"), 0)
+    return {"registers": {"RSP": hex(rbp + 8)}, "flags": {}}
+
+def _compute_call(initial):
+    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    return {"registers": {"RSP": hex(rsp - 8)}, "flags": {}}
+
+def _compute_ret(initial):
+    rsp = _parse_int(initial.get("registers", {}).get("RSP"), STACKP_VALUE)
+    return {"registers": {"RSP": hex(rsp + 8)}, "flags": {}}
+
+def _compute_jmp(_initial):
+    # jmp doesn't modify registers or flags, just control flow
+    return {"registers": {}, "flags": {}}
+
+def _compute_movs_x(initial):
+    rsi = _parse_int(initial.get("registers", {}).get("RSI"), 0)
+    rdi = _parse_int(initial.get("registers", {}).get("RDI"), 0)
+    df = _parse_int(initial.get("flags", {}).get("FLAG_DF"), 0)
+    step = -8 if df else 8  # movsq = 8 bytes
+    return {"registers": {"RSI": hex(rsi + step), "RDI": hex(rdi + step)}, "flags": {}}
+
+def _compute_stosx(initial):
+    rdi = _parse_int(initial.get("registers", {}).get("RDI"), 0)
+    df = _parse_int(initial.get("flags", {}).get("FLAG_DF"), 0)
+    step = -8 if df else 8  # stosq = 8 bytes
+    return {"registers": {"RDI": hex(rdi + step)}, "flags": {}}
+
+def _compute_cli(_initial):
+    return {"registers": {}, "flags": {"FLAG_IF": 0}}
+
+COMPUTED_HANDLERS = {
+    "push":   _compute_push,
+    "pop":    _compute_pop,
+    "pushfq": _compute_pushfq,
+    "popfq":  _compute_popfq,
+    "leave":  _compute_leave,
+    "call":   _compute_call,
+    # ret is excluded: non-real-return path crashes in solvePath (symbolic return addr)
+    "jmp":    _compute_jmp,
+    "movs_x": _compute_movs_x,
+    "stosx":  _compute_stosx,
+    "cli":    _compute_cli,
+}
+
+# Non-deterministic system instructions — truly untestable
 NONDETERMINISTIC_HANDLERS = {"rdtsc", "cpuid"}
 
-# Memory string instructions (need RSI/RDI memory setup)
-MEMORY_HANDLERS = {"movs_X", "movs_x", "stosx"}
-
-# All handlers to skip unconditionally
-SKIP_HANDLERS = CONTROL_FLOW_HANDLERS | STACK_HANDLERS | NONDETERMINISTIC_HANDLERS | MEMORY_HANDLERS
+# Handlers to skip: nondeterministic + ret (crashes in solvePath with symbolic retaddr)
+SKIP_HANDLERS = NONDETERMINISTIC_HANDLERS | {"ret"}
 
 # Flag-only handlers (no register output, just flags)
 FLAG_ONLY_HANDLERS = {"cmp", "test", "bt", "btr", "bts", "btc"}
@@ -209,6 +276,14 @@ def enrich_case(case: dict) -> dict:
             "flags": {},
             "branch_taken": taken,
         }
+        return case
+
+    # Computed-handler enrichment (stack, string, cli, call/ret/jmp)
+    if handler in COMPUTED_HANDLERS:
+        initial = case.get("initial", {})
+        computed = COMPUTED_HANDLERS[handler](initial)
+        case["oracle"] = "computed"
+        case["expected"] = computed
         return case
 
     # Skip control flow and other problematic handlers by name

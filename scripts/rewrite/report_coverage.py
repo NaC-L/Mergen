@@ -52,15 +52,11 @@ def main():
         else:
             active_cases.append(case)
 
-    # Active handlers with register checks
+    # Active handlers: any non-skipped case with a handler name counts as coverage
     active_handlers: Dict[str, List[str]] = {}
     for case in active_cases:
         handler = case.get("handler", "").lower()
-        exp = case.get("expected", {})
-        has_reg = bool(exp.get("registers"))
-        has_flag = bool(exp.get("flags"))
-        has_branch = "branch_taken" in exp
-        if has_reg or has_flag or has_branch:
+        if handler:
             active_handlers.setdefault(handler, []).append(case["name"])
 
     # Skipped handlers

@@ -542,10 +542,10 @@
       "handler": "call",
       "instruction_bytes": [
         232,
-        238,
-        10,
-        110,
-        73
+        16,
+        0,
+        0,
+        0
       ],
       "initial": {
         "registers": {
@@ -1240,11 +1240,8 @@
       "name": "smoke_jmp_jmp",
       "handler": "jmp",
       "instruction_bytes": [
-        233,
-        93,
-        27,
-        108,
-        210
+        235,
+        16
       ],
       "initial": {
         "registers": {
@@ -1804,10 +1801,7 @@
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RBP": "0x200000"
         },
         "flags": {}
       },
@@ -1877,11 +1871,10 @@
       "initial": {
         "registers": {
           "RSI": "0x2000",
-          "RDI": "0x3000",
-          "RAX": "0x1122334455667788"
+          "RDI": "0x3000"
         },
         "flags": {
-          "FLAG_DF": "0x0"
+          "FLAG_DF": 0
         }
       },
       "expected": {
@@ -2066,7 +2059,7 @@
       "name": "smoke_pop_pop",
       "handler": "pop",
       "instruction_bytes": [
-        89
+        88
       ],
       "initial": {
         "registers": {
@@ -2110,11 +2103,9 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_popfq_popf",
+      "name": "smoke_popfq_popfq",
       "handler": "popfq",
       "instruction_bytes": [
-        46,
-        102,
         157
       ],
       "initial": {
@@ -2137,11 +2128,7 @@
       "name": "smoke_push_push",
       "handler": "push",
       "instruction_bytes": [
-        104,
-        246,
-        167,
-        230,
-        158
+        80
       ],
       "initial": {
         "registers": {
@@ -2160,10 +2147,9 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_pushfq_pushf",
+      "name": "smoke_pushfq_pushfq",
       "handler": "pushfq",
       "instruction_bytes": [
-        102,
         156
       ],
       "initial": {
@@ -2259,10 +2245,7 @@
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RSP": "0x14FF00"
         },
         "flags": {}
       },
@@ -2895,18 +2878,17 @@
       "name": "smoke_stosx_stosq",
       "handler": "stosx",
       "instruction_bytes": [
-        46,
-        78,
+        72,
         171
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RDI": "0x3000",
+          "RAX": "0x1122334455667788"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_DF": 0
+        }
       },
       "expected": {
         "registers": {},

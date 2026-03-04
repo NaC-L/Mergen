@@ -402,8 +402,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
   destReg = createAddFolder(destReg, Direction);
   printvalue(sourceReg);
   printvalue(destReg);
-  SetRegisterValue(Register::RDI, sourceReg);
-  SetRegisterValue(Register::RSI, destReg);
+  SetRegisterValue(Register::RSI, sourceReg);
+  SetRegisterValue(Register::RDI, destReg);
 
   // this doesnt set flags, so if its rep/repz/repnz, we could do a trick with
   // memcpy
