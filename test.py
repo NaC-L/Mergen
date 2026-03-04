@@ -59,6 +59,13 @@ def run_coverage(vectors_file: Path) -> None:
     _run_cmd(REWRITE_DIR / "collect_instruction_tests.cmd", args=["--vectors-file", str(rel)])
 
 
+def run_report(vectors_file: Path, as_json: bool) -> None:
+    args = ["--vectors", str(vectors_file)]
+    if as_json:
+        args.append("--json")
+    _run([sys.executable, str(REWRITE_DIR / "report_coverage.py")] + args)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Convenience test runner for Mergen rewrite gates"
@@ -108,6 +115,9 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="enforce strict oracle flag comparisons during full-handler stage",
     )
+    report_cmd = sub.add_parser("report", help="print handler test coverage report")
+    report_cmd.add_argument("--json", action="store_true", help="output as JSON")
+    report_cmd.add_argument("--vectors", type=Path, default=None, help="explicit vectors file")
     return parser.parse_args()
 
 
@@ -139,6 +149,13 @@ def main() -> None:
             raise SystemExit(f"Vectors file does not exist: {vectors_file}")
 
         run_coverage(vectors_file)
+        return
+
+    if command == "report":
+        vectors_file = args.vectors if args.vectors else DEFAULT_VECTORS
+        if not vectors_file.exists():
+            raise SystemExit(f"Vectors file does not exist: {vectors_file}")
+        run_report(vectors_file, args.json)
         return
 
     if command == "flags":
