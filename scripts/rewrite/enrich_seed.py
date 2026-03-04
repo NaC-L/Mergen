@@ -189,8 +189,9 @@ def enrich_case(case: dict) -> dict:
         case["skip_reason"] = "failed to disassemble instruction bytes"
         return case
 
-    # Skip instructions with memory operands (Unicorn needs mapped memory)
-    if analysis.has_memory_operand:
+    # Skip instructions with memory operands (Unicorn needs mapped memory).
+    # Exception: LEA uses memory-addressing syntax but never accesses memory.
+    if analysis.has_memory_operand and handler != "lea":
         case["skip"] = True
         case["skip_reason"] = f"memory operand in '{analysis.disasm_text}'; needs mapped memory for emulation"
         return case

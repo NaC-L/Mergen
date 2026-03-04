@@ -308,55 +308,69 @@
       "instruction_bytes": [
         196,
         226,
-        64,
+        120,
         243,
-        88,
-        128
+        217
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "memory operand in 'blsi edi, dword ptr [rax - 0x80]'; needs mapped memory for emulation"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_blsmsk_blsmsk",
       "handler": "blsmsk",
       "instruction_bytes": [
         196,
-        2,
-        32,
+        226,
+        120,
         243,
-        86,
-        228
+        209
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "memory operand in 'blsmsk r11d, dword ptr [r14 - 0x1c]'; needs mapped memory for emulation"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_blsr_blsr",
@@ -364,26 +378,34 @@
       "instruction_bytes": [
         196,
         226,
-        32,
+        120,
         243,
-        9
+        201
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "memory operand in 'blsr r11d, dword ptr [rcx]'; needs mapped memory for emulation"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bsf_bsf",
@@ -1123,21 +1145,21 @@
       "name": "smoke_idiv_idiv",
       "handler": "idiv",
       "instruction_bytes": [
-        246,
-        251
+        247,
+        249
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RAX": "0x10",
+          "RDX": "0x0",
+          "RCX": "0x3"
         },
         "flags": {}
       },
       "expected": {
         "registers": {
-          "RAX": "0x0"
+          "RAX": "0x0",
+          "RDX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -1743,7 +1765,8 @@
       "handler": "lea",
       "instruction_bytes": [
         141,
-        38
+        4,
+        17
       ],
       "initial": {
         "registers": {
@@ -1755,13 +1778,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "memory operand in 'lea esp, [rsi]'; needs mapped memory for emulation"
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_leave_leave",
