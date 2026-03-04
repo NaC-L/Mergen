@@ -92,6 +92,40 @@ MANUAL_HANDLER_CASES = {
         "mnemonic": "blsr",
         "instruction_bytes": [0xC4, 0xE2, 0x78, 0xF3, 0xC9],  # blsr eax, ecx
     },
+    # ---- Conditional jumps (short-form jcc rel8, offset=+0x10) ----
+    # Each uses initial flags designed to make the branch TAKEN.
+    "jz":   {"mnemonic": "je",   "instruction_bytes": [0x74, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_ZF": 1}}},
+    "jnz":  {"mnemonic": "jne",  "instruction_bytes": [0x75, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_ZF": 0}}},
+    "jb":   {"mnemonic": "jb",   "instruction_bytes": [0x72, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_CF": 1}}},
+    "jnb":  {"mnemonic": "jae",  "instruction_bytes": [0x73, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_CF": 0}}},
+    "jbe":  {"mnemonic": "jbe",  "instruction_bytes": [0x76, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_CF": 1, "FLAG_ZF": 0}}},
+    "jnbe": {"mnemonic": "ja",   "instruction_bytes": [0x77, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_CF": 0, "FLAG_ZF": 0}}},
+    "jl":   {"mnemonic": "jl",   "instruction_bytes": [0x7C, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 1, "FLAG_OF": 0}}},
+    "jnl":  {"mnemonic": "jge",  "instruction_bytes": [0x7D, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 0, "FLAG_OF": 0}}},
+    "jle":  {"mnemonic": "jle",  "instruction_bytes": [0x7E, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 1, "FLAG_OF": 0, "FLAG_ZF": 0}}},
+    "jnle": {"mnemonic": "jg",   "instruction_bytes": [0x7F, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 0, "FLAG_OF": 0, "FLAG_ZF": 0}}},
+    "js":   {"mnemonic": "js",   "instruction_bytes": [0x78, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 1}}},
+    "jns":  {"mnemonic": "jns",  "instruction_bytes": [0x79, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 0}}},
+    "jo":   {"mnemonic": "jo",   "instruction_bytes": [0x70, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_OF": 1}}},
+    "jno":  {"mnemonic": "jno",  "instruction_bytes": [0x71, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_OF": 0}}},
+    "jp":   {"mnemonic": "jp",   "instruction_bytes": [0x7A, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_PF": 1}}},
+    "jnp":  {"mnemonic": "jnp",  "instruction_bytes": [0x7B, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_PF": 0}}},
     "movs_x": {
         "mnemonic": "movsq",
         "instruction_bytes": [0x48, 0xA5],
@@ -104,6 +138,45 @@ MANUAL_HANDLER_CASES = {
             "flags": {"FLAG_DF": "0x0"},
         },
     },
+}
+
+# Additional test-case variants for handlers that need both-direction testing.
+# Each maps handler_name -> list of {suffix, mnemonic, instruction_bytes, initial}.
+# The suffix is appended to the case name, e.g. smoke_jz_je_notaken.
+VARIANT_HANDLER_CASES: Dict[str, list] = {
+    # ---- jcc "not-taken" variants: flags designed so branch is NOT taken ----
+    "jz":   [{"suffix": "notaken", "mnemonic": "je",   "instruction_bytes": [0x74, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_ZF": 0}}}],
+    "jnz":  [{"suffix": "notaken", "mnemonic": "jne",  "instruction_bytes": [0x75, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_ZF": 1}}}],
+    "jb":   [{"suffix": "notaken", "mnemonic": "jb",   "instruction_bytes": [0x72, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_CF": 0}}}],
+    "jnb":  [{"suffix": "notaken", "mnemonic": "jae",  "instruction_bytes": [0x73, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_CF": 1}}}],
+    "jbe":  [{"suffix": "notaken", "mnemonic": "jbe",  "instruction_bytes": [0x76, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_CF": 0, "FLAG_ZF": 0}}}],
+    "jnbe": [{"suffix": "notaken", "mnemonic": "ja",   "instruction_bytes": [0x77, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_CF": 1, "FLAG_ZF": 0}}}],
+    "jl":   [{"suffix": "notaken", "mnemonic": "jl",   "instruction_bytes": [0x7C, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 0, "FLAG_OF": 0}}}],
+    "jnl":  [{"suffix": "notaken", "mnemonic": "jge",  "instruction_bytes": [0x7D, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 1, "FLAG_OF": 0}}}],
+    "jle":  [{"suffix": "notaken", "mnemonic": "jle",  "instruction_bytes": [0x7E, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 0, "FLAG_OF": 0, "FLAG_ZF": 0}}}],
+    "jnle": [{"suffix": "notaken", "mnemonic": "jg",   "instruction_bytes": [0x7F, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 1, "FLAG_OF": 0, "FLAG_ZF": 0}}}],
+    "js":   [{"suffix": "notaken", "mnemonic": "js",   "instruction_bytes": [0x78, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 0}}}],
+    "jns":  [{"suffix": "notaken", "mnemonic": "jns",  "instruction_bytes": [0x79, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 1}}}],
+    "jo":   [{"suffix": "notaken", "mnemonic": "jo",   "instruction_bytes": [0x70, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_OF": 0}}}],
+    "jno":  [{"suffix": "notaken", "mnemonic": "jno",  "instruction_bytes": [0x71, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_OF": 1}}}],
+    "jp":   [{"suffix": "notaken", "mnemonic": "jp",   "instruction_bytes": [0x7A, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_PF": 0}}}],
+    "jnp":  [{"suffix": "notaken", "mnemonic": "jnp",  "instruction_bytes": [0x7B, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_PF": 1}}}],
 }
 
 # Instruction byte overrides for handlers whose auto-discovered encodings
@@ -351,6 +424,18 @@ def main() -> None:
                     run_enabled=handler not in SKIP_RUN_HANDLERS,
                 )
             )
+            # Emit variant cases (e.g. not-taken jcc)
+            if handler in VARIANT_HANDLER_CASES:
+                for variant in VARIANT_HANDLER_CASES[handler]:
+                    vcase = build_smoke_case(
+                        handler=handler,
+                        mnemonic=variant["mnemonic"],
+                        instruction_bytes=variant["instruction_bytes"],
+                        initial=variant.get("initial"),
+                        run_enabled=handler not in SKIP_RUN_HANDLERS,
+                    )
+                    vcase["name"] += f"_{variant['suffix']}"
+                    auto_cases.append(vcase)
             continue
 
         selected = None

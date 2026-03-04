@@ -59,7 +59,8 @@ def main():
         exp = case.get("expected", {})
         has_reg = bool(exp.get("registers"))
         has_flag = bool(exp.get("flags"))
-        if has_reg or has_flag:
+        has_branch = "branch_taken" in exp
+        if has_reg or has_flag or has_branch:
             active_handlers.setdefault(handler, []).append(case["name"])
 
     # Skipped handlers

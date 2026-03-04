@@ -1073,16 +1073,33 @@
       "handler": "jb",
       "instruction_bytes": [
         114,
-        196
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_CF": 1
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jb_jb_notaken",
+      "handler": "jb",
+      "instruction_bytes": [
+        114,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_CF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1096,16 +1113,35 @@
       "handler": "jbe",
       "instruction_bytes": [
         118,
-        88
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_ZF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jbe_jbe_notaken",
+      "handler": "jbe",
+      "instruction_bytes": [
+        118,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_ZF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1119,16 +1155,35 @@
       "handler": "jl",
       "instruction_bytes": [
         124,
-        95
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 1,
+          "FLAG_OF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jl_jl_notaken",
+      "handler": "jl",
+      "instruction_bytes": [
+        124,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 0,
+          "FLAG_OF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1142,16 +1197,37 @@
       "handler": "jle",
       "instruction_bytes": [
         126,
-        180
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 1,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jle_jle_notaken",
+      "handler": "jle",
+      "instruction_bytes": [
+        126,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1187,20 +1263,17 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_jnb_jnb",
+      "name": "smoke_jnb_jae",
       "handler": "jnb",
       "instruction_bytes": [
         115,
-        106
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
-        "flags": {}
+        "registers": {},
+        "flags": {
+          "FLAG_CF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1210,20 +1283,38 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_jnbe_jnbe",
+      "name": "smoke_jnb_jae_notaken",
+      "handler": "jnb",
+      "instruction_bytes": [
+        115,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_CF": 1
+        }
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnbe_ja",
       "handler": "jnbe",
       "instruction_bytes": [
         119,
-        13
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
-        "flags": {}
+        "registers": {},
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_ZF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1233,20 +1324,39 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_jnl_jnl",
+      "name": "smoke_jnbe_ja_notaken",
+      "handler": "jnbe",
+      "instruction_bytes": [
+        119,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_ZF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnl_jge",
       "handler": "jnl",
       "instruction_bytes": [
         125,
-        202
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
-        "flags": {}
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 0,
+          "FLAG_OF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1256,20 +1366,62 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_jnle_jnle",
+      "name": "smoke_jnl_jge_notaken",
+      "handler": "jnl",
+      "instruction_bytes": [
+        125,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 1,
+          "FLAG_OF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnle_jg",
       "handler": "jnle",
       "instruction_bytes": [
         127,
-        75
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnle_jg_notaken",
+      "handler": "jnle",
+      "instruction_bytes": [
+        127,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 1,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1283,16 +1435,33 @@
       "handler": "jno",
       "instruction_bytes": [
         113,
-        141
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_OF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jno_jno_notaken",
+      "handler": "jno",
+      "instruction_bytes": [
+        113,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_OF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1306,16 +1475,33 @@
       "handler": "jnp",
       "instruction_bytes": [
         123,
-        100
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_PF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnp_jnp_notaken",
+      "handler": "jnp",
+      "instruction_bytes": [
+        123,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_PF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1328,18 +1514,14 @@
       "name": "smoke_jns_jns",
       "handler": "jns",
       "instruction_bytes": [
-        54,
         121,
-        209
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
-        "flags": {}
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1349,20 +1531,57 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_jnz_jnz",
+      "name": "smoke_jns_jns_notaken",
+      "handler": "jns",
+      "instruction_bytes": [
+        121,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 1
+        }
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnz_jne",
       "handler": "jnz",
       "instruction_bytes": [
         117,
-        63
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_ZF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jnz_jne_notaken",
+      "handler": "jnz",
+      "instruction_bytes": [
+        117,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_ZF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1376,16 +1595,33 @@
       "handler": "jo",
       "instruction_bytes": [
         112,
-        243
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_OF": 1
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jo_jo_notaken",
+      "handler": "jo",
+      "instruction_bytes": [
+        112,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_OF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1399,16 +1635,33 @@
       "handler": "jp",
       "instruction_bytes": [
         122,
-        57
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_PF": 1
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jp_jp_notaken",
+      "handler": "jp",
+      "instruction_bytes": [
+        122,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_PF": 0
+        }
       },
       "expected": {
         "registers": {},
@@ -1422,16 +1675,13 @@
       "handler": "js",
       "instruction_bytes": [
         120,
-        136
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
-        "flags": {}
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1441,20 +1691,57 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_jz_jz",
+      "name": "smoke_js_js_notaken",
+      "handler": "js",
+      "instruction_bytes": [
+        120,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_SF": 0
+        }
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jz_je",
       "handler": "jz",
       "instruction_bytes": [
         116,
-        21
+        16
       ],
       "initial": {
-        "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
-        },
+        "registers": {},
+        "flags": {
+          "FLAG_ZF": 1
+        }
+      },
+      "expected": {
+        "registers": {},
         "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_jz_je_notaken",
+      "handler": "jz",
+      "instruction_bytes": [
+        116,
+        16
+      ],
+      "initial": {
+        "registers": {},
+        "flags": {
+          "FLAG_ZF": 0
+        }
       },
       "expected": {
         "registers": {},
