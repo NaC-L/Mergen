@@ -1,6 +1,6 @@
 {
   "schema": "mergen-oracle-v1",
-  "generated_at_utc": "2026-03-04T07:36:55.885872+00:00",
+  "generated_at_utc": "2026-03-04T08:06:16.790700+00:00",
   "source_seed_schema": "mergen-oracle-seed-v1",
   "providers": [
     "unicorn"
@@ -954,13 +954,13 @@
     {
       "name": "smoke_call_call",
       "handler": "call",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
         232,
-        238,
-        10,
-        110,
-        73
+        16,
+        0,
+        0,
+        0
       ],
       "initial": {
         "registers": {
@@ -972,12 +972,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fe98"
+        },
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'call' requires special test setup"
+      "oracle_observations": {}
     },
     {
       "name": "smoke_cbw_cbw",
@@ -1141,7 +1141,7 @@
     {
       "name": "smoke_cli_cli",
       "handler": "cli",
-      "oracle_mode": "unicorn",
+      "oracle_mode": "computed",
       "instruction_bytes": [
         250
       ],
@@ -1156,14 +1156,11 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
-      },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {}
+        "flags": {
+          "FLAG_IF": 0
         }
-      }
+      },
+      "oracle_observations": {}
     },
     {
       "name": "smoke_cmc_cmc",
@@ -1988,13 +1985,10 @@
     {
       "name": "smoke_jmp_jmp",
       "handler": "jmp",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
-        233,
-        93,
-        27,
-        108,
-        210
+        235,
+        16
       ],
       "initial": {
         "registers": {
@@ -2009,9 +2003,7 @@
         "registers": {},
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'jmp' requires special test setup"
+      "oracle_observations": {}
     },
     {
       "name": "smoke_jnb_jae",
@@ -2592,26 +2584,23 @@
     {
       "name": "smoke_leave_leave",
       "handler": "leave",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
         201
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RBP": "0x200000"
         },
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x200008"
+        },
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'leave' requires special test setup"
+      "oracle_observations": {}
     },
     {
       "name": "smoke_lzcnt_lzcnt",
@@ -2697,7 +2686,7 @@
     {
       "name": "smoke_movs_x_movsq",
       "handler": "movs_x",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
         72,
         165
@@ -2705,20 +2694,20 @@
       "initial": {
         "registers": {
           "RSI": "0x2000",
-          "RDI": "0x3000",
-          "RAX": "0x1122334455667788"
+          "RDI": "0x3000"
         },
         "flags": {
-          "FLAG_DF": "0x0"
+          "FLAG_DF": 0
         }
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSI": "0x2008",
+          "RDI": "0x3008"
+        },
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'movs_x' requires special test setup"
+      "oracle_observations": {}
     },
     {
       "name": "smoke_mul_mul",
@@ -3017,9 +3006,9 @@
     {
       "name": "smoke_pop_pop",
       "handler": "pop",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
-        89
+        88
       ],
       "initial": {
         "registers": {
@@ -3031,12 +3020,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fea8"
+        },
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'pop' requires special test setup"
+      "oracle_observations": {}
     },
     {
       "name": "smoke_popcnt_popcnt",
@@ -3087,12 +3076,10 @@
       }
     },
     {
-      "name": "smoke_popfq_popf",
+      "name": "smoke_popfq_popfq",
       "handler": "popfq",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
-        46,
-        102,
         157
       ],
       "initial": {
@@ -3105,23 +3092,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fea8"
+        },
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'popfq' requires special test setup"
+      "oracle_observations": {}
     },
     {
       "name": "smoke_push_push",
       "handler": "push",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
-        104,
-        246,
-        167,
-        230,
-        158
+        80
       ],
       "initial": {
         "registers": {
@@ -3133,19 +3116,18 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fe98"
+        },
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'push' requires special test setup"
+      "oracle_observations": {}
     },
     {
-      "name": "smoke_pushfq_pushf",
+      "name": "smoke_pushfq_pushfq",
       "handler": "pushfq",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
-        102,
         156
       ],
       "initial": {
@@ -3158,12 +3140,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fe98"
+        },
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'pushfq' requires special test setup"
+      "oracle_observations": {}
     },
     {
       "name": "smoke_rcl_rcl",
@@ -3287,10 +3269,7 @@
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RSP": "0x14FF00"
         },
         "flags": {}
       },
@@ -4249,28 +4228,27 @@
     {
       "name": "smoke_stosx_stosq",
       "handler": "stosx",
-      "oracle_mode": "none",
+      "oracle_mode": "computed",
       "instruction_bytes": [
-        46,
-        78,
+        72,
         171
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RDI": "0x3000",
+          "RAX": "0x1122334455667788"
+        },
+        "flags": {
+          "FLAG_DF": 0
+        }
+      },
+      "expected": {
+        "registers": {
+          "RDI": "0x3008"
         },
         "flags": {}
       },
-      "expected": {
-        "registers": {},
-        "flags": {}
-      },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "handler 'stosx' requires special test setup"
+      "oracle_observations": {}
     },
     {
       "name": "smoke_test_test",

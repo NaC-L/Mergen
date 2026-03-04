@@ -133,10 +133,69 @@ MANUAL_HANDLER_CASES = {
             "registers": {
                 "RSI": "0x2000",
                 "RDI": "0x3000",
-                "RAX": "0x1122334455667788"
             },
-            "flags": {"FLAG_DF": "0x0"},
+            "flags": {"FLAG_DF": 0},
         },
+    },
+    # ---- Stack ops ----
+    "push": {
+        "mnemonic": "push",
+        "instruction_bytes": [0x50],  # push rax
+    },
+    "pop": {
+        "mnemonic": "pop",
+        "instruction_bytes": [0x58],  # pop rax
+    },
+    "pushfq": {
+        "mnemonic": "pushfq",
+        "instruction_bytes": [0x9C],
+    },
+    "popfq": {
+        "mnemonic": "popfq",
+        "instruction_bytes": [0x9D],
+    },
+    "leave": {
+        "mnemonic": "leave",
+        "instruction_bytes": [0xC9],
+        "initial": {
+            "registers": {"RBP": "0x200000"},
+            "flags": {},
+        },
+    },
+    # ---- Control flow ----
+    "call": {
+        "mnemonic": "call",
+        "instruction_bytes": [0xE8, 0x10, 0x00, 0x00, 0x00],  # call +0x10
+    },
+    "ret": {
+        "mnemonic": "ret",
+        "instruction_bytes": [0xC3],
+        # RSP must NOT equal STACKP_VALUE (0x14FEA0) to avoid real-return path
+        "initial": {
+            "registers": {"RSP": "0x14FF00"},
+            "flags": {},
+        },
+    },
+    "jmp": {
+        "mnemonic": "jmp",
+        "instruction_bytes": [0xEB, 0x10],  # jmp +0x10 (short)
+    },
+    # ---- String ops ----
+    "stosx": {
+        "mnemonic": "stosq",
+        "instruction_bytes": [0x48, 0xAB],
+        "initial": {
+            "registers": {
+                "RDI": "0x3000",
+                "RAX": "0x1122334455667788",
+            },
+            "flags": {"FLAG_DF": 0},
+        },
+    },
+    # ---- System flag ops ----
+    "cli": {
+        "mnemonic": "cli",
+        "instruction_bytes": [0xFA],
     },
 }
 

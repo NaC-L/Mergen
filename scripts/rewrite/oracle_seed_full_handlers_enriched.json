@@ -668,10 +668,10 @@
       "handler": "call",
       "instruction_bytes": [
         232,
-        238,
-        10,
-        110,
-        73
+        16,
+        0,
+        0,
+        0
       ],
       "initial": {
         "registers": {
@@ -683,13 +683,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fe98"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'call' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cbw_cbw",
@@ -831,9 +831,11 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_IF": 0
+        }
       },
-      "oracle": "unicorn",
+      "oracle": "computed",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1487,11 +1489,8 @@
       "name": "smoke_jmp_jmp",
       "handler": "jmp",
       "instruction_bytes": [
-        233,
-        93,
-        27,
-        108,
-        210
+        235,
+        16
       ],
       "initial": {
         "registers": {
@@ -1506,10 +1505,8 @@
         "registers": {},
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'jmp' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnb_jae",
@@ -2081,21 +2078,18 @@
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RBP": "0x200000"
         },
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x200008"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'leave' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_lzcnt_lzcnt",
@@ -2167,21 +2161,21 @@
       "initial": {
         "registers": {
           "RSI": "0x2000",
-          "RDI": "0x3000",
-          "RAX": "0x1122334455667788"
+          "RDI": "0x3000"
         },
         "flags": {
-          "FLAG_DF": "0x0"
+          "FLAG_DF": 0
         }
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSI": "0x2008",
+          "RDI": "0x3008"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'movs_x' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_mul_mul",
@@ -2402,7 +2396,7 @@
       "name": "smoke_pop_pop",
       "handler": "pop",
       "instruction_bytes": [
-        89
+        88
       ],
       "initial": {
         "registers": {
@@ -2414,13 +2408,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fea8"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'pop' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_popcnt_popcnt",
@@ -2457,11 +2451,9 @@
       "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_popfq_popf",
+      "name": "smoke_popfq_popfq",
       "handler": "popfq",
       "instruction_bytes": [
-        46,
-        102,
         157
       ],
       "initial": {
@@ -2474,23 +2466,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fea8"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'popfq' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_push_push",
       "handler": "push",
       "instruction_bytes": [
-        104,
-        246,
-        167,
-        230,
-        158
+        80
       ],
       "initial": {
         "registers": {
@@ -2502,19 +2490,18 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fe98"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'push' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
-      "name": "smoke_pushfq_pushf",
+      "name": "smoke_pushfq_pushfq",
       "handler": "pushfq",
       "instruction_bytes": [
-        102,
         156
       ],
       "initial": {
@@ -2527,13 +2514,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RSP": "0x14fe98"
+        },
         "flags": {}
       },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'pushfq' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_rcl_rcl",
@@ -2630,10 +2617,7 @@
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RSP": "0x14FF00"
         },
         "flags": {}
       },
@@ -3366,27 +3350,26 @@
       "name": "smoke_stosx_stosq",
       "handler": "stosx",
       "instruction_bytes": [
-        46,
-        78,
+        72,
         171
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RDI": "0x3000",
+          "RAX": "0x1122334455667788"
+        },
+        "flags": {
+          "FLAG_DF": 0
+        }
+      },
+      "expected": {
+        "registers": {
+          "RDI": "0x3008"
         },
         "flags": {}
       },
-      "expected": {
-        "registers": {},
-        "flags": {}
-      },
-      "oracle": "none",
-      "source": "capstone-auto-discovery",
-      "skip": true,
-      "skip_reason": "handler 'stosx' requires special test setup"
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_test_test",
