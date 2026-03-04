@@ -361,6 +361,9 @@ public:
   void liftAddress(uint64_t addr, size_t size = 15) {
 
     file.filebase_exists();
+    this->hadConditionalBranch = false;
+    this->lastConditionalBranchResolved = false;
+    this->lastBranchTaken = false;
 
     this->current_address = addr;
     auto offset = file.address_to_mapped_address(addr);

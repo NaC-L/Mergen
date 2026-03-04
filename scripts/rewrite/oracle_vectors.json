@@ -1,6 +1,6 @@
 {
   "schema": "mergen-oracle-v1",
-  "generated_at_utc": "2026-03-04T09:50:13.857063+00:00",
+  "generated_at_utc": "2026-03-04T10:12:02.045616+00:00",
   "source_seed_schema": "mergen-oracle-seed-v1",
   "providers": [
     "unicorn"
@@ -1781,14 +1781,7 @@
           "RAX": "0x6",
           "RDX": "0x54ffaa58"
         },
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 0,
-          "FLAG_SF": 0,
-          "FLAG_PF": 0,
-          "FLAG_AF": 0
-        }
+        "flags": {}
       },
       "oracle_observations": {
         "unicorn": {
@@ -1796,14 +1789,7 @@
             "RAX": "0x6",
             "RDX": "0x54ffaa58"
           },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
+          "flags": {}
         }
       }
     },
@@ -1839,14 +1825,7 @@
           "RAX": "0x8",
           "RDX": "0x0"
         },
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 0,
-          "FLAG_SF": 0,
-          "FLAG_PF": 0,
-          "FLAG_AF": 0
-        }
+        "flags": {}
       },
       "oracle_observations": {
         "unicorn": {
@@ -1854,14 +1833,7 @@
             "RAX": "0x8",
             "RDX": "0x0"
           },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
+          "flags": {}
         }
       }
     },
@@ -1896,14 +1868,7 @@
           "RAX": "0x5",
           "RDX": "0x1"
         },
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 0,
-          "FLAG_SF": 0,
-          "FLAG_PF": 0,
-          "FLAG_AF": 0
-        }
+        "flags": {}
       },
       "oracle_observations": {
         "unicorn": {
@@ -1911,14 +1876,7 @@
             "RAX": "0x5",
             "RDX": "0x1"
           },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
+          "flags": {}
         }
       }
     },
@@ -1954,14 +1912,7 @@
           "RAX": "0x8",
           "RDX": "0x0"
         },
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 0,
-          "FLAG_SF": 0,
-          "FLAG_PF": 0,
-          "FLAG_AF": 0
-        }
+        "flags": {}
       },
       "oracle_observations": {
         "unicorn": {
@@ -1969,14 +1920,7 @@
             "RAX": "0x8",
             "RDX": "0x0"
           },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
+          "flags": {}
         }
       }
     },
