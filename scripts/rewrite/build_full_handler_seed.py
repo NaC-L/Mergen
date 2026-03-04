@@ -122,6 +122,22 @@ MANUAL_HANDLER_CASES = {
     },
 }
 
+# Instruction byte overrides for handlers whose auto-discovered encodings
+# use registers outside the default initial set (RAX, RBX, RCX, RDX).
+# Each maps handler_name -> [byte, ...].  The default initial state is used.
+INSTRUCTION_OVERRIDES: Dict[str, list] = {
+    "dec":   [0xFF, 0xC9],          # dec ecx
+    "bsr":   [0x0F, 0xBD, 0xC3],    # bsr eax, ebx
+    "btc":   [0x0F, 0xBB, 0xC8],    # btc eax, ecx
+    "btr":   [0x0F, 0xB3, 0xC8],    # btr eax, ecx
+    "bts":   [0x0F, 0xAB, 0xC8],    # bts eax, ecx
+    "sar":   [0xD2, 0xF8],          # sar al, cl
+    "andn":  [0xC4, 0xE2, 0x70, 0xF2, 0xC2],  # andn eax, ecx, edx
+    "bextr": [0xC4, 0xE2, 0x70, 0xF7, 0xC2],  # bextr eax, edx, ecx
+    "bzhi":  [0xC4, 0xE2, 0x70, 0xF5, 0xC2],  # bzhi eax, edx, ecx
+    "pext":  [0xC4, 0xE2, 0x72, 0xF5, 0xC2],  # pext eax, ecx, edx
+}
+
 SKIP_RUN_HANDLERS = set()
 
 DEFAULT_INITIAL = {
@@ -368,11 +384,16 @@ def main() -> None:
             unresolved_handlers.append(handler)
             continue
 
+        # Apply instruction byte override if available
+        insn_bytes = list(selected["instruction_bytes"])
+        if handler in INSTRUCTION_OVERRIDES:
+            insn_bytes = list(INSTRUCTION_OVERRIDES[handler])
+
         auto_cases.append(
             build_smoke_case(
                 handler=handler,
                 mnemonic=selected_mnemonic,
-                instruction_bytes=list(selected["instruction_bytes"]),
+                instruction_bytes=insn_bytes,
                 run_enabled=handler not in SKIP_RUN_HANDLERS,
         )
         )

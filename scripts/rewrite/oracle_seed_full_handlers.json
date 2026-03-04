@@ -219,10 +219,10 @@
       "handler": "andn",
       "instruction_bytes": [
         196,
-        162,
-        136,
+        226,
+        112,
         242,
-        199
+        194
       ],
       "initial": {
         "registers": {
@@ -245,10 +245,10 @@
       "handler": "bextr",
       "instruction_bytes": [
         196,
-        130,
-        64,
+        226,
+        112,
         247,
-        220
+        194
       ],
       "initial": {
         "registers": {
@@ -371,10 +371,9 @@
       "name": "smoke_bsr_bsr",
       "handler": "bsr",
       "instruction_bytes": [
-        69,
         15,
         189,
-        226
+        195
       ],
       "initial": {
         "registers": {
@@ -445,7 +444,7 @@
       "instruction_bytes": [
         15,
         187,
-        236
+        200
       ],
       "initial": {
         "registers": {
@@ -469,7 +468,7 @@
       "instruction_bytes": [
         15,
         179,
-        229
+        200
       ],
       "initial": {
         "registers": {
@@ -493,7 +492,7 @@
       "instruction_bytes": [
         15,
         171,
-        235
+        200
       ],
       "initial": {
         "registers": {
@@ -516,10 +515,10 @@
       "handler": "bzhi",
       "instruction_bytes": [
         196,
-        34,
-        128,
+        226,
+        112,
         245,
-        216
+        194
       ],
       "initial": {
         "registers": {
@@ -886,7 +885,7 @@
       "handler": "dec",
       "instruction_bytes": [
         255,
-        204
+        201
       ],
       "initial": {
         "registers": {
@@ -1754,10 +1753,10 @@
       "handler": "pext",
       "instruction_bytes": [
         196,
-        98,
-        10,
+        226,
+        114,
         245,
-        225
+        194
       ],
       "initial": {
         "registers": {
@@ -2036,8 +2035,8 @@
       "name": "smoke_sar_sar",
       "handler": "sar",
       "instruction_bytes": [
-        211,
-        254
+        210,
+        248
       ],
       "initial": {
         "registers": {
