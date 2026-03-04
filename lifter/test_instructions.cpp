@@ -540,6 +540,22 @@ bool loadOracleCases(const std::string& oraclePath,
       return false;
     }
 
+    // Parse optional expected.branch_taken for branch assertion tests
+    if (auto* bt = expectedObject->get("branch_taken")) {
+      if (auto boolVal = bt->getAsBoolean()) {
+        testCase.expectedBranchTaken = *boolVal;
+      } else if (auto intVal = bt->getAsInteger()) {
+        if (*intVal != 0 && *intVal != 1) {
+          outError = "case '" + testCase.name + "': expected.branch_taken integer must be 0 or 1";
+          return false;
+        }
+        testCase.expectedBranchTaken = (*intVal == 1);
+      } else {
+        outError = "case '" + testCase.name + "': expected.branch_taken must be bool or integer";
+        return false;
+      }
+    }
+
     outCases.push_back(std::move(testCase));
   }
 

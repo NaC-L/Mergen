@@ -72,42 +72,60 @@ MANUAL_HANDLER_CASES = {
             "flags": {},
         },
     },
-    "blsi": {
-        "mnemonic": "blsi",
-        "instruction_bytes": [0xC4, 0xE2, 0x40, 0xF3, 0x58, 0x80],
+    "idiv": {
+        "mnemonic": "idiv",
+        "instruction_bytes": [0xF7, 0xF9],  # idiv ecx (32-bit)
         "initial": {
-            "registers": {
-                "RAX": "0x1000",
-                "RCX": "0x2000",
-                "R14": "0x3000"
-            },
+            "registers": {"RAX": "0x10", "RDX": "0x0", "RCX": "0x3"},
             "flags": {},
         },
     },
-    "blsr": {
-        "mnemonic": "blsr",
-        "instruction_bytes": [0xC4, 0xE2, 0x20, 0xF3, 0x09],
-        "initial": {
-            "registers": {
-                "RAX": "0x1000",
-                "RCX": "0x2000",
-                "R14": "0x3000"
-            },
-            "flags": {},
-        },
+    "blsi": {
+        "mnemonic": "blsi",
+        "instruction_bytes": [0xC4, 0xE2, 0x78, 0xF3, 0xD9],  # blsi eax, ecx
     },
     "blsmsk": {
         "mnemonic": "blsmsk",
-        "instruction_bytes": [0xC4, 0x02, 0x20, 0xF3, 0x56, 0xE4],
-        "initial": {
-            "registers": {
-                "RAX": "0x1000",
-                "RCX": "0x2000",
-                "R14": "0x3000"
-            },
-            "flags": {},
-        },
+        "instruction_bytes": [0xC4, 0xE2, 0x78, 0xF3, 0xD1],  # blsmsk eax, ecx
     },
+    "blsr": {
+        "mnemonic": "blsr",
+        "instruction_bytes": [0xC4, 0xE2, 0x78, 0xF3, 0xC9],  # blsr eax, ecx
+    },
+    # ---- Conditional jumps (short-form jcc rel8, offset=+0x10) ----
+    # Each uses initial flags designed to make the branch TAKEN.
+    "jz":   {"mnemonic": "je",   "instruction_bytes": [0x74, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_ZF": 1}}},
+    "jnz":  {"mnemonic": "jne",  "instruction_bytes": [0x75, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_ZF": 0}}},
+    "jb":   {"mnemonic": "jb",   "instruction_bytes": [0x72, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_CF": 1}}},
+    "jnb":  {"mnemonic": "jae",  "instruction_bytes": [0x73, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_CF": 0}}},
+    "jbe":  {"mnemonic": "jbe",  "instruction_bytes": [0x76, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_CF": 1, "FLAG_ZF": 0}}},
+    "jnbe": {"mnemonic": "ja",   "instruction_bytes": [0x77, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_CF": 0, "FLAG_ZF": 0}}},
+    "jl":   {"mnemonic": "jl",   "instruction_bytes": [0x7C, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 1, "FLAG_OF": 0}}},
+    "jnl":  {"mnemonic": "jge",  "instruction_bytes": [0x7D, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 0, "FLAG_OF": 0}}},
+    "jle":  {"mnemonic": "jle",  "instruction_bytes": [0x7E, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 1, "FLAG_OF": 0, "FLAG_ZF": 0}}},
+    "jnle": {"mnemonic": "jg",   "instruction_bytes": [0x7F, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 0, "FLAG_OF": 0, "FLAG_ZF": 0}}},
+    "js":   {"mnemonic": "js",   "instruction_bytes": [0x78, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 1}}},
+    "jns":  {"mnemonic": "jns",  "instruction_bytes": [0x79, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_SF": 0}}},
+    "jo":   {"mnemonic": "jo",   "instruction_bytes": [0x70, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_OF": 1}}},
+    "jno":  {"mnemonic": "jno",  "instruction_bytes": [0x71, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_OF": 0}}},
+    "jp":   {"mnemonic": "jp",   "instruction_bytes": [0x7A, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_PF": 1}}},
+    "jnp":  {"mnemonic": "jnp",  "instruction_bytes": [0x7B, 0x10],
+             "initial": {"registers": {}, "flags": {"FLAG_PF": 0}}},
     "movs_x": {
         "mnemonic": "movsq",
         "instruction_bytes": [0x48, 0xA5],
@@ -115,11 +133,128 @@ MANUAL_HANDLER_CASES = {
             "registers": {
                 "RSI": "0x2000",
                 "RDI": "0x3000",
-                "RAX": "0x1122334455667788"
             },
-            "flags": {"FLAG_DF": "0x0"},
+            "flags": {"FLAG_DF": 0},
         },
     },
+    # ---- Stack ops ----
+    "push": {
+        "mnemonic": "push",
+        "instruction_bytes": [0x50],  # push rax
+    },
+    "pop": {
+        "mnemonic": "pop",
+        "instruction_bytes": [0x58],  # pop rax
+    },
+    "pushfq": {
+        "mnemonic": "pushfq",
+        "instruction_bytes": [0x9C],
+    },
+    "popfq": {
+        "mnemonic": "popfq",
+        "instruction_bytes": [0x9D],
+    },
+    "leave": {
+        "mnemonic": "leave",
+        "instruction_bytes": [0xC9],
+        "initial": {
+            "registers": {"RBP": "0x200000"},
+            "flags": {},
+        },
+    },
+    # ---- Control flow ----
+    "call": {
+        "mnemonic": "call",
+        "instruction_bytes": [0xE8, 0x10, 0x00, 0x00, 0x00],  # call +0x10
+    },
+    "ret": {
+        "mnemonic": "ret",
+        "instruction_bytes": [0xC3],
+        # RSP must NOT equal STACKP_VALUE (0x14FEA0) to avoid real-return path
+        "initial": {
+            "registers": {"RSP": "0x14FF00"},
+            "flags": {},
+        },
+    },
+    "jmp": {
+        "mnemonic": "jmp",
+        "instruction_bytes": [0xEB, 0x10],  # jmp +0x10 (short)
+    },
+    # ---- String ops ----
+    "stosx": {
+        "mnemonic": "stosq",
+        "instruction_bytes": [0x48, 0xAB],
+        "initial": {
+            "registers": {
+                "RDI": "0x3000",
+                "RAX": "0x1122334455667788",
+            },
+            "flags": {"FLAG_DF": 0},
+        },
+    },
+    # ---- System flag ops ----
+    "cli": {
+        "mnemonic": "cli",
+        "instruction_bytes": [0xFA],
+    },
+}
+
+# Additional test-case variants for handlers that need both-direction testing.
+# Each maps handler_name -> list of {suffix, mnemonic, instruction_bytes, initial}.
+# The suffix is appended to the case name, e.g. smoke_jz_je_notaken.
+VARIANT_HANDLER_CASES: Dict[str, list] = {
+    # ---- jcc "not-taken" variants: flags designed so branch is NOT taken ----
+    "jz":   [{"suffix": "notaken", "mnemonic": "je",   "instruction_bytes": [0x74, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_ZF": 0}}}],
+    "jnz":  [{"suffix": "notaken", "mnemonic": "jne",  "instruction_bytes": [0x75, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_ZF": 1}}}],
+    "jb":   [{"suffix": "notaken", "mnemonic": "jb",   "instruction_bytes": [0x72, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_CF": 0}}}],
+    "jnb":  [{"suffix": "notaken", "mnemonic": "jae",  "instruction_bytes": [0x73, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_CF": 1}}}],
+    "jbe":  [{"suffix": "notaken", "mnemonic": "jbe",  "instruction_bytes": [0x76, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_CF": 0, "FLAG_ZF": 0}}}],
+    "jnbe": [{"suffix": "notaken", "mnemonic": "ja",   "instruction_bytes": [0x77, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_CF": 1, "FLAG_ZF": 0}}}],
+    "jl":   [{"suffix": "notaken", "mnemonic": "jl",   "instruction_bytes": [0x7C, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 0, "FLAG_OF": 0}}}],
+    "jnl":  [{"suffix": "notaken", "mnemonic": "jge",  "instruction_bytes": [0x7D, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 1, "FLAG_OF": 0}}}],
+    "jle":  [{"suffix": "notaken", "mnemonic": "jle",  "instruction_bytes": [0x7E, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 0, "FLAG_OF": 0, "FLAG_ZF": 0}}}],
+    "jnle": [{"suffix": "notaken", "mnemonic": "jg",   "instruction_bytes": [0x7F, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 1, "FLAG_OF": 0, "FLAG_ZF": 0}}}],
+    "js":   [{"suffix": "notaken", "mnemonic": "js",   "instruction_bytes": [0x78, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 0}}}],
+    "jns":  [{"suffix": "notaken", "mnemonic": "jns",  "instruction_bytes": [0x79, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_SF": 1}}}],
+    "jo":   [{"suffix": "notaken", "mnemonic": "jo",   "instruction_bytes": [0x70, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_OF": 0}}}],
+    "jno":  [{"suffix": "notaken", "mnemonic": "jno",  "instruction_bytes": [0x71, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_OF": 1}}}],
+    "jp":   [{"suffix": "notaken", "mnemonic": "jp",   "instruction_bytes": [0x7A, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_PF": 0}}}],
+    "jnp":  [{"suffix": "notaken", "mnemonic": "jnp",  "instruction_bytes": [0x7B, 0x10],
+              "initial": {"registers": {}, "flags": {"FLAG_PF": 1}}}],
+}
+
+# Instruction byte overrides for handlers whose auto-discovered encodings
+# use registers outside the default initial set (RAX, RBX, RCX, RDX).
+# Each maps handler_name -> [byte, ...].  The default initial state is used.
+INSTRUCTION_OVERRIDES: Dict[str, list] = {
+    "dec":    [0xFF, 0xC9],          # dec ecx
+    "bsr":    [0x0F, 0xBD, 0xC3],    # bsr eax, ebx
+    "btc":    [0x0F, 0xBB, 0xC8],    # btc eax, ecx
+    "btr":    [0x0F, 0xB3, 0xC8],    # btr eax, ecx
+    "bts":    [0x0F, 0xAB, 0xC8],    # bts eax, ecx
+    "sar":    [0xC0, 0xF8, 0x01],    # sar al, 1 (stable OF semantics)
+    "shl":    [0xC0, 0xE0, 0x01],    # shl al, 1 (stable OF semantics)
+    "shr":    [0xC0, 0xE8, 0x01],    # shr al, 1 (stable OF semantics)
+    "andn":   [0xC4, 0xE2, 0x70, 0xF2, 0xC2],  # andn eax, ecx, edx
+    "bextr":  [0xC4, 0xE2, 0x70, 0xF7, 0xC2],  # bextr eax, edx, ecx
+    "bzhi":   [0xC4, 0xE2, 0x70, 0xF5, 0xC2],  # bzhi eax, edx, ecx
+    "pext":   [0xC4, 0xE2, 0x72, 0xF5, 0xC2],  # pext eax, ecx, edx
+    "lea":    [0x8D, 0x04, 0x11],    # lea eax, [rcx+rdx]
 }
 
 SKIP_RUN_HANDLERS = set()
@@ -131,9 +266,19 @@ DEFAULT_INITIAL = {
         "RCX": "0x10",
         "RDX": "0x2",
     },
-    "flags": {},
-}
+    "flags": {
+        "FLAG_CF": 0,
+        "FLAG_PF": 0,
+        "FLAG_AF": 0,
+        "FLAG_ZF": 0,
+        "FLAG_SF": 0,
+        "FLAG_OF": 0,
+        "FLAG_DF": 0,
+        "FLAG_IF": 1,
+    },
 
+
+}
 
 def strip_comments(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
@@ -271,6 +416,22 @@ def targeted_prefix_discovery(
                 return
 
 
+def _merge_initial(initial: Optional[dict]) -> dict:
+    merged = {
+        "registers": dict(DEFAULT_INITIAL["registers"]),
+        "flags": dict(DEFAULT_INITIAL["flags"]),
+    }
+    if initial is None:
+        return merged
+    reg_overrides = initial.get("registers", {})
+    flag_overrides = initial.get("flags", {})
+    if reg_overrides:
+        merged["registers"].update(reg_overrides)
+    if flag_overrides:
+        merged["flags"].update(flag_overrides)
+    return merged
+
+
 def build_smoke_case(
     handler: str,
     mnemonic: str,
@@ -282,7 +443,7 @@ def build_smoke_case(
         "name": f"smoke_{handler}_{mnemonic}",
         "handler": handler,
         "instruction_bytes": instruction_bytes,
-        "initial": initial if initial is not None else DEFAULT_INITIAL,
+        "initial": _merge_initial(initial),
         "expected": {"registers": {}, "flags": {}},
         "oracle": "none",
         "source": "capstone-auto-discovery",
@@ -346,10 +507,22 @@ def main() -> None:
                     handler=handler,
                     mnemonic=manual["mnemonic"],
                     instruction_bytes=manual["instruction_bytes"],
-                    initial=manual["initial"],
+                    initial=manual.get("initial"),
                     run_enabled=handler not in SKIP_RUN_HANDLERS,
                 )
             )
+            # Emit variant cases (e.g. not-taken jcc)
+            if handler in VARIANT_HANDLER_CASES:
+                for variant in VARIANT_HANDLER_CASES[handler]:
+                    vcase = build_smoke_case(
+                        handler=handler,
+                        mnemonic=variant["mnemonic"],
+                        instruction_bytes=variant["instruction_bytes"],
+                        initial=variant.get("initial"),
+                        run_enabled=handler not in SKIP_RUN_HANDLERS,
+                    )
+                    vcase["name"] += f"_{variant['suffix']}"
+                    auto_cases.append(vcase)
             continue
 
         selected = None
@@ -368,11 +541,16 @@ def main() -> None:
             unresolved_handlers.append(handler)
             continue
 
+        # Apply instruction byte override if available
+        insn_bytes = list(selected["instruction_bytes"])
+        if handler in INSTRUCTION_OVERRIDES:
+            insn_bytes = list(INSTRUCTION_OVERRIDES[handler])
+
         auto_cases.append(
             build_smoke_case(
                 handler=handler,
                 mnemonic=selected_mnemonic,
-                instruction_bytes=list(selected["instruction_bytes"]),
+                instruction_bytes=insn_bytes,
                 run_enabled=handler not in SKIP_RUN_HANDLERS,
         )
         )

@@ -39,33 +39,46 @@ def parse_vector_signals(path: Path) -> dict:
     if not path.exists():
         return {
             "handlers": [],
-            "test_names": [],
-            "name_prefixes": [],
+            "skipped_handlers": [],
+            "active_test_names": [],
+            "active_name_prefixes": [],
         }
 
     payload = json.loads(path.read_text(encoding="utf-8"))
     cases = payload.get("cases", [])
+    if not isinstance(cases, list):
+        cases = []
 
-    handlers = set()
-    names = []
-    prefixes = set()
+    active_handlers = set()
+    skipped_handlers = set()
+    active_names = []
+    active_prefixes = set()
 
     for case in cases:
         if not isinstance(case, dict):
             continue
-        name = str(case.get("name", "")).strip()
-        if name:
-            names.append(name)
-            prefixes.add(name.split("_", 1)[0].lower())
 
         handler = str(case.get("handler", "")).strip().lower()
+        is_skipped = bool(case.get("skip"))
         if handler:
-            handlers.add(handler)
+            if is_skipped:
+                skipped_handlers.add(handler)
+            else:
+                active_handlers.add(handler)
+
+        if is_skipped:
+            continue
+
+        name = str(case.get("name", "")).strip()
+        if name:
+            active_names.append(name)
+            active_prefixes.add(name.split("_", 1)[0].lower())
 
     return {
-        "handlers": sorted(handlers),
-        "test_names": names,
-        "name_prefixes": sorted(prefixes),
+        "handlers": sorted(active_handlers),
+        "skipped_handlers": sorted(skipped_handlers),
+        "active_test_names": active_names,
+        "active_name_prefixes": sorted(active_prefixes),
     }
 
 
@@ -103,9 +116,11 @@ def compute_coverage(
     vector_signals: dict,
     legacy_signals: dict,
 ) -> dict:
-    covered_handlers = set(vector_signals["handlers"])
+    opcode_handlers = set(handlers.keys())
+    covered_handlers = set(vector_signals["handlers"]) & opcode_handlers
+    skipped_handlers = set(vector_signals.get("skipped_handlers", [])) & opcode_handlers
 
-    for prefix in vector_signals["name_prefixes"]:
+    for prefix in vector_signals.get("active_name_prefixes", []):
         if prefix in handlers:
             covered_handlers.add(prefix)
 
@@ -115,17 +130,20 @@ def compute_coverage(
 
     for mnemonic in legacy_signals["byte_comment_mnemonics"]:
         for handler in mnemonic_to_handlers.get(mnemonic, []):
-            covered_handlers.add(handler)
+            if handler in opcode_handlers:
+                covered_handlers.add(handler)
 
-    missing_handlers = sorted(set(handlers.keys()) - covered_handlers)
+    missing_handlers = sorted(opcode_handlers - covered_handlers - skipped_handlers)
 
     return {
-        "total_handlers": len(handlers),
+        "total_handlers": len(opcode_handlers),
         "covered_handlers": len(covered_handlers),
+        "skipped_handlers": len(skipped_handlers),
         "coverage_percent": round(
-            (len(covered_handlers) * 100.0 / max(1, len(handlers))), 2
+            (len(covered_handlers) * 100.0 / max(1, len(opcode_handlers))), 2
         ),
         "covered_list": sorted(covered_handlers),
+        "skipped_list": sorted(skipped_handlers),
         "missing_list": missing_handlers,
     }
 
@@ -138,6 +156,7 @@ def build_report(handlers: Dict[str, List[str]], coverage: dict) -> str:
         f"Covered {coverage['covered_handlers']} / {coverage['total_handlers']} handlers "
         f"({coverage['coverage_percent']}%)"
     )
+    lines.append(f"Skipped handlers: {coverage['skipped_handlers']}")
     lines.append("")
     lines.append("Missing handlers:")
 
