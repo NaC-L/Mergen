@@ -34,6 +34,7 @@ struct InstructionTestCase {
   std::vector<FlagStatus> initialFlags;
   std::vector<RegisterState> expectedRegisters;
   std::vector<FlagStatus> expectedFlags;
+  std::optional<bool> expectedBranchTaken;  // for jcc tests
 };
 
 class InstructionTester {
@@ -83,6 +84,8 @@ private:
     }
 
     LifterUnderTest lifter;
+    lifter.hadConditionalBranch = false;
+    lifter.lastBranchTaken = false;
 
     for (const auto& reg : testCase.initialRegisters) {
       lifter.SetRegisterValue(
@@ -128,6 +131,19 @@ private:
                  << ": expected=" << expected.value
                  << " actual=" << actual.value() << "\n";
         }
+      }
+    }
+
+    // Branch-taken check for jcc handlers
+    if (testCase.expectedBranchTaken.has_value()) {
+      if (!lifter.hadConditionalBranch) {
+        errors << "  expected a conditional branch but none was taken\n";
+      } else if (!lifter.lastConditionalBranchResolved) {
+        errors << "  expected resolved conditional branch direction but it remained symbolic\n";
+      } else if (lifter.lastBranchTaken != testCase.expectedBranchTaken.value()) {
+        errors << "  branch_taken mismatch: expected="
+               << testCase.expectedBranchTaken.value()
+               << " actual=" << lifter.lastBranchTaken << "\n";
       }
     }
 

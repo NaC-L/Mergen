@@ -1,15 +1,11 @@
 {
-  "schema": "mergen-oracle-v1",
-  "generated_at_utc": "2026-03-04T10:12:02.045616+00:00",
-  "source_seed_schema": "mergen-oracle-seed-v1",
-  "providers": [
-    "unicorn"
-  ],
+  "schema": "mergen-oracle-seed-v1",
+  "base_seed": "scripts\\rewrite\\oracle_seed_vectors.json",
+  "generator": "build_full_handler_seed.py",
   "cases": [
     {
       "name": "add_rax_rcx_basic",
       "handler": "add_sub",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         1,
@@ -24,37 +20,21 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0xc"
+          "RAX": null
         },
         "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 0,
-          "FLAG_SF": 0,
-          "FLAG_PF": 1,
-          "FLAG_AF": 0
-        }
-      },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0xc"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
+          "FLAG_CF": null,
+          "FLAG_OF": null,
+          "FLAG_ZF": null,
+          "FLAG_SF": null,
+          "FLAG_PF": null,
+          "FLAG_AF": null
         }
       }
     },
     {
       "name": "add_rax_rcx_carry_magic",
       "handler": "add_sub",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         1,
@@ -69,37 +49,21 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x0"
+          "RAX": null
         },
         "flags": {
-          "FLAG_CF": 1,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 1,
-          "FLAG_SF": 0,
-          "FLAG_PF": 1,
-          "FLAG_AF": 1
-        }
-      },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x0"
-          },
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 1,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 1
-          }
+          "FLAG_CF": null,
+          "FLAG_OF": null,
+          "FLAG_ZF": null,
+          "FLAG_SF": null,
+          "FLAG_PF": null,
+          "FLAG_AF": null
         }
       }
     },
     {
       "name": "sub_rax_rcx_borrow_magic",
       "handler": "add_sub",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         41,
@@ -114,37 +78,21 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0xffffffffffffffff"
+          "RAX": null
         },
         "flags": {
-          "FLAG_CF": 1,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 0,
-          "FLAG_SF": 1,
-          "FLAG_PF": 1,
-          "FLAG_AF": 1
-        }
-      },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0xffffffffffffffff"
-          },
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 1,
-            "FLAG_AF": 1
-          }
+          "FLAG_CF": null,
+          "FLAG_OF": null,
+          "FLAG_ZF": null,
+          "FLAG_SF": null,
+          "FLAG_PF": null,
+          "FLAG_AF": null
         }
       }
     },
     {
       "name": "xor_rax_rcx_magic",
       "handler": "xor",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         49,
@@ -159,29 +107,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x5a5a5a5a5a5a5a5a"
+          "RAX": null
         },
         "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0
-        }
-      },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x5a5a5a5a5a5a5a5a"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0
-          }
+          "FLAG_CF": null,
+          "FLAG_OF": null
         }
       }
     },
     {
       "name": "xor_rax_rax_zero",
       "handler": "xor",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         49,
@@ -195,29 +131,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x0"
+          "RAX": null
         },
         "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0
-        }
-      },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x0"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0
-          }
+          "FLAG_CF": null,
+          "FLAG_OF": null
         }
       }
     },
     {
       "name": "rol_rax_1_carry_probe",
       "handler": "rol",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         209,
@@ -233,29 +157,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x3"
+          "RAX": null
         },
         "flags": {
-          "FLAG_CF": 1,
-          "FLAG_OF": 1
-        }
-      },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x3"
-          },
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 1
-          }
+          "FLAG_CF": null,
+          "FLAG_OF": null
         }
       }
     },
     {
       "name": "smoke_adc_adc",
       "handler": "adc",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         20,
         49
@@ -280,37 +192,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x11223344556677b9"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
-          "FLAG_SF": 1,
+          "FLAG_SF": 0,
           "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x11223344556677b9"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_and_and",
       "handler": "and",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         37,
         119,
@@ -338,37 +236,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x40047200"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x40047200"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_andn_andn",
       "handler": "andn",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
@@ -396,7 +280,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x2"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -407,26 +291,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x2"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bextr_bextr",
       "handler": "bextr",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
@@ -459,32 +329,18 @@
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
-          "FLAG_ZF": 1,
+          "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x0"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 1,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_blsi_blsi",
       "handler": "blsi",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
@@ -512,7 +368,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x10"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -523,26 +379,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x10"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_blsmsk_blsmsk",
       "handler": "blsmsk",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
@@ -570,7 +412,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1f"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -581,26 +423,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1f"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_blsr_blsr",
       "handler": "blsr",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
@@ -633,32 +461,18 @@
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
-          "FLAG_ZF": 1,
+          "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x0"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 1,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bsf_bsf",
       "handler": "bsf",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         188,
@@ -684,37 +498,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bsr_bsr",
       "handler": "bsr",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         189,
@@ -740,37 +540,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1e"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1e"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bswap_bswap",
       "handler": "bswap",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         201
@@ -795,23 +581,16 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0x10000000"
+          "RCX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0x10000000"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bt_bt",
       "handler": "bt",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         163,
@@ -846,24 +625,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_btc_btc",
       "handler": "btc",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         187,
@@ -889,7 +656,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x55677788"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -900,26 +667,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x55677788"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_btr_btr",
       "handler": "btr",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         179,
@@ -945,7 +698,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x55667788"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -956,26 +709,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x55667788"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bts_bts",
       "handler": "bts",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         171,
@@ -1001,7 +740,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x55677788"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -1012,26 +751,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x55677788"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_bzhi_bzhi",
       "handler": "bzhi",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
@@ -1059,7 +784,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x2"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -1070,26 +795,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x2"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_call_call",
       "handler": "call",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         232,
         16,
@@ -1121,12 +832,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cbw_cbw",
       "handler": "cbw",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         102,
         152
@@ -1151,23 +862,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x112233445566ff88"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x112233445566ff88"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cdq_cdq",
       "handler": "cdq",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         153
       ],
@@ -1191,25 +895,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788",
+          "RAX": "0x0",
           "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788",
-            "RDX": "0x0"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cdqe_cdqe",
       "handler": "cdqe",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         76,
         152
@@ -1234,23 +930,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x55667788"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x55667788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_clc_clc",
       "handler": "clc",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         248
       ],
@@ -1278,19 +967,12 @@
           "FLAG_CF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_CF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cld_cld",
       "handler": "cld",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         252
       ],
@@ -1318,19 +1000,12 @@
           "FLAG_DF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_DF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cli_cli",
       "handler": "cli",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         250
       ],
@@ -1358,12 +1033,12 @@
           "FLAG_IF": 0
         }
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cmc_cmc",
       "handler": "cmc",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         245
       ],
@@ -1388,22 +1063,15 @@
       "expected": {
         "registers": {},
         "flags": {
-          "FLAG_CF": 1
+          "FLAG_CF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_CF": 1
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cmovcc_cmovl",
       "handler": "cmovcc",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         76,
@@ -1429,23 +1097,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cmp_cmp",
       "handler": "cmp",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         60,
         198
@@ -1471,32 +1132,20 @@
       "expected": {
         "registers": {},
         "flags": {
-          "FLAG_CF": 1,
+          "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
-          "FLAG_SF": 1,
+          "FLAG_SF": 0,
           "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cmpxchg_cmpxchg",
       "handler": "cmpxchg",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         176,
@@ -1522,23 +1171,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cpuid_cpuid",
       "handler": "cpuid",
-      "oracle_mode": "none",
       "instruction_bytes": [
         15,
         162
@@ -1565,14 +1207,14 @@
         "registers": {},
         "flags": {}
       },
-      "oracle_observations": {},
+      "oracle": "none",
+      "source": "capstone-auto-discovery",
       "skip": true,
       "skip_reason": "handler 'cpuid' requires special test setup"
     },
     {
       "name": "smoke_cqo_cqo",
       "handler": "cqo",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         79,
         153
@@ -1597,25 +1239,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788",
+          "RAX": "0x0",
           "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788",
-            "RDX": "0x0"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cwd_cwd",
       "handler": "cwd",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         102,
         153
@@ -1640,25 +1274,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788",
+          "RAX": "0x0",
           "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788",
-            "RDX": "0x0"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_cwde_cwde",
       "handler": "cwde",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         152
       ],
@@ -1682,23 +1308,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x7788"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x7788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_dec_dec",
       "handler": "dec",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         255,
         201
@@ -1723,37 +1342,23 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0xf"
+          "RCX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
-          "FLAG_AF": 1
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0xf"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 1
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_div_div",
       "handler": "div",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         247,
         240
@@ -1778,25 +1383,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x6",
-          "RDX": "0x54ffaa58"
+          "RAX": "0x0",
+          "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x6",
-            "RDX": "0x54ffaa58"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_div2_div",
       "handler": "div2",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         247,
@@ -1822,25 +1419,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x8",
+          "RAX": "0x0",
           "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x8",
-            "RDX": "0x0"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_idiv_idiv",
       "handler": "idiv",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         247,
         249
@@ -1865,25 +1454,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x5",
-          "RDX": "0x1"
+          "RAX": "0x0",
+          "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x5",
-            "RDX": "0x1"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_idiv2_idiv",
       "handler": "idiv2",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         247,
@@ -1909,25 +1490,17 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x8",
+          "RAX": "0x0",
           "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x8",
-            "RDX": "0x0"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_imul_imul",
       "handler": "imul",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         105,
         248,
@@ -1956,37 +1529,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788"
+          "RAX": "0x0"
         },
         "flags": {
-          "FLAG_CF": 1,
-          "FLAG_OF": 1,
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 1,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_imul2_imul",
       "handler": "imul2",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         247,
@@ -2012,7 +1571,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x15",
+          "RAX": "0x0",
           "RDX": "0x0"
         },
         "flags": {
@@ -2024,27 +1583,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x15",
-            "RDX": "0x0"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_inc_inc",
       "handler": "inc",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         254,
         197
@@ -2069,7 +1613,7 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0x110"
+          "RCX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -2080,26 +1624,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0x110"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jb_jb",
       "handler": "jb",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         114,
         16
@@ -2127,12 +1657,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jb_jb_notaken",
       "handler": "jb",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         114,
         16
@@ -2160,12 +1690,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jbe_jbe",
       "handler": "jbe",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         118,
         16
@@ -2193,12 +1723,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jbe_jbe_notaken",
       "handler": "jbe",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         118,
         16
@@ -2226,12 +1756,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jl_jl",
       "handler": "jl",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         124,
         16
@@ -2259,12 +1789,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jl_jl_notaken",
       "handler": "jl",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         124,
         16
@@ -2292,12 +1822,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jle_jle",
       "handler": "jle",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         126,
         16
@@ -2325,12 +1855,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jle_jle_notaken",
       "handler": "jle",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         126,
         16
@@ -2358,12 +1888,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jmp_jmp",
       "handler": "jmp",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         235,
         16
@@ -2390,12 +1920,12 @@
         "registers": {},
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnb_jae",
       "handler": "jnb",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         115,
         16
@@ -2423,12 +1953,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnb_jae_notaken",
       "handler": "jnb",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         115,
         16
@@ -2456,12 +1986,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnbe_ja",
       "handler": "jnbe",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         119,
         16
@@ -2489,12 +2019,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnbe_ja_notaken",
       "handler": "jnbe",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         119,
         16
@@ -2522,12 +2052,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnl_jge",
       "handler": "jnl",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         125,
         16
@@ -2555,12 +2085,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnl_jge_notaken",
       "handler": "jnl",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         125,
         16
@@ -2588,12 +2118,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnle_jg",
       "handler": "jnle",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         127,
         16
@@ -2621,12 +2151,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnle_jg_notaken",
       "handler": "jnle",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         127,
         16
@@ -2654,12 +2184,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jno_jno",
       "handler": "jno",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         113,
         16
@@ -2687,12 +2217,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jno_jno_notaken",
       "handler": "jno",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         113,
         16
@@ -2720,12 +2250,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnp_jnp",
       "handler": "jnp",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         123,
         16
@@ -2753,12 +2283,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnp_jnp_notaken",
       "handler": "jnp",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         123,
         16
@@ -2786,12 +2316,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jns_jns",
       "handler": "jns",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         121,
         16
@@ -2819,12 +2349,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jns_jns_notaken",
       "handler": "jns",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         121,
         16
@@ -2852,12 +2382,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnz_jne",
       "handler": "jnz",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         117,
         16
@@ -2885,12 +2415,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jnz_jne_notaken",
       "handler": "jnz",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         117,
         16
@@ -2918,12 +2448,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jo_jo",
       "handler": "jo",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         112,
         16
@@ -2951,12 +2481,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jo_jo_notaken",
       "handler": "jo",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         112,
         16
@@ -2984,12 +2514,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jp_jp",
       "handler": "jp",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         122,
         16
@@ -3017,12 +2547,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jp_jp_notaken",
       "handler": "jp",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         122,
         16
@@ -3050,12 +2580,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_js_js",
       "handler": "js",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         120,
         16
@@ -3083,12 +2613,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_js_js_notaken",
       "handler": "js",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         120,
         16
@@ -3116,12 +2646,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jz_je",
       "handler": "jz",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         116,
         16
@@ -3149,12 +2679,12 @@
         "flags": {},
         "branch_taken": true
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_jz_je_notaken",
       "handler": "jz",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         116,
         16
@@ -3182,12 +2712,12 @@
         "flags": {},
         "branch_taken": false
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_lahf_lahf",
       "handler": "lahf",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         159
       ],
@@ -3211,23 +2741,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455660288"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455660288"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_lea_lea",
       "handler": "lea",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         141,
         4,
@@ -3253,23 +2776,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x12"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x12"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_leave_leave",
       "handler": "leave",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         201
       ],
@@ -3298,12 +2814,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_lzcnt_lzcnt",
       "handler": "lzcnt",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         243,
         15,
@@ -3330,7 +2846,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -3341,26 +2857,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_mov_movzx",
       "handler": "mov",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         183,
@@ -3386,23 +2888,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_movs_x_movsq",
       "handler": "movs_x",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         72,
         165
@@ -3434,12 +2929,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_mul_mul",
       "handler": "mul",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         101,
         247,
@@ -3465,39 +2960,24 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0xc82fb840",
-          "RDX": "0x1c7d3463"
+          "RAX": "0x0",
+          "RDX": "0x0"
         },
         "flags": {
-          "FLAG_CF": 1,
-          "FLAG_OF": 1,
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
           "FLAG_ZF": 0,
-          "FLAG_SF": 1,
+          "FLAG_SF": 0,
           "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0xc82fb840",
-            "RDX": "0x1c7d3463"
-          },
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 1,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_mul2_mul",
       "handler": "mul2",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         72,
         247,
@@ -3523,7 +3003,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x15",
+          "RAX": "0x0",
           "RDX": "0x0"
         },
         "flags": {
@@ -3535,27 +3015,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x15",
-            "RDX": "0x0"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_neg_neg",
       "handler": "neg",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         246,
         217
@@ -3580,37 +3045,23 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0xf0"
+          "RCX": "0x0"
         },
         "flags": {
-          "FLAG_CF": 1,
+          "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
-          "FLAG_SF": 1,
-          "FLAG_PF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0xf0"
-          },
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_not_not",
       "handler": "not",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         247,
         209
@@ -3635,23 +3086,16 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0xffffffef"
+          "RCX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0xffffffef"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_or_or",
       "handler": "or",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         13,
         172,
@@ -3679,37 +3123,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x77e677ac"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x77e677ac"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_pdep_pdep",
       "handler": "pdep",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
@@ -3741,19 +3171,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x0"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_pext_pext",
       "handler": "pext",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
@@ -3785,19 +3208,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x0"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_pop_pop",
       "handler": "pop",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         88
       ],
@@ -3825,12 +3241,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_popcnt_popcnt",
       "handler": "popcnt",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         243,
         15,
@@ -3857,7 +3273,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x10"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -3868,26 +3284,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x10"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_popfq_popfq",
       "handler": "popfq",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         157
       ],
@@ -3915,12 +3317,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_push_push",
       "handler": "push",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         80
       ],
@@ -3948,12 +3350,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_pushfq_pushfq",
       "handler": "pushfq",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         156
       ],
@@ -3981,12 +3383,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_rcl_rcl",
       "handler": "rcl",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         208,
         215
@@ -4011,7 +3413,7 @@
       },
       "expected": {
         "registers": {
-          "RBX": "0x8877665544334411"
+          "RBX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -4021,25 +3423,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RBX": "0x8877665544334411"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_rcr_rcr",
       "handler": "rcr",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         210,
         223
@@ -4064,7 +3453,7 @@
       },
       "expected": {
         "registers": {
-          "RBX": "0x8877665544338811"
+          "RBX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -4074,25 +3463,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RBX": "0x8877665544338811"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_rdtsc_rdtsc",
       "handler": "rdtsc",
-      "oracle_mode": "none",
       "instruction_bytes": [
         15,
         49
@@ -4119,14 +3495,14 @@
         "registers": {},
         "flags": {}
       },
-      "oracle_observations": {},
+      "oracle": "none",
+      "source": "capstone-auto-discovery",
       "skip": true,
       "skip_reason": "handler 'rdtsc' requires special test setup"
     },
     {
       "name": "smoke_ret_ret",
       "handler": "ret",
-      "oracle_mode": "none",
       "instruction_bytes": [
         195
       ],
@@ -4153,14 +3529,14 @@
         "registers": {},
         "flags": {}
       },
-      "oracle_observations": {},
+      "oracle": "none",
+      "source": "capstone-auto-discovery",
       "skip": true,
       "skip_reason": "handler 'ret' requires special test setup"
     },
     {
       "name": "smoke_ror_ror",
       "handler": "ror",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         192,
         201,
@@ -4186,7 +3562,7 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0x8"
+          "RCX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -4196,25 +3572,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0x8"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_sahf_sahf",
       "handler": "sahf",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         158
       ],
@@ -4238,23 +3601,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667788"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_sar_sar",
       "handler": "sar",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         192,
         248,
@@ -4280,37 +3636,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x11223344556677c4"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
-          "FLAG_SF": 1,
+          "FLAG_SF": 0,
           "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x11223344556677c4"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_sbb_sbb",
       "handler": "sbb",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         29,
         216,
@@ -4338,37 +3680,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0xef6cd0b0"
+          "RAX": "0x0"
         },
         "flags": {
-          "FLAG_CF": 1,
+          "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
-          "FLAG_SF": 1,
+          "FLAG_SF": 0,
           "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0xef6cd0b0"
-          },
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setb_setb",
       "handler": "setb",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         146,
@@ -4394,23 +3722,16 @@
       },
       "expected": {
         "registers": {
-          "RDX": "0x2"
+          "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RDX": "0x2"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setbe_setbe",
       "handler": "setbe",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         150,
@@ -4436,23 +3757,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667700"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667700"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setl_setl",
       "handler": "setl",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         156,
@@ -4478,23 +3792,16 @@
       },
       "expected": {
         "registers": {
-          "RBX": "0x8877665544330011"
+          "RBX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RBX": "0x8877665544330011"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setle_setle",
       "handler": "setle",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         158,
@@ -4520,23 +3827,16 @@
       },
       "expected": {
         "registers": {
-          "RBX": "0x8877665544330011"
+          "RBX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RBX": "0x8877665544330011"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setnb_setnb",
       "handler": "setnb",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         147,
@@ -4562,23 +3862,16 @@
       },
       "expected": {
         "registers": {
-          "RDX": "0x1"
+          "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RDX": "0x1"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setnbe_setnbe",
       "handler": "setnbe",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         151,
@@ -4604,23 +3897,16 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0x110"
+          "RCX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0x110"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setnl_setnl",
       "handler": "setnl",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         157,
@@ -4646,23 +3932,16 @@
       },
       "expected": {
         "registers": {
-          "RDX": "0x1"
+          "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RDX": "0x1"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setnle_setnle",
       "handler": "setnle",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         159,
@@ -4688,23 +3967,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667701"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667701"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setno_setno",
       "handler": "setno",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         145,
@@ -4730,23 +4002,16 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0x1"
+          "RCX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0x1"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setnp_setnp",
       "handler": "setnp",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         155,
@@ -4772,23 +4037,16 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0x110"
+          "RCX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0x110"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setns_setns",
       "handler": "setns",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         153,
@@ -4814,23 +4072,16 @@
       },
       "expected": {
         "registers": {
-          "RDX": "0x1"
+          "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RDX": "0x1"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setnz_setnz",
       "handler": "setnz",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         149,
@@ -4856,23 +4107,16 @@
       },
       "expected": {
         "registers": {
-          "RCX": "0x110"
+          "RCX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RCX": "0x110"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_seto_seto",
       "handler": "seto",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         144,
@@ -4898,23 +4142,16 @@
       },
       "expected": {
         "registers": {
-          "RDX": "0x2"
+          "RDX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RDX": "0x2"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setp_setp",
       "handler": "setp",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         154,
@@ -4940,23 +4177,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455660088"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455660088"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_sets_sets",
       "handler": "sets",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         152,
@@ -4982,23 +4212,16 @@
       },
       "expected": {
         "registers": {
-          "RBX": "0x8877665544332200"
+          "RBX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RBX": "0x8877665544332200"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_setz_setz",
       "handler": "setz",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         148,
@@ -5028,19 +4251,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RDX": "0x0"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_shl_shl",
       "handler": "shl",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         192,
         224,
@@ -5066,37 +4282,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667710"
+          "RAX": "0x0"
         },
         "flags": {
-          "FLAG_CF": 1,
-          "FLAG_OF": 1,
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667710"
-          },
-          "flags": {
-            "FLAG_CF": 1,
-            "FLAG_OF": 1,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_shld_shld",
       "handler": "shld",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         164,
@@ -5123,35 +4325,22 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0xaccef100"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_ZF": 0,
-          "FLAG_SF": 1,
-          "FLAG_PF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0xaccef100"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_shr_shr",
       "handler": "shr",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         192,
         232,
@@ -5177,37 +4366,23 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x1122334455667744"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_OF": 1,
+          "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667744"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 1,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_shrd_shrd",
       "handler": "shrd",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         173,
@@ -5233,35 +4408,22 @@
       },
       "expected": {
         "registers": {
-          "RBX": "0x77884433"
+          "RBX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RBX": "0x77884433"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_stc_stc",
       "handler": "stc",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         249
       ],
@@ -5286,22 +4448,15 @@
       "expected": {
         "registers": {},
         "flags": {
-          "FLAG_CF": 1
+          "FLAG_CF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_CF": 1
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_std_std",
       "handler": "std",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         253
       ],
@@ -5326,22 +4481,15 @@
       "expected": {
         "registers": {},
         "flags": {
-          "FLAG_DF": 1
+          "FLAG_DF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_DF": 1
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_stosx_stosq",
       "handler": "stosx",
-      "oracle_mode": "computed",
       "instruction_bytes": [
         72,
         171
@@ -5371,12 +4519,12 @@
         },
         "flags": {}
       },
-      "oracle_observations": {}
+      "oracle": "computed",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_test_test",
       "handler": "test",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         168,
         221
@@ -5405,29 +4553,17 @@
           "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
-          "FLAG_SF": 1,
-          "FLAG_PF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 1,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_tzcnt_tzcnt",
       "handler": "tzcnt",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         243,
         15,
@@ -5454,7 +4590,7 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x3"
+          "RAX": "0x0"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -5465,26 +4601,12 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x3"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_xadd_xadd",
       "handler": "xadd",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         15,
         193,
@@ -5510,23 +4632,16 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0xaaccef10"
+          "RAX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0xaaccef10"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     },
     {
       "name": "smoke_xchg_xchg",
       "handler": "xchg",
-      "oracle_mode": "unicorn",
       "instruction_bytes": [
         145
       ],
@@ -5550,20 +4665,13 @@
       },
       "expected": {
         "registers": {
-          "RAX": "0x10",
-          "RCX": "0x55667788"
+          "RAX": "0x0",
+          "RCX": "0x0"
         },
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x10",
-            "RCX": "0x55667788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle": "unicorn",
+      "source": "capstone-auto-discovery"
     }
   ]
 }

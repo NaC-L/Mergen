@@ -248,16 +248,42 @@ def main():
                 raise OracleError(
                     f"Case '{case['name']}' has invalid expected payload for oracle=none"
                 )
-            expected.setdefault("registers", {})
-            expected.setdefault("flags", {})
+            expected_registers = expected.get("registers", {})
+            expected_flags = expected.get("flags", {})
+            if not isinstance(expected_registers, dict) or not isinstance(expected_flags, dict):
+                raise OracleError(
+                    f"Case '{case['name']}' expected.registers/expected.flags must be objects"
+                )
+            expected["registers"] = expected_registers
+            expected["flags"] = expected_flags
         elif oracle_mode == "unicorn":
             for provider in providers:
-                case_results[provider.name] = provider.emulate(case)
+                try:
+                    case_results[provider.name] = provider.emulate(case)
+                except Exception as exc:
+                    raise OracleError(
+                        f"Emulation failed for case '{case['name']}' with provider "
+                        f"'{provider.name}': {exc}"
+                    ) from exc
 
             compare_results(case_results, case["name"])
-
             consensus = case_results[providers[0].name]
             expected = normalize_expected(case, consensus)
+        elif oracle_mode == "computed":
+            # Pre-computed expected values (e.g., jcc branch_taken)
+            expected = case.get("expected", {})
+            if not isinstance(expected, dict):
+                raise OracleError(
+                    f"Case '{case['name']}' has invalid expected payload for oracle=computed"
+                )
+            expected_registers = expected.get("registers", {})
+            expected_flags = expected.get("flags", {})
+            if not isinstance(expected_registers, dict) or not isinstance(expected_flags, dict):
+                raise OracleError(
+                    f"Case '{case['name']}' expected.registers/expected.flags must be objects"
+                )
+            expected["registers"] = expected_registers
+            expected["flags"] = expected_flags
         else:
             raise OracleError(
                 f"Case '{case['name']}' has unsupported oracle mode '{oracle_mode}'"
