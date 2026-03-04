@@ -152,7 +152,10 @@ def main() -> None:
         return
 
     if command == "report":
-        vectors_file = args.vectors if args.vectors else DEFAULT_VECTORS
+        if args.vectors is not None:
+            vectors_file = args.vectors if args.vectors.is_absolute() else ROOT / args.vectors
+        else:
+            vectors_file = DEFAULT_VECTORS
         if not vectors_file.exists():
             raise SystemExit(f"Vectors file does not exist: {vectors_file}")
         run_report(vectors_file, args.json)

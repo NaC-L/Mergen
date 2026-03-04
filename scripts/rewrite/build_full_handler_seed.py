@@ -247,7 +247,9 @@ INSTRUCTION_OVERRIDES: Dict[str, list] = {
     "btc":    [0x0F, 0xBB, 0xC8],    # btc eax, ecx
     "btr":    [0x0F, 0xB3, 0xC8],    # btr eax, ecx
     "bts":    [0x0F, 0xAB, 0xC8],    # bts eax, ecx
-    "sar":    [0xD2, 0xF8],          # sar al, cl
+    "sar":    [0xC0, 0xF8, 0x01],    # sar al, 1 (stable OF semantics)
+    "shl":    [0xC0, 0xE0, 0x01],    # shl al, 1 (stable OF semantics)
+    "shr":    [0xC0, 0xE8, 0x01],    # shr al, 1 (stable OF semantics)
     "andn":   [0xC4, 0xE2, 0x70, 0xF2, 0xC2],  # andn eax, ecx, edx
     "bextr":  [0xC4, 0xE2, 0x70, 0xF7, 0xC2],  # bextr eax, edx, ecx
     "bzhi":   [0xC4, 0xE2, 0x70, 0xF5, 0xC2],  # bzhi eax, edx, ecx
@@ -264,9 +266,19 @@ DEFAULT_INITIAL = {
         "RCX": "0x10",
         "RDX": "0x2",
     },
-    "flags": {},
-}
+    "flags": {
+        "FLAG_CF": 0,
+        "FLAG_PF": 0,
+        "FLAG_AF": 0,
+        "FLAG_ZF": 0,
+        "FLAG_SF": 0,
+        "FLAG_OF": 0,
+        "FLAG_DF": 0,
+        "FLAG_IF": 1,
+    },
 
+
+}
 
 def strip_comments(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
@@ -404,6 +416,22 @@ def targeted_prefix_discovery(
                 return
 
 
+def _merge_initial(initial: Optional[dict]) -> dict:
+    merged = {
+        "registers": dict(DEFAULT_INITIAL["registers"]),
+        "flags": dict(DEFAULT_INITIAL["flags"]),
+    }
+    if initial is None:
+        return merged
+    reg_overrides = initial.get("registers", {})
+    flag_overrides = initial.get("flags", {})
+    if reg_overrides:
+        merged["registers"].update(reg_overrides)
+    if flag_overrides:
+        merged["flags"].update(flag_overrides)
+    return merged
+
+
 def build_smoke_case(
     handler: str,
     mnemonic: str,
@@ -415,7 +443,7 @@ def build_smoke_case(
         "name": f"smoke_{handler}_{mnemonic}",
         "handler": handler,
         "instruction_bytes": instruction_bytes,
-        "initial": initial if initial is not None else DEFAULT_INITIAL,
+        "initial": _merge_initial(initial),
         "expected": {"registers": {}, "flags": {}},
         "oracle": "none",
         "source": "capstone-auto-discovery",

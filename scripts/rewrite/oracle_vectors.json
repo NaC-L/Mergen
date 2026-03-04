@@ -1,6 +1,6 @@
 {
   "schema": "mergen-oracle-v1",
-  "generated_at_utc": "2026-03-04T08:06:16.790700+00:00",
+  "generated_at_utc": "2026-03-04T09:06:10.291314+00:00",
   "source_seed_schema": "mergen-oracle-seed-v1",
   "providers": [
     "unicorn"
@@ -267,7 +267,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -316,7 +325,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -365,7 +383,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -414,7 +441,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -463,7 +499,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -512,7 +557,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -561,7 +615,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -608,7 +671,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -655,7 +727,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -701,7 +782,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -734,7 +824,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -777,7 +876,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -824,7 +932,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -871,7 +988,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -920,7 +1046,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -969,7 +1104,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -994,7 +1138,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1025,7 +1178,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1059,7 +1221,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1090,7 +1261,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1121,7 +1301,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1152,7 +1341,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1176,7 +1374,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1209,7 +1416,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1241,7 +1457,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1284,7 +1509,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1316,7 +1550,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -1341,7 +1584,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1375,7 +1627,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1408,7 +1669,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1440,7 +1710,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1486,7 +1765,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1531,10 +1819,20 @@
       "initial": {
         "registers": {
           "RAX": "0x10",
-          "RDX": "0x0",
-          "RCX": "0x2"
+          "RBX": "0x8877665544332211",
+          "RCX": "0x2",
+          "RDX": "0x0"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1578,10 +1876,20 @@
       "initial": {
         "registers": {
           "RAX": "0x10",
-          "RDX": "0x0",
-          "RCX": "0x3"
+          "RBX": "0x8877665544332211",
+          "RCX": "0x3",
+          "RDX": "0x0"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1626,10 +1934,20 @@
       "initial": {
         "registers": {
           "RAX": "0x10",
-          "RDX": "0x0",
-          "RCX": "0x2"
+          "RBX": "0x8877665544332211",
+          "RCX": "0x2",
+          "RDX": "0x0"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1681,7 +1999,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1724,10 +2051,20 @@
       "initial": {
         "registers": {
           "RAX": "0x7",
-          "RDX": "0x0",
-          "RCX": "0x3"
+          "RBX": "0x8877665544332211",
+          "RCX": "0x3",
+          "RDX": "0x0"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1775,7 +2112,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -1815,9 +2161,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_CF": 1
+          "FLAG_CF": 1,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -1836,9 +2194,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_CF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -1857,10 +2227,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
           "FLAG_CF": 1,
-          "FLAG_ZF": 0
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -1879,10 +2260,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_ZF": 0
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -1901,10 +2293,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
           "FLAG_SF": 1,
-          "FLAG_OF": 0
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -1923,10 +2326,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_OF": 0
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -1945,11 +2359,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
           "FLAG_SF": 1,
           "FLAG_OF": 0,
-          "FLAG_ZF": 0
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -1968,11 +2392,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_OF": 0,
-          "FLAG_ZF": 0
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -1997,7 +2431,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -2014,9 +2457,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_CF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2035,9 +2490,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_CF": 1
+          "FLAG_CF": 1,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2056,10 +2523,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_ZF": 0
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2078,10 +2556,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
           "FLAG_CF": 1,
-          "FLAG_ZF": 0
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2100,10 +2589,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_OF": 0
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2122,10 +2622,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
           "FLAG_SF": 1,
-          "FLAG_OF": 0
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2144,11 +2655,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_OF": 0,
-          "FLAG_ZF": 0
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2167,11 +2688,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
           "FLAG_SF": 1,
           "FLAG_OF": 0,
-          "FLAG_ZF": 0
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2190,9 +2721,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_OF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2211,9 +2754,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_OF": 1
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 1,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2232,9 +2787,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_PF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2253,9 +2820,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_PF": 1
+          "FLAG_CF": 0,
+          "FLAG_PF": 1,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2274,9 +2853,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_SF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2295,9 +2886,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_SF": 1
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 1,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2316,9 +2919,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_ZF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2337,9 +2952,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_ZF": 1
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 1,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2358,9 +2985,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_OF": 1
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 1,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2379,9 +3018,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_OF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2400,9 +3051,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_PF": 1
+          "FLAG_CF": 0,
+          "FLAG_PF": 1,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2421,9 +3084,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_PF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2442,9 +3117,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_SF": 1
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 1,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2463,9 +3150,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_SF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2484,9 +3183,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_ZF": 1
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 1,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2505,9 +3216,21 @@
         16
       ],
       "initial": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
+        },
         "flags": {
-          "FLAG_ZF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2531,7 +3254,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2564,7 +3296,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2590,9 +3331,22 @@
       ],
       "initial": {
         "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2",
           "RBP": "0x200000"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2619,7 +3373,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2666,7 +3429,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2693,11 +3465,22 @@
       ],
       "initial": {
         "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2",
           "RSI": "0x2000",
           "RDI": "0x3000"
         },
         "flags": {
-          "FLAG_DF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -2725,7 +3508,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2770,10 +3562,20 @@
       "initial": {
         "registers": {
           "RAX": "0x7",
-          "RDX": "0x0",
-          "RCX": "0x3"
+          "RBX": "0x8877665544332211",
+          "RCX": "0x3",
+          "RDX": "0x0"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2821,7 +3623,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2867,7 +3678,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2902,7 +3722,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2951,7 +3780,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -2986,7 +3824,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3017,7 +3864,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3044,7 +3900,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3089,7 +3954,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3113,7 +3987,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3137,7 +4020,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3162,7 +4054,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3206,7 +4107,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3250,7 +4160,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -3269,9 +4188,22 @@
       ],
       "initial": {
         "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2",
           "RSP": "0x14FF00"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -3297,7 +4229,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3340,7 +4281,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3362,8 +4312,9 @@
       "handler": "sar",
       "oracle_mode": "unicorn",
       "instruction_bytes": [
-        210,
-        248
+        192,
+        248,
+        1
       ],
       "initial": {
         "registers": {
@@ -3372,32 +4323,41 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
-          "RAX": "0x11223344556677ff"
+          "RAX": "0x11223344556677c4"
         },
         "flags": {
-          "FLAG_CF": 1,
+          "FLAG_CF": 0,
           "FLAG_OF": 0,
           "FLAG_ZF": 0,
           "FLAG_SF": 1,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
       "oracle_observations": {
         "unicorn": {
           "registers": {
-            "RAX": "0x11223344556677ff"
+            "RAX": "0x11223344556677c4"
           },
           "flags": {
-            "FLAG_CF": 1,
+            "FLAG_CF": 0,
             "FLAG_OF": 0,
             "FLAG_ZF": 0,
             "FLAG_SF": 1,
-            "FLAG_PF": 1,
+            "FLAG_PF": 0,
             "FLAG_AF": 0
           }
         }
@@ -3421,7 +4381,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3468,7 +4437,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3501,7 +4479,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3534,7 +4521,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3567,7 +4563,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3600,7 +4605,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3633,7 +4647,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3666,7 +4689,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3699,7 +4731,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3732,7 +4773,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3765,7 +4815,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3798,7 +4857,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3831,7 +4899,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3864,7 +4941,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3897,7 +4983,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3930,7 +5025,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3963,7 +5067,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -3985,8 +5098,9 @@
       "handler": "shl",
       "oracle_mode": "unicorn",
       "instruction_bytes": [
-        210,
-        226
+        192,
+        224,
+        1
       ],
       "initial": {
         "registers": {
@@ -3995,32 +5109,41 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
-          "RDX": "0x0"
+          "RAX": "0x1122334455667710"
         },
         "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 1,
+          "FLAG_CF": 1,
+          "FLAG_OF": 1,
+          "FLAG_ZF": 0,
           "FLAG_SF": 0,
-          "FLAG_PF": 1,
+          "FLAG_PF": 0,
           "FLAG_AF": 0
         }
       },
       "oracle_observations": {
         "unicorn": {
           "registers": {
-            "RDX": "0x0"
+            "RAX": "0x1122334455667710"
           },
           "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 1,
+            "FLAG_CF": 1,
+            "FLAG_OF": 1,
+            "FLAG_ZF": 0,
             "FLAG_SF": 0,
-            "FLAG_PF": 1,
+            "FLAG_PF": 0,
             "FLAG_AF": 0
           }
         }
@@ -4043,7 +5166,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -4077,8 +5209,9 @@
       "handler": "shr",
       "oracle_mode": "unicorn",
       "instruction_bytes": [
-        210,
-        237
+        192,
+        232,
+        1
       ],
       "initial": {
         "registers": {
@@ -4087,16 +5220,25 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
-          "RCX": "0x10"
+          "RAX": "0x1122334455667744"
         },
         "flags": {
           "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 1,
+          "FLAG_OF": 1,
+          "FLAG_ZF": 0,
           "FLAG_SF": 0,
           "FLAG_PF": 1,
           "FLAG_AF": 0
@@ -4105,12 +5247,12 @@
       "oracle_observations": {
         "unicorn": {
           "registers": {
-            "RCX": "0x10"
+            "RAX": "0x1122334455667744"
           },
           "flags": {
             "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 1,
+            "FLAG_OF": 1,
+            "FLAG_ZF": 0,
             "FLAG_SF": 0,
             "FLAG_PF": 1,
             "FLAG_AF": 0
@@ -4134,7 +5276,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -4177,7 +5328,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -4208,7 +5368,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -4235,11 +5404,21 @@
       ],
       "initial": {
         "registers": {
-          "RDI": "0x3000",
-          "RAX": "0x1122334455667788"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2",
+          "RDI": "0x3000"
         },
         "flags": {
-          "FLAG_DF": 0
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
         }
       },
       "expected": {
@@ -4265,7 +5444,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {},
@@ -4309,7 +5497,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -4356,7 +5553,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
@@ -4387,7 +5593,16 @@
           "RCX": "0x10",
           "RDX": "0x2"
         },
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
       },
       "expected": {
         "registers": {
