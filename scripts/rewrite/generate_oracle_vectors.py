@@ -276,6 +276,11 @@ def main():
                 compare_results(case_results, case["name"])
                 consensus = case_results[providers[0].name]
                 expected = normalize_expected(case, consensus)
+        elif oracle_mode == "computed":
+            # Pre-computed expected values (e.g., jcc branch_taken)
+            expected = case.get("expected", {})
+            expected.setdefault("registers", {})
+            expected.setdefault("flags", {})
         else:
             raise OracleError(
                 f"Case '{case['name']}' has unsupported oracle mode '{oracle_mode}'"

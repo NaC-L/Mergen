@@ -54,10 +54,29 @@ LOGIC_FLAGS = ["FLAG_CF", "FLAG_OF", "FLAG_ZF", "FLAG_SF", "FLAG_PF"]
 
 # Handlers that are control flow (change RIP/RSP fundamentally)
 CONTROL_FLOW_HANDLERS = {
-    "call", "ret", "jmp",
-    "jnz", "jz", "js", "jns", "jle", "jl", "jnl", "jnle",
-    "jbe", "jb", "jnb", "jnbe", "jo", "jno", "jp", "jnp",
-    "leave",
+    "call", "ret", "jmp", "leave",
+}
+
+# Conditional-jump handlers: maps handler name -> (condition_lambda, description).
+# condition_lambda(flags_dict) -> bool (True = branch taken).
+# flags_dict values are 0 or 1 integers.
+JCC_HANDLERS = {
+    "jz":   lambda f: f.get("FLAG_ZF", 0) == 1,
+    "jnz":  lambda f: f.get("FLAG_ZF", 0) == 0,
+    "jb":   lambda f: f.get("FLAG_CF", 0) == 1,
+    "jnb":  lambda f: f.get("FLAG_CF", 0) == 0,
+    "jbe":  lambda f: f.get("FLAG_CF", 0) == 1 or f.get("FLAG_ZF", 0) == 1,
+    "jnbe": lambda f: f.get("FLAG_CF", 0) == 0 and f.get("FLAG_ZF", 0) == 0,
+    "jl":   lambda f: f.get("FLAG_SF", 0) != f.get("FLAG_OF", 0),
+    "jnl":  lambda f: f.get("FLAG_SF", 0) == f.get("FLAG_OF", 0),
+    "jle":  lambda f: f.get("FLAG_ZF", 0) == 1 or f.get("FLAG_SF", 0) != f.get("FLAG_OF", 0),
+    "jnle": lambda f: f.get("FLAG_ZF", 0) == 0 and f.get("FLAG_SF", 0) == f.get("FLAG_OF", 0),
+    "js":   lambda f: f.get("FLAG_SF", 0) == 1,
+    "jns":  lambda f: f.get("FLAG_SF", 0) == 0,
+    "jo":   lambda f: f.get("FLAG_OF", 0) == 1,
+    "jno":  lambda f: f.get("FLAG_OF", 0) == 0,
+    "jp":   lambda f: f.get("FLAG_PF", 0) == 1,
+    "jnp":  lambda f: f.get("FLAG_PF", 0) == 0,
 }
 
 # Stack-modifying handlers
@@ -170,6 +189,26 @@ def enrich_case(case: dict) -> dict:
         return case
     expected = case.get("expected", {})
     if expected.get("registers") or expected.get("flags"):
+        return case
+
+    # Conditional-jump handlers: compute branch_taken from initial flags
+    if handler in JCC_HANDLERS:
+        initial_flags = case.get("initial", {}).get("flags", {})
+        # Convert flag values to int (may be hex strings or ints)
+        flags_int = {}
+        for k, v in initial_flags.items():
+            if isinstance(v, str):
+                flags_int[k] = int(v, 0)
+            else:
+                flags_int[k] = int(v)
+        condition = JCC_HANDLERS[handler]
+        taken = condition(flags_int)
+        case["oracle"] = "computed"
+        case["expected"] = {
+            "registers": {},
+            "flags": {},
+            "branch_taken": taken,
+        }
         return case
 
     # Skip control flow and other problematic handlers by name

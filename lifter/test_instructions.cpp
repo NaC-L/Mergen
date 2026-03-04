@@ -540,6 +540,15 @@ bool loadOracleCases(const std::string& oraclePath,
       return false;
     }
 
+    // Parse optional expected_branch_taken for jcc tests
+    if (auto* bt = expectedObject->get("branch_taken")) {
+      if (auto boolVal = bt->getAsBoolean()) {
+        testCase.expectedBranchTaken = *boolVal;
+      } else if (auto intVal = bt->getAsInteger()) {
+        testCase.expectedBranchTaken = (*intVal != 0);
+      }
+    }
+
     outCases.push_back(std::move(testCase));
   }
 

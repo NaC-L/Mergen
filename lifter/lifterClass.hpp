@@ -468,6 +468,11 @@ public:
 
   std::map<int64_t, int64_t> pageMap;
   std::vector<llvm::BranchInst*> BIlist;
+
+  // Set by branchHelper after resolving a conditional branch.
+  // Test framework reads this to verify jcc taken/not-taken.
+  bool hadConditionalBranch = false;
+  bool lastBranchTaken = false;
   // DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>
   // cache;
   InstructionCache cache;

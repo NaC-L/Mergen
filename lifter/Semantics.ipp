@@ -269,6 +269,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::branchHelper(
 
   uint64_t destination = 0;
   solvePath(function, destination, next_jump);
+  this->hadConditionalBranch = true;
+  this->lastBranchTaken = (destination == true_jump_addr);
 
   block->setName("previousjmp_block-" + std::to_string(destination) + "-");
   // cout << "pathInfo:" << pathInfo << " dest: " << destination  <<
