@@ -72,41 +72,25 @@ MANUAL_HANDLER_CASES = {
             "flags": {},
         },
     },
-    "blsi": {
-        "mnemonic": "blsi",
-        "instruction_bytes": [0xC4, 0xE2, 0x40, 0xF3, 0x58, 0x80],
+    "idiv": {
+        "mnemonic": "idiv",
+        "instruction_bytes": [0xF7, 0xF9],  # idiv ecx (32-bit)
         "initial": {
-            "registers": {
-                "RAX": "0x1000",
-                "RCX": "0x2000",
-                "R14": "0x3000"
-            },
+            "registers": {"RAX": "0x10", "RDX": "0x0", "RCX": "0x3"},
             "flags": {},
         },
     },
-    "blsr": {
-        "mnemonic": "blsr",
-        "instruction_bytes": [0xC4, 0xE2, 0x20, 0xF3, 0x09],
-        "initial": {
-            "registers": {
-                "RAX": "0x1000",
-                "RCX": "0x2000",
-                "R14": "0x3000"
-            },
-            "flags": {},
-        },
+    "blsi": {
+        "mnemonic": "blsi",
+        "instruction_bytes": [0xC4, 0xE2, 0x78, 0xF3, 0xD9],  # blsi eax, ecx
     },
     "blsmsk": {
         "mnemonic": "blsmsk",
-        "instruction_bytes": [0xC4, 0x02, 0x20, 0xF3, 0x56, 0xE4],
-        "initial": {
-            "registers": {
-                "RAX": "0x1000",
-                "RCX": "0x2000",
-                "R14": "0x3000"
-            },
-            "flags": {},
-        },
+        "instruction_bytes": [0xC4, 0xE2, 0x78, 0xF3, 0xD1],  # blsmsk eax, ecx
+    },
+    "blsr": {
+        "mnemonic": "blsr",
+        "instruction_bytes": [0xC4, 0xE2, 0x78, 0xF3, 0xC9],  # blsr eax, ecx
     },
     "movs_x": {
         "mnemonic": "movsq",
@@ -126,16 +110,17 @@ MANUAL_HANDLER_CASES = {
 # use registers outside the default initial set (RAX, RBX, RCX, RDX).
 # Each maps handler_name -> [byte, ...].  The default initial state is used.
 INSTRUCTION_OVERRIDES: Dict[str, list] = {
-    "dec":   [0xFF, 0xC9],          # dec ecx
-    "bsr":   [0x0F, 0xBD, 0xC3],    # bsr eax, ebx
-    "btc":   [0x0F, 0xBB, 0xC8],    # btc eax, ecx
-    "btr":   [0x0F, 0xB3, 0xC8],    # btr eax, ecx
-    "bts":   [0x0F, 0xAB, 0xC8],    # bts eax, ecx
-    "sar":   [0xD2, 0xF8],          # sar al, cl
-    "andn":  [0xC4, 0xE2, 0x70, 0xF2, 0xC2],  # andn eax, ecx, edx
-    "bextr": [0xC4, 0xE2, 0x70, 0xF7, 0xC2],  # bextr eax, edx, ecx
-    "bzhi":  [0xC4, 0xE2, 0x70, 0xF5, 0xC2],  # bzhi eax, edx, ecx
-    "pext":  [0xC4, 0xE2, 0x72, 0xF5, 0xC2],  # pext eax, ecx, edx
+    "dec":    [0xFF, 0xC9],          # dec ecx
+    "bsr":    [0x0F, 0xBD, 0xC3],    # bsr eax, ebx
+    "btc":    [0x0F, 0xBB, 0xC8],    # btc eax, ecx
+    "btr":    [0x0F, 0xB3, 0xC8],    # btr eax, ecx
+    "bts":    [0x0F, 0xAB, 0xC8],    # bts eax, ecx
+    "sar":    [0xD2, 0xF8],          # sar al, cl
+    "andn":   [0xC4, 0xE2, 0x70, 0xF2, 0xC2],  # andn eax, ecx, edx
+    "bextr":  [0xC4, 0xE2, 0x70, 0xF7, 0xC2],  # bextr eax, edx, ecx
+    "bzhi":   [0xC4, 0xE2, 0x70, 0xF5, 0xC2],  # bzhi eax, edx, ecx
+    "pext":   [0xC4, 0xE2, 0x72, 0xF5, 0xC2],  # pext eax, ecx, edx
+    "lea":    [0x8D, 0x04, 0x11],    # lea eax, [rcx+rdx]
 }
 
 SKIP_RUN_HANDLERS = set()
@@ -362,7 +347,7 @@ def main() -> None:
                     handler=handler,
                     mnemonic=manual["mnemonic"],
                     instruction_bytes=manual["instruction_bytes"],
-                    initial=manual["initial"],
+                    initial=manual.get("initial"),
                     run_enabled=handler not in SKIP_RUN_HANDLERS,
                 )
             )

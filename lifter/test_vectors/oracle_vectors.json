@@ -1,6 +1,6 @@
 {
   "schema": "mergen-oracle-v1",
-  "generated_at_utc": "2026-03-04T07:14:30.392324+00:00",
+  "generated_at_utc": "2026-03-04T07:23:59.325293+00:00",
   "source_seed_schema": "mergen-oracle-seed-v1",
   "providers": [
     "unicorn"
@@ -448,85 +448,149 @@
     {
       "name": "smoke_blsi_blsi",
       "handler": "blsi",
-      "oracle_mode": "none",
+      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
-        64,
+        120,
         243,
-        88,
-        128
+        217
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x10"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "memory operand in 'blsi edi, dword ptr [rax - 0x80]'; needs mapped memory for emulation"
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x10"
+          },
+          "flags": {
+            "FLAG_CF": 0,
+            "FLAG_OF": 0,
+            "FLAG_ZF": 0,
+            "FLAG_SF": 0,
+            "FLAG_PF": 0,
+            "FLAG_AF": 0
+          }
+        }
+      }
     },
     {
       "name": "smoke_blsmsk_blsmsk",
       "handler": "blsmsk",
-      "oracle_mode": "none",
+      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
-        2,
-        32,
+        226,
+        120,
         243,
-        86,
-        228
+        209
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x1f"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "memory operand in 'blsmsk r11d, dword ptr [r14 - 0x1c]'; needs mapped memory for emulation"
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x1f"
+          },
+          "flags": {
+            "FLAG_CF": 0,
+            "FLAG_OF": 0,
+            "FLAG_ZF": 0,
+            "FLAG_SF": 0,
+            "FLAG_PF": 0,
+            "FLAG_AF": 0
+          }
+        }
+      }
     },
     {
       "name": "smoke_blsr_blsr",
       "handler": "blsr",
-      "oracle_mode": "none",
+      "oracle_mode": "unicorn",
       "instruction_bytes": [
         196,
         226,
-        32,
+        120,
         243,
-        9
+        201
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "memory operand in 'blsr r11d, dword ptr [rcx]'; needs mapped memory for emulation"
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x0"
+          },
+          "flags": {
+            "FLAG_CF": 0,
+            "FLAG_OF": 0,
+            "FLAG_ZF": 1,
+            "FLAG_SF": 0,
+            "FLAG_PF": 0,
+            "FLAG_AF": 0
+          }
+        }
+      }
     },
     {
       "name": "smoke_bsf_bsf",
@@ -1509,23 +1573,23 @@
     {
       "name": "smoke_idiv_idiv",
       "handler": "idiv",
-      "oracle_mode": "none",
+      "oracle_mode": "unicorn",
       "instruction_bytes": [
-        246,
-        251
+        247,
+        249
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RAX": "0x10",
+          "RDX": "0x0",
+          "RCX": "0x3"
         },
         "flags": {}
       },
       "expected": {
         "registers": {
-          "RAX": "0x0"
+          "RAX": "0x5",
+          "RDX": "0x1"
         },
         "flags": {
           "FLAG_CF": 0,
@@ -1536,9 +1600,22 @@
           "FLAG_AF": 0
         }
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "emulation failed: Unhandled CPU exception (UC_ERR_EXCEPTION)"
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x5",
+            "RDX": "0x1"
+          },
+          "flags": {
+            "FLAG_CF": 0,
+            "FLAG_OF": 0,
+            "FLAG_ZF": 0,
+            "FLAG_SF": 0,
+            "FLAG_PF": 0,
+            "FLAG_AF": 0
+          }
+        }
+      }
     },
     {
       "name": "smoke_idiv2_idiv",
@@ -2195,10 +2272,11 @@
     {
       "name": "smoke_lea_lea",
       "handler": "lea",
-      "oracle_mode": "none",
+      "oracle_mode": "unicorn",
       "instruction_bytes": [
         141,
-        38
+        4,
+        17
       ],
       "initial": {
         "registers": {
@@ -2210,12 +2288,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x12"
+        },
         "flags": {}
       },
-      "oracle_observations": {},
-      "skip": true,
-      "skip_reason": "memory operand in 'lea esp, [rsi]'; needs mapped memory for emulation"
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x12"
+          },
+          "flags": {}
+        }
+      }
     },
     {
       "name": "smoke_leave_leave",

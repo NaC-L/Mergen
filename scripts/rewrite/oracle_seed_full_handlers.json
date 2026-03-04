@@ -272,16 +272,16 @@
       "instruction_bytes": [
         196,
         226,
-        64,
+        120,
         243,
-        88,
-        128
+        217
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
@@ -297,17 +297,17 @@
       "handler": "blsmsk",
       "instruction_bytes": [
         196,
-        2,
-        32,
+        226,
+        120,
         243,
-        86,
-        228
+        209
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
@@ -324,15 +324,16 @@
       "instruction_bytes": [
         196,
         226,
-        32,
+        120,
         243,
-        9
+        201
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1000",
-          "RCX": "0x2000",
-          "R14": "0x3000"
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x10",
+          "RDX": "0x2"
         },
         "flags": {}
       },
@@ -953,15 +954,14 @@
       "name": "smoke_idiv_idiv",
       "handler": "idiv",
       "instruction_bytes": [
-        246,
-        251
+        247,
+        249
       ],
       "initial": {
         "registers": {
-          "RAX": "0x1122334455667788",
-          "RBX": "0x8877665544332211",
-          "RCX": "0x10",
-          "RDX": "0x2"
+          "RAX": "0x10",
+          "RDX": "0x0",
+          "RCX": "0x3"
         },
         "flags": {}
       },
@@ -1490,7 +1490,8 @@
       "handler": "lea",
       "instruction_bytes": [
         141,
-        38
+        4,
+        17
       ],
       "initial": {
         "registers": {
