@@ -3,19 +3,21 @@
 
 For each case with oracle=none and empty expected fields, this script:
 1. Disassembles the instruction with Capstone to understand its semantics
-2. Sets oracle=unicorn
-3. Populates expected.registers with affected registers from the initial set
-4. Populates expected.flags with relevant arithmetic flags
+2. Detects memory operands and uninitialized register reads
+3. Sets oracle=unicorn (or skip if not emulatable)
+4. Populates expected.registers with affected registers from the initial set
+5. Populates expected.flags with relevant arithmetic flags
 
 The oracle generator then fills in the actual numeric expected values via Unicorn.
 """
 import argparse
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 try:
-    from capstone import Cs, CS_ARCH_X86, CS_MODE_64, CS_GRP_JUMP, CS_GRP_CALL, CS_GRP_RET
+    from capstone import Cs, CS_ARCH_X86, CS_MODE_64, CS_OP_MEM
     import capstone.x86_const as x86c
 except ImportError:
     raise SystemExit("capstone is required: pip install capstone")
@@ -33,6 +35,8 @@ _CS_REG_TO_NAME: Dict[int, str] = {
     x86c.X86_REG_DL: "RDX", x86c.X86_REG_DH: "RDX",
     x86c.X86_REG_RSI: "RSI", x86c.X86_REG_ESI: "RSI", x86c.X86_REG_SI: "RSI",
     x86c.X86_REG_RDI: "RDI", x86c.X86_REG_EDI: "RDI", x86c.X86_REG_DI: "RDI",
+    x86c.X86_REG_RBP: "RBP", x86c.X86_REG_EBP: "RBP", x86c.X86_REG_BP: "RBP",
+    x86c.X86_REG_RSP: "RSP", x86c.X86_REG_ESP: "RSP", x86c.X86_REG_SP: "RSP",
     x86c.X86_REG_R8: "R8", x86c.X86_REG_R8D: "R8", x86c.X86_REG_R8W: "R8", x86c.X86_REG_R8B: "R8",
     x86c.X86_REG_R9: "R9", x86c.X86_REG_R9D: "R9", x86c.X86_REG_R9W: "R9", x86c.X86_REG_R9B: "R9",
     x86c.X86_REG_R10: "R10", x86c.X86_REG_R10D: "R10", x86c.X86_REG_R10W: "R10", x86c.X86_REG_R10B: "R10",
@@ -44,15 +48,11 @@ _CS_REG_TO_NAME: Dict[int, str] = {
     x86c.X86_REG_EFLAGS: "RFLAGS",
 }
 
-# The registers we have in our initial state
-INITIAL_REGS = {"RAX", "RBX", "RCX", "RDX"}
-
 # Standard arithmetic flags
 ARITH_FLAGS = ["FLAG_CF", "FLAG_OF", "FLAG_ZF", "FLAG_SF", "FLAG_PF", "FLAG_AF"]
-# Flags for logical operations (AF is undefined, CF/OF are cleared)
 LOGIC_FLAGS = ["FLAG_CF", "FLAG_OF", "FLAG_ZF", "FLAG_SF", "FLAG_PF"]
 
-# Handlers that are control flow and should NOT get oracle checks (they change RIP/RSP)
+# Handlers that are control flow (change RIP/RSP fundamentally)
 CONTROL_FLOW_HANDLERS = {
     "call", "ret", "jmp",
     "jnz", "jz", "js", "jns", "jle", "jl", "jnl", "jnle",
@@ -60,22 +60,22 @@ CONTROL_FLOW_HANDLERS = {
     "leave",
 }
 
-# Handlers that modify RSP and are tricky to test in isolation
+# Stack-modifying handlers
 STACK_HANDLERS = {"push", "pop", "pushfq", "popfq"}
 
-# Handlers that are system instructions (rdtsc, cpuid) with non-deterministic results
+# Non-deterministic system instructions
 NONDETERMINISTIC_HANDLERS = {"rdtsc", "cpuid"}
 
-# Handlers that modify memory strings (need memory setup)
-MEMORY_HANDLERS = {"movs_X", "stosx"}
+# Memory string instructions (need RSI/RDI memory setup)
+MEMORY_HANDLERS = {"movs_X", "movs_x", "stosx"}
 
-# Handlers that should be skipped entirely
+# All handlers to skip unconditionally
 SKIP_HANDLERS = CONTROL_FLOW_HANDLERS | STACK_HANDLERS | NONDETERMINISTIC_HANDLERS | MEMORY_HANDLERS
 
 # Flag-only handlers (no register output, just flags)
 FLAG_ONLY_HANDLERS = {"cmp", "test", "bt", "btr", "bts", "btc"}
 
-# Sign/zero extension handlers (result depends on register size, check RAX)
+# Sign/zero extension handlers
 EXTENSION_HANDLERS = {"cbw", "cwde", "cdqe", "cwd", "cdq", "cqo"}
 
 # Handlers that modify both RAX and RDX (multiply/divide)
@@ -88,50 +88,86 @@ FLAG_MANIP_HANDLERS = {
     "cmc": ["FLAG_CF"],
     "std": ["FLAG_DF"],
     "cld": ["FLAG_DF"],
-    "cli": [],  # IF flag, not testable
+    "cli": [],
 }
 
-# Handlers where checking flags is problematic (flags are fully defined by the instruction)
+# Handlers where flag checking is not meaningful
 NO_FLAG_HANDLERS = {
     "mov", "lea", "cmovcc", "bswap", "xchg", "cmpxchg",
     "lahf", "sahf",
 }
 
 
-def get_written_regs(instruction_bytes: List[int]) -> Tuple[Set[str], bool]:
-    """Disassemble and return written GPR names + whether EFLAGS is written."""
+@dataclass
+class InsnAnalysis:
+    """Analysis result from disassembling instruction bytes."""
+    read_regs: Set[str]
+    written_regs: Set[str]
+    writes_flags: bool
+    has_memory_operand: bool
+    disasm_text: str
+
+
+def _get_initial_regs_from_case(case: dict) -> Set[str]:
+    """Return the set of register names initialized in this case."""
+    initial = case.get("initial", {})
+    regs = initial.get("registers", {})
+    return {name.upper() for name in regs.keys()}
+
+
+def analyze_instruction(instruction_bytes: List[int]) -> Optional[InsnAnalysis]:
+    """Disassemble and analyze the instruction."""
     md = Cs(CS_ARCH_X86, CS_MODE_64)
     md.detail = True
     code = bytes(instruction_bytes)
 
+    read_regs: Set[str] = set()
     written_regs: Set[str] = set()
     writes_flags = False
+    has_memory = False
 
     for insn in md.disasm(code, 0x1000000):
-        _, regs_write = insn.regs_access()
+        # Check for memory operands
+        for op in insn.operands:
+            if op.type == CS_OP_MEM:
+                has_memory = True
+
+        regs_read, regs_write = insn.regs_access()
+        for reg_id in regs_read:
+            name = _CS_REG_TO_NAME.get(reg_id)
+            if name and name != "RFLAGS":
+                read_regs.add(name)
         for reg_id in regs_write:
             name = _CS_REG_TO_NAME.get(reg_id)
             if name == "RFLAGS":
                 writes_flags = True
             elif name is not None:
                 written_regs.add(name)
-        break  # Only first instruction
 
-    return written_regs, writes_flags
+        return InsnAnalysis(
+            read_regs=read_regs,
+            written_regs=written_regs,
+            writes_flags=writes_flags,
+            has_memory_operand=has_memory,
+            disasm_text=f"{insn.mnemonic} {insn.op_str}",
+        )
+
+    return None
 
 
 def enrich_case(case: dict) -> dict:
     """Add expected fields to an auto-discovered case."""
     handler = case.get("handler", "").lower()
 
-    # Skip cases that are already enriched
-    if case.get("oracle") != "none":
+    # Skip cases that are already enriched or have oracle != none
+    oracle = str(case.get("oracle", "")).strip().lower()
+    if oracle and oracle != "none":
         return case
     expected = case.get("expected", {})
     if expected.get("registers") or expected.get("flags"):
         return case
 
-    # Skip control flow and other problematic handlers
+    # Skip control flow and other problematic handlers by name
     if handler in SKIP_HANDLERS:
         case["skip"] = True
         case["skip_reason"] = f"handler '{handler}' requires special test setup"
@@ -141,13 +177,37 @@ def enrich_case(case: dict) -> dict:
     if not instruction_bytes:
         return case
 
-    # Determine which registers to check
-    written_regs, writes_flags = get_written_regs(instruction_bytes)
+    # Analyze the instruction
+    analysis = analyze_instruction(instruction_bytes)
+    if analysis is None:
+        case["skip"] = True
+        case["skip_reason"] = "failed to disassemble instruction bytes"
+        return case
 
-    # Intersect with registers we have initial values for
-    check_regs = written_regs & INITIAL_REGS
+    # Skip instructions with memory operands (Unicorn needs mapped memory)
+    if analysis.has_memory_operand:
+        case["skip"] = True
+        case["skip_reason"] = f"memory operand in '{analysis.disasm_text}'; needs mapped memory for emulation"
+        return case
 
-    # Special cases
+    # Check for uninitialized register reads
+    initialized_regs = _get_initial_regs_from_case(case)
+    # RIP and RSP are always implicitly initialized by the emulator
+    initialized_regs |= {"RIP", "RSP"}
+    uninit_reads = analysis.read_regs - initialized_regs
+    if uninit_reads:
+        case["skip"] = True
+        case["skip_reason"] = (
+            f"instruction '{analysis.disasm_text}' reads uninitialized register(s): "
+            + ", ".join(sorted(uninit_reads))
+        )
+        return case
+
+    # Determine which registers to check (written regs ∩ initialized regs)
+    # Exclude RSP/RBP: their values differ between Unicorn and the lifter test framework
+    check_regs = analysis.written_regs & initialized_regs - {"RSP", "RBP", "RIP"}
+
+    # Special handler overrides
     if handler in RAX_RDX_HANDLERS:
         check_regs = {"RAX", "RDX"}
     elif handler in EXTENSION_HANDLERS:
@@ -155,23 +215,25 @@ def enrich_case(case: dict) -> dict:
         if handler in ("cwd", "cdq", "cqo"):
             check_regs.add("RDX")
 
-    # If no registers detected, try RAX as fallback for most handlers
+    # Fallback: if instruction writes to a register we initialized, check it
     if not check_regs and handler not in FLAG_MANIP_HANDLERS and handler not in FLAG_ONLY_HANDLERS:
-        check_regs = {"RAX"}
+        # Check RAX as default destination
+        if "RAX" in initialized_regs:
+            check_regs = {"RAX"}
 
     # Determine which flags to check
     check_flags: List[str] = []
     if handler in FLAG_MANIP_HANDLERS:
         check_flags = FLAG_MANIP_HANDLERS[handler]
-        check_regs = set()  # Flag-only
+        check_regs = set()
     elif handler in NO_FLAG_HANDLERS:
         check_flags = []
     elif handler in FLAG_ONLY_HANDLERS:
         check_flags = ARITH_FLAGS
-    elif writes_flags:
+    elif analysis.writes_flags:
         check_flags = ARITH_FLAGS
 
-    # Build enriched expected
+    # Build enriched case
     case["oracle"] = "unicorn"
     case["expected"] = {
         "registers": {reg: "0x0" for reg in sorted(check_regs)},
@@ -206,12 +268,13 @@ def main():
     for i, case in enumerate(cases):
         before_oracle = case.get("oracle")
         cases[i] = enrich_case(case)
-        if cases[i].get("oracle") != before_oracle:
-            enriched += 1
         if cases[i].get("skip"):
             skipped += 1
+        elif cases[i].get("oracle") != before_oracle:
+            enriched += 1
 
     payload["cases"] = cases
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
     print(f"Enriched: {enriched} cases, Skipped: {skipped} cases")

@@ -1,6 +1,6 @@
 {
   "schema": "mergen-oracle-v1",
-  "generated_at_utc": "2026-03-04T06:36:12.783399+00:00",
+  "generated_at_utc": "2026-03-04T06:59:11.322690+00:00",
   "source_seed_schema": "mergen-oracle-seed-v1",
   "providers": [
     "unicorn"
@@ -373,7 +373,7 @@
       },
       "oracle_observations": {},
       "skip": true,
-      "skip_reason": "instruction uses R14/RDI which are not in initial register set"
+      "skip_reason": "instruction 'andn rax, r14, rdi' reads uninitialized register(s): R14, RDI"
     },
     {
       "name": "smoke_bextr_bextr",
@@ -401,7 +401,7 @@
       },
       "oracle_observations": {},
       "skip": true,
-      "skip_reason": "instruction uses R12D/EDI which are not in initial register set"
+      "skip_reason": "instruction 'bextr ebx, r12d, edi' reads uninitialized register(s): R12, RDI"
     },
     {
       "name": "smoke_blsi_blsi",
@@ -429,7 +429,7 @@
       },
       "oracle_observations": {},
       "skip": true,
-      "skip_reason": "memory operand form discovered; need register-only encoding"
+      "skip_reason": "memory operand in 'blsi edi, dword ptr [rax - 0x80]'; needs mapped memory for emulation"
     },
     {
       "name": "smoke_blsmsk_blsmsk",
@@ -457,7 +457,7 @@
       },
       "oracle_observations": {},
       "skip": true,
-      "skip_reason": "memory operand form discovered; need register-only encoding"
+      "skip_reason": "memory operand in 'blsmsk r11d, dword ptr [r14 - 0x1c]'; needs mapped memory for emulation"
     },
     {
       "name": "smoke_blsr_blsr",
@@ -484,7 +484,7 @@
       },
       "oracle_observations": {},
       "skip": true,
-      "skip_reason": "memory operand form discovered; need register-only encoding"
+      "skip_reason": "memory operand in 'blsr r11d, dword ptr [rcx]'; needs mapped memory for emulation"
     },
     {
       "name": "smoke_bsf_bsf",
@@ -536,7 +536,7 @@
     {
       "name": "smoke_bsr_bsr",
       "handler": "bsr",
-      "oracle_mode": "unicorn",
+      "oracle_mode": "none",
       "instruction_bytes": [
         69,
         15,
@@ -553,33 +553,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {
-          "RAX": "0x1122334455667788"
-        },
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 1,
-          "FLAG_SF": 0,
-          "FLAG_PF": 1,
-          "FLAG_AF": 0
-        }
+        "registers": {},
+        "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 1,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle_observations": {},
+      "skip": true,
+      "skip_reason": "instruction 'bsr r12d, r10d' reads uninitialized register(s): R10"
     },
     {
       "name": "smoke_bswap_bswap",
@@ -659,7 +638,7 @@
     {
       "name": "smoke_btc_btc",
       "handler": "btc",
-      "oracle_mode": "unicorn",
+      "oracle_mode": "none",
       "instruction_bytes": [
         15,
         187,
@@ -676,33 +655,16 @@
       },
       "expected": {
         "registers": {},
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 0,
-          "FLAG_SF": 0,
-          "FLAG_PF": 0,
-          "FLAG_AF": 0
-        }
+        "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle_observations": {},
+      "skip": true,
+      "skip_reason": "instruction 'btc esp, ebp' reads uninitialized register(s): RBP"
     },
     {
       "name": "smoke_btr_btr",
       "handler": "btr",
-      "oracle_mode": "unicorn",
+      "oracle_mode": "none",
       "instruction_bytes": [
         15,
         179,
@@ -719,28 +681,11 @@
       },
       "expected": {
         "registers": {},
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 0,
-          "FLAG_SF": 0,
-          "FLAG_PF": 0,
-          "FLAG_AF": 0
-        }
+        "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {},
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 0,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle_observations": {},
+      "skip": true,
+      "skip_reason": "instruction 'btr ebp, esp' reads uninitialized register(s): RBP"
     },
     {
       "name": "smoke_bts_bts",
@@ -766,12 +711,12 @@
       },
       "oracle_observations": {},
       "skip": true,
-      "skip_reason": "instruction uses EBP which is not in initial register set"
+      "skip_reason": "instruction 'bts ebx, ebp' reads uninitialized register(s): RBP"
     },
     {
       "name": "smoke_bzhi_bzhi",
       "handler": "bzhi",
-      "oracle_mode": "unicorn",
+      "oracle_mode": "none",
       "instruction_bytes": [
         196,
         34,
@@ -789,33 +734,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {
-          "RAX": "0x1122334455667788"
-        },
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 1,
-          "FLAG_SF": 0,
-          "FLAG_PF": 0,
-          "FLAG_AF": 0
-        }
+        "registers": {},
+        "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 1,
-            "FLAG_SF": 0,
-            "FLAG_PF": 0,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle_observations": {},
+      "skip": true,
+      "skip_reason": "instruction 'bzhi r11, rax, r15' reads uninitialized register(s): R15"
     },
     {
       "name": "smoke_call_call",
@@ -1454,12 +1378,21 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
       "oracle_observations": {},
       "skip": true,
-      "skip_reason": "idiv bl causes exception with default initial values"
+      "skip_reason": "emulation failed: Unhandled CPU exception (UC_ERR_EXCEPTION)"
     },
     {
       "name": "smoke_idiv2_idiv",
@@ -2116,7 +2049,7 @@
     {
       "name": "smoke_lea_lea",
       "handler": "lea",
-      "oracle_mode": "unicorn",
+      "oracle_mode": "none",
       "instruction_bytes": [
         141,
         38
@@ -2131,19 +2064,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {
-          "RAX": "0x1122334455667788"
-        },
+        "registers": {},
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle_observations": {},
+      "skip": true,
+      "skip_reason": "memory operand in 'lea esp, [rsi]'; needs mapped memory for emulation"
     },
     {
       "name": "smoke_leave_leave",
@@ -2274,7 +2200,7 @@
       },
       "oracle_observations": {},
       "skip": true,
-      "skip_reason": "memory string instruction requires RSI/RDI memory setup"
+      "skip_reason": "handler 'movs_x' requires special test setup"
     },
     {
       "name": "smoke_mul_mul",
@@ -2538,7 +2464,7 @@
     {
       "name": "smoke_pext_pext",
       "handler": "pext",
-      "oracle_mode": "unicorn",
+      "oracle_mode": "none",
       "instruction_bytes": [
         196,
         98,
@@ -2556,19 +2482,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {
-          "RAX": "0x1122334455667788"
-        },
+        "registers": {},
         "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {}
-        }
-      }
+      "oracle_observations": {},
+      "skip": true,
+      "skip_reason": "instruction 'pext r12d, r14d, ecx' reads uninitialized register(s): R14"
     },
     {
       "name": "smoke_pop_pop",
@@ -2943,7 +2862,7 @@
     {
       "name": "smoke_sar_sar",
       "handler": "sar",
-      "oracle_mode": "unicorn",
+      "oracle_mode": "none",
       "instruction_bytes": [
         211,
         254
@@ -2958,33 +2877,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {
-          "RAX": "0x1122334455667788"
-        },
-        "flags": {
-          "FLAG_CF": 0,
-          "FLAG_OF": 0,
-          "FLAG_ZF": 1,
-          "FLAG_SF": 0,
-          "FLAG_PF": 1,
-          "FLAG_AF": 0
-        }
+        "registers": {},
+        "flags": {}
       },
-      "oracle_observations": {
-        "unicorn": {
-          "registers": {
-            "RAX": "0x1122334455667788"
-          },
-          "flags": {
-            "FLAG_CF": 0,
-            "FLAG_OF": 0,
-            "FLAG_ZF": 1,
-            "FLAG_SF": 0,
-            "FLAG_PF": 1,
-            "FLAG_AF": 0
-          }
-        }
-      }
+      "oracle_observations": {},
+      "skip": true,
+      "skip_reason": "instruction 'sar esi, cl' reads uninitialized register(s): RSI"
     },
     {
       "name": "smoke_sbb_sbb",
