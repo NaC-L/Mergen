@@ -3211,8 +3211,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_xadd() {
       Lvalue, Rvalue, "xadd_sum-" + std::to_string(current_address) + "-");
 
   // only 0 could be memory, so ideally 0 should be set first?
-  SetIndexValue(0, TEMP);
   SetIndexValue(1, Lvalue);
+  SetIndexValue(0, TEMP);
   /*
   TEMP := SRC + DEST;
   SRC := DEST;
@@ -3803,10 +3803,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_lzcnt() {
   auto ctlzDecl = Intrinsic::getDeclaration(
       builder->GetInsertBlock()->getModule(), Intrinsic::ctlz, source->getType());
   auto isZeroUndef = ConstantInt::getFalse(builder->getContext());
-  Value* lzcntValue = builder->CreateCall(ctlzDecl, {source, isZeroUndef});
-  lzcntValue = simplifyValue(
-      lzcntValue,
-      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
+  Value* lzcntValue;
+  if (auto* CI = dyn_cast<ConstantInt>(source)) {
+    unsigned lz = CI->getValue().countl_zero();
+    lzcntValue = ConstantInt::get(source->getType(), lz);
+  } else {
+    lzcntValue = builder->CreateCall(ctlzDecl, {source, isZeroUndef});
+  }
 
   SetIndexValue(0, lzcntValue);
 
@@ -4015,10 +4018,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_tzcnt() {
   auto cttzDecl = Intrinsic::getDeclaration(
       builder->GetInsertBlock()->getModule(), Intrinsic::cttz, source->getType());
   auto isZeroUndef = ConstantInt::getFalse(builder->getContext());
-  Value* tzcntValue = builder->CreateCall(cttzDecl, {source, isZeroUndef});
-  tzcntValue = simplifyValue(
-      tzcntValue,
-      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
+  Value* tzcntValue;
+  if (auto* CI = dyn_cast<ConstantInt>(source)) {
+    unsigned tz = CI->getValue().countr_zero();
+    tzcntValue = ConstantInt::get(source->getType(), tz);
+  } else {
+    tzcntValue = builder->CreateCall(cttzDecl, {source, isZeroUndef});
+  }
 
   SetIndexValue(0, tzcntValue);
 

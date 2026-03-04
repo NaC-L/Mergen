@@ -182,10 +182,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -208,10 +217,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -238,7 +256,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "instruction uses R14/RDI which are not in initial register set"
     },
     {
       "name": "smoke_bextr_bextr",
@@ -264,7 +284,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "instruction uses R12D/EDI which are not in initial register set"
     },
     {
       "name": "smoke_blsi_blsi",
@@ -290,7 +312,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "memory operand form discovered; need register-only encoding"
     },
     {
       "name": "smoke_blsmsk_blsmsk",
@@ -316,7 +340,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "memory operand form discovered; need register-only encoding"
     },
     {
       "name": "smoke_blsr_blsr",
@@ -341,7 +367,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "memory operand form discovered; need register-only encoding"
     },
     {
       "name": "smoke_bsf_bsf",
@@ -361,10 +389,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -386,10 +423,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -409,10 +455,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RCX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -434,9 +482,16 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -458,9 +513,16 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -482,9 +544,16 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -509,7 +578,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "instruction uses EBP which is not in initial register set"
     },
     {
       "name": "smoke_bzhi_bzhi",
@@ -531,10 +602,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -561,7 +641,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'call' requires special test setup"
     },
     {
       "name": "smoke_cbw_cbw",
@@ -580,10 +662,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -602,10 +686,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -625,10 +712,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -648,9 +737,11 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -670,9 +761,11 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_DF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -694,7 +787,7 @@
         "registers": {},
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -714,9 +807,11 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -737,10 +832,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -761,9 +858,16 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -784,10 +888,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -811,7 +917,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'cpuid' requires special test setup"
     },
     {
       "name": "smoke_cqo_cqo",
@@ -830,10 +938,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -853,10 +964,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -875,10 +989,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -898,10 +1014,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -921,10 +1046,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -944,10 +1079,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -971,7 +1116,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "idiv bl causes exception with default initial values"
     },
     {
       "name": "smoke_idiv2_idiv",
@@ -990,10 +1137,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1017,10 +1174,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1040,10 +1206,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1063,10 +1239,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RCX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1090,7 +1275,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jb' requires special test setup"
     },
     {
       "name": "smoke_jbe_jbe",
@@ -1113,7 +1300,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jbe' requires special test setup"
     },
     {
       "name": "smoke_jl_jl",
@@ -1136,7 +1325,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jl' requires special test setup"
     },
     {
       "name": "smoke_jle_jle",
@@ -1159,7 +1350,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jle' requires special test setup"
     },
     {
       "name": "smoke_jmp_jmp",
@@ -1185,7 +1378,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jmp' requires special test setup"
     },
     {
       "name": "smoke_jnb_jnb",
@@ -1208,7 +1403,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jnb' requires special test setup"
     },
     {
       "name": "smoke_jnbe_jnbe",
@@ -1231,7 +1428,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jnbe' requires special test setup"
     },
     {
       "name": "smoke_jnl_jnl",
@@ -1254,7 +1453,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jnl' requires special test setup"
     },
     {
       "name": "smoke_jnle_jnle",
@@ -1277,7 +1478,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jnle' requires special test setup"
     },
     {
       "name": "smoke_jno_jno",
@@ -1300,7 +1503,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jno' requires special test setup"
     },
     {
       "name": "smoke_jnp_jnp",
@@ -1323,7 +1528,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jnp' requires special test setup"
     },
     {
       "name": "smoke_jns_jns",
@@ -1347,7 +1554,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jns' requires special test setup"
     },
     {
       "name": "smoke_jnz_jnz",
@@ -1370,7 +1579,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jnz' requires special test setup"
     },
     {
       "name": "smoke_jo_jo",
@@ -1393,7 +1604,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jo' requires special test setup"
     },
     {
       "name": "smoke_jp_jp",
@@ -1416,7 +1629,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jp' requires special test setup"
     },
     {
       "name": "smoke_js_js",
@@ -1439,7 +1654,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'js' requires special test setup"
     },
     {
       "name": "smoke_jz_jz",
@@ -1462,7 +1679,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'jz' requires special test setup"
     },
     {
       "name": "smoke_lahf_lahf",
@@ -1480,10 +1699,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1503,10 +1724,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1529,7 +1752,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'leave' requires special test setup"
     },
     {
       "name": "smoke_lzcnt_lzcnt",
@@ -1550,10 +1775,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1574,10 +1808,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1602,7 +1838,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "memory string instruction requires RSI/RDI memory setup"
     },
     {
       "name": "smoke_mul_mul",
@@ -1622,10 +1860,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1645,10 +1893,20 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0",
+          "RDX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1668,10 +1926,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RCX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1691,10 +1958,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RCX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1717,10 +1986,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1743,10 +2021,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1769,10 +2049,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1795,7 +2077,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'pop' requires special test setup"
     },
     {
       "name": "smoke_popcnt_popcnt",
@@ -1816,10 +2100,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1844,7 +2137,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'popfq' requires special test setup"
     },
     {
       "name": "smoke_push_push",
@@ -1870,7 +2165,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'push' requires special test setup"
     },
     {
       "name": "smoke_pushfq_pushf",
@@ -1893,7 +2190,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'pushfq' requires special test setup"
     },
     {
       "name": "smoke_rcl_rcl",
@@ -1912,10 +2211,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RBX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1935,10 +2243,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RBX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -1962,7 +2279,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'rdtsc' requires special test setup"
     },
     {
       "name": "smoke_ret_ret",
@@ -1984,7 +2303,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'ret' requires special test setup"
     },
     {
       "name": "smoke_ror_ror",
@@ -2004,10 +2325,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RCX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2026,10 +2356,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2049,10 +2381,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2075,10 +2416,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2099,10 +2449,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2123,10 +2475,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2147,10 +2501,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RBX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2171,10 +2527,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RBX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2195,10 +2553,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2219,10 +2579,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RCX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2243,10 +2605,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2267,10 +2631,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2291,10 +2657,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RCX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2315,10 +2683,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RCX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2339,10 +2709,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2363,10 +2735,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RCX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2387,10 +2761,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2411,10 +2787,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2435,10 +2813,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RBX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2459,10 +2839,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RDX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2482,10 +2864,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RDX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2507,10 +2898,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2530,10 +2930,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RCX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2554,10 +2963,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RBX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2577,9 +2995,11 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2599,9 +3019,11 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_DF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2626,7 +3048,9 @@
         "flags": {}
       },
       "oracle": "none",
-      "source": "capstone-auto-discovery"
+      "source": "capstone-auto-discovery",
+      "skip": true,
+      "skip_reason": "handler 'stosx' requires special test setup"
     },
     {
       "name": "smoke_test_test",
@@ -2646,9 +3070,16 @@
       },
       "expected": {
         "registers": {},
-        "flags": {}
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2670,10 +3101,19 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
-        "flags": {}
+        "registers": {
+          "RAX": "0x0"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0
+        }
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2694,10 +3134,12 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     },
     {
@@ -2716,10 +3158,13 @@
         "flags": {}
       },
       "expected": {
-        "registers": {},
+        "registers": {
+          "RAX": "0x0",
+          "RCX": "0x0"
+        },
         "flags": {}
       },
-      "oracle": "none",
+      "oracle": "unicorn",
       "source": "capstone-auto-discovery"
     }
   ]
