@@ -341,6 +341,9 @@ public:
   // lifts single instruction
   void liftBytes(const void* bytes, size_t size = 15) {
     // what about the basicblock?
+    this->hadConditionalBranch = false;
+    this->lastConditionalBranchResolved = false;
+    this->lastBranchTaken = false;
     runDisassembler(bytes, size);
     current_address += instruction.length;
     liftInstructionSemantics();
@@ -472,6 +475,7 @@ public:
   // Set by branchHelper after resolving a conditional branch.
   // Test framework reads this to verify jcc taken/not-taken.
   bool hadConditionalBranch = false;
+  bool lastConditionalBranchResolved = false;
   bool lastBranchTaken = false;
   // DenseMap<InstructionKey, Value*, InstructionKey::InstructionKeyInfo>
   // cache;

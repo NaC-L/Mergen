@@ -138,6 +138,8 @@ private:
     if (testCase.expectedBranchTaken.has_value()) {
       if (!lifter.hadConditionalBranch) {
         errors << "  expected a conditional branch but none was taken\n";
+      } else if (!lifter.lastConditionalBranchResolved) {
+        errors << "  expected resolved conditional branch direction but it remained symbolic\n";
       } else if (lifter.lastBranchTaken != testCase.expectedBranchTaken.value()) {
         errors << "  branch_taken mismatch: expected="
                << testCase.expectedBranchTaken.value()

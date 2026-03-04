@@ -268,15 +268,21 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::branchHelper(
     next_jump = createSelectFolder(condition, false_jump, true_jump);
 
   uint64_t destination = 0;
-  solvePath(function, destination, next_jump);
+  PATH_info pathInfo = solvePath(function, destination, next_jump);
   this->hadConditionalBranch = true;
-  if (true_jump_addr == false_jump_addr) {
+  this->lastConditionalBranchResolved = (pathInfo == PATH_solved);
+
+  if (!this->lastConditionalBranchResolved) {
+    // Direction is unresolved/symbolic; do not infer taken/not-taken from default destination.
+    this->lastBranchTaken = false;
+  } else if (true_jump_addr == false_jump_addr) {
     if (auto* condConst = llvm::dyn_cast<llvm::ConstantInt>(condition)) {
       const bool condValue = condConst->isOne();
       this->lastBranchTaken = reverse ? !condValue : condValue;
     } else {
       // Ambiguous when both destinations are equal and condition is symbolic.
       this->lastBranchTaken = false;
+      this->lastConditionalBranchResolved = false;
     }
   } else {
     this->lastBranchTaken = (destination == true_jump_addr);

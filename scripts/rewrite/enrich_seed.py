@@ -11,6 +11,7 @@ For each case with oracle=none and empty expected fields, this script:
 The oracle generator then fills in the actual numeric expected values via Unicorn.
 """
 import argparse
+import os
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -437,7 +438,9 @@ def main():
 
     payload["cases"] = cases
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    temp_out = out_path.with_name(out_path.name + ".tmp")
+    temp_out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    os.replace(temp_out, out_path)
 
     print(f"Enriched: {enriched} cases, Skipped: {skipped} cases")
     print(f"Total: {len(cases)} cases")
