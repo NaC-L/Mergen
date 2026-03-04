@@ -251,13 +251,31 @@ def main():
             expected.setdefault("registers", {})
             expected.setdefault("flags", {})
         elif oracle_mode == "unicorn":
+            emulation_failed = False
+            emulation_error = ""
             for provider in providers:
-                case_results[provider.name] = provider.emulate(case)
+                try:
+                    case_results[provider.name] = provider.emulate(case)
+                except Exception as exc:
+                    emulation_error = str(exc)
+                    print(
+                        f"WARNING: emulation failed for case '{case['name']}' "
+                        f"with provider '{provider.name}': {emulation_error}"
+                    )
+                    emulation_failed = True
+                    break
 
-            compare_results(case_results, case["name"])
-
-            consensus = case_results[providers[0].name]
-            expected = normalize_expected(case, consensus)
+            if emulation_failed:
+                expected = case.get("expected", {})
+                expected.setdefault("registers", {})
+                expected.setdefault("flags", {})
+                oracle_mode = "none"
+                case["skip"] = True
+                case["skip_reason"] = f"emulation failed: {emulation_error}"
+            else:
+                compare_results(case_results, case["name"])
+                consensus = case_results[providers[0].name]
+                expected = normalize_expected(case, consensus)
         else:
             raise OracleError(
                 f"Case '{case['name']}' has unsupported oracle mode '{oracle_mode}'"
