@@ -183,7 +183,7 @@ def main() -> None:
         return
 
     if command == "update-golden":
-        run_baseline()
+        _run_cmd(REWRITE_DIR / "run.cmd")
         update_golden(IR_OUTPUT_DIR, GOLDEN_HASHES_FILE)
         return
 

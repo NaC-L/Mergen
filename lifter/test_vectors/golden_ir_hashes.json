@@ -36,5 +36,7 @@
   "stack.ll": "41199a809916ab3045d1de076b3d4128fb40a45f950764b38b851f67b310c4fe",
   "stack_no_opts.ll": "94059a01b8a78951c9448ba94b5dadf445610df76315b8cab8eecd153843472b",
   "switch_3way.ll": "e706ce0da37dbe02fd52fae223c39f74a8b84c4946b971d8425fe868a4e73256",
-  "switch_3way_no_opts.ll": "5527b1a564babe40dd9ea1ff7d1ea3796e814c22823be7841ee1be0dbd1c7524"
+  "switch_3way_no_opts.ll": "5527b1a564babe40dd9ea1ff7d1ea3796e814c22823be7841ee1be0dbd1c7524",
+  "switch_sparse.ll": "06b9ec694dcf18ffb7041a437fa3e4f2e50c061569cc98bcb239b5f77c3a15f4",
+  "switch_sparse_no_opts.ll": "b5fea064fea49272e541476f1e087d6f34f10e9f2d90d0eb0b6ebdda9ca7ea6c"
 }

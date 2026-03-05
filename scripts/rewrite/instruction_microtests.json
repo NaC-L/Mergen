@@ -94,6 +94,18 @@
       "name": "calc_switch",
       "symbol": "calc_switch",
       "patterns": ["switch i32 %0", "i32 1, label", "i32 2, label", "i32 3, label", "i32 4, label", "i32 5, label", "phi i64"]
+    },
+    {
+      "name": "switch_sparse",
+      "symbol": "switch_sparse_target",
+      "patterns": ["switch i32 %0", "i32 10, label", "i32 50, label", "i32 200, label", "i32 1000, label", "phi i64", "[ 11,", "[ 55,", "[ 222,", "[ 1337,", "[ 4294967295,"]
+    },
+    {
+      "name": "calc_cout",
+      "symbol": "calc_cout",
+      "skip": true,
+      "skip_reason": "Statically-linked STL (cout) inlined by lifter; GEPTracker UNREACHABLE on complex library code. Blocked on inline policy improvements (Phase 2).",
+      "patterns": []
     }
   ]
 }
