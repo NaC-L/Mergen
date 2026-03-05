@@ -79,13 +79,17 @@ struct InstructionKey {
       return lhs == rhs;
     }
 
-    // Define empty and tombstone keys
+    // Define empty and tombstone keys — MUST be distinct for DenseMap.
     static inline InstructionKey getEmptyKey() {
-      return InstructionKey(nullptr, static_cast<Value*>(nullptr));
+      return InstructionKey(
+          reinterpret_cast<Value*>(static_cast<uintptr_t>(-1)),
+          reinterpret_cast<Value*>(static_cast<uintptr_t>(-1)));
     }
 
     static inline InstructionKey getTombstoneKey() {
-      return InstructionKey(nullptr, static_cast<Value*>(nullptr));
+      return InstructionKey(
+          reinterpret_cast<Value*>(static_cast<uintptr_t>(-2)),
+          reinterpret_cast<Value*>(static_cast<uintptr_t>(-2)));
     }
   };
 };
@@ -110,16 +114,8 @@ public:
   }
   InstructionCache() = default;
   InstructionCache(InstructionCache& other) {
-    // we want to copy each SmallDenseMap individually
-    // crash on last item, why?
-    // FIXME: last item on array is corrupted.
     for (size_t i = 0; i < opcodeCaches.size(); ++i) {
-
-      // reserve because its faster
-
-      auto src = other.opcodeCaches[i];
-      opcodeCaches[i].reserve(src.size());
-
+      opcodeCaches[i].reserve(other.opcodeCaches[i].size());
       for (auto& kv : other.opcodeCaches[i]) {
         opcodeCaches[i].try_emplace(kv.first, kv.second);
       }

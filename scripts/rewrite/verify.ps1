@@ -19,6 +19,10 @@ if ($checks.Count -eq 0) {
 $failed = $false
 
 foreach ($check in $checks) {
+    if ($check.PSObject.Properties['skip'] -and $check.skip) {
+        Write-Host "SKIP: $($check.name) (known limitation)"
+        continue
+    }
     $file = Join-Path $irDir "$($check.name).ll"
     if (-not (Test-Path $file)) {
         Write-Host "FAIL: missing $file"

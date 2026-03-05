@@ -62,5 +62,14 @@ for %%F in ("%~dp0..\..\testcases\rewrite_smoke\*.c") do (
     if errorlevel 1 exit /b 1
 )
 
+rem --- Compile C++ test programs (real binaries with CRT + STL) ---
+for %%F in ("%~dp0..\..\testcases\rewrite_smoke\*.cpp") do (
+    cl.exe /nologo /Od /GS- /EHsc /c /Fo"%WORKDIR%\%%~nF.obj" "%%~fF"
+    if errorlevel 1 exit /b 1
+
+    link.exe /nologo /subsystem:console /out:"%WORKDIR%\%%~nF.exe" /map:"%WORKDIR%\%%~nF.map" "%WORKDIR%\%%~nF.obj"
+    if errorlevel 1 exit /b 1
+)
+
 echo Built rewrite regression samples in "%WORKDIR%"
 exit /b 0

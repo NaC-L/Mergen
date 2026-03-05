@@ -32,7 +32,8 @@ if ($samples.Count -eq 0) {
 $srcDir = Join-Path $repoRoot 'testcases/rewrite_smoke'
 $srcNames = @(
     (Get-ChildItem -Path $srcDir -Filter '*.asm' | ForEach-Object { $_.BaseName }) +
-    (Get-ChildItem -Path $srcDir -Filter '*.c'   | ForEach-Object { $_.BaseName })
+    (Get-ChildItem -Path $srcDir -Filter '*.c'   | ForEach-Object { $_.BaseName }) +
+    (Get-ChildItem -Path $srcDir -Filter '*.cpp' | ForEach-Object { $_.BaseName })
 )
 $sampleNames = @($samples | ForEach-Object { $_.name })
 
@@ -52,6 +53,11 @@ New-Item -ItemType Directory -Path $irDir -Force | Out-Null
 Push-Location $repoRoot
 try {
     foreach ($sample in $samples) {
+        if ($sample.PSObject.Properties['skip'] -and $sample.skip) {
+            Write-Host "SKIP: $($sample.name) (known limitation)"
+            continue
+        }
+
         $mapPath = Join-Path $WorkDir "$($sample.name).map"
         if (-not (Test-Path $mapPath)) {
             throw "Map file not found: $mapPath"
