@@ -34,6 +34,56 @@
       "name": "instr_rol",
       "symbol": "instr_rol_target",
       "patterns": ["ret i64 34"]
+    },
+    {
+      "name": "nested_branch",
+      "symbol": "nested_branch_target",
+      "patterns": ["icmp slt i32 %0, 11", "icmp slt i32 %0, 21", "select i1", "i64 200, i64 300", "i64 100"]
+    },
+    {
+      "name": "loop_simple",
+      "symbol": "loop_simple_target",
+      "patterns": ["ret i64 6"]
+    },
+    {
+      "name": "bitchain",
+      "symbol": "bitchain_target",
+      "patterns": ["ret i64 4090"]
+    },
+    {
+      "name": "multi_arg",
+      "symbol": "multi_arg_target",
+      "patterns": ["trunc i64 %RCX to i32", "trunc i64 %RDX to i32", "add i32", "mul i32", "zext i32"]
+    },
+    {
+      "name": "diamond",
+      "symbol": "diamond_target",
+      "patterns": ["and i32 %0, 1", "icmp eq i32", "select i1", "mul i32 %0, 3"]
+    },
+    {
+      "name": "cmov_chain",
+      "symbol": "cmov_chain_target",
+      "patterns": ["icmp sgt i32 %0, 10", "select i1", "i64 250, i64 150"]
+    },
+    {
+      "name": "calc_grade",
+      "symbol": "calc_grade",
+      "patterns": ["icmp slt i32 %0, 90", "icmp slt i32 %0, 80", "icmp slt i32 %0, 70", "phi i64", "ret i64 %common.ret.op"]
+    },
+    {
+      "name": "calc_mixed",
+      "symbol": "calc_mixed",
+      "patterns": ["icmp slt i32 %0, 101", "select i1", "mul i32", "ret i64"]
+    },
+    {
+      "name": "calc_fib",
+      "symbol": "calc_fib",
+      "patterns": ["ret i64 13"]
+    },
+    {
+      "name": "calc_sum_array",
+      "symbol": "calc_sum_array",
+      "patterns": ["ret i64 150"]
     }
   ]
 }

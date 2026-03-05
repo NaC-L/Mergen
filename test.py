@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -12,6 +14,8 @@ ROOT = Path(__file__).resolve().parent
 REWRITE_DIR = ROOT / "scripts" / "rewrite"
 FULL_VECTORS = ROOT / "lifter" / "test_vectors" / "oracle_vectors_full_handlers.json"
 DEFAULT_VECTORS = ROOT / "lifter" / "test_vectors" / "oracle_vectors.json"
+IR_OUTPUT_DIR = ROOT.parent / "rewrite-regression-work" / "ir_outputs"
+GOLDEN_HASHES_FILE = ROOT / "lifter" / "test_vectors" / "golden_ir_hashes.json"
 
 
 def _run(argv: List[str], extra_env: Dict[str, str] | None = None) -> None:
@@ -29,8 +33,61 @@ def _run_cmd(script: Path, args: List[str] | None = None, extra_env: Dict[str, s
     _run(["cmd", "/c", str(script), *(args or [])], extra_env=extra_env)
 
 
+def compute_ir_hashes(ir_dir: Path) -> Dict[str, str]:
+    hashes: Dict[str, str] = {}
+    if not ir_dir.is_dir():
+        return hashes
+    for ll_file in sorted(ir_dir.rglob("*.ll")):
+        content = ll_file.read_text(encoding="utf-8", errors="replace")
+        normalized = "\n".join(line.rstrip() for line in content.splitlines()) + "\n"
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        hashes[ll_file.name] = digest
+    return dict(sorted(hashes.items()))
+
+
+def check_determinism(ir_dir: Path, golden_file: Path) -> None:
+    hashes = compute_ir_hashes(ir_dir)
+    if not hashes:
+        print("WARNING: no .ll files found in", ir_dir, "— skipping determinism check")
+        return
+
+    if not golden_file.exists():
+        golden_file.parent.mkdir(parents=True, exist_ok=True)
+        golden_file.write_text(json.dumps(hashes, indent=2) + "\n", encoding="utf-8")
+        print(f"Golden hashes written to {golden_file} (first run)")
+        return
+
+    golden = json.loads(golden_file.read_text(encoding="utf-8"))
+    mismatches: List[str] = []
+    all_keys = sorted(set(golden) | set(hashes))
+    for key in all_keys:
+        expected = golden.get(key)
+        actual = hashes.get(key)
+        if expected != actual:
+            mismatches.append(
+                f"  {key}: expected={expected or '(missing)'} actual={actual or '(missing)'}"
+            )
+    if mismatches:
+        print("Determinism check FAILED — mismatched files:")
+        for m in mismatches:
+            print(m)
+        raise SystemExit(1)
+    print(f"Determinism check passed: {len(hashes)} files match golden hashes")
+
+
+def update_golden(ir_dir: Path, golden_file: Path) -> None:
+    hashes = compute_ir_hashes(ir_dir)
+    if not hashes:
+        print("WARNING: no .ll files found in", ir_dir, "— nothing to write")
+        return
+    golden_file.parent.mkdir(parents=True, exist_ok=True)
+    golden_file.write_text(json.dumps(hashes, indent=2) + "\n", encoding="utf-8")
+    print(f"Golden hashes updated: {golden_file} ({len(hashes)} files)")
+
+
 def run_baseline() -> None:
     _run_cmd(REWRITE_DIR / "run.cmd")
+    check_determinism(IR_OUTPUT_DIR, GOLDEN_HASHES_FILE)
 
 
 def run_micro(filter_tokens: List[str], check_flags: bool, regenerate_oracle: bool) -> None:
@@ -75,6 +132,7 @@ def parse_args() -> argparse.Namespace:
 
     sub.add_parser("quick", help="baseline + microtests (skip oracle regen)")
     sub.add_parser("baseline", help="run scripts/rewrite/run.cmd")
+    sub.add_parser("update-golden", help="run baseline then regenerate golden IR hashes")
     full = sub.add_parser("full", help="run scripts/rewrite/run_all_handlers.cmd")
     full.add_argument(
         "--check-flags",
@@ -110,11 +168,6 @@ def parse_args() -> argparse.Namespace:
     flags.add_argument("filter", nargs="*", help="optional test name filter tokens")
     all_cmd = sub.add_parser("all", help="baseline + full-handler + full coverage")
     all_cmd.add_argument("--no-coverage", action="store_true", help="skip final coverage report")
-    all_cmd.add_argument(
-        "--check-flags",
-        action="store_true",
-        help="enforce strict oracle flag comparisons during full-handler stage",
-    )
     report_cmd = sub.add_parser("report", help="print handler test coverage report")
     report_cmd.add_argument("--json", action="store_true", help="output as JSON")
     report_cmd.add_argument("--vectors", type=Path, default=None, help="explicit vectors file")
@@ -127,6 +180,11 @@ def main() -> None:
 
     if command == "baseline":
         run_baseline()
+        return
+
+    if command == "update-golden":
+        run_baseline()
+        update_golden(IR_OUTPUT_DIR, GOLDEN_HASHES_FILE)
         return
 
     if command == "micro":
@@ -167,14 +225,14 @@ def main() -> None:
 
     if command == "all":
         run_baseline()
-        run_full(args.check_flags)
+        run_full(check_flags=True)
         if not args.no_coverage:
             run_coverage(FULL_VECTORS)
         return
 
     if command == "quick":
         run_baseline()
-        run_micro([], check_flags=False, regenerate_oracle=False)
+        run_micro([], check_flags=True, regenerate_oracle=False)
         return
 
     raise SystemExit(f"Unknown command: {command}")
