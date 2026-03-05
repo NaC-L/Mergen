@@ -84,6 +84,16 @@
       "name": "calc_sum_array",
       "symbol": "calc_sum_array",
       "patterns": ["ret i64 150"]
+    },
+    {
+      "name": "switch_3way",
+      "symbol": "switch_3way_target",
+      "patterns": ["switch i32 %0", "i32 1, label", "i32 2, label", "i32 3, label", "phi i64", "[ 100,", "[ 200,", "[ 300,", "[ 999,"]
+    },
+    {
+      "name": "calc_switch",
+      "symbol": "calc_switch",
+      "patterns": ["switch i32 %0", "i32 1, label", "i32 2, label", "i32 3, label", "i32 4, label", "i32 5, label", "phi i64"]
     }
   ]
 }

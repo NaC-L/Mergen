@@ -11,6 +11,8 @@
   "calc_mixed_no_opts.ll": "c4dd8f527814da16a719e3b60503e1fa763c313cbe137ae8709b62f73eca279b",
   "calc_sum_array.ll": "d93f19c3b0594a6a84a9cba2bc35ea6772eb9f5da29dfe1ee28a492b92cf8ab5",
   "calc_sum_array_no_opts.ll": "8b2e552c2cad89bbcb381de515c23191eaab37194a7af42b556dc5f9cba4c2f7",
+  "calc_switch.ll": "ae8e4ddb00a412f8da5b8f396ee6c47ccfb00f6dd6220f6cb4305c9ed4b10a5e",
+  "calc_switch_no_opts.ll": "b36d6c1f2e80afd21b2a669d90e1308c148d374ed1da7a5c5239258cc4dd460a",
   "cmov_chain.ll": "802ad2c3900fa4f14a189664e9f4e5decdf9a870a5c5e82e0738d5e858fe2d1e",
   "cmov_chain_no_opts.ll": "68bb86dba77a80858742e2123bbe9b375bdf25840905be8ea9a8f1a45f3e2d3e",
   "diamond.ll": "e8145999e8c9fb8606b8845b1101680f96ba0f7d4b6053deed2b14b1be1ee612",
@@ -32,5 +34,7 @@
   "nested_branch.ll": "56cb412346186716c2361db7edad986afbfe2465d216660bf8d2b59e29c34afb",
   "nested_branch_no_opts.ll": "64189e90e9383596bd8089473fdda64a795ab755f07fec635da401d7c0b4685e",
   "stack.ll": "41199a809916ab3045d1de076b3d4128fb40a45f950764b38b851f67b310c4fe",
-  "stack_no_opts.ll": "94059a01b8a78951c9448ba94b5dadf445610df76315b8cab8eecd153843472b"
+  "stack_no_opts.ll": "94059a01b8a78951c9448ba94b5dadf445610df76315b8cab8eecd153843472b",
+  "switch_3way.ll": "e706ce0da37dbe02fd52fae223c39f74a8b84c4946b971d8425fe868a4e73256",
+  "switch_3way_no_opts.ll": "5527b1a564babe40dd9ea1ff7d1ea3796e814c22823be7841ee1be0dbd1c7524"
 }

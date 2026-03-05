@@ -270,7 +270,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::branchHelper(
   uint64_t destination = 0;
   PATH_info pathInfo = solvePath(function, destination, next_jump);
   this->hadConditionalBranch = true;
-  this->lastConditionalBranchResolved = (pathInfo == PATH_solved);
+  this->lastConditionalBranchResolved = (pathInfo != PATH_unsolved);
 
   if (!this->lastConditionalBranchResolved) {
     // Direction is unresolved/symbolic; do not infer taken/not-taken from default destination.
