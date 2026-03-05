@@ -168,7 +168,58 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   }
 
   if (pv.size() > 2) {
-    UNREACHABLE("cant reach more than 2 paths!");
+    // N-way branch: emit SwitchInst for multi-target resolution.
+    // Use the first target as the default case (deterministic choice);
+    // remaining targets become explicit case values.
+    auto defaultDest = pv[0];
+    auto bb_default =
+        getOrCreateBB(defaultDest.getZExtValue(), "bb_switch_default");
+
+    unsigned bitWidth = simplifyValue->getType()->getIntegerBitWidth();
+    auto* SI = builder->CreateSwitch(simplifyValue, bb_default,
+                                      static_cast<unsigned>(pv.size() - 1));
+
+    // Add every non-default target as a case.
+    for (size_t i = 1; i < pv.size(); ++i) {
+      auto caseVal = pv[i];
+      auto bb_case = getOrCreateBB(
+          caseVal.getZExtValue(),
+          "bb_switch_" + std::to_string(i));
+      SI->addCase(
+          cast<ConstantInt>(builder->getIntN(bitWidth, caseVal.getZExtValue())),
+          bb_case);
+    }
+
+    // Enqueue all targets and save per-BB state backups.
+    // Process default first, then cases in order.
+    auto defaultBlock = BBInfo(defaultDest.getZExtValue(), bb_default);
+    addUnvisitedAddr(defaultBlock);
+    branch_backup(defaultBlock.block);
+
+    for (size_t i = 1; i < pv.size(); ++i) {
+      auto caseBlock =
+          BBInfo(pv[i].getZExtValue(),
+                 SI->findCaseValue(
+                       cast<ConstantInt>(
+                           builder->getIntN(bitWidth, pv[i].getZExtValue())))
+                     ->getCaseSuccessor());
+      addUnvisitedAddr(caseBlock);
+      branch_backup(caseBlock.block);
+    }
+
+    // dest = first target (for caller compatibility)
+    dest = defaultDest.getZExtValue();
+    result = PATH_multi_solved;
+
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_switch.ll";
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Filename, EC);
+      function->getParent()->print(OS, nullptr);
+    });
+    std::cout << "created multi-target switch with " << pv.size()
+              << " targets\n"
+              << std::flush;
   }
 
   return result;
