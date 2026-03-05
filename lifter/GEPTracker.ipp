@@ -431,7 +431,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
     const llvm::KnownBits& known, unsigned max_unknown) {
 
   if ((max_unknown == 0) || (max_unknown >= 4)) {
-
     debugging::doIfDebug([&]() {
       std::string Filename = "output_too_many_unk.ll";
       std::error_code EC;
@@ -439,7 +438,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
       builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
     printvalueforce2(max_unknown);
-    UNREACHABLE("There is a very huge chance that this shouldnt happen");
+    // Graceful bail: return empty set so caller treats this as PATH_unsolved.
+    // max_unknown==0 means contradictory analysis (no solutions exist).
+    // max_unknown>=4 means too many unknowns (2^N blowup, >16 values).
+    return {};
   }
   llvm::APInt base = known.One;
   llvm::APInt unknowns = ~(known.Zero | known.One);
@@ -584,8 +586,8 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
       default:
         outs() << "\n : " << inst->getOpcode();
         outs().flush();
-        UNREACHABLE("Unsupported operation in calculatePossibleValues.\n");
-        break;
+        // Graceful bail: unsupported opcode in value enumeration.
+        return {};
       }
     }
   }
@@ -602,7 +604,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
       raw_fd_ostream OS(Filename, EC);
       builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
-    UNREACHABLE("Depth exceeded");
+    // Graceful bail: return empty set so caller treats this as PATH_unsolved.
+    return {};
   }
   std::set<APInt, APIntComparator> res;
   printvalue(V);
