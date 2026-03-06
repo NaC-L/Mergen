@@ -26,19 +26,6 @@ DEFAULT_STACK_ADDRESS = 0x2000000
 DEFAULT_STACK_SIZE = 0x20000
 DEFAULT_CODE_SIZE = 0x1000
 
-FLAG_BITS = {
-    "FLAG_CF": 0,
-    "FLAG_PF": 2,
-    "FLAG_AF": 4,
-    "FLAG_ZF": 6,
-    "FLAG_SF": 7,
-    "FLAG_TF": 8,
-    "FLAG_IF": 9,
-    "FLAG_DF": 10,
-    "FLAG_OF": 11,
-}
-
-
 class PcodeEmulatorError(RuntimeError):
     pass
 
@@ -85,8 +72,7 @@ class PcodeEmulatorState:
             data = self._regs[offset : offset + size]
         elif space == "unique":
             data = self._unique.get(offset, b'\x00' * size)
-            if len(data) < size:
-                data = data + b'\x00' * (size - len(data))
+            data = (data + b'\x00' * size)[:size]
         elif space == "ram":
             region, off = self._find_region(offset, size)
             data = region[off : off + size]
@@ -184,12 +170,6 @@ class PcodeEmulator:
         val = self.state.read(space.name, addr, op.output.size)
         self._write(op.output, val)
 
-    def _op_store(self, op) -> None:
-        # STORE [space_id] addr value
-        addr = self._read(op.inputs[1])
-        value = self._read(op.inputs[2])
-        space = op.inputs[0].getSpaceFromConst()
-        self.state.write(space.name, addr, op.output.size if op.output else op.inputs[2].size, value)
 
     def _op_store_fixed(self, op) -> None:
         # STORE has no output; size comes from the value input
@@ -201,7 +181,10 @@ class PcodeEmulator:
     def _op_branch(self, op) -> Optional[int]:
         target = op.inputs[0]
         if target.space.name == "const":
-            # Intra-instruction: const offset is relative to current pc
+            # Intra-instruction: const offset is RELATIVE to current PC.
+            # Verified empirically against BSF P-code which uses a 3-branch
+            # loop (CBRANCH +7, CBRANCH +3, BRANCH -5).  Absolute interpretation
+            # produces nonsensical targets; relative yields correct loop control.
             raw = target.offset
             if raw > 0x7FFFFFFF:  # handle negative as signed 32-bit
                 raw -= 0x100000000
@@ -524,6 +507,11 @@ class SleighOracleProvider:
 
         Returns (pre_a, pre_b, dest_space, dest_offset, dest_size) or None.
         After execution: AF = ((pre_a ^ pre_b ^ post_result) >> 4) & 1.
+
+        Limitation: this heuristic works for ADD, SUB, CMP, NEG, INC, DEC.
+        For ADC/SBB, SLEIGH emits chained INT_ADDs (one for operands, one for
+        carry), and this heuristic may capture operands from the wrong ADD,
+        producing incorrect AF.  Acceptable for a cross-validation oracle.
         """
         pre_a = pre_b = None
         # Track the last INT_ADD/INT_SUB/INT_2COMP output that writes to a

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -196,7 +197,6 @@ def compare_results(results: Dict[str, OracleResult], case_name: str, *, strict:
             if strict:
                 raise OracleError(msg)
             else:
-                import sys
                 print(f"WARNING: {msg}", file=sys.stderr)
 
 
@@ -288,7 +288,6 @@ def main():
                         ) from exc
                     else:
                         # Secondary provider failure is a warning
-                        import sys
                         print(
                             f"WARNING: {provider.name} failed on '{case['name']}': {exc}",
                             file=sys.stderr,
