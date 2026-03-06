@@ -75,15 +75,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
 
   if (memoryPolicy.isRangeFullyCovered(startAddress, startAddress + byteCount,
                                        MemoryAccessMode::SYMBOLIC)) {
-    // Range is fully symbolic. Try the PE file for initial values;
-    // if the address is unmapped, return 0 (reads from unmapped memory
-    // would fault in real execution, so this path is dead code).
+    // Fully symbolic range: use concrete bytes only when mapping is proven;
+    // otherwise preserve symbolic fallback from the original load.
     uint64_t sym_value;
     if (file.readMemory(startAddress, byteCount, sym_value)) {
       return builder->getIntN(byteCount * 8, sym_value);
     }
-    return ConstantInt::get(Type::getIntNTy(builder->getContext(),
-                                            byteCount * 8), 0);
+    return extractBytes(orgLoad.get(), 0, byteCount);
   }
 
   LLVMContext& context = builder->getContext();
@@ -147,23 +145,21 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     printvalue2(read_mem);
     printvalue2(mem_value);
     if (!v.isRef && memoryPolicy.isSymbolic(v.memoryAddress)) {
-      // Symbolic address: try the PE file for initial value,
-      // else return 0 (unmapped memory).
+      // Symbolic address: preserve symbolic fallback when concrete mapping
+      // is not proven.
       if (read_mem) {
         byteValue = builder->getIntN(bytesize * 8, mem_value);
       } else {
-        byteValue = builder->getIntN(bytesize * 8, 0);
+        byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
       }
     } else if (v.isRef) {
       byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
                                v.ref.byteOffset + bytesize);
-    } else if (!v.isRef &&
-               file.readMemory(v.memoryAddress, bytesize, mem_value)) {
-
+    } else if (!v.isRef && read_mem) {
       byteValue = builder->getIntN(bytesize * 8, mem_value);
     } else if (!v.isRef) {
-      // CONCRETE address, file read failed (BSS zero-fill or unmapped)
-      byteValue = builder->getIntN(bytesize * 8, 0);
+      // Concrete read is unresolved when file mapping is unavailable.
+      byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
     }
     if (byteValue) {
       printvalue(byteValue);
