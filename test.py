@@ -41,15 +41,17 @@ def compute_ir_hashes(ir_dir: Path) -> Dict[str, str]:
         content = ll_file.read_text(encoding="utf-8", errors="replace")
         normalized = "\n".join(line.rstrip() for line in content.splitlines()) + "\n"
         digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-        hashes[ll_file.name] = digest
+        rel_key = ll_file.relative_to(ir_dir).as_posix()
+        hashes[rel_key] = digest
     return dict(sorted(hashes.items()))
 
 
 def check_determinism(ir_dir: Path, golden_file: Path) -> None:
     hashes = compute_ir_hashes(ir_dir)
     if not hashes:
-        print("WARNING: no .ll files found in", ir_dir, "— skipping determinism check")
-        return
+        raise SystemExit(
+            f"Determinism check FAILED — no .ll files found in {ir_dir}"
+        )
 
     if not golden_file.exists():
         golden_file.parent.mkdir(parents=True, exist_ok=True)

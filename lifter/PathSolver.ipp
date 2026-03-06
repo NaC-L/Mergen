@@ -9,6 +9,7 @@
 #include <llvm/Analysis/MemorySSAUpdater.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
@@ -169,46 +170,38 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
   if (pv.size() > 2) {
     // N-way branch: emit SwitchInst for multi-target resolution.
-    // Use the first target as the default case (deterministic choice);
-    // remaining targets become explicit case values.
-    auto defaultDest = pv[0];
-    auto bb_default =
-        getOrCreateBB(defaultDest.getZExtValue(), "bb_switch_default");
-
+    // Default must stay unresolved because computePossibleValues() is heuristic.
     unsigned bitWidth = simplifyValue->getType()->getIntegerBitWidth();
-    auto* SI = builder->CreateSwitch(simplifyValue, bb_default,
-                                      static_cast<unsigned>(pv.size() - 1));
 
-    // Add every non-default target as a case.
-    for (size_t i = 1; i < pv.size(); ++i) {
+    auto* bb_default_unresolved = BasicBlock::Create(
+        function->getContext(), "bb_switch_default_unresolved", function);
+    DTU->applyUpdates(
+        {{DominatorTree::Insert, this->blockInfo.block, bb_default_unresolved}});
+
+    auto* SI = builder->CreateSwitch(
+        simplifyValue, bb_default_unresolved, static_cast<unsigned>(pv.size()));
+
+    // Add every discovered target as an explicit case.
+    for (size_t i = 0; i < pv.size(); ++i) {
       auto caseVal = pv[i];
-      auto bb_case = getOrCreateBB(
-          caseVal.getZExtValue(),
-          "bb_switch_" + std::to_string(i));
+      auto bb_case = getOrCreateBB(caseVal.getZExtValue(),
+                                   "bb_switch_" + std::to_string(i));
       SI->addCase(
           cast<ConstantInt>(builder->getIntN(bitWidth, caseVal.getZExtValue())),
           bb_case);
-    }
 
-    // Enqueue all targets and save per-BB state backups.
-    // Process default first, then cases in order.
-    auto defaultBlock = BBInfo(defaultDest.getZExtValue(), bb_default);
-    addUnvisitedAddr(defaultBlock);
-    branch_backup(defaultBlock.block);
-
-    for (size_t i = 1; i < pv.size(); ++i) {
-      auto caseBlock =
-          BBInfo(pv[i].getZExtValue(),
-                 SI->findCaseValue(
-                       cast<ConstantInt>(
-                           builder->getIntN(bitWidth, pv[i].getZExtValue())))
-                     ->getCaseSuccessor());
+      auto caseBlock = BBInfo(caseVal.getZExtValue(), bb_case);
       addUnvisitedAddr(caseBlock);
       branch_backup(caseBlock.block);
     }
 
-    // dest = first target (for caller compatibility)
-    dest = defaultDest.getZExtValue();
+    // Conservative fallback for values not enumerated in pv:
+    // keep default unresolved instead of routing to an arbitrary concrete target.
+    llvm::IRBuilder<> defaultBuilder(bb_default_unresolved);
+    defaultBuilder.CreateUnreachable();
+
+    // Destination is intentionally unknown for multi-target switches.
+    dest = 0;
     result = PATH_multi_solved;
 
     debugging::doIfDebug([&]() {
