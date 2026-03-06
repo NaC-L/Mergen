@@ -290,6 +290,14 @@ def main() -> None:
     out_vectors = Path(args.out_vectors)
     semantics_path = Path(args.semantics)
 
+    payload = json.loads(in_vectors.read_text(encoding="utf-8"))
+    if payload.get("schema") != "mergen-oracle-v1":
+        raise FlagStressError("Input vectors schema must be 'mergen-oracle-v1'")
+
+    cases = payload.get("cases")
+    if not isinstance(cases, list) or not cases:
+        raise FlagStressError("Input vectors must contain non-empty 'cases'")
+
     # Support both a directory of split Semantics_*.ipp files and a single file
     if semantics_path.is_dir():
         parts = sorted(semantics_path.glob("Semantics*.ipp"))
