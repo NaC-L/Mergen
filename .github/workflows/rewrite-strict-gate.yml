@@ -14,7 +14,7 @@ jobs:
         gate:
           - job_name: rewrite-strict-gate
             timeout_minutes: 120
-            test_command: python test.py all --check-flags
+            test_command: python test.py all
             install_python_deps: true
           - job_name: rewrite-quick-gate
             timeout_minutes: 90

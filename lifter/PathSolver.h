@@ -6,6 +6,7 @@
 enum PATH_info {
   PATH_unsolved = 0,
   PATH_solved = 1,
+  PATH_multi_solved = 2,  // >2 targets resolved via SwitchInst
 };
 
 PATH_info getConstraintVal(llvm::Function* function, llvm::Value* constraint,

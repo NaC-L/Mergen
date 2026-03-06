@@ -75,8 +75,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
 
   if (memoryPolicy.isRangeFullyCovered(startAddress, startAddress + byteCount,
                                        MemoryAccessMode::SYMBOLIC)) {
-    // early exit: range is fully symbolic
-    return orgLoad.get();
+    // Fully symbolic range: use concrete bytes only when mapping is proven;
+    // otherwise preserve symbolic fallback from the original load.
+    uint64_t sym_value;
+    if (file.readMemory(startAddress, byteCount, sym_value)) {
+      return builder->getIntN(byteCount * 8, sym_value);
+    }
+    return extractBytes(orgLoad.get(), 0, byteCount);
   }
 
   LLVMContext& context = builder->getContext();
@@ -123,7 +128,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     } else {
       ++values.back().end;
     }
-    lastAccessMode = memoryPolicy.getAccessMode(startAddress);
+    lastAccessMode = currentAccessMode;
   }
 
   Value* result = ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
@@ -140,16 +145,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     printvalue2(read_mem);
     printvalue2(mem_value);
     if (!v.isRef && memoryPolicy.isSymbolic(v.memoryAddress)) {
-      byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+      // Symbolic address: preserve symbolic fallback when concrete mapping
+      // is not proven.
+      if (read_mem) {
+        byteValue = builder->getIntN(bytesize * 8, mem_value);
+      } else {
+        byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+      }
     } else if (v.isRef) {
       byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
                                v.ref.byteOffset + bytesize);
-    } else if (!v.isRef &&
-               file.readMemory(v.memoryAddress, bytesize, mem_value)) {
-
+    } else if (!v.isRef && read_mem) {
       byteValue = builder->getIntN(bytesize * 8, mem_value);
     } else if (!v.isRef) {
-
+      // Concrete read is unresolved when file mapping is unavailable.
       byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
     }
     if (byteValue) {
@@ -431,7 +440,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
     const llvm::KnownBits& known, unsigned max_unknown) {
 
   if ((max_unknown == 0) || (max_unknown >= 4)) {
-
     debugging::doIfDebug([&]() {
       std::string Filename = "output_too_many_unk.ll";
       std::error_code EC;
@@ -439,7 +447,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
       builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
     printvalueforce2(max_unknown);
-    UNREACHABLE("There is a very huge chance that this shouldnt happen");
+    // Graceful bail: return empty set so caller treats this as PATH_unsolved.
+    // max_unknown==0 means contradictory analysis (no solutions exist).
+    // max_unknown>=4 means too many unknowns (2^N blowup, >16 values).
+    return {};
   }
   llvm::APInt base = known.One;
   llvm::APInt unknowns = ~(known.Zero | known.One);
@@ -584,8 +595,8 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
       default:
         outs() << "\n : " << inst->getOpcode();
         outs().flush();
-        UNREACHABLE("Unsupported operation in calculatePossibleValues.\n");
-        break;
+        // Graceful bail: unsupported opcode in value enumeration.
+        return {};
       }
     }
   }
@@ -602,7 +613,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
       raw_fd_ostream OS(Filename, EC);
       builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
     });
-    UNREACHABLE("Depth exceeded");
+    // Graceful bail: return empty set so caller treats this as PATH_unsolved.
+    return {};
   }
   std::set<APInt, APIntComparator> res;
   printvalue(V);
