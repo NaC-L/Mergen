@@ -14,7 +14,7 @@ from typing import Dict, Iterable, List, Tuple
 
 DEFAULT_INPUT_VECTORS = Path("lifter/test/test_vectors/oracle_vectors_full_handlers.json")
 DEFAULT_OUTPUT_VECTORS = Path("lifter/test/test_vectors/oracle_vectors_flagstress.json")
-DEFAULT_SEMANTICS = Path("lifter/Semantics.ipp")
+DEFAULT_SEMANTICS = Path("lifter/semantics/Semantics.ipp")
 
 DEFAULT_CODE_ADDRESS = 0x1000000
 DEFAULT_STACK_ADDRESS = 0x2000000

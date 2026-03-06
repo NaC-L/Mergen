@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
-    return buildFullHandlerSeed(outputPath, "lifter/x86_64_opcodes.x", maxAttempts,
+    return buildFullHandlerSeed(outputPath, "lifter/semantics/x86_64_opcodes.x", maxAttempts,
                                 randomSeed);
   }
 
