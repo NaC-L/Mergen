@@ -401,14 +401,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
     printvalue(size);
     createMemcpy(sourceReg, destReg, size);
 
-    sourceReg = createAddFolder(sourceReg, Direction);
-    destReg = createAddFolder(destReg, Direction);
+    sourceReg = createAddFolder(sourceReg, size);
+    destReg = createAddFolder(destReg, size);
     printvalue(sourceReg);
     printvalue(destReg);
     SetRegisterValue(Register::RSI, sourceReg);
     SetRegisterValue(Register::RDI, destReg);
-
-    // also update sourceReg and destReg properly
+    SetRegisterValue(Register::RCX,
+                     ConstantInt::get(sizeReg->getType(), 0));
     return;
   }
 
@@ -1935,8 +1935,22 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cmpxchg() {
   // if zf dest = src
   auto result = createSelectFolder(zf, Rvalue, Lvalue);
   auto acc = createSelectFolder(zf, accum, Lvalue);
-  SetRegisterValue(accreg, acc);
-  SetIndexValue(0, result);
+  // When operand 0 is memory, write it before the accumulator: the memory
+  // address may reference RAX/EAX, which SetRegisterValue would corrupt.
+  // When operand 0 is a register, write accumulator first so DEST wins if
+  // DEST aliases the accumulator (e.g., cmpxchg rax, rbx).
+  auto destType = instruction.types[0];
+  bool destIsMemory = destType == OperandType::Memory8 ||
+                      destType == OperandType::Memory16 ||
+                      destType == OperandType::Memory32 ||
+                      destType == OperandType::Memory64;
+  if (destIsMemory) {
+    SetIndexValue(0, result);
+    SetRegisterValue(accreg, acc);
+  } else {
+    SetRegisterValue(accreg, acc);
+    SetIndexValue(0, result);
+  }
   setFlag(FLAG_OF, of);
   setFlag(FLAG_CF, cf);
   setFlag(FLAG_AF, af);
@@ -3229,9 +3243,23 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_xadd() {
   Value* TEMP = createAddFolder(
       Lvalue, Rvalue, "xadd_sum-" + std::to_string(current_address) + "-");
 
-  // only 0 could be memory, so ideally 0 should be set first?
-  SetIndexValue(1, Lvalue);
-  SetIndexValue(0, TEMP);
+  // When operand 0 is memory, write it first: its effective address may
+  // reference the register in operand 1. Writing operand 1 first would
+  // corrupt the address computation (e.g., xadd [rsp+r8*4-0xC000], r8).
+  // When both operands are registers, write SRC first so DEST wins on
+  // aliased cases (e.g., xadd eax, eax → EAX must get the sum).
+  auto destType = instruction.types[0];
+  bool destIsMemory = destType == OperandType::Memory8 ||
+                      destType == OperandType::Memory16 ||
+                      destType == OperandType::Memory32 ||
+                      destType == OperandType::Memory64;
+  if (destIsMemory) {
+    SetIndexValue(0, TEMP);
+    SetIndexValue(1, Lvalue);
+  } else {
+    SetIndexValue(1, Lvalue);
+    SetIndexValue(0, TEMP);
+  }
   /*
   TEMP := SRC + DEST;
   SRC := DEST;

@@ -135,15 +135,20 @@ public:
     }
     --it; // now *it is the candidate section
     if (rva < it->virtual_address + it->virtual_size) {
-      return (rva - it->virtual_address) + it->ptr_raw_data;
+      uint32_t offset_in_section = rva - it->virtual_address;
+      if (offset_in_section >= it->size_raw_data)
+        return 0; // BSS region (beyond raw data), zero-filled
+      return offset_in_section + it->ptr_raw_data;
     }
     return 0;
   }
 
   uint64_t address_to_mapped_address_impl(uint64_t rva) {
-
     uint64_t address = rva - imageBase;
-    return (uint64_t)FileBase + RvaToFileOffset(address);
+    auto fileOffset = RvaToFileOffset(address);
+    if (fileOffset == 0)
+      return 0;
+    return (uint64_t)FileBase + fileOffset;
   }
 
   bool readMemory_impl(uint64_t addr, unsigned byteSize, uint64_t& value) {
@@ -153,7 +158,7 @@ public:
     if (mappedAddr > 0) {
       uint64_t tempValue;
       std::memcpy(&tempValue,
-                  reinterpret_cast<const void*>(FileBase + mappedAddr),
+                  reinterpret_cast<const void*>(mappedAddr),
                   byteSize);
 
       value = tempValue;
@@ -241,8 +246,10 @@ public:
 
     --it;
     if (rva < it->virtual_address + it->virtual_size) {
-
-      return (rva - it->virtual_address) + it->ptr_raw_data;
+      uint32_t offset_in_section = rva - it->virtual_address;
+      if (offset_in_section >= it->size_raw_data)
+        return 0; // BSS region (beyond raw data), zero-filled
+      return offset_in_section + it->ptr_raw_data;
     }
     return 0;
   }
@@ -265,12 +272,11 @@ public:
   }
 
   uint64_t address_to_mapped_address_impl(uint64_t rva) {
-
     uint64_t address = rva - imageBase;
-
-    auto res = (uint64_t)FileBase + RvaToFileOffset(address);
-
-    return res;
+    auto fileOffset = RvaToFileOffset(address);
+    if (fileOffset == 0)
+      return 0;
+    return (uint64_t)FileBase + fileOffset;
   }
 
   bool readMemory_impl(uint64_t addr, unsigned byteSize, uint64_t& value) {

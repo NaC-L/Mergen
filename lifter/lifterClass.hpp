@@ -363,6 +363,12 @@ public:
 
     this->current_address = addr;
     auto offset = file.address_to_mapped_address(addr);
+    if (offset == 0) {
+      this->run = 0;
+      this->finished = 1;
+      builder->CreateUnreachable();
+      return;
+    }
     // what about the basicblock?
     printvalue2(offset);
     printvalue2(*(uint8_t*)offset);
