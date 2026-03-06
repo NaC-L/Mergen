@@ -2,10 +2,10 @@
 #include "FunctionSignatures.hpp"
 #include "OperandUtils.ipp"
 #include "PathSolver.ipp"
-#include "fileReader.hpp"
-#include "includes.h"
-#include "lifterClass.hpp"
-#include "utils.h"
+#include "FileReader.hpp"
+#include "Includes.h"
+#include "LifterClass.hpp"
+#include "Utils.h"
 #include <immintrin.h>
 #include <iostream>
 #include <llvm/IR/Constant.h>
@@ -40,7 +40,7 @@ int branchnumber = 0;
 
 // Dispatch machinery
 
-#include "pp_macros.hpp"
+#include "PPMacros.hpp"
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
 

@@ -1,7 +1,7 @@
 
 #include "PathSolver.h"
 #include "CustomPasses.hpp"
-#include "utils.h"
+#include "Utils.h"
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/Analysis/InstructionSimplify.h>
 #include <llvm/Analysis/ConstantFolding.h>

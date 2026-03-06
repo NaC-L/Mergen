@@ -12,10 +12,10 @@ from typing import Dict, List
 
 ROOT = Path(__file__).resolve().parent
 REWRITE_DIR = ROOT / "scripts" / "rewrite"
-FULL_VECTORS = ROOT / "lifter" / "test_vectors" / "oracle_vectors_full_handlers.json"
-DEFAULT_VECTORS = ROOT / "lifter" / "test_vectors" / "oracle_vectors.json"
+FULL_VECTORS = ROOT / "lifter" / "test" / "test_vectors" / "oracle_vectors_full_handlers.json"
+DEFAULT_VECTORS = ROOT / "lifter" / "test" / "test_vectors" / "oracle_vectors.json"
 IR_OUTPUT_DIR = ROOT.parent / "rewrite-regression-work" / "ir_outputs"
-GOLDEN_HASHES_FILE = ROOT / "lifter" / "test_vectors" / "golden_ir_hashes.json"
+GOLDEN_HASHES_FILE = ROOT / "lifter" / "test" / "test_vectors" / "golden_ir_hashes.json"
 
 
 def _run(argv: List[str], extra_env: Dict[str, str] | None = None) -> None:

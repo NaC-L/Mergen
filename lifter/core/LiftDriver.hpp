@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lifterClass_concolic.hpp"
+#include "LifterClass_Concolic.hpp"
 
 inline void runLiftWorklist(lifterConcolic<>* lifter) {
   BBInfo bbinfo;

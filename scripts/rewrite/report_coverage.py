@@ -11,12 +11,12 @@ def main():
     parser = argparse.ArgumentParser(description="Report handler test coverage")
     parser.add_argument(
         "--vectors",
-        default="lifter/test_vectors/oracle_vectors.json",
+        default="lifter/test/test_vectors/oracle_vectors.json",
         help="Oracle vectors JSON path",
     )
     parser.add_argument(
         "--opcodes",
-        default="lifter/x86_64_opcodes.x",
+        default="lifter/semantics/x86_64_opcodes.x",
         help="Opcode handler definition file",
     )
     parser.add_argument("--json", action="store_true", help="Output JSON instead of text")

@@ -2,7 +2,7 @@
 
 #include "MemoryPolicySetup.hpp"
 #include "RuntimeImageContext.hpp"
-#include "utils.h"
+#include "Utils.h"
 #include <memory>
 #include <vector>
 

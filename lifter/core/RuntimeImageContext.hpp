@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fileReader.hpp"
+#include "FileReader.hpp"
 #include "nt/nt_headers.hpp"
 #include <cstddef>
 #include <cstdint>

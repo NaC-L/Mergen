@@ -3,8 +3,8 @@
 
 #include "CommonMnemonics.h"
 #include "CommonRegisters.h"
-#include "ZydisDisassembler_mnemonics.h"
-#include "ZydisDisassembler_registers.h"
+#include "ZydisDisassemblerMnemonics.h"
+#include "ZydisDisassemblerRegisters.h"
 #include <array>
 #include <concepts>
 #include <cstdint>

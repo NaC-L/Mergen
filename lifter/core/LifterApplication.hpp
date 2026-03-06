@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CommandLineHelpers.hpp"
-#include "utils.h"
+#include "Utils.h"
 #include <cstdint>
 #include <iostream>
 #include <string>

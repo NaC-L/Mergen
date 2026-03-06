@@ -2,8 +2,8 @@
 
 #include "CommonDisassembler.hpp"
 #include "PathSolver.h"
-#include "lifterClass.hpp"
-#include "utils.h"
+#include "LifterClass.hpp"
+#include "Utils.h"
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/MemorySSA.h>
 #include <llvm/Analysis/MemorySSAUpdater.h>

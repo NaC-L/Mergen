@@ -2,9 +2,9 @@
 #define CUSTOMPASSES_H
 
 #include "MemoryPolicy.hpp"
-#include "fileReader.hpp"
-#include "includes.h"
-#include "utils.h"
+#include "FileReader.hpp"
+#include "Includes.h"
+#include "Utils.h"
 #include "llvm/IR/PassManager.h"
 #include <algorithm>
 #include <llvm/Analysis/ValueTracking.h>

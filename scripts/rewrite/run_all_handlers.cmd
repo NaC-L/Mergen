@@ -15,7 +15,7 @@ if errorlevel 1 exit /b 1
 
 set "FULL_SEED=%~dp0oracle_seed_full_handlers.json"
 set "ENRICHED_SEED=%~dp0oracle_seed_full_handlers_enriched.json"
-set "FULL_VECTORS=%~dp0..\..\lifter\test_vectors\oracle_vectors_full_handlers.json"
+set "FULL_VECTORS=%~dp0..\..\lifter\test\test_vectors\oracle_vectors_full_handlers.json"
 
 call "%~dp0build_full_handler_seed.cmd" --out-seed "%FULL_SEED%"
 if errorlevel 1 exit /b 1
