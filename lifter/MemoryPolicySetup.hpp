@@ -9,12 +9,9 @@ inline void configureDefaultMemoryPolicy(lifterConcolic<>* lifter) {
     const auto sectionStart = lifter->file.imageBase + section.virtual_address;
     const auto sectionEnd = sectionStart + section.virtual_size;
 
-    if (section.characteristics.mem_write) {
-      lifter->memoryPolicy.addRange(sectionStart, sectionEnd,
-                                    MemoryAccessMode::SYMBOLIC);
-      continue;
-    }
-
+    // All PE sections are CONCRETE: initial values are known from the file.
+    // The concolic buffer tracks stores, so reads without prior stores
+    // correctly return the file's initial bytes.
     lifter->memoryPolicy.addRange(sectionStart, sectionEnd,
                                   MemoryAccessMode::CONCRETE);
   }

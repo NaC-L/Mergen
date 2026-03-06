@@ -1774,7 +1774,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetMemoryValue(Value* address,
 
   // convert to pointer first
   auto pointer = getPointer(address);
-
   LazyValue retval([this, pointer, size]() {
     auto ret = builder->CreateLoad(builder->getIntNTy(size),
                                    pointer /*, "Loadxd-" + address + "-"*/);

@@ -75,8 +75,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
 
   if (memoryPolicy.isRangeFullyCovered(startAddress, startAddress + byteCount,
                                        MemoryAccessMode::SYMBOLIC)) {
-    // early exit: range is fully symbolic
-    return orgLoad.get();
+    // Range is fully symbolic. Try the PE file for initial values;
+    // if the address is unmapped, return 0 (reads from unmapped memory
+    // would fault in real execution, so this path is dead code).
+    uint64_t sym_value;
+    if (file.readMemory(startAddress, byteCount, sym_value)) {
+      return builder->getIntN(byteCount * 8, sym_value);
+    }
+    return ConstantInt::get(Type::getIntNTy(builder->getContext(),
+                                            byteCount * 8), 0);
   }
 
   LLVMContext& context = builder->getContext();
@@ -123,7 +130,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     } else {
       ++values.back().end;
     }
-    lastAccessMode = memoryPolicy.getAccessMode(startAddress);
+    lastAccessMode = currentAccessMode;
   }
 
   Value* result = ConstantInt::get(Type::getIntNTy(context, byteCount * 8), 0);
@@ -140,7 +147,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     printvalue2(read_mem);
     printvalue2(mem_value);
     if (!v.isRef && memoryPolicy.isSymbolic(v.memoryAddress)) {
-      byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+      // Symbolic address: try the PE file for initial value,
+      // else return 0 (unmapped memory).
+      if (read_mem) {
+        byteValue = builder->getIntN(bytesize * 8, mem_value);
+      } else {
+        byteValue = builder->getIntN(bytesize * 8, 0);
+      }
     } else if (v.isRef) {
       byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
                                v.ref.byteOffset + bytesize);
@@ -149,8 +162,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
 
       byteValue = builder->getIntN(bytesize * 8, mem_value);
     } else if (!v.isRef) {
-
-      byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+      // CONCRETE address, file read failed (BSS zero-fill or unmapped)
+      byteValue = builder->getIntN(bytesize * 8, 0);
     }
     if (byteValue) {
       printvalue(byteValue);

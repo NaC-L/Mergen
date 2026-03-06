@@ -105,6 +105,16 @@ fn is_relative_jump(instr: &Instruction) -> bool {
     false
 }
 
+fn has_near_branch(instr: &Instruction) -> bool {
+    for i in 0..5 {
+        match instr.op_kind(i) {
+            OpKind::NearBranch16 | OpKind::NearBranch32 | OpKind::NearBranch64 => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
 fn convert_type_to_mergen(inst : &Instruction,  index : u32) -> OperandType {
     
     match inst.op_kind(index) {
@@ -201,9 +211,10 @@ pub extern "C" fn disas(
     let is_rel = is_relative_jump(&instr);
     let has_imm64 = has_64bit_immediate(&instr);
 
-    // Compute immediate in one branch sequence
-    let immediate = if is_rel {
-        // relative jump: displacement minus instruction length
+    // Compute immediate: only near branches use displacement-based value;
+    // RIP-relative memory instructions must use the actual immediate operand.
+    let is_branch = has_near_branch(&instr);
+    let immediate = if is_branch {
         disp64.wrapping_sub(instr_len)
     } else if has_imm64 {
         instr.immediate64() as u64
@@ -286,7 +297,8 @@ pub extern "C" fn disas2(
     let is_rel = is_relative_jump(&instr);
     let has_imm64 = has_64bit_immediate(&instr);
 
-    let immediate = if is_rel {
+    let is_branch = has_near_branch(&instr);
+    let immediate = if is_branch {
         disp64.wrapping_sub(instr_len)
     } else if has_imm64 {
         instr.immediate64() as u64
