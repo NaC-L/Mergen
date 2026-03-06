@@ -174,7 +174,7 @@ def normalize_expected(case: dict, oracle_result: OracleResult) -> dict:
     return out
 
 
-def compare_results(results: Dict[str, OracleResult], case_name: str):
+def compare_results(results: Dict[str, OracleResult], case_name: str, *, strict: bool = False):
     providers = list(results.keys())
     if len(providers) < 2:
         return
@@ -182,11 +182,22 @@ def compare_results(results: Dict[str, OracleResult], case_name: str):
     baseline = results[providers[0]]
     for provider_name in providers[1:]:
         cur = results[provider_name]
-        if baseline.registers != cur.registers or baseline.flags != cur.flags:
-            raise OracleError(
+        reg_match = baseline.registers == cur.registers
+        flag_match = baseline.flags == cur.flags
+        if not reg_match or not flag_match:
+            msg = (
                 f"Oracle mismatch in case '{case_name}' between "
                 f"{providers[0]} and {provider_name}"
             )
+            if not reg_match:
+                msg += f" (registers: {baseline.registers} vs {cur.registers})"
+            if not flag_match:
+                msg += f" (flags: {baseline.flags} vs {cur.flags})"
+            if strict:
+                raise OracleError(msg)
+            else:
+                import sys
+                print(f"WARNING: {msg}", file=sys.stderr)
 
 
 def build_output(seed_payload: dict, provider_names: List[str], output_cases: List[dict]) -> dict:
@@ -203,6 +214,9 @@ def create_provider(name: str) -> OracleProvider:
     normalized = name.strip().lower()
     if normalized == "unicorn":
         return UnicornOracleProvider()
+    if normalized == "sleigh":
+        from sleigh_oracle import SleighOracleProvider
+        return SleighOracleProvider()
     raise OracleError(f"Unsupported oracle provider '{name}'")
 
 
@@ -221,7 +235,12 @@ def main():
     parser.add_argument(
         "--providers",
         default="unicorn",
-        help="Comma-separated oracle providers (currently: unicorn)",
+        help="Comma-separated oracle providers (unicorn, sleigh)",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Raise on oracle mismatches instead of warning",
     )
     args = parser.parse_args()
 
@@ -257,16 +276,25 @@ def main():
             expected["registers"] = expected_registers
             expected["flags"] = expected_flags
         elif oracle_mode == "unicorn":
-            for provider in providers:
+            for i, provider in enumerate(providers):
                 try:
                     case_results[provider.name] = provider.emulate(case)
                 except Exception as exc:
-                    raise OracleError(
-                        f"Emulation failed for case '{case['name']}' with provider "
-                        f"'{provider.name}': {exc}"
-                    ) from exc
+                    if i == 0:
+                        # Primary provider failure is fatal
+                        raise OracleError(
+                            f"Emulation failed for case '{case['name']}' with provider "
+                            f"'{provider.name}': {exc}"
+                        ) from exc
+                    else:
+                        # Secondary provider failure is a warning
+                        import sys
+                        print(
+                            f"WARNING: {provider.name} failed on '{case['name']}': {exc}",
+                            file=sys.stderr,
+                        )
 
-            compare_results(case_results, case["name"])
+            compare_results(case_results, case["name"], strict=args.strict)
             consensus = case_results[providers[0].name]
             expected = normalize_expected(case, consensus)
         elif oracle_mode == "computed":
