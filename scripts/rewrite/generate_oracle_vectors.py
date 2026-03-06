@@ -215,7 +215,7 @@ def main():
     )
     parser.add_argument(
         "--out",
-        default="lifter/test_vectors/oracle_vectors.json",
+        default="lifter/test/test_vectors/oracle_vectors.json",
         help="Generated oracle output JSON",
     )
     parser.add_argument(

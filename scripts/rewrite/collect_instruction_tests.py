@@ -176,17 +176,17 @@ def main():
     )
     parser.add_argument(
         "--opcode-file",
-        default="lifter/x86_64_opcodes.x",
+        default="lifter/semantics/x86_64_opcodes.x",
         help="Path to opcode dispatch table",
     )
     parser.add_argument(
         "--vectors-file",
-        default="lifter/test_vectors/oracle_vectors.json",
+        default="lifter/test/test_vectors/oracle_vectors.json",
         help="Path to generated oracle vectors JSON",
     )
     parser.add_argument(
         "--legacy-tests-file",
-        default="lifter/test_instructions.cpp",
+        default="lifter/test/TestInstructions.cpp",
         help="Optional legacy source file for extra signal extraction",
     )
     parser.add_argument(
