@@ -4252,23 +4252,14 @@ namespace Mergen {
       for (int i = 0; i < 4; i++) {
 
         auto op = operands[i];
-        // printvalue2(magic_enum::enum_name(operands[i].type));
-        // printvalue2(magic_enum::enum_name(operands[i].visibility));
 
         // skip implicit operands
-        /*
-        if (operands[i].visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
-          continue;
-        */
-        // printvalue2(i);
         convertedInstruction.types[i] =
             zydisTypeToMergenType(op.type, op.size, secondimm);
 
-        // printvalue2(magic_enum::enum_name(op.type));
 
         if (op.type == ZYDIS_OPERAND_TYPE_REGISTER) {
 
-          // printvalue2(op.reg.value);
 
           convertedInstruction.regs[i] =
               zydisRegisterToMergenRegister<Register>(op.reg.value);
@@ -4287,7 +4278,6 @@ namespace Mergen {
 
           // with push, pop, implicit/hidden rsp fucks this up.
           // skip all implicit memory operands.
-          // printvalue2(magic_enum::enum_name(op.visibility));
           if (op.visibility != ZYDIS_OPERAND_VISIBILITY_EXPLICIT)
             continue;
 
@@ -4297,11 +4287,8 @@ namespace Mergen {
           convertedInstruction.mem_index =
               zydisRegisterToMergenRegister<Register>(op.mem.index);
 
-          // printvalue2(op.mem.base);
 
-          // printvalue2(op.mem.index);
 
-          // printvalue2(op.mem.disp.value);
           convertedInstruction.mem_disp = op.mem.disp.value;
 
           convertedInstruction.mem_scale = op.mem.scale;

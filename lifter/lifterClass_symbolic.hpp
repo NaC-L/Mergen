@@ -205,26 +205,6 @@ public:
     // rsp
     // rsp_unaligned = %rsp % 16
     // rsp_aligned_to16 = rsp - rsp_unaligned
-    // auto reg = Register::RAX;
-    // auto argEnd = this->fnc->arg_end();
-    // for (auto argIt = this->fnc->arg_begin(); argIt != argEnd; ++argIt) {
-
-    //   Argument* arg = &*argIt;
-    //   arg->setName(magic_enum::enum_name(reg));
-
-    //   if (std::next(argIt) == argEnd) {
-    //     arg->setName("memory");
-    //     this->memoryAlloc = arg;
-    //   } else {
-    //     // arg->setName(ZydisRegisterGetString(zydisRegister));
-    //     printvalue2(magic_enum::enum_name(reg));
-    //     printvalue(arg);
-    //     // int index = getRegisterIndex(reg);
-    //     // vec[index] = arg;
-    //     reg = static_cast<Register>(static_cast<int>(reg) + 1);
-    //   }
-    // }
-    // printvalue(GetRegisterValue(Register::RAX));
 
     ctx = this->builder->CreateAlloca(type);
 
