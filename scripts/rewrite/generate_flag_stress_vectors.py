@@ -14,7 +14,7 @@ from typing import Dict, Iterable, List, Tuple
 
 DEFAULT_INPUT_VECTORS = Path("lifter/test/test_vectors/oracle_vectors_full_handlers.json")
 DEFAULT_OUTPUT_VECTORS = Path("lifter/test/test_vectors/oracle_vectors_flagstress.json")
-DEFAULT_SEMANTICS = Path("lifter/semantics/Semantics.ipp")
+DEFAULT_SEMANTICS_DIR = Path("lifter/semantics")
 
 DEFAULT_CODE_ADDRESS = 0x1000000
 DEFAULT_STACK_ADDRESS = 0x2000000
@@ -276,7 +276,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate strict flag-stress oracle vectors")
     parser.add_argument("--in-vectors", default=str(DEFAULT_INPUT_VECTORS))
     parser.add_argument("--out-vectors", default=str(DEFAULT_OUTPUT_VECTORS))
-    parser.add_argument("--semantics", default=str(DEFAULT_SEMANTICS))
+    parser.add_argument("--semantics", default=str(DEFAULT_SEMANTICS_DIR),
+                        help="Path to semantics dir or single .ipp file")
     parser.add_argument("--variants-per-handler", type=int, default=4)
     parser.add_argument("--seed", type=int, default=1337)
     return parser.parse_args()
@@ -289,15 +290,16 @@ def main() -> None:
     out_vectors = Path(args.out_vectors)
     semantics_path = Path(args.semantics)
 
-    payload = json.loads(in_vectors.read_text(encoding="utf-8"))
-    if payload.get("schema") != "mergen-oracle-v1":
-        raise FlagStressError("Input vectors schema must be 'mergen-oracle-v1'")
-
-    cases = payload.get("cases")
-    if not isinstance(cases, list) or not cases:
-        raise FlagStressError("Input vectors must contain non-empty 'cases'")
-
-    semantics_text = semantics_path.read_text(encoding="utf-8", errors="ignore")
+    # Support both a directory of split Semantics_*.ipp files and a single file
+    if semantics_path.is_dir():
+        parts = sorted(semantics_path.glob("Semantics*.ipp"))
+        if not parts:
+            raise FlagStressError(f"No Semantics*.ipp files found in {semantics_path}")
+        semantics_text = "\n".join(
+            p.read_text(encoding="utf-8", errors="ignore") for p in parts
+        )
+    else:
+        semantics_text = semantics_path.read_text(encoding="utf-8", errors="ignore")
     handler_flags = parse_flag_writing_handlers(semantics_text)
     reps = pick_representative_cases(cases)
 
