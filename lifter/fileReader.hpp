@@ -135,32 +135,66 @@ public:
     }
     --it; // now *it is the candidate section
     if (rva < it->virtual_address + it->virtual_size) {
-      return (rva - it->virtual_address) + it->ptr_raw_data;
+      uint32_t offset_in_section = rva - it->virtual_address;
+      if (offset_in_section >= it->size_raw_data)
+        return 0; // BSS region (beyond raw data), zero-filled
+      return offset_in_section + it->ptr_raw_data;
     }
     return 0;
   }
 
   uint64_t address_to_mapped_address_impl(uint64_t rva) {
-
     uint64_t address = rva - imageBase;
-    return (uint64_t)FileBase + RvaToFileOffset(address);
+    auto fileOffset = RvaToFileOffset(address);
+    if (fileOffset == 0)
+      return 0;
+    return (uint64_t)FileBase + fileOffset;
   }
 
   bool readMemory_impl(uint64_t addr, unsigned byteSize, uint64_t& value) {
-
     uint64_t mappedAddr = address_to_mapped_address(addr);
-
     if (mappedAddr > 0) {
-      uint64_t tempValue;
-      std::memcpy(&tempValue,
-                  reinterpret_cast<const void*>(FileBase + mappedAddr),
+      uint64_t tempValue = 0;
+      std::memcpy(&tempValue, reinterpret_cast<const void*>(mappedAddr),
                   byteSize);
-
       value = tempValue;
       return 1;
     }
 
-    return 0;
+    // Handle zero-initialized virtual tails (BSS) and raw->BSS boundary reads.
+    uint64_t rva64 = addr - imageBase;
+    if (rva64 > UINT32_MAX)
+      return 0;
+    uint32_t rva = static_cast<uint32_t>(rva64);
+
+    auto it =
+        std::upper_bound(sections.begin(), sections.end(), rva,
+                         [](uint32_t val, const win::section_header_t& s) {
+                           return val < s.virtual_address;
+                         });
+    if (it == sections.begin())
+      return 0;
+    --it;
+
+    if (rva >= it->virtual_address + it->virtual_size)
+      return 0;
+
+    uint32_t offset_in_section = rva - it->virtual_address;
+    if (offset_in_section + byteSize > it->virtual_size)
+      return 0;
+
+    uint64_t tempValue = 0;
+    if (offset_in_section < it->size_raw_data) {
+      uint32_t rawAvailable =
+          std::min<uint32_t>(byteSize, it->size_raw_data - offset_in_section);
+      std::memcpy(&tempValue,
+                  reinterpret_cast<const void*>(FileBase + it->ptr_raw_data +
+                                               offset_in_section),
+                  rawAvailable);
+    }
+
+    value = tempValue;
+    return 1;
   }
 
   const char* getName_impl(uint64_t offset) {
@@ -241,8 +275,10 @@ public:
 
     --it;
     if (rva < it->virtual_address + it->virtual_size) {
-
-      return (rva - it->virtual_address) + it->ptr_raw_data;
+      uint32_t offset_in_section = rva - it->virtual_address;
+      if (offset_in_section >= it->size_raw_data)
+        return 0; // BSS region (beyond raw data), zero-filled
+      return offset_in_section + it->ptr_raw_data;
     }
     return 0;
   }
@@ -265,27 +301,57 @@ public:
   }
 
   uint64_t address_to_mapped_address_impl(uint64_t rva) {
-
     uint64_t address = rva - imageBase;
-
-    auto res = (uint64_t)FileBase + RvaToFileOffset(address);
-
-    return res;
+    auto fileOffset = RvaToFileOffset(address);
+    if (fileOffset == 0)
+      return 0;
+    return (uint64_t)FileBase + fileOffset;
   }
 
   bool readMemory_impl(uint64_t addr, unsigned byteSize, uint64_t& value) {
     uint64_t mappedAddr = address_to_mapped_address(addr);
-
     if (mappedAddr > 0) {
-      uint64_t tempValue;
+      uint64_t tempValue = 0;
       std::memcpy(&tempValue, reinterpret_cast<const void*>(mappedAddr),
                   byteSize);
-
       value = tempValue;
       return 1;
     }
 
-    return 0;
+    // Handle zero-initialized virtual tails (BSS) and raw->BSS boundary reads.
+    uint64_t rva64 = addr - imageBase;
+    if (rva64 > UINT32_MAX)
+      return 0;
+    uint32_t rva = static_cast<uint32_t>(rva64);
+
+    auto it =
+        std::upper_bound(sections_v.begin(), sections_v.end(), rva,
+                         [](uint32_t val, const win::section_header_t& s) {
+                           return val < s.virtual_address;
+                         });
+    if (it == sections_v.begin())
+      return 0;
+    --it;
+
+    if (rva >= it->virtual_address + it->virtual_size)
+      return 0;
+
+    uint32_t offset_in_section = rva - it->virtual_address;
+    if (offset_in_section + byteSize > it->virtual_size)
+      return 0;
+
+    uint64_t tempValue = 0;
+    if (offset_in_section < it->size_raw_data) {
+      uint32_t rawAvailable =
+          std::min<uint32_t>(byteSize, it->size_raw_data - offset_in_section);
+      std::memcpy(&tempValue,
+                  reinterpret_cast<const void*>(FileBase + it->ptr_raw_data +
+                                               offset_in_section),
+                  rawAvailable);
+    }
+
+    value = tempValue;
+    return 1;
   }
 
   const char* getName_impl(uint64_t offset) {

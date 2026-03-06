@@ -9,6 +9,7 @@
 #include <llvm/Analysis/MemorySSAUpdater.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
@@ -168,7 +169,50 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   }
 
   if (pv.size() > 2) {
-    UNREACHABLE("cant reach more than 2 paths!");
+    // N-way branch: emit SwitchInst for multi-target resolution.
+    // Default must stay unresolved because computePossibleValues() is heuristic.
+    unsigned bitWidth = simplifyValue->getType()->getIntegerBitWidth();
+
+    auto* bb_default_unresolved = BasicBlock::Create(
+        function->getContext(), "bb_switch_default_unresolved", function);
+    DTU->applyUpdates(
+        {{DominatorTree::Insert, this->blockInfo.block, bb_default_unresolved}});
+
+    auto* SI = builder->CreateSwitch(
+        simplifyValue, bb_default_unresolved, static_cast<unsigned>(pv.size()));
+
+    // Add every discovered target as an explicit case.
+    for (size_t i = 0; i < pv.size(); ++i) {
+      auto caseVal = pv[i];
+      auto bb_case = getOrCreateBB(caseVal.getZExtValue(),
+                                   "bb_switch_" + std::to_string(i));
+      SI->addCase(
+          cast<ConstantInt>(builder->getIntN(bitWidth, caseVal.getZExtValue())),
+          bb_case);
+
+      auto caseBlock = BBInfo(caseVal.getZExtValue(), bb_case);
+      addUnvisitedAddr(caseBlock);
+      branch_backup(caseBlock.block);
+    }
+
+    // Conservative fallback for values not enumerated in pv:
+    // keep default unresolved instead of assuming impossible behavior.
+    llvm::IRBuilder<> defaultBuilder(bb_default_unresolved);
+    defaultBuilder.CreateRet(UndefValue::get(function->getReturnType()));
+
+    // Destination remains unknown for multi-target switches.
+    dest = 0;
+    result = PATH_unsolved;
+
+    debugging::doIfDebug([&]() {
+      std::string Filename = "output_switch.ll";
+      std::error_code EC;
+      llvm::raw_fd_ostream OS(Filename, EC);
+      function->getParent()->print(OS, nullptr);
+    });
+    std::cout << "created multi-target switch with " << pv.size()
+              << " targets\n"
+              << std::flush;
   }
 
   return result;
