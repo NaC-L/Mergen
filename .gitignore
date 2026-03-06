@@ -12,7 +12,6 @@
 *.ipdb
 *.iobj
 *\x64*
-*.exe*
 
 # cmkr
 build*/
@@ -30,7 +29,13 @@ output.ll
 output_finalnoopt.ll
 output_no_opts.ll
 /rewrite-regression-work/
-/icpped_rust
 
 /lifter/test_vectors/oracle_vectors_flagstress.json
 __pycache__/
+*.pyc
+debug*.txt
+emu_*.py
+check_*.py
+.tmp*
+=*
+scriptsdev/

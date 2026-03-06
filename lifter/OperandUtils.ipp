@@ -354,43 +354,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(KnownBits)::analyzeValueKnownBits(
   return knownBits.trunc(value->getType()->getIntegerBitWidth());
 }
 
-Value* simplifyValue(Value* v, const DataLayout& DL) {
-  if (1 == 1)
-    return v;
-  if (!isa<Instruction>(v))
-    return v;
-
-  Instruction* inst = cast<Instruction>(v);
-
-  /*
-  shl al, cl
-  where cl is bigger than 8, it just clears the al
-  */
-
-  llvm::SimplifyQuery SQ(DL, inst);
-  if (auto vconstant = ConstantFoldInstruction(inst, DL)) {
-    if (isa<llvm::PoisonValue>(
-            vconstant)) // if poison it should be 0 for shifts,
-                        // can other operations generate poison
-                        // without a poison value anyways?
-      return ConstantInt::get(v->getType(), 0);
-    return vconstant;
-  }
-
-  if (auto vsimplified = simplifyInstruction(inst, SQ)) {
-
-    if (isa<llvm::PoisonValue>(
-            vsimplified)) // if poison it should be 0 for shifts,
-                          // can other operations generate poison
-                          // without a poison value anyways?
-
-      return ConstantInt::get(v->getType(), 0);
-
-    return vsimplified;
-  }
-
-  return v;
-}
 
 inline bool isCast(uint8_t opcode) {
   return Instruction::Trunc <= opcode && opcode <= Instruction::AddrSpaceCast;
@@ -564,9 +527,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createInstruction(
 
   Value* newValue = getOrCreate(key, opcode, Name);
 
-  return simplifyValue(
-      newValue,
-      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout()); //
+  return newValue; //
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSelectFolder(
@@ -909,305 +870,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::folderBinOps(
     return builder->getIntN(LHS->getType()->getIntegerBitWidth(),
                             computedBits.getConstant().getZExtValue());
   }
-  /*
-  if (auto try_z3 = evaluateLLVMExpression(inst)) {
-    if (try_z3.has_value()) {
-      printvalueforce(inst);
-      printvalueforce(try_z3.value());
-      return try_z3.value();
-    }
-  }
-  */
   return inst;
 }
-/*
-#include <z3++.h>
-
-z3::expr llvmToZ3Expr(Value* val, z3::context& c) {
-  static llvm::DenseMap<Value*, z3::expr*> cache;
-  static int counter = 0;
-  if (cache.find(val) != cache.end()) {
-    return *cache[val];
-  }
-  if (ConstantInt* constInt = dyn_cast<ConstantInt>(val)) {
-    z3::expr e = c.bv_val(constInt->getValue().getSExtValue(),
-                          constInt->getType()->getIntegerBitWidth());
-    cache[val] = new z3::expr(e);
-    return e;
-  } else if (Argument* arg = dyn_cast<Argument>(val)) {
-    z3::expr e = c.bv_const(arg->getName().str().c_str(), 64);
-    cache[val] = new z3::expr(e);
-    return e;
-  } else if (CallInst* arg = dyn_cast<CallInst>(val)) {
-    z3::expr e = c.bv_const((std::string("callinst") + std::to_string(counter) +
-                             (arg->getName().str().c_str()))
-                                .c_str(),
-                            arg->getType()->getIntegerBitWidth());
-    counter++;
-    cache[val] = new z3::expr(e);
-
-    return e;
-  } else if (Instruction* inst = dyn_cast<Instruction>(val)) {
-    switch (inst->getOpcode()) {
-    case Instruction::Add: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = lhs + rhs;
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::And: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = lhs & rhs;
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::Or: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = lhs | rhs;
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::AShr: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-
-      z3::expr result = z3::ashr(lhs, rhs);
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::LShr: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-
-      z3::expr result = z3::lshr(lhs, rhs);
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::Shl: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = z3::shl(lhs, rhs);
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::Mul: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = lhs * rhs;
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-
-    case Instruction::UDiv: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = z3::udiv(lhs, rhs);
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::SDiv: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = lhs / rhs;
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::URem: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = z3::urem(lhs, rhs);
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::SRem: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = z3::srem(lhs, rhs);
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::Xor: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = lhs ^ rhs;
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::Sub: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr result = lhs - rhs;
-      cache[val] = new z3::expr(result);
-      return result;
-    }
-    case Instruction::Load: {
-      z3::expr e = c.bv_const(inst->getName().str().c_str(), 64);
-      cache[val] = new z3::expr(e);
-      return e;
-    }
-    case Instruction::Trunc: {
-      Value* srcValue = inst->getOperand(0);
-      z3::expr srcExpr = llvmToZ3Expr(srcValue, c);
-      unsigned targetBitWidth = inst->getType()->getIntegerBitWidth();
-
-      z3::expr truncatedExpr = srcExpr.extract(targetBitWidth - 1, 0);
-      cache[val] = new z3::expr(truncatedExpr);
-      return truncatedExpr;
-    }
-    case Instruction::Select: {
-      z3::expr condition = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(1), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(2), c);
-
-      z3::expr is_true = condition != 0;
-      z3::expr select_expr = z3::ite(is_true, lhs, rhs);
-      cache[val] = new z3::expr(select_expr);
-      return select_expr;
-    }
-    case Instruction::ICmp: {
-      z3::expr lhs = llvmToZ3Expr(inst->getOperand(0), c);
-      z3::expr rhs = llvmToZ3Expr(inst->getOperand(1), c);
-
-      z3::expr bool_result = lhs;
-      switch (cast<llvm::ICmpInst>(inst)->getPredicate()) {
-      case llvm::CmpInst::ICMP_EQ:
-        bool_result = (lhs == rhs);
-        break;
-      case llvm::CmpInst::ICMP_NE:
-        bool_result = (lhs != rhs);
-        break;
-      case llvm::CmpInst::ICMP_SLE:
-        bool_result = z3::sle(lhs, rhs);
-        break;
-      case llvm::CmpInst::ICMP_SLT:
-        bool_result = z3::slt(lhs, rhs);
-        break;
-      case llvm::CmpInst::ICMP_ULE:
-        bool_result = z3::ule(lhs, rhs);
-        break;
-      case llvm::CmpInst::ICMP_ULT:
-        bool_result = z3::ult(lhs, rhs);
-        break;
-      case llvm::CmpInst::ICMP_SGE:
-        bool_result = z3::sge(lhs, rhs);
-        break;
-      case llvm::CmpInst::ICMP_SGT:
-        bool_result = z3::sgt(lhs, rhs);
-        break;
-      case llvm::CmpInst::ICMP_UGE:
-        bool_result = z3::uge(lhs, rhs);
-        break;
-      case llvm::CmpInst::ICMP_UGT:
-        bool_result = z3::ugt(lhs, rhs);
-        break;
-      default:
-        UNREACHABLE("Unsupported comparison predicate !");
-        return c.bv_val(-1, 32);
-      }
-
-      z3::expr int_result =
-          z3::ite(bool_result, c.bv_val(1, 1), c.bv_val(0, 1));
-      cache[val] = new z3::expr(int_result);
-      return int_result;
-    }
-    case Instruction::ZExt:
-    case Instruction::SExt: {
-      Value* srcValue = inst->getOperand(0);
-      z3::expr srcExpr = llvmToZ3Expr(srcValue, c);
-      unsigned srcBitWidth = srcExpr.get_sort().bv_size();
-      unsigned targetBitWidth = inst->getType()->getIntegerBitWidth();
-      z3::expr extendedExpr =
-          inst->getOpcode() == Instruction::ZExt
-              ? z3::zext(srcExpr, targetBitWidth - srcBitWidth)
-              : z3::sext(srcExpr, targetBitWidth - srcBitWidth);
-
-      cache[val] = new z3::expr(extendedExpr);
-      return extendedExpr;
-    }
-    default:
-      std::cerr << "Unsupported instruction : " << inst->getOpcodeName() << " !"
-                << std::endl;
-      UNREACHABLE("Unsupported instruction !");
-      return c.bv_val(0, 64);
-    }
-  }
-
-  UNREACHABLE("Unsupported!");
-  return c.bv_val(0, 64);
-}
-
-std::optional<Value*> lifterClass<Mnemonic, Register,
-T3>::evaluateLLVMExpression(Value* value) { static z3::context c;
-
-  printvalue(value);
-
-  z3::expr expr = llvmToZ3Expr(value, c);
-
-  if (auto inst = dyn_cast<Instruction>(value)) {
-
-  } else
-    return std::nullopt;
-  printvalue2(expr);
-  z3::expr simplified_expr = expr.simplify();
-  printvalue2(simplified_expr);
-  if (simplified_expr.get_sort().bv_size() != 64) {
-    return std::nullopt;
-  }
-  if (simplified_expr.is_numeral()) {
-    return ConstantInt::get(value->getType(),
-                            simplified_expr.get_numeral_uint64());
-  }
-
-  static z3::solver s =
-      (z3::tactic(c, "solve-eqs") & z3::tactic(c, "propagate-values") &
-       z3::tactic(c, "bit-blast") & z3::tactic(c, "elim-uncnstr") &
-       z3::tactic(c, "qe-light") & z3::tactic(c, "elim-uncnstr") &
-       z3::tactic(c, "reduce-args") & z3::tactic(c, "qe-light") &
-       z3::tactic(c, "smt"))
-          .mk_solver();
-  Z3_global_param_set("timeout", "1000");
-  s.reset();
-
-  const auto lowstack = c.bv_val(STACKP_VALUE - 0x10000, 64);
-  const auto higstack = c.bv_val(STACKP_VALUE + 0x10000, 64);
-  const auto low_bin = c.bv_val(0x140000000, 64);
-  const auto high_bin = c.bv_val(0x140000000 + 0x144f000, 64);
-
-  auto bound_stack =
-      ((simplified_expr >= lowstack) && (simplified_expr <= higstack));
-
-  auto bound_bin_0 = (simplified_expr >= low_bin);
-  auto bound_bin_1 = (simplified_expr <= high_bin);
-  auto bound_bin = bound_bin_0 && bound_bin_1;
-  s.add(bound_stack || bound_bin);
-  for (const auto& it : assumptions) {
-    auto cnd = llvmToZ3Expr(it.first, c);
-    auto v = llvmToZ3Expr(ConstantInt::get(it.first->getType(), it.second), c);
-    s.add(cnd == v);
-  }
-  auto status = s.check();
-  if (status == z3::sat) {
-
-    z3::model m = s.get_model();
-
-    z3::expr value_expr = m.eval(simplified_expr, true);
-
-    printvalue2(value_expr);
-
-    s.add((simplified_expr != value_expr));
-
-    if (s.check() != z3::sat) {
-      return ConstantInt::get(value->getType(),
-                              value_expr.get_numeral_uint64());
-    }
-  }
-
-  return std::nullopt;
-}
-*/
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createGEPFolder(Type* Type,
                                                             Value* Base,
@@ -1429,9 +1093,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createTruncFolder(
   // just use %y
   // so xor %y, %y2 => %y, %y => 0
 
-  return simplifyValue(
-      result,
-      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
+  return result;
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createZExtFolder(
@@ -1445,9 +1107,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createZExtFolder(
       return ConstantInt::get(DestTy, KnownRHS.getConstant());
   }
 #endif
-  return simplifyValue(
-      result,
-      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
+  return result;
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createZExtOrTruncFolder(
@@ -1472,9 +1132,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtFolder(
       return ConstantInt::get(DestTy, KnownRHS.getConstant());
   }
 #endif
-  return simplifyValue(
-      result,
-      builder->GetInsertBlock()->getParent()->getParent()->getDataLayout());
+  return result;
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtOrTruncFolder(
@@ -1487,10 +1145,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtOrTruncFolder(
   return V;
 }
 
-/*
-%extendedValue13 = zext i8 %trunc11 to i64
-%maskedreg14 = and i64 %newreg9, -256
-*/
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::setFlag(const Flag flag,
                                                   Value* newValue) {
@@ -1955,15 +1609,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetIndexValue(uint8_t index,
   }
 }
 
-/*
-
-MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetOperandValue(
-    const ZydisDecodedOperand& op, int possiblesize,
-    const std::string& address) {}
-
-MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetOperandValue(
-    const ZydisDecodedOperand& op, Value* value, const std::string& address) {}
-*/
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(std::vector<Value*>)::GetRFLAGS() {
   std::vector<Value*> rflags;
