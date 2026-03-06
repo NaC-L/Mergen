@@ -54,10 +54,10 @@ def check_determinism(ir_dir: Path, golden_file: Path) -> None:
         )
 
     if not golden_file.exists():
-        golden_file.parent.mkdir(parents=True, exist_ok=True)
-        golden_file.write_text(json.dumps(hashes, indent=2) + "\n", encoding="utf-8")
-        print(f"Golden hashes written to {golden_file} (first run)")
-        return
+        raise SystemExit(
+            f"Determinism check FAILED — golden hash file is missing: {golden_file}. "
+            "Run `python test.py update-golden` to regenerate it."
+        )
 
     golden = json.loads(golden_file.read_text(encoding="utf-8"))
     mismatches: List[str] = []

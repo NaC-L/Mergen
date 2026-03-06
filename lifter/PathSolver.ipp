@@ -196,13 +196,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     }
 
     // Conservative fallback for values not enumerated in pv:
-    // keep default unresolved instead of routing to an arbitrary concrete target.
+    // keep default unresolved instead of assuming impossible behavior.
     llvm::IRBuilder<> defaultBuilder(bb_default_unresolved);
-    defaultBuilder.CreateUnreachable();
+    defaultBuilder.CreateRet(UndefValue::get(function->getReturnType()));
 
-    // Destination is intentionally unknown for multi-target switches.
+    // Destination remains unknown for multi-target switches.
     dest = 0;
-    result = PATH_multi_solved;
+    result = PATH_unsolved;
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_switch.ll";
