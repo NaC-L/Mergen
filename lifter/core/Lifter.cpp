@@ -7,15 +7,15 @@
 #include "LifterPipeline.hpp"
 #include "LifterStages.hpp"
 #include "MergenPB.hpp"
-#include "includes.h"
-#include "lifterClass.hpp"
-#include "lifterClass_concolic.hpp"
-#include "lifterClass_symbolic.hpp"
+#include "Includes.h"
+#include "LifterClass.hpp"
+#include "LifterClass_Concolic.hpp"
+#include "LifterClass_Symbolic.hpp"
 
 
-#include "test_instructions.h"
+#include "TestInstructions.h"
 #include "Semantics.ipp"
-#include "utils.h"
+#include "Utils.h"
 #include <coff/line_number.hpp>
 #include <cstdint>
 #include <iostream>

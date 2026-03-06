@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lifterClass_concolic.hpp"
+#include "LifterClass_Concolic.hpp"
 #include <llvm/IR/Constants.h>
 #include <llvm/Support/Casting.h>
 

@@ -1,7 +1,7 @@
 
 #include "CustomPasses.hpp"
-#include "lifterClass.hpp"
-#include "utils.h"
+#include "LifterClass.hpp"
+#include "Utils.h"
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>

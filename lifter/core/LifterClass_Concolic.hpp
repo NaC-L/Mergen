@@ -2,10 +2,10 @@
 #define LIFTERCLASS_CONCRETE_H
 #include "CommonDisassembler.hpp"
 #include "RegisterManager.hpp"
-#include "icedDisassembler.hpp"
-#include "icedDisassembler_mnemonics.h"
-#include "icedDisassembler_registers.h"
-#include "lifterClass.hpp"
+#include "IcedDisassembler.hpp"
+#include "IcedDisassemblerMnemonics.h"
+#include "IcedDisassemblerRegisters.h"
+#include "LifterClass.hpp"
 #include <magic_enum/magic_enum.hpp>
 
 template <

@@ -4,9 +4,9 @@
 #include "CommonDisassembler.hpp"
 #include "CommonMnemonics.h"
 #include "CommonRegisters.h"
-#include "icedDisassembler_mnemonics.h"
-#include "icedDisassembler_registers.h"
-#include "utils.h"
+#include "IcedDisassemblerMnemonics.h"
+#include "IcedDisassemblerRegisters.h"
+#include "Utils.h"
 
 #include <cstddef>
 #include <magic_enum/magic_enum.hpp>

@@ -1,8 +1,8 @@
-#include "test_instructions.h"
+#include "TestInstructions.h"
 
 #ifdef MERGEN_TEST
 
-#include "tester.hpp"
+#include "Tester.hpp"
 
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/JSON.h>
@@ -662,7 +662,7 @@ int buildFullHandlerSeed(const std::string& outputPath,
 int testInit(const std::string& suiteFilter) {
   const char* vectorsEnv = std::getenv("MERGEN_TEST_VECTORS");
   const std::string vectorsPath =
-      vectorsEnv ? vectorsEnv : "lifter/test_vectors/oracle_vectors.json";
+      vectorsEnv ? vectorsEnv : "lifter/test/test_vectors/oracle_vectors.json";
 
   std::vector<InstructionTestCase> testCases;
   std::string loadError;

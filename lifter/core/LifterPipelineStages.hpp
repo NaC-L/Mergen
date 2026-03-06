@@ -1,8 +1,8 @@
 #pragma once
 
 #include "RuntimeImageContext.hpp"
-#include "lifterClass_concolic.hpp"
-#include "utils.h"
+#include "LifterClass_Concolic.hpp"
+#include "Utils.h"
 #include <cstdint>
 #include <iostream>
 #include <vector>

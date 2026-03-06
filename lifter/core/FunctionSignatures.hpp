@@ -1,6 +1,6 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
-#include "fileReader.hpp"
+#include "FileReader.hpp"
 #include <iostream>
 #include <map>
 #include <queue>

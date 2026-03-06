@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lifterClass_concolic.hpp"
+#include "LifterClass_Concolic.hpp"
 
 inline void configureDefaultMemoryPolicy(lifterConcolic<>* lifter) {
   lifter->memoryPolicy.setDefaultMode(MemoryAccessMode::SYMBOLIC);

@@ -5,8 +5,8 @@
 #include "CommonDisassembler.hpp"
 #include "CommonMnemonics.h"
 #include "CommonRegisters.h"
-#include "ZydisDisassembler_mnemonics.h"
-#include "utils.h"
+#include "ZydisDisassemblerMnemonics.h"
+#include "Utils.h"
 #include <Zydis/Register.h>
 #include <Zydis/SharedTypes.h>
 #include <Zydis/Zydis.h>

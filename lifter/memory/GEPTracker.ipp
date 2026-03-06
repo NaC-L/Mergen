@@ -3,8 +3,8 @@
 #include "GEPTracker.h"
 #include "MemoryPolicy.hpp"
 #include "OperandUtils.ipp"
-#include "lifterClass.hpp"
-#include "utils.h"
+#include "LifterClass.hpp"
+#include "Utils.h"
 #include "llvm/Analysis/MemorySSA.h"
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>

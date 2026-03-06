@@ -7,14 +7,14 @@
 #include "PathSolver.h"
 #include "RegisterManager.hpp"
 #include "ZydisDisassembler.hpp"
-#include "ZydisDisassembler_mnemonics.h"
-#include "ZydisDisassembler_registers.h"
-#include "fileReader.hpp"
-#include "icedDisassembler.hpp"
-#include "icedDisassembler_mnemonics.h"
-#include "icedDisassembler_registers.h"
-#include "includes.h"
-#include "utils.h"
+#include "ZydisDisassemblerMnemonics.h"
+#include "ZydisDisassemblerRegisters.h"
+#include "FileReader.hpp"
+#include "IcedDisassembler.hpp"
+#include "IcedDisassemblerMnemonics.h"
+#include "IcedDisassemblerRegisters.h"
+#include "Includes.h"
+#include "Utils.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 
@@ -37,6 +37,8 @@
 #include <set>
 #include <type_traits>
 #include <utility>
+
+using namespace llvm;
 
 #ifndef DEFINE_FUNCTION
 #define DEFINE_FUNCTION(name) void lift_##name()

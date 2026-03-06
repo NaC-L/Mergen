@@ -2,10 +2,10 @@
 #define LIFTERCLASS_SYMBOLIC_H
 
 #include "CommonDisassembler.hpp"
-#include "icedDisassembler.hpp"
-#include "icedDisassembler_mnemonics.h"
-#include "icedDisassembler_registers.h"
-#include "lifterClass.hpp"
+#include "IcedDisassembler.hpp"
+#include "IcedDisassemblerMnemonics.h"
+#include "IcedDisassemblerRegisters.h"
+#include "LifterClass.hpp"
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Metadata.h>

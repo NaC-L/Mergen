@@ -4,8 +4,8 @@
 #include "CommonDisassembler.hpp"
 #include "GEPTracker.ipp"
 #include "ZydisDisassembler.hpp"
-#include "lifterClass.hpp"
-#include "utils.h"
+#include "LifterClass.hpp"
+#include "Utils.h"
 #include <cstdio>
 #include <iostream>
 #include <llvm/ADT/DenseMap.h>
