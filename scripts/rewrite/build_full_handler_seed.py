@@ -458,7 +458,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Build full handler seed using Capstone auto-discovery"
     )
-    parser.add_argument("--opcode-file", default="lifter/x86_64_opcodes.x")
+    parser.add_argument("--opcode-file", default="lifter/semantics/x86_64_opcodes.x")
     parser.add_argument("--base-seed", default="scripts/rewrite/oracle_seed_vectors.json")
     parser.add_argument("--out-seed", default="scripts/rewrite/oracle_seed_full_handlers.json")
     parser.add_argument("--iterations", type=int, default=12)

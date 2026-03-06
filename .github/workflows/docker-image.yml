@@ -18,7 +18,7 @@ jobs:
 
       - name: Build the Docker image
         run: |
-          TAG=my-image-name:${{ matrix.variant }}
+          TAG=mergen:${{ matrix.variant }}
           # decide whether to install Rust: only for "iced"
           if [ "${{ matrix.variant }}" = "iced" ]; then
             RUST_ARG=true
@@ -33,7 +33,7 @@ jobs:
 
       - name: Extract the lifter binary
         run: |
-          TAG=my-image-name:${{ matrix.variant }}
+          TAG=mergen:${{ matrix.variant }}
           docker create --name extract-container "$TAG"
           mkdir -p ./output
           docker cp extract-container:/root/Mergen/build/lifter \
