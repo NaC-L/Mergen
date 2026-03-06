@@ -68,7 +68,7 @@
     {
       "name": "calc_grade",
       "symbol": "calc_grade",
-      "patterns": ["icmp slt i32 %0, 90", "icmp slt i32 %0, 80", "icmp slt i32 %0, 70", "icmp slt i32 %0, 60", "phi i64", "ret i64 %common.ret.op"]
+      "patterns": ["icmp slt i32 %0, 90", "icmp slt i32 %0, 80", "icmp slt i32 %0, 70", "icmp sgt i32 %0, 59", "phi i64", "ret i64 %common.ret.op"]
     },
     {
       "name": "calc_mixed",
