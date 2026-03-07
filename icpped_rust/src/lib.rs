@@ -23,10 +23,12 @@ enum OperandType {
   Register16,
   Register32,
   Register64,
+  Register128,
   Memory8,
   Memory16,
   Memory32,
   Memory64,
+  Memory128,
   Immediate8,
   Immediate8_2nd, // enter/exit
   Immediate16,
@@ -121,12 +123,12 @@ fn convert_type_to_mergen(inst : &Instruction,  index : u32) -> OperandType {
         OpKind::Register => {
             match inst.op_register(index).size() {
                 1 => { return OperandType::Register8; },
-                2 => {return OperandType::Register16},
-                4 => {return OperandType::Register32},
-                8 => {return OperandType::Register64},
-                // 16 => OperandType::Register128,
-                0 => {return OperandType::Invalid},
-                _ => {panic!("Unhandled register size: {}", inst.op_register(index).size());},
+                2 => { return OperandType::Register16; },
+                4 => { return OperandType::Register32; },
+                8 => { return OperandType::Register64; },
+                16 => { return OperandType::Register128; },
+                0 => { return OperandType::Invalid; },
+                _ => { panic!("Unhandled register size: {}", inst.op_register(index).size()); },
             }
         },
         OpKind::Immediate8 => { return OperandType::Immediate8 },
@@ -162,12 +164,12 @@ fn convert_type_to_mergen(inst : &Instruction,  index : u32) -> OperandType {
                     */
                     return OperandType::Invalid;
                 },
-                1 => {return OperandType::Memory8},
-                2 => {return OperandType::Memory16},
-                4 => {return OperandType::Memory32},
-                8 => {return OperandType::Memory64},
-                // 16 => OperandType::Memory128
-                _ => {println!("{:?}", inst.memory_size());panic!("Unhandled memory size: {}", inst.memory_size().size())},
+                1 => { return OperandType::Memory8; },
+                2 => { return OperandType::Memory16; },
+                4 => { return OperandType::Memory32; },
+                8 => { return OperandType::Memory64; },
+                16 => { return OperandType::Memory128; },
+                _ => { println!("{:?}", inst.memory_size()); panic!("Unhandled memory size: {}", inst.memory_size().size()); },
             }
         },
 

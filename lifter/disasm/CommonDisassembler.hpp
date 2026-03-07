@@ -18,10 +18,12 @@ enum class OperandType : uint8_t {
   Register16,
   Register32,
   Register64,
+  Register128,
   Memory8,
   Memory16,
   Memory32,
   Memory64,
+  Memory128,
   Immediate8,
   Immediate8_2nd, // enter/exit
   Immediate16,
@@ -53,6 +55,10 @@ inline uint8_t GetTypeSize(OperandType op) {
   case OperandType::Immediate64: {
     return 64;
   }
+  case OperandType::Register128:
+  case OperandType::Memory128: {
+    return 128;
+  }
   default: {
     // UNREACHABLE("invalid size");
   }
@@ -61,6 +67,11 @@ inline uint8_t GetTypeSize(OperandType op) {
 }
 
 template <Registers Register> Register getBiggestEncoding(Register reg) {
+  auto regValue = static_cast<int>(reg);
+  if (regValue >= static_cast<int>(Register::XMM0) &&
+      regValue <= static_cast<int>(Register::XMM15)) {
+    return reg;
+  }
 
   switch (reg) {
 
@@ -331,6 +342,11 @@ inline Register getRegOfSize(Register reg, uint8_t size) {
 }
 
 template <Registers Register> inline uint8_t getRegisterSize(Register reg) {
+  auto regValue = static_cast<int>(reg);
+  if (regValue >= static_cast<int>(Register::XMM0) &&
+      regValue <= static_cast<int>(Register::XMM15)) {
+    return 128;
+  }
 
   switch (reg) {
   case Register::RAX:

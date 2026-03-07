@@ -4255,7 +4255,8 @@ namespace Mergen {
         case OperandType::Register8:
         case OperandType::Register16:
         case OperandType::Register32:
-        case OperandType::Register64: {
+        case OperandType::Register64:
+        case OperandType::Register128: {
           convertedInstruction.regs[i] = icedToMergenRegisters<Register>(
               static_cast<IcedRegister_internal>(obj.regs[i]));
           break;

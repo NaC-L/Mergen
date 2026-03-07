@@ -8,8 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
-// 8 << (arg.argtype.size - 1)
-enum ArgType { NONE = 0, I8 = 1, I16 = 2, I32 = 3, I64 = 4 };
+// 8 << (arg.argtype.size - 1) => I8/I16/I32/I64/I128
+enum ArgType { NONE = 0, I8 = 1, I16 = 2, I32 = 3, I64 = 4, I128 = 5 };
 
 template <typename Register> class funcsignatures {
 public:

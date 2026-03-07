@@ -1468,7 +1468,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
   case OperandType::Register8:
   case OperandType::Register16:
   case OperandType::Register32:
-  case OperandType::Register64: {
+  case OperandType::Register64:
+  case OperandType::Register128: {
     auto reg = instruction.regs[index];
     printvalue2(magic_enum::enum_name(reg));
     return createZExtOrTruncFolder(GetRegisterValue(reg),
@@ -1508,7 +1509,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
   case OperandType::Memory8:
   case OperandType::Memory16:
   case OperandType::Memory32:
-  case OperandType::Memory64: {
+  case OperandType::Memory64:
+  case OperandType::Memory128: {
     int size = 0;
 
     switch (type) {
@@ -1524,6 +1526,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetIndexValue(uint8_t index) {
       break;
     case OperandType::Memory64:
       size = 64;
+      break;
+    case OperandType::Memory128:
+      size = 128;
       break;
 
     default:
@@ -1552,7 +1557,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetIndexValue(uint8_t index,
   case OperandType::Register8:
   case OperandType::Register16:
   case OperandType::Register32:
-  case OperandType::Register64: {
+  case OperandType::Register64:
+  case OperandType::Register128: {
     auto reg = instruction.regs[index];
 
     // TODO: do we need to remove this sext from here?
@@ -1574,7 +1580,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetIndexValue(uint8_t index,
   case OperandType::Memory8:
   case OperandType::Memory16:
   case OperandType::Memory32:
-  case OperandType::Memory64: {
+  case OperandType::Memory64:
+  case OperandType::Memory128: {
     int size = 0;
 
     switch (type) {
@@ -1590,6 +1597,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetIndexValue(uint8_t index,
       break;
     case OperandType::Memory64:
       size = 64;
+      break;
+    case OperandType::Memory128:
+      size = 128;
       break;
 
     default:
