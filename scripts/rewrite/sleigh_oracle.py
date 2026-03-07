@@ -45,8 +45,8 @@ class PcodeEmulatorState:
     """Flat byte-addressable storage for register-space, unique-space, and RAM."""
 
     def __init__(self) -> None:
-        # register space: 0x0 .. 0x800 covers x86_64 GPRs, flags, segments, etc.
-        self._regs = bytearray(0x1000)
+        # register space includes GPR/flags and SIMD offsets (x86_64 XMM0..XMM15)
+        self._regs = bytearray(0x2000)
         # unique (temp) space: sparse dict {offset: bytes} to avoid large alloc
         self._unique: Dict[int, bytes] = {}
         # RAM: mapped regions as {base_addr: bytearray}
@@ -65,10 +65,18 @@ class PcodeEmulatorState:
             f"Memory access at {addr:#x} (size {size}) outside mapped regions"
         )
 
+    def _ensure_reg_bounds(self, offset: int, size: int) -> None:
+        if offset < 0 or size < 0 or offset + size > len(self._regs):
+            raise PcodeEmulatorError(
+                f"Register access out of range: offset={offset:#x} size={size} "
+                f"backing_size={len(self._regs):#x}"
+            )
+
     # -- generic read/write by space name --
 
     def read(self, space: str, offset: int, size: int) -> int:
         if space == "register":
+            self._ensure_reg_bounds(offset, size)
             data = self._regs[offset : offset + size]
         elif space == "unique":
             data = self._unique.get(offset, b'\x00' * size)
@@ -86,6 +94,7 @@ class PcodeEmulatorState:
         mask = (1 << (size * 8)) - 1
         data = (value & mask).to_bytes(size, "little")
         if space == "register":
+            self._ensure_reg_bounds(offset, size)
             self._regs[offset : offset + size] = data
         elif space == "unique":
             self._unique[offset] = data
@@ -118,12 +127,19 @@ class PcodeEmulator:
     def execute(self, ops: list) -> None:
         """Execute a list of PcodeOp objects (from a single translated instruction)."""
         self._pc = 0
-        max_iters = len(ops) * 20
+        intra_branch_ops = tuple(
+            op for op in (OpCode.BRANCH, OpCode.CBRANCH, getattr(OpCode, "BRANCHIND", None))
+            if op is not None
+        )
+        has_intra_branch = any(op.opcode in intra_branch_ops for op in ops)
+        max_iters = max(len(ops) * 128, 2048) if has_intra_branch else len(ops) + 1
         iters = 0
         while self._pc < len(ops):
             iters += 1
             if iters > max_iters:
-                raise PcodeEmulatorError("P-code execution exceeded max iterations")
+                raise PcodeEmulatorError(
+                    f"P-code execution exceeded max iterations ({iters}>{max_iters}, ops={len(ops)})"
+                )
             op = ops[self._pc]
             handler = _OP_DISPATCH.get(op.opcode)
             if handler is None:
@@ -154,6 +170,12 @@ class PcodeEmulator:
         if value & (1 << (bits - 1)):
             return value - (1 << bits)
         return value
+
+    def _trunc_div_signed(self, dividend: int, divisor: int) -> int:
+        quotient = abs(dividend) // abs(divisor)
+        if (dividend < 0) ^ (divisor < 0):
+            return -quotient
+        return quotient
 
     # -- Opcode implementations --
 
@@ -334,8 +356,7 @@ class PcodeEmulator:
         b = self._sign_extend(self._read(op.inputs[1]), size)
         if b == 0:
             raise PcodeEmulatorError("Signed division by zero")
-        # Python's // truncates toward negative infinity; C truncates toward zero
-        result = int(a / b)  # truncate toward zero
+        result = self._trunc_div_signed(a, b)
         self._write(op.output, result)
 
     def _op_int_rem(self, op) -> None:
@@ -350,8 +371,8 @@ class PcodeEmulator:
         b = self._sign_extend(self._read(op.inputs[1]), size)
         if b == 0:
             raise PcodeEmulatorError("Signed remainder by zero")
-        # C-style: result has sign of dividend
-        result = a - int(a / b) * b
+        quotient = self._trunc_div_signed(a, b)
+        result = a - quotient * b
         self._write(op.output, result)
 
     # -- Boolean ops --
@@ -464,6 +485,10 @@ _MERGEN_TO_SLEIGH_REG = {
     "R8": "R8", "R9": "R9", "R10": "R10", "R11": "R11",
     "R12": "R12", "R13": "R13", "R14": "R14", "R15": "R15",
     "RIP": "RIP",
+    "XMM0": "XMM0", "XMM1": "XMM1", "XMM2": "XMM2", "XMM3": "XMM3",
+    "XMM4": "XMM4", "XMM5": "XMM5", "XMM6": "XMM6", "XMM7": "XMM7",
+    "XMM8": "XMM8", "XMM9": "XMM9", "XMM10": "XMM10", "XMM11": "XMM11",
+    "XMM12": "XMM12", "XMM13": "XMM13", "XMM14": "XMM14", "XMM15": "XMM15",
 }
 
 # Maps Mergen flag names to pypcode individual flag register names.

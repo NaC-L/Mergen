@@ -3,7 +3,12 @@
     {
       "name": "branch",
       "symbol": "branch_target",
-      "patterns": ["select i1", "mul i32 %0, 3", "add i32 %0, 100", "xor i32"]
+      "patterns": [
+        "select i1",
+        { "line_all": ["mul i32", ", 3"] },
+        { "line_all": ["add i32", ", 100"] },
+        "xor i32"
+      ]
     },
     {
       "name": "stack",
@@ -38,7 +43,13 @@
     {
       "name": "nested_branch",
       "symbol": "nested_branch_target",
-      "patterns": ["icmp slt i32 %0, 11", "icmp slt i32 %0, 21", "select i1", "i64 200, i64 300", "i64 100"]
+      "patterns": [
+        { "line_all": ["icmp slt i32", ", 11"] },
+        { "line_all": ["icmp slt i32", ", 21"] },
+        "select i1",
+        "i64 200, i64 300",
+        "i64 100"
+      ]
     },
     {
       "name": "loop_simple",
@@ -53,17 +64,26 @@
     {
       "name": "multi_arg",
       "symbol": "multi_arg_target",
-      "patterns": ["trunc i64 %RCX to i32", "trunc i64 %RDX to i32", "add i32", "mul i32", "zext i32"]
+      "patterns": ["trunc i64 %RCX to i32", "trunc i64 %RDX to i32", "add i32", "mul i32", "zext i32", "i128 %XMM0", "i128 %XMM15"]
     },
     {
       "name": "diamond",
       "symbol": "diamond_target",
-      "patterns": ["and i32 %0, 1", "icmp eq i32", "select i1", "mul i32 %0, 3"]
+      "patterns": [
+        { "line_all": ["and i32", ", 1"] },
+        "icmp eq i32",
+        "select i1",
+        { "line_all": ["mul i32", ", 3"] }
+      ]
     },
     {
       "name": "cmov_chain",
       "symbol": "cmov_chain_target",
-      "patterns": ["icmp sgt i32 %0, 10", "select i1", "i64 250, i64 150"]
+      "patterns": [
+        { "line_all": ["icmp sgt i32", ", 10"] },
+        "select i1",
+        "i64 250, i64 150"
+      ]
     },
     {
       "name": "calc_grade",
@@ -88,7 +108,7 @@
     {
       "name": "switch_3way",
       "symbol": "switch_3way_target",
-      "patterns": ["switch i32 %0", "i32 1, label", "i32 2, label", "i32 3, label", "phi i64", "[ 100,", "[ 200,", "[ 300,", "[ 999,"]
+      "patterns": ["switch i32 %", "i32 1, label", "i32 2, label", "i32 3, label", "phi i64", "[ 100,", "[ 200,", "[ 300,", "[ 999,"]
     },
     {
       "name": "calc_switch",
@@ -98,7 +118,7 @@
     {
       "name": "switch_sparse",
       "symbol": "switch_sparse_target",
-      "patterns": ["switch i32 %0", "i32 10, label", "i32 50, label", "i32 200, label", "i32 1000, label", "phi i64", "[ 11,", "[ 55,", "[ 222,", "[ 1337,", "[ 4294967295,"]
+      "patterns": ["switch i32 %", "i32 10, label", "i32 50, label", "i32 200, label", "i32 1000, label", "phi i64", "[ 11,", "[ 55,", "[ 222,", "[ 1337,", "[ 4294967295,"]
     },
     {
       "name": "calc_cout",

@@ -1,6 +1,6 @@
 {
   "schema": "mergen-oracle-v1",
-  "generated_at_utc": "2026-03-04T10:12:02.045616+00:00",
+  "generated_at_utc": "2026-03-07T13:10:37.212650+00:00",
   "source_seed_schema": "mergen-oracle-seed-v1",
   "providers": [
     "unicorn"
@@ -5560,6 +5560,134 @@
           "registers": {
             "RAX": "0x10",
             "RCX": "0x55667788"
+          },
+          "flags": {}
+        }
+      }
+    },
+    {
+      "name": "movdqa_xmm0_xmm1_basic",
+      "handler": "movdqa",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        102,
+        15,
+        111,
+        193
+      ],
+      "initial": {
+        "registers": {
+          "XMM0": "0x00112233445566778899aabbccddeeff",
+          "XMM1": "0xffeeddccbbaa99887766554433221100"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "XMM0": "0xffeeddccbbaa99887766554433221100"
+        },
+        "flags": {}
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "XMM0": "0xffeeddccbbaa99887766554433221100"
+          },
+          "flags": {}
+        }
+      }
+    },
+    {
+      "name": "pxor_xmm0_xmm1_basic",
+      "handler": "pxor",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        102,
+        15,
+        239,
+        193
+      ],
+      "initial": {
+        "registers": {
+          "XMM0": "0x00112233445566778899aabbccddeeff",
+          "XMM1": "0xffeeddccbbaa99887766554433221100"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "XMM0": "0xffffffffffffffffffffffffffffffff"
+        },
+        "flags": {}
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "XMM0": "0xffffffffffffffffffffffffffffffff"
+          },
+          "flags": {}
+        }
+      }
+    },
+    {
+      "name": "pand_xmm0_xmm1_basic",
+      "handler": "pand",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        102,
+        15,
+        219,
+        193
+      ],
+      "initial": {
+        "registers": {
+          "XMM0": "0xf0f0f0f0f0f0f0f00f0f0f0f0f0f0f0f",
+          "XMM1": "0x00ff00ff00ff00ffff00ff00ff00ff00"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "XMM0": "0xf000f000f000f00f000f000f000f00"
+        },
+        "flags": {}
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "XMM0": "0xf000f000f000f00f000f000f000f00"
+          },
+          "flags": {}
+        }
+      }
+    },
+    {
+      "name": "por_xmm0_xmm1_basic",
+      "handler": "por",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        102,
+        15,
+        235,
+        193
+      ],
+      "initial": {
+        "registers": {
+          "XMM0": "0xf0f0f0f0f0f0f0f00f0f0f0f0f0f0f0f",
+          "XMM1": "0x00ff00ff00ff00ffff00ff00ff00ff00"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "XMM0": "0xf0fff0fff0fff0ffff0fff0fff0fff0f"
+        },
+        "flags": {}
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "XMM0": "0xf0fff0fff0fff0ffff0fff0fff0fff0f"
           },
           "flags": {}
         }

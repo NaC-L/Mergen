@@ -1,6 +1,8 @@
 #pragma once
 
 #include "LifterClass_Concolic.hpp"
+#include <llvm/ADT/APInt.h>
+#include <llvm/ADT/SmallString.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/Support/Casting.h>
 
@@ -19,7 +21,7 @@ using RegisterUnderTest = std::remove_reference_t<
 
 struct RegisterState {
   RegisterUnderTest reg;
-  uint64_t value;
+  llvm::APInt value;
 };
 
 struct FlagStatus {
@@ -41,7 +43,7 @@ class InstructionTester {
 public:
   int runAllTests(const std::vector<InstructionTestCase>& testCases,
                   const std::string& suiteFilter = "", bool checkFlags = false) {
-    int failures = 0;
+    int failures = runCustomKnownBitsTests(suiteFilter);
 
     for (const auto& testCase : testCases) {
       if (!suiteFilter.empty() &&
@@ -63,11 +65,17 @@ public:
   }
 
 private:
-  static std::optional<uint64_t> readConstantU64(llvm::Value* value) {
+  static std::optional<llvm::APInt> readConstantAPInt(llvm::Value* value) {
     if (auto* constant = llvm::dyn_cast<llvm::ConstantInt>(value)) {
-      return constant->getZExtValue();
+      return constant->getValue();
     }
     return std::nullopt;
+  }
+
+  static std::string formatAPIntHex(const llvm::APInt& value) {
+    llvm::SmallString<64> formatted;
+    value.toString(formatted, 16, false);
+    return "0x" + std::string(formatted);
   }
 
   static std::optional<bool> readConstantBool(llvm::Value* value) {
@@ -75,6 +83,87 @@ private:
       return constant->getZExtValue() != 0;
     }
     return std::nullopt;
+  }
+
+  static bool shouldRunByFilter(const std::string& caseName,
+                                const std::string& suiteFilter) {
+    return suiteFilter.empty() ||
+           caseName.find(suiteFilter) != std::string::npos;
+  }
+
+  bool runKnownBitsI64ConstantCase(std::string& details) {
+    LifterUnderTest lifter;
+    auto* value = llvm::ConstantInt::get(
+        llvm::Type::getInt64Ty(lifter.builder->getContext()), 0xF0ULL);
+    auto knownBits = lifter.analyzeValueKnownBits(value, nullptr);
+
+    if (!knownBits.isConstant()) {
+      details = "  expected knownbits constant for i64 literal\n";
+      return false;
+    }
+
+    const llvm::APInt expected(64, 0xF0ULL);
+    if (knownBits.getConstant() != expected) {
+      details = "  i64 knownbits mismatch: expected=" + formatAPIntHex(expected) +
+                " actual=" + formatAPIntHex(knownBits.getConstant()) + "\n";
+      return false;
+    }
+
+    return true;
+  }
+
+  bool runKnownBitsSimdFallbackCase(std::string& details) {
+    LifterUnderTest lifter;
+    const llvm::APInt xmmValue(128, "ffeeddccbbaa99887766554433221100", 16);
+    auto* value = llvm::ConstantInt::get(lifter.builder->getContext(), xmmValue);
+    auto knownBits = lifter.analyzeValueKnownBits(value, nullptr);
+
+    const bool fallbackWidth = knownBits.getBitWidth() == 64;
+    const bool fullyUnknown = knownBits.Zero.isZero() && knownBits.One.isZero() &&
+                              !knownBits.hasConflict() && !knownBits.isConstant();
+    if (!fallbackWidth || !fullyUnknown) {
+      std::ostringstream oss;
+      oss << "  expected unsupported SIMD knownbits fallback (unknown i64), got width="
+          << knownBits.getBitWidth();
+      if (knownBits.isConstant()) {
+        oss << " constant=" << formatAPIntHex(knownBits.getConstant());
+      }
+      oss << "\n";
+      details = oss.str();
+      return false;
+    }
+
+    return true;
+  }
+
+  int runCustomKnownBitsTests(const std::string& suiteFilter) {
+    int failures = 0;
+
+    const std::string scalarCase = "custom_knownbits_scalar_i64_constant";
+    if (shouldRunByFilter(scalarCase, suiteFilter)) {
+      std::string details;
+      const bool ok = runKnownBitsI64ConstantCase(details);
+      std::cout << "[" << (ok ? "  OK  " : " FAIL ") << "] " << scalarCase
+                << "\n";
+      if (!ok && !details.empty()) {
+        std::cout << details;
+      }
+      failures += !ok;
+    }
+
+    const std::string simdCase = "custom_knownbits_simd_i128_fallback";
+    if (shouldRunByFilter(simdCase, suiteFilter)) {
+      std::string details;
+      const bool ok = runKnownBitsSimdFallbackCase(details);
+      std::cout << "[" << (ok ? "  OK  " : " FAIL ") << "] " << simdCase
+                << "\n";
+      if (!ok && !details.empty()) {
+        std::cout << details;
+      }
+      failures += !ok;
+    }
+
+    return failures;
   }
 
   bool runTestCase(const InstructionTestCase& testCase, bool checkFlags) {
@@ -88,9 +177,10 @@ private:
     lifter.lastBranchTaken = false;
 
     for (const auto& reg : testCase.initialRegisters) {
+      const auto registerSize = getRegisterSize(reg.reg);
+      auto normalized = reg.value.zextOrTrunc(registerSize);
       lifter.SetRegisterValue(
-          reg.reg,
-          llvm::ConstantInt::get(lifter.builder->getInt64Ty(), reg.value));
+          reg.reg, llvm::ConstantInt::get(lifter.builder->getContext(), normalized));
     }
 
     for (const auto& flag : testCase.initialFlags) {
@@ -103,17 +193,26 @@ private:
     std::ostringstream errors;
 
     for (const auto& expected : testCase.expectedRegisters) {
-      auto actual = readConstantU64(lifter.GetRegisterValue(expected.reg));
+      auto actual = readConstantAPInt(lifter.GetRegisterValue(expected.reg));
       if (!actual.has_value()) {
         errors << "  register is not constant: "
                << magic_enum::enum_name(expected.reg) << "\n";
         continue;
       }
 
-      if (actual.value() != expected.value) {
+      const auto expectedWidth = static_cast<unsigned>(getRegisterSize(expected.reg));
+      if (actual->getBitWidth() != expectedWidth) {
+        errors << "  register width mismatch " << magic_enum::enum_name(expected.reg)
+               << ": expected_bits=" << expectedWidth
+               << " actual_bits=" << actual->getBitWidth() << "\n";
+        continue;
+      }
+
+      auto expectedValue = expected.value.zextOrTrunc(expectedWidth);
+      if (actual.value() != expectedValue) {
         errors << "  register mismatch " << magic_enum::enum_name(expected.reg)
-               << ": expected=" << expected.value
-               << " actual=" << actual.value() << "\n";
+               << ": expected=" << formatAPIntHex(expectedValue)
+               << " actual=" << formatAPIntHex(actual.value()) << "\n";
       }
     }
 
