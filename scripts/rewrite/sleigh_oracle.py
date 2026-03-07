@@ -127,12 +127,19 @@ class PcodeEmulator:
     def execute(self, ops: list) -> None:
         """Execute a list of PcodeOp objects (from a single translated instruction)."""
         self._pc = 0
-        max_iters = len(ops) * 20
+        intra_branch_ops = tuple(
+            op for op in (OpCode.BRANCH, OpCode.CBRANCH, getattr(OpCode, "BRANCHIND", None))
+            if op is not None
+        )
+        has_intra_branch = any(op.opcode in intra_branch_ops for op in ops)
+        max_iters = max(len(ops) * 128, 2048) if has_intra_branch else len(ops) + 1
         iters = 0
         while self._pc < len(ops):
             iters += 1
             if iters > max_iters:
-                raise PcodeEmulatorError("P-code execution exceeded max iterations")
+                raise PcodeEmulatorError(
+                    f"P-code execution exceeded max iterations ({iters}>{max_iters}, ops={len(ops)})"
+                )
             op = ops[self._pc]
             handler = _OP_DISPATCH.get(op.opcode)
             if handler is None:

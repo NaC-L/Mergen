@@ -132,11 +132,29 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
   // memcpy
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movdqa() {
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool destinationIsXmm = destinationType == OperandType::Register128;
+  bool sourceIsXmm = sourceType == OperandType::Register128 ||
+                     sourceType == OperandType::Memory128;
+  if (!destinationIsXmm || !sourceIsXmm) {
+    UNREACHABLE("movdqa requires xmm destination and xmm/m128 source");
+  }
+
   auto sourceValue = GetIndexValue(1);
   SetIndexValue(0, sourceValue);
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pand() {
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool destinationIsXmm = destinationType == OperandType::Register128;
+  bool sourceIsXmm = sourceType == OperandType::Register128 ||
+                     sourceType == OperandType::Memory128;
+  if (!destinationIsXmm || !sourceIsXmm) {
+    UNREACHABLE("pand requires xmm destination and xmm/m128 source");
+  }
+
   auto destinationValue = GetIndexValue(0);
   auto sourceValue = GetIndexValue(1);
   auto result = createAndFolder(destinationValue, sourceValue);
@@ -144,6 +162,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pand() {
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_por() {
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool destinationIsXmm = destinationType == OperandType::Register128;
+  bool sourceIsXmm = sourceType == OperandType::Register128 ||
+                     sourceType == OperandType::Memory128;
+  if (!destinationIsXmm || !sourceIsXmm) {
+    UNREACHABLE("por requires xmm destination and xmm/m128 source");
+  }
+
   auto destinationValue = GetIndexValue(0);
   auto sourceValue = GetIndexValue(1);
   auto result = createOrFolder(destinationValue, sourceValue);
@@ -151,6 +178,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_por() {
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pxor() {
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool destinationIsXmm = destinationType == OperandType::Register128;
+  bool sourceIsXmm = sourceType == OperandType::Register128 ||
+                     sourceType == OperandType::Memory128;
+  if (!destinationIsXmm || !sourceIsXmm) {
+    UNREACHABLE("pxor requires xmm destination and xmm/m128 source");
+  }
+
   auto destinationValue = GetIndexValue(0);
   auto sourceValue = GetIndexValue(1);
   auto result = createXorFolder(destinationValue, sourceValue);

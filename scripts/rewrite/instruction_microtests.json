@@ -3,7 +3,12 @@
     {
       "name": "branch",
       "symbol": "branch_target",
-      "patterns": ["select i1", "mul i32", ", 3", "add i32", ", 100", "xor i32"]
+      "patterns": [
+        "select i1",
+        { "line_all": ["mul i32", ", 3"] },
+        { "line_all": ["add i32", ", 100"] },
+        "xor i32"
+      ]
     },
     {
       "name": "stack",
@@ -38,7 +43,13 @@
     {
       "name": "nested_branch",
       "symbol": "nested_branch_target",
-      "patterns": ["icmp slt i32", ", 11", ", 21", "select i1", "i64 200, i64 300", "i64 100"]
+      "patterns": [
+        { "line_all": ["icmp slt i32", ", 11"] },
+        { "line_all": ["icmp slt i32", ", 21"] },
+        "select i1",
+        "i64 200, i64 300",
+        "i64 100"
+      ]
     },
     {
       "name": "loop_simple",
@@ -58,12 +69,21 @@
     {
       "name": "diamond",
       "symbol": "diamond_target",
-      "patterns": ["and i32", ", 1", "icmp eq i32", "select i1", "mul i32", ", 3"]
+      "patterns": [
+        { "line_all": ["and i32", ", 1"] },
+        "icmp eq i32",
+        "select i1",
+        { "line_all": ["mul i32", ", 3"] }
+      ]
     },
     {
       "name": "cmov_chain",
       "symbol": "cmov_chain_target",
-      "patterns": ["icmp sgt i32", ", 10", "select i1", "i64 250, i64 150"]
+      "patterns": [
+        { "line_all": ["icmp sgt i32", ", 10"] },
+        "select i1",
+        "i64 250, i64 150"
+      ]
     },
     {
       "name": "calc_grade",
