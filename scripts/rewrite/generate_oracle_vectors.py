@@ -303,7 +303,11 @@ def main():
                             f"'{provider.name}': {exc}"
                         ) from exc
                     else:
-                        # Secondary provider failure is a warning
+                        if args.strict:
+                            raise OracleError(
+                                f"Emulation failed for case '{case['name']}' with provider "
+                                f"'{provider.name}': {exc}"
+                            ) from exc
                         print(
                             f"WARNING: {provider.name} failed on '{case['name']}': {exc}",
                             file=sys.stderr,

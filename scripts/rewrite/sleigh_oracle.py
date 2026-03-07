@@ -155,6 +155,12 @@ class PcodeEmulator:
             return value - (1 << bits)
         return value
 
+    def _trunc_div_signed(self, dividend: int, divisor: int) -> int:
+        quotient = abs(dividend) // abs(divisor)
+        if (dividend < 0) ^ (divisor < 0):
+            return -quotient
+        return quotient
+
     # -- Opcode implementations --
 
     def _op_imark(self, op) -> None:
@@ -334,8 +340,7 @@ class PcodeEmulator:
         b = self._sign_extend(self._read(op.inputs[1]), size)
         if b == 0:
             raise PcodeEmulatorError("Signed division by zero")
-        # Python's // truncates toward negative infinity; C truncates toward zero
-        result = int(a / b)  # truncate toward zero
+        result = self._trunc_div_signed(a, b)
         self._write(op.output, result)
 
     def _op_int_rem(self, op) -> None:
@@ -350,8 +355,8 @@ class PcodeEmulator:
         b = self._sign_extend(self._read(op.inputs[1]), size)
         if b == 0:
             raise PcodeEmulatorError("Signed remainder by zero")
-        # C-style: result has sign of dividend
-        result = a - int(a / b) * b
+        quotient = self._trunc_div_signed(a, b)
+        result = a - quotient * b
         self._write(op.output, result)
 
     # -- Boolean ops --
