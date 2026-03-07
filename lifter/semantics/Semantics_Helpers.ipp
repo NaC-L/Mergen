@@ -18,9 +18,29 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(FunctionType*)::parseArgsType(
   }
   std::vector<llvm::Type*> argTypes;
   for (const auto& arg : funcInfo->args) {
-    llvm::Type* type = nullptr;
-    type = llvm::Type::getIntNTy(context, 8 << (arg.argtype.size - 1));
+    unsigned bitWidth = 64;
+    switch (static_cast<ArgType>(arg.argtype.size)) {
+    case ArgType::I8:
+      bitWidth = 8;
+      break;
+    case ArgType::I16:
+      bitWidth = 16;
+      break;
+    case ArgType::I32:
+      bitWidth = 32;
+      break;
+    case ArgType::I64:
+      bitWidth = 64;
+      break;
+    case ArgType::I128:
+      bitWidth = 128;
+      break;
+    default:
+      bitWidth = 64;
+      break;
+    }
 
+    llvm::Type* type = llvm::Type::getIntNTy(context, bitWidth);
     if (arg.argtype.isPtr) {
       type = type->getPointerTo();
     }
@@ -75,8 +95,31 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(std::vector<Value*>)::parseArgs(
   std::vector<Value*> args;
   for (const auto& arg : funcInfo->args) {
     Value* argValue = GetRegisterValue(arg.reg);
-    argValue = createZExtOrTruncFolder(
-        argValue, Type::getIntNTy(context, 8 << (arg.argtype.size - 1)));
+
+    unsigned bitWidth = 64;
+    switch (static_cast<ArgType>(arg.argtype.size)) {
+    case ArgType::I8:
+      bitWidth = 8;
+      break;
+    case ArgType::I16:
+      bitWidth = 16;
+      break;
+    case ArgType::I32:
+      bitWidth = 32;
+      break;
+    case ArgType::I64:
+      bitWidth = 64;
+      break;
+    case ArgType::I128:
+      bitWidth = 128;
+      break;
+    default:
+      bitWidth = 64;
+      break;
+    }
+
+    argValue =
+        createZExtOrTruncFolder(argValue, Type::getIntNTy(context, bitWidth));
     if (arg.argtype.isPtr)
       argValue = getPointer(argValue);
     //  now convert to pointer if its a pointer

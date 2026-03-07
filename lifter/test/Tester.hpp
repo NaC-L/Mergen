@@ -1,6 +1,8 @@
 #pragma once
 
 #include "LifterClass_Concolic.hpp"
+#include <llvm/ADT/APInt.h>
+#include <llvm/ADT/SmallString.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/Support/Casting.h>
 
@@ -19,7 +21,7 @@ using RegisterUnderTest = std::remove_reference_t<
 
 struct RegisterState {
   RegisterUnderTest reg;
-  uint64_t value;
+  llvm::APInt value;
 };
 
 struct FlagStatus {
@@ -63,11 +65,17 @@ public:
   }
 
 private:
-  static std::optional<uint64_t> readConstantU64(llvm::Value* value) {
+  static std::optional<llvm::APInt> readConstantAPInt(llvm::Value* value) {
     if (auto* constant = llvm::dyn_cast<llvm::ConstantInt>(value)) {
-      return constant->getZExtValue();
+      return constant->getValue();
     }
     return std::nullopt;
+  }
+
+  static std::string formatAPIntHex(const llvm::APInt& value) {
+    llvm::SmallString<64> formatted;
+    value.toString(formatted, 16, false);
+    return "0x" + std::string(formatted);
   }
 
   static std::optional<bool> readConstantBool(llvm::Value* value) {
@@ -88,9 +96,10 @@ private:
     lifter.lastBranchTaken = false;
 
     for (const auto& reg : testCase.initialRegisters) {
+      const auto registerSize = getRegisterSize(reg.reg);
+      auto normalized = reg.value.zextOrTrunc(registerSize);
       lifter.SetRegisterValue(
-          reg.reg,
-          llvm::ConstantInt::get(lifter.builder->getInt64Ty(), reg.value));
+          reg.reg, llvm::ConstantInt::get(lifter.builder->getContext(), normalized));
     }
 
     for (const auto& flag : testCase.initialFlags) {
@@ -103,17 +112,18 @@ private:
     std::ostringstream errors;
 
     for (const auto& expected : testCase.expectedRegisters) {
-      auto actual = readConstantU64(lifter.GetRegisterValue(expected.reg));
+      auto actual = readConstantAPInt(lifter.GetRegisterValue(expected.reg));
       if (!actual.has_value()) {
         errors << "  register is not constant: "
                << magic_enum::enum_name(expected.reg) << "\n";
         continue;
       }
 
-      if (actual.value() != expected.value) {
+      auto expectedValue = expected.value.zextOrTrunc(actual->getBitWidth());
+      if (actual.value() != expectedValue) {
         errors << "  register mismatch " << magic_enum::enum_name(expected.reg)
-               << ": expected=" << expected.value
-               << " actual=" << actual.value() << "\n";
+               << ": expected=" << formatAPIntHex(expectedValue)
+               << " actual=" << formatAPIntHex(actual.value()) << "\n";
       }
     }
 

@@ -464,6 +464,10 @@ _MERGEN_TO_SLEIGH_REG = {
     "R8": "R8", "R9": "R9", "R10": "R10", "R11": "R11",
     "R12": "R12", "R13": "R13", "R14": "R14", "R15": "R15",
     "RIP": "RIP",
+    "XMM0": "XMM0", "XMM1": "XMM1", "XMM2": "XMM2", "XMM3": "XMM3",
+    "XMM4": "XMM4", "XMM5": "XMM5", "XMM6": "XMM6", "XMM7": "XMM7",
+    "XMM8": "XMM8", "XMM9": "XMM9", "XMM10": "XMM10", "XMM11": "XMM11",
+    "XMM12": "XMM12", "XMM13": "XMM13", "XMM14": "XMM14", "XMM15": "XMM15",
 }
 
 # Maps Mergen flag names to pypcode individual flag register names.
