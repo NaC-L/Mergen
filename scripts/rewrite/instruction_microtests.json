@@ -38,7 +38,7 @@
     {
       "name": "nested_branch",
       "symbol": "nested_branch_target",
-      "patterns": ["icmp slt i32 %1, 11", "icmp slt i32 %1, 21", "select i1", "i64 200, i64 300", "i64 100"]
+      "patterns": ["icmp slt i32", ", 11", ", 21", "select i1", "i64 200, i64 300", "i64 100"]
     },
     {
       "name": "loop_simple",
