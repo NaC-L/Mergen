@@ -211,7 +211,10 @@ inline Register getRegOfSize(Register reg, uint8_t size) {
     return -1;
   };
 
-  uint8_t index = size2index(size);
+  int index = size2index(size);
+  if (index < 0) {
+    return Register::None;
+  }
   // pray god this is inlined so this switch case is optimized out
   switch (reg) {
 
