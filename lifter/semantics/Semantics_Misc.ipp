@@ -141,7 +141,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movdqa() {
   bool memoryDestinationForm = destinationType == OperandType::Memory128 &&
                                sourceType == OperandType::Register128;
   if (!xmmDestinationForm && !memoryDestinationForm) {
-    UNREACHABLE("movdqa requires xmm<-xmm/m128 or m128<-xmm operands");
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
   }
 
   auto sourceValue = GetIndexValue(1);
@@ -155,7 +162,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pand() {
   bool sourceIsXmm = sourceType == OperandType::Register128 ||
                      sourceType == OperandType::Memory128;
   if (!destinationIsXmm || !sourceIsXmm) {
-    UNREACHABLE("pand requires xmm destination and xmm/m128 source");
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
   }
 
   auto destinationValue = GetIndexValue(0);
@@ -171,7 +185,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_por() {
   bool sourceIsXmm = sourceType == OperandType::Register128 ||
                      sourceType == OperandType::Memory128;
   if (!destinationIsXmm || !sourceIsXmm) {
-    UNREACHABLE("por requires xmm destination and xmm/m128 source");
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
   }
 
   auto destinationValue = GetIndexValue(0);
@@ -187,7 +208,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pxor() {
   bool sourceIsXmm = sourceType == OperandType::Register128 ||
                      sourceType == OperandType::Memory128;
   if (!destinationIsXmm || !sourceIsXmm) {
-    UNREACHABLE("pxor requires xmm destination and xmm/m128 source");
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
   }
 
   auto destinationValue = GetIndexValue(0);
