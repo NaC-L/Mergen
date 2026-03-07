@@ -43,7 +43,7 @@ class InstructionTester {
 public:
   int runAllTests(const std::vector<InstructionTestCase>& testCases,
                   const std::string& suiteFilter = "", bool checkFlags = false) {
-    int failures = 0;
+    int failures = runCustomKnownBitsTests(suiteFilter);
 
     for (const auto& testCase : testCases) {
       if (!suiteFilter.empty() &&
@@ -83,6 +83,87 @@ private:
       return constant->getZExtValue() != 0;
     }
     return std::nullopt;
+  }
+
+  static bool shouldRunByFilter(const std::string& caseName,
+                                const std::string& suiteFilter) {
+    return suiteFilter.empty() ||
+           caseName.find(suiteFilter) != std::string::npos;
+  }
+
+  bool runKnownBitsI64ConstantCase(std::string& details) {
+    LifterUnderTest lifter;
+    auto* value = llvm::ConstantInt::get(
+        llvm::Type::getInt64Ty(lifter.builder->getContext()), 0xF0ULL);
+    auto knownBits = lifter.analyzeValueKnownBits(value, nullptr);
+
+    if (!knownBits.isConstant()) {
+      details = "  expected knownbits constant for i64 literal\n";
+      return false;
+    }
+
+    const llvm::APInt expected(64, 0xF0ULL);
+    if (knownBits.getConstant() != expected) {
+      details = "  i64 knownbits mismatch: expected=" + formatAPIntHex(expected) +
+                " actual=" + formatAPIntHex(knownBits.getConstant()) + "\n";
+      return false;
+    }
+
+    return true;
+  }
+
+  bool runKnownBitsSimdFallbackCase(std::string& details) {
+    LifterUnderTest lifter;
+    const llvm::APInt xmmValue(128, "ffeeddccbbaa99887766554433221100", 16);
+    auto* value = llvm::ConstantInt::get(lifter.builder->getContext(), xmmValue);
+    auto knownBits = lifter.analyzeValueKnownBits(value, nullptr);
+
+    const bool fallbackWidth = knownBits.getBitWidth() == 64;
+    const bool fullyUnknown = knownBits.Zero.isZero() && knownBits.One.isZero() &&
+                              !knownBits.hasConflict() && !knownBits.isConstant();
+    if (!fallbackWidth || !fullyUnknown) {
+      std::ostringstream oss;
+      oss << "  expected unsupported SIMD knownbits fallback (unknown i64), got width="
+          << knownBits.getBitWidth();
+      if (knownBits.isConstant()) {
+        oss << " constant=" << formatAPIntHex(knownBits.getConstant());
+      }
+      oss << "\n";
+      details = oss.str();
+      return false;
+    }
+
+    return true;
+  }
+
+  int runCustomKnownBitsTests(const std::string& suiteFilter) {
+    int failures = 0;
+
+    const std::string scalarCase = "custom_knownbits_scalar_i64_constant";
+    if (shouldRunByFilter(scalarCase, suiteFilter)) {
+      std::string details;
+      const bool ok = runKnownBitsI64ConstantCase(details);
+      std::cout << "[" << (ok ? "  OK  " : " FAIL ") << "] " << scalarCase
+                << "\n";
+      if (!ok && !details.empty()) {
+        std::cout << details;
+      }
+      failures += !ok;
+    }
+
+    const std::string simdCase = "custom_knownbits_simd_i128_fallback";
+    if (shouldRunByFilter(simdCase, suiteFilter)) {
+      std::string details;
+      const bool ok = runKnownBitsSimdFallbackCase(details);
+      std::cout << "[" << (ok ? "  OK  " : " FAIL ") << "] " << simdCase
+                << "\n";
+      if (!ok && !details.empty()) {
+        std::cout << details;
+      }
+      failures += !ok;
+    }
+
+    return failures;
   }
 
   bool runTestCase(const InstructionTestCase& testCase, bool checkFlags) {
