@@ -254,7 +254,12 @@ public:
 
     auto* eipArg = &*argIt++;
     eipArg->setName("EIP");
-
+    auto* ripValue = eipArg->getType()->isPointerTy()
+                         ? this->builder->CreatePtrToInt(
+                               eipArg, llvm::Type::getInt64Ty(this->context), "rip.arg")
+                         : this->builder->CreateZExtOrTrunc(
+                               eipArg, llvm::Type::getInt64Ty(this->context), "rip.arg");
+    this->SetRegisterValue(Register::RIP, ripValue);
     auto* memoryArg = &*argIt++;
     memoryArg->setName("memory");
     this->memoryAlloc = memoryArg;

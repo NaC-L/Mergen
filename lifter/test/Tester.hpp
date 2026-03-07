@@ -200,7 +200,15 @@ private:
         continue;
       }
 
-      auto expectedValue = expected.value.zextOrTrunc(actual->getBitWidth());
+      const auto expectedWidth = static_cast<unsigned>(getRegisterSize(expected.reg));
+      if (actual->getBitWidth() != expectedWidth) {
+        errors << "  register width mismatch " << magic_enum::enum_name(expected.reg)
+               << ": expected_bits=" << expectedWidth
+               << " actual_bits=" << actual->getBitWidth() << "\n";
+        continue;
+      }
+
+      auto expectedValue = expected.value.zextOrTrunc(expectedWidth);
       if (actual.value() != expectedValue) {
         errors << "  register mismatch " << magic_enum::enum_name(expected.reg)
                << ": expected=" << formatAPIntHex(expectedValue)

@@ -190,6 +190,11 @@ template <Registers Register> Register getBiggestEncoding(Register reg) {
 
 template <Registers Register>
 inline Register getRegOfSize(Register reg, uint8_t size) {
+  auto regValue = static_cast<int>(reg);
+  if (regValue >= static_cast<int>(Register::XMM0) &&
+      regValue <= static_cast<int>(Register::XMM15)) {
+    return size == 128 ? reg : Register::None;
+  }
 
   auto size2index = [](uint8_t size) {
     switch (size) {
