@@ -45,8 +45,8 @@ class PcodeEmulatorState:
     """Flat byte-addressable storage for register-space, unique-space, and RAM."""
 
     def __init__(self) -> None:
-        # register space: 0x0 .. 0x800 covers x86_64 GPRs, flags, segments, etc.
-        self._regs = bytearray(0x1000)
+        # register space includes GPR/flags and SIMD offsets (x86_64 XMM0..XMM15)
+        self._regs = bytearray(0x2000)
         # unique (temp) space: sparse dict {offset: bytes} to avoid large alloc
         self._unique: Dict[int, bytes] = {}
         # RAM: mapped regions as {base_addr: bytearray}
@@ -65,10 +65,18 @@ class PcodeEmulatorState:
             f"Memory access at {addr:#x} (size {size}) outside mapped regions"
         )
 
+    def _ensure_reg_bounds(self, offset: int, size: int) -> None:
+        if offset < 0 or size < 0 or offset + size > len(self._regs):
+            raise PcodeEmulatorError(
+                f"Register access out of range: offset={offset:#x} size={size} "
+                f"backing_size={len(self._regs):#x}"
+            )
+
     # -- generic read/write by space name --
 
     def read(self, space: str, offset: int, size: int) -> int:
         if space == "register":
+            self._ensure_reg_bounds(offset, size)
             data = self._regs[offset : offset + size]
         elif space == "unique":
             data = self._unique.get(offset, b'\x00' * size)
@@ -86,6 +94,7 @@ class PcodeEmulatorState:
         mask = (1 << (size * 8)) - 1
         data = (value & mask).to_bytes(size, "little")
         if space == "register":
+            self._ensure_reg_bounds(offset, size)
             self._regs[offset : offset + size] = data
         elif space == "unique":
             self._unique[offset] = data
