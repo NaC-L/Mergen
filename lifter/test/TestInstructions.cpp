@@ -361,11 +361,21 @@ bool parseU64Literal(const llvm::json::Value& value, uint64_t& out) {
 
 bool parseAPIntLiteral(const llvm::json::Value& value, unsigned bitWidth,
                        llvm::APInt& out) {
+  if (bitWidth == 0) {
+    return false;
+  }
+
   if (auto integerValue = value.getAsInteger()) {
     if (*integerValue < 0) {
       return false;
     }
-    out = llvm::APInt(bitWidth, static_cast<uint64_t>(*integerValue), false);
+
+    const uint64_t rawValue = static_cast<uint64_t>(*integerValue);
+    if (bitWidth < 64 && (rawValue >> bitWidth) != 0) {
+      return false;
+    }
+
+    out = llvm::APInt(bitWidth, rawValue, false);
     return true;
   }
 
@@ -391,7 +401,14 @@ bool parseAPIntLiteral(const llvm::json::Value& value, unsigned bitWidth,
       return false;
     }
 
-    out = llvm::APInt(bitWidth, raw, radix);
+    const unsigned parseWidth =
+        std::max<unsigned>(bitWidth, static_cast<unsigned>(raw.size() * 4 + 1));
+    llvm::APInt parsed(parseWidth, raw, radix);
+    if (parsed.getActiveBits() > bitWidth) {
+      return false;
+    }
+
+    out = parsed.zextOrTrunc(bitWidth);
     return true;
   }
 
