@@ -134,11 +134,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movdqa() {
   auto destinationType = instruction.types[0];
   auto sourceType = instruction.types[1];
-  bool destinationIsXmm = destinationType == OperandType::Register128;
-  bool sourceIsXmm = sourceType == OperandType::Register128 ||
-                     sourceType == OperandType::Memory128;
-  if (!destinationIsXmm || !sourceIsXmm) {
-    UNREACHABLE("movdqa requires xmm destination and xmm/m128 source");
+  bool xmmDestinationForm =
+      destinationType == OperandType::Register128 &&
+      (sourceType == OperandType::Register128 ||
+       sourceType == OperandType::Memory128);
+  bool memoryDestinationForm = destinationType == OperandType::Memory128 &&
+                               sourceType == OperandType::Register128;
+  if (!xmmDestinationForm && !memoryDestinationForm) {
+    UNREACHABLE("movdqa requires xmm<-xmm/m128 or m128<-xmm operands");
   }
 
   auto sourceValue = GetIndexValue(1);
