@@ -30,14 +30,49 @@ foreach ($check in $checks) {
         continue
     }
 
+    $lines = Get-Content $file
+
     foreach ($pattern in @($check.patterns)) {
-        if (Select-String -Path $file -SimpleMatch -Pattern $pattern -Quiet) {
-            Write-Host "PASS: $($check.name) contains '$pattern'"
+        if ($pattern -is [string]) {
+            if ($lines | Select-String -SimpleMatch -Pattern $pattern -Quiet) {
+                Write-Host "PASS: $($check.name) contains '$pattern'"
+            }
+            else {
+                Write-Host "FAIL: $($check.name) missing '$pattern'"
+                $failed = $true
+            }
+            continue
         }
-        else {
-            Write-Host "FAIL: $($check.name) missing '$pattern'"
-            $failed = $true
+
+        if ($pattern.PSObject.Properties['line_all']) {
+            $tokens = @($pattern.line_all)
+            $matched = $false
+            foreach ($line in $lines) {
+                $lineMatches = $true
+                foreach ($token in $tokens) {
+                    if ($line.IndexOf([string]$token, [System.StringComparison]::Ordinal) -lt 0) {
+                        $lineMatches = $false
+                        break
+                    }
+                }
+                if ($lineMatches) {
+                    $matched = $true
+                    break
+                }
+            }
+
+            $tokenSummary = ($tokens | ForEach-Object { "'$_'" }) -join " + "
+            if ($matched) {
+                Write-Host "PASS: $($check.name) line contains $tokenSummary"
+            }
+            else {
+                Write-Host "FAIL: $($check.name) missing line containing $tokenSummary"
+                $failed = $true
+            }
+            continue
         }
+
+        throw "Unsupported pattern descriptor in $ManifestPath for '$($check.name)'"
     }
 }
 
