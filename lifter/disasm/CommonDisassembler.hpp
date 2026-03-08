@@ -69,7 +69,7 @@ inline uint8_t GetTypeSize(OperandType op) {
 template <Registers Register> Register getBiggestEncoding(Register reg) {
   auto regValue = static_cast<int>(reg);
   if (regValue >= static_cast<int>(Register::XMM0) &&
-      regValue <= static_cast<int>(Register::XMM15)) {
+      regValue <= static_cast<int>(Register::XMM31)) {
     return reg;
   }
 
@@ -192,7 +192,7 @@ template <Registers Register>
 inline Register getRegOfSize(Register reg, uint8_t size) {
   auto regValue = static_cast<int>(reg);
   if (regValue >= static_cast<int>(Register::XMM0) &&
-      regValue <= static_cast<int>(Register::XMM15)) {
+      regValue <= static_cast<int>(Register::XMM31)) {
     return size == 128 ? reg : Register::None;
   }
 
@@ -352,7 +352,7 @@ inline Register getRegOfSize(Register reg, uint8_t size) {
 template <Registers Register> inline uint8_t getRegisterSize(Register reg) {
   auto regValue = static_cast<int>(reg);
   if (regValue >= static_cast<int>(Register::XMM0) &&
-      regValue <= static_cast<int>(Register::XMM15)) {
+      regValue <= static_cast<int>(Register::XMM31)) {
     return 128;
   }
 
