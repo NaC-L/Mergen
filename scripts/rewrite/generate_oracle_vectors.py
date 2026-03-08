@@ -231,9 +231,18 @@ def create_provider(name: str) -> OracleProvider:
     if normalized == "unicorn":
         return UnicornOracleProvider()
     if normalized == "sleigh":
-        from sleigh_oracle import SleighOracleProvider
-        return SleighOracleProvider()
-    raise OracleError(f"Unsupported oracle provider '{name}'")
+        try:
+            from sleigh_oracle import SleighOracleProvider
+            return SleighOracleProvider()
+        except ModuleNotFoundError as exc:
+            if exc.name == "pypcode":
+                raise OracleError(
+                    "Sleigh provider requires `pypcode` Python package. "
+                    "Install with `pip install pypcode`."
+                ) from exc
+            raise
+        except RuntimeError as exc:
+            raise OracleError(str(exc)) from exc
 
 
 def main():
@@ -369,4 +378,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except OracleError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(1)
