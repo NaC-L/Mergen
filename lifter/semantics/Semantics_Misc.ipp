@@ -131,121 +131,98 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movs_X() {
   // this doesnt set flags, so if its rep/repz/repnz, we could do a trick with
   // memcpy
 }
-/*
-void lifterClass<Mnemonic, Register, T3>::lift_movaps() {
-  auto dest = operands[0];
-  auto src = operands[1];
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movdqa() {
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool xmmDestinationForm =
+      destinationType == OperandType::Register128 &&
+      (sourceType == OperandType::Register128 ||
+       sourceType == OperandType::Memory128);
+  bool memoryDestinationForm = destinationType == OperandType::Memory128 &&
+                               sourceType == OperandType::Register128;
+  if (!xmmDestinationForm && !memoryDestinationForm) {
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
 
-  auto Rvalue =
-      GetIndexValue(src, src.size, std::to_string(current_address));
-  SetIndexValue(dest, Rvalue, std::to_string(current_address));
-}
-*/
-/*
-void lifterClass<Mnemonic, Register, T3>::lift_xorps() {
-
-  auto dest = operands[0]; // 128
-  auto src = operands[1];  // 128
-
-  // only legal:
-  // rr
-  // mr
-  // rm
-
-  auto Lvalue =
-      GetIndexValueFP(dest, std::to_string(current_address));
-  auto Rvalue =
-      GetIndexValueFP(src, std::to_string(current_address));
-  printvalue(Rvalue.v1);
-  printvalue(Rvalue.v2);
-  auto dest1 = createXorFolder(Rvalue.v1, Lvalue.v1);
-  auto desRegister = createXorFolder(Rvalue.v2, Lvalue.v2);
-  Rvalue.v1 = dest1;
-  Rvalue.v2 = desRegister;
-  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
+  auto sourceValue = GetIndexValue(1);
+  SetIndexValue(0, sourceValue);
 }
 
-void lifterClass<Mnemonic, Register, T3>::lift_movdqa() {
-  auto dest = operands[0]; // 128
-  auto src = operands[1];  // 128
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pand() {
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool destinationIsXmm = destinationType == OperandType::Register128;
+  bool sourceIsXmm = sourceType == OperandType::Register128 ||
+                     sourceType == OperandType::Memory128;
+  if (!destinationIsXmm || !sourceIsXmm) {
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
 
-  // only legal:
-  // rr
-  // mr
-  // rm
-
-  auto Rvalue =
-      GetIndexValueFP(src, std::to_string(current_address));
-  printvalue(Rvalue.v1);
-  printvalue(Rvalue.v2);
-  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
+  auto destinationValue = GetIndexValue(0);
+  auto sourceValue = GetIndexValue(1);
+  auto result = createAndFolder(destinationValue, sourceValue);
+  SetIndexValue(0, result);
 }
 
-void lifterClass<Mnemonic, Register, T3>::lift_pand() {
-  auto dest = operands[0]; // 128
-  auto src = operands[1];  // 128
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_por() {
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool destinationIsXmm = destinationType == OperandType::Register128;
+  bool sourceIsXmm = sourceType == OperandType::Register128 ||
+                     sourceType == OperandType::Memory128;
+  if (!destinationIsXmm || !sourceIsXmm) {
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
 
-  // only legal:
-  // rr
-  // mr
-  // rm
-
-  auto Rvalue =
-      GetIndexValueFP(src, std::to_string(current_address));
-  auto Lvalue =
-      GetIndexValueFP(dest, std::to_string(current_address));
-  printvalue(Rvalue.v1);
-  printvalue(Rvalue.v2);
-  printvalue(Lvalue.v1);
-  printvalue(Lvalue.v2);
-  Rvalue.v1 = createAndFolder(Rvalue.v1, Lvalue.v1);
-  Rvalue.v2 = createAndFolder(Rvalue.v2, Lvalue.v2);
-  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
+  auto destinationValue = GetIndexValue(0);
+  auto sourceValue = GetIndexValue(1);
+  auto result = createOrFolder(destinationValue, sourceValue);
+  SetIndexValue(0, result);
 }
 
-void lifterClass<Mnemonic, Register, T3>::lift_por() {
-  auto dest = operands[0]; // 128
-  auto src = operands[1];  // 128
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pxor() {
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool destinationIsXmm = destinationType == OperandType::Register128;
+  bool sourceIsXmm = sourceType == OperandType::Register128 ||
+                     sourceType == OperandType::Memory128;
+  if (!destinationIsXmm || !sourceIsXmm) {
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
 
-  // only legal:
-  // rr
-  // mr
-  // rm
-
-  auto Rvalue =
-      GetIndexValueFP(src, std::to_string(current_address));
-  auto Lvalue =
-      GetIndexValueFP(dest, std::to_string(current_address));
-  printvalue(Rvalue.v1);
-  printvalue(Rvalue.v2);
-  printvalue(Lvalue.v1);
-  printvalue(Lvalue.v2);
-  Rvalue.v1 = createOrFolder(Rvalue.v1, Lvalue.v1);
-  Rvalue.v2 = createOrFolder(Rvalue.v2, Lvalue.v2);
-  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
+  auto destinationValue = GetIndexValue(0);
+  auto sourceValue = GetIndexValue(1);
+  auto result = createXorFolder(destinationValue, sourceValue);
+  SetIndexValue(0, result);
 }
-void lifterClass<Mnemonic, Register, T3>::lift_pxor() {
-  auto dest = operands[0]; // 128
-  auto src = operands[1];  // 128
-
-  // only legal:
-  // rr
-  // mr
-  // rm
-
-  auto Rvalue =
-      GetIndexValueFP(src, std::to_string(current_address));
-  auto Lvalue =
-      GetIndexValueFP(dest, std::to_string(current_address));
-  printvalue(Rvalue.v1);
-  printvalue(Rvalue.v2);
-  printvalue(Lvalue.v1);
-  printvalue(Lvalue.v2);
-  Rvalue.v1 = createXorFolder(Rvalue.v1, Lvalue.v1);
-  Rvalue.v2 = createXorFolder(Rvalue.v2, Lvalue.v2);
-  SetIndexValueFP(dest, Rvalue, std::to_string(current_address));
-}
-*/
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_adc() {
   /*  auto dest = operands[0];
    auto src = operands[1]; */

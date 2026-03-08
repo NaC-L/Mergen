@@ -47,42 +47,55 @@ const std::unordered_map<std::string, std::string> kMnemonicAliases = {
     {"cmovg", "cmovnle"}, {"cmovpe", "cmovp"}, {"cmovpo", "cmovnp"},
 };
 
+RegisterState makeRegisterState(RegisterUnderTest reg, uint64_t value) {
+  return RegisterState{
+      .reg = reg,
+      .value = llvm::APInt(getRegisterSize(reg), value, false),
+  };
+}
+
+std::string formatAPIntHex(const llvm::APInt& value) {
+  llvm::SmallString<64> formatted;
+  value.toString(formatted, 16, false);
+  return "0x" + std::string(formatted);
+}
+
 const std::unordered_map<std::string, ManualCaseSpec> kManualHandlerCases = {
     {"imul2",
      ManualCaseSpec{.mnemonic = "imul",
                     .instructionBytes = {0x48, 0xF7, 0xE9},
-                    .initialRegisters = {{RegisterUnderTest::RAX, 7},
-                                         {RegisterUnderTest::RDX, 0},
-                                         {RegisterUnderTest::RCX, 3}},
+                    .initialRegisters = {makeRegisterState(RegisterUnderTest::RAX, 7),
+                                         makeRegisterState(RegisterUnderTest::RDX, 0),
+                                         makeRegisterState(RegisterUnderTest::RCX, 3)},
                     .initialFlags = {}}},
     {"mul2",
      ManualCaseSpec{.mnemonic = "mul",
                     .instructionBytes = {0x48, 0xF7, 0xE1},
-                    .initialRegisters = {{RegisterUnderTest::RAX, 7},
-                                         {RegisterUnderTest::RDX, 0},
-                                         {RegisterUnderTest::RCX, 3}},
+                    .initialRegisters = {makeRegisterState(RegisterUnderTest::RAX, 7),
+                                         makeRegisterState(RegisterUnderTest::RDX, 0),
+                                         makeRegisterState(RegisterUnderTest::RCX, 3)},
                     .initialFlags = {}}},
     {"div2",
      ManualCaseSpec{.mnemonic = "div",
                     .instructionBytes = {0x48, 0xF7, 0xF1},
-                    .initialRegisters = {{RegisterUnderTest::RAX, 16},
-                                         {RegisterUnderTest::RDX, 0},
-                                         {RegisterUnderTest::RCX, 2}},
+                    .initialRegisters = {makeRegisterState(RegisterUnderTest::RAX, 16),
+                                         makeRegisterState(RegisterUnderTest::RDX, 0),
+                                         makeRegisterState(RegisterUnderTest::RCX, 2)},
                     .initialFlags = {}}},
     {"idiv2",
      ManualCaseSpec{.mnemonic = "idiv",
                     .instructionBytes = {0x48, 0xF7, 0xF9},
-                    .initialRegisters = {{RegisterUnderTest::RAX, 16},
-                                         {RegisterUnderTest::RDX, 0},
-                                         {RegisterUnderTest::RCX, 2}},
+                    .initialRegisters = {makeRegisterState(RegisterUnderTest::RAX, 16),
+                                         makeRegisterState(RegisterUnderTest::RDX, 0),
+                                         makeRegisterState(RegisterUnderTest::RCX, 2)},
                     .initialFlags = {}}},
 };
 
 const std::vector<RegisterState> kDefaultInitialRegisters = {
-    {RegisterUnderTest::RAX, 0x1122334455667788ULL},
-    {RegisterUnderTest::RBX, 0x8877665544332211ULL},
-    {RegisterUnderTest::RCX, 0x10ULL},
-    {RegisterUnderTest::RDX, 0x2ULL},
+    makeRegisterState(RegisterUnderTest::RAX, 0x1122334455667788ULL),
+    makeRegisterState(RegisterUnderTest::RBX, 0x8877665544332211ULL),
+    makeRegisterState(RegisterUnderTest::RCX, 0x10ULL),
+    makeRegisterState(RegisterUnderTest::RDX, 0x2ULL),
 };
 
 std::string trim(const std::string& value) {
@@ -286,7 +299,7 @@ llvm::json::Object toJsonCase(const InstructionTestCase& testCase,
   llvm::json::Object initialRegs;
   for (const auto& reg : testCase.initialRegisters) {
     initialRegs[std::string(magic_enum::enum_name(reg.reg))] =
-        llvm::formatv("0x{0:x}", reg.value).str();
+        formatAPIntHex(reg.value);
   }
 
   llvm::json::Object initialFlags;
@@ -341,6 +354,62 @@ bool parseU64Literal(const llvm::json::Value& value, uint64_t& out) {
     } catch (...) {
       return false;
     }
+  }
+
+  return false;
+}
+
+bool parseAPIntLiteral(const llvm::json::Value& value, unsigned bitWidth,
+                       llvm::APInt& out) {
+  if (bitWidth == 0) {
+    return false;
+  }
+
+  if (auto integerValue = value.getAsInteger()) {
+    if (*integerValue < 0) {
+      return false;
+    }
+
+    const uint64_t rawValue = static_cast<uint64_t>(*integerValue);
+    if (bitWidth < 64 && (rawValue >> bitWidth) != 0) {
+      return false;
+    }
+
+    out = llvm::APInt(bitWidth, rawValue, false);
+    return true;
+  }
+
+  if (auto stringValue = value.getAsString()) {
+    std::string raw = trim(std::string(*stringValue));
+    if (raw.empty() || raw[0] == '-') {
+      return false;
+    }
+
+    unsigned radix = 10;
+    if (raw.size() > 2 && raw[0] == '0' && (raw[1] == 'x' || raw[1] == 'X')) {
+      radix = 16;
+      raw = raw.substr(2);
+    }
+
+    if (raw.empty()) {
+      return false;
+    }
+
+    const std::string validChars =
+        radix == 16 ? "0123456789abcdefABCDEF" : "0123456789";
+    if (raw.find_first_not_of(validChars) != std::string::npos) {
+      return false;
+    }
+
+    const unsigned parseWidth =
+        std::max<unsigned>(bitWidth, static_cast<unsigned>(raw.size() * 4 + 1));
+    llvm::APInt parsed(parseWidth, raw, radix);
+    if (parsed.getActiveBits() > bitWidth) {
+      return false;
+    }
+
+    out = parsed.zextOrTrunc(bitWidth);
+    return true;
   }
 
   return false;
@@ -413,13 +482,15 @@ bool parseRegisterMap(const llvm::json::Object* registerObject,
       return false;
     }
 
-    uint64_t value = 0;
-    if (!parseU64Literal(rawValue, value)) {
+    const auto bitWidth = static_cast<unsigned>(getRegisterSize(reg.value()));
+    llvm::APInt value(bitWidth, 0, false);
+    if (!parseAPIntLiteral(rawValue, bitWidth, value)) {
       outError = "invalid register value for " + name.str();
       return false;
     }
 
-    outRegisters.push_back(RegisterState{.reg = reg.value(), .value = value});
+    outRegisters.push_back(
+        RegisterState{.reg = reg.value(), .value = std::move(value)});
   }
 
   return true;

@@ -52,7 +52,23 @@ public:
     R15_ = 15,
     RIP_ = 16,
     RFLAGS_ = 17,
-    REGISTER_COUNT = RFLAGS_ // Total number of registers
+    XMM0_ = 18,
+    XMM1_ = 19,
+    XMM2_ = 20,
+    XMM3_ = 21,
+    XMM4_ = 22,
+    XMM5_ = 23,
+    XMM6_ = 24,
+    XMM7_ = 25,
+    XMM8_ = 26,
+    XMM9_ = 27,
+    XMM10_ = 28,
+    XMM11_ = 29,
+    XMM12_ = 30,
+    XMM13_ = 31,
+    XMM14_ = 32,
+    XMM15_ = 33,
+    REGISTER_COUNT // Total number of registers
   };
   std::array<llvm::Value*, REGISTER_COUNT> vec;
   std::array<llvm::Value*, FLAGS_END> vecflag;
@@ -69,7 +85,16 @@ public:
       return RFLAGS_;
     }
     default: {
-      return (static_cast<int>(key) - static_cast<int>(Register::RAX));
+      if (key >= Register::RAX && key <= Register::R15) {
+        return (static_cast<int>(key) - static_cast<int>(Register::RAX));
+      }
+
+      if (key >= Register::XMM0 && key <= Register::XMM15) {
+        return XMM0_ + (static_cast<int>(key) - static_cast<int>(Register::XMM0));
+      }
+
+      UNREACHABLE("unsupported register index in concolic register manager");
+      return RAX_;
     }
     }
   }
@@ -172,10 +197,8 @@ public:
 
     printvalue2("backing up");
     printvalue2(this->counter);
-    printvalueforce2("dbg1");
     BBbackup[bb] = backup_point(vec, vecflag, this->buffer, this->cache,
                                 this->assumptions, this->counter);
-    printvalueforce2("dbg2");
   }
 
   void load_backup_impl(BasicBlock* bb) {
@@ -194,27 +217,16 @@ public:
 
   void createFunction_impl() {
     std::vector<llvm::Type*> argTypes;
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::Type::getInt64Ty(this->context));
-    argTypes.push_back(llvm::PointerType::get(this->context, 0));
-    argTypes.push_back(
-        llvm::PointerType::get(this->context, 0)); // temp fix TEB
+    for (size_t i = 0; i < 16; ++i) {
+      argTypes.push_back(llvm::Type::getInt64Ty(this->context));
+    }
 
-    // TODO: replace stack with alloca to get rid of alias issues.
+    argTypes.push_back(llvm::PointerType::get(this->context, 0));
+    argTypes.push_back(llvm::PointerType::get(this->context, 0)); // memory
+
+    for (size_t i = 0; i < 16; ++i) {
+      argTypes.push_back(llvm::Type::getInt128Ty(this->context));
+    }
 
     auto functionType = llvm::FunctionType::get(
         llvm::Type::getInt64Ty(this->context), argTypes, 0);
@@ -226,26 +238,38 @@ public:
   }
 
   void InitRegisters_impl() {
-    // rsp
-    // rsp_unaligned = %rsp % 16
-    // rsp_aligned_to16 = rsp - rsp_unaligned
-    auto reg = Register::RAX;
-    auto argEnd = this->fnc->arg_end();
-    for (auto argIt = this->fnc->arg_begin(); argIt != argEnd; ++argIt) {
+    constexpr std::array<Register, 16> gprOrder = {
+        Register::RAX, Register::RCX, Register::RDX, Register::RBX,
+        Register::RSP, Register::RBP, Register::RSI, Register::RDI,
+        Register::R8,  Register::R9,  Register::R10, Register::R11,
+        Register::R12, Register::R13, Register::R14, Register::R15,
+    };
 
-      Argument* arg = &*argIt;
+    auto argIt = this->fnc->arg_begin();
+    for (auto reg : gprOrder) {
+      auto* arg = &*argIt++;
       arg->setName(magic_enum::enum_name(reg));
+      this->SetRegisterValue(reg, arg);
+    }
 
-      if (std::next(argIt) == argEnd) {
-        arg->setName("memory");
-        this->memoryAlloc = arg;
-      } else {
-        // arg->setName(ZydisRegisterGetString(zydisRegister));
-        printvalue2(magic_enum::enum_name(reg));
-        printvalue(arg);
-        this->SetRegisterValue(reg, arg);
-        reg = static_cast<Register>(static_cast<int>(reg) + 1);
-      }
+    auto* eipArg = &*argIt++;
+    eipArg->setName("EIP");
+    auto* ripValue = eipArg->getType()->isPointerTy()
+                         ? this->builder->CreatePtrToInt(
+                               eipArg, llvm::Type::getInt64Ty(this->context), "rip.arg")
+                         : this->builder->CreateZExtOrTrunc(
+                               eipArg, llvm::Type::getInt64Ty(this->context), "rip.arg");
+    this->SetRegisterValue(Register::RIP, ripValue);
+    auto* memoryArg = &*argIt++;
+    memoryArg->setName("memory");
+    this->memoryAlloc = memoryArg;
+
+    for (uint8_t i = 0; i < 16; ++i) {
+      auto xmmReg =
+          static_cast<Register>(static_cast<int>(Register::XMM0) + i);
+      auto* xmmArg = &*argIt++;
+      xmmArg->setName(magic_enum::enum_name(xmmReg));
+      this->SetRegisterValue(xmmReg, xmmArg);
     }
     // printvalue(GetRegisterValue(Register::RAX));
 

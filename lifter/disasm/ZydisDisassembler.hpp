@@ -45,6 +45,8 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
       return OperandType::Register32;
     case 64:
       return OperandType::Register64;
+    case 128:
+      return OperandType::Register128;
     }
   }
 
@@ -60,6 +62,8 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
       return OperandType::Memory32;
     case 64:
       return OperandType::Memory64;
+    case 128:
+      return OperandType::Memory128;
     }
 
   default:

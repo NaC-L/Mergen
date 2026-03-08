@@ -18,10 +18,12 @@ enum class OperandType : uint8_t {
   Register16,
   Register32,
   Register64,
+  Register128,
   Memory8,
   Memory16,
   Memory32,
   Memory64,
+  Memory128,
   Immediate8,
   Immediate8_2nd, // enter/exit
   Immediate16,
@@ -53,6 +55,10 @@ inline uint8_t GetTypeSize(OperandType op) {
   case OperandType::Immediate64: {
     return 64;
   }
+  case OperandType::Register128:
+  case OperandType::Memory128: {
+    return 128;
+  }
   default: {
     // UNREACHABLE("invalid size");
   }
@@ -61,6 +67,11 @@ inline uint8_t GetTypeSize(OperandType op) {
 }
 
 template <Registers Register> Register getBiggestEncoding(Register reg) {
+  auto regValue = static_cast<int>(reg);
+  if (regValue >= static_cast<int>(Register::XMM0) &&
+      regValue <= static_cast<int>(Register::XMM31)) {
+    return reg;
+  }
 
   switch (reg) {
 
@@ -179,6 +190,11 @@ template <Registers Register> Register getBiggestEncoding(Register reg) {
 
 template <Registers Register>
 inline Register getRegOfSize(Register reg, uint8_t size) {
+  auto regValue = static_cast<int>(reg);
+  if (regValue >= static_cast<int>(Register::XMM0) &&
+      regValue <= static_cast<int>(Register::XMM31)) {
+    return size == 128 ? reg : Register::None;
+  }
 
   auto size2index = [](uint8_t size) {
     switch (size) {
@@ -195,7 +211,10 @@ inline Register getRegOfSize(Register reg, uint8_t size) {
     return -1;
   };
 
-  uint8_t index = size2index(size);
+  int index = size2index(size);
+  if (index < 0) {
+    return Register::None;
+  }
   // pray god this is inlined so this switch case is optimized out
   switch (reg) {
 
@@ -331,6 +350,11 @@ inline Register getRegOfSize(Register reg, uint8_t size) {
 }
 
 template <Registers Register> inline uint8_t getRegisterSize(Register reg) {
+  auto regValue = static_cast<int>(reg);
+  if (regValue >= static_cast<int>(Register::XMM0) &&
+      regValue <= static_cast<int>(Register::XMM31)) {
+    return 128;
+  }
 
   switch (reg) {
   case Register::RAX:

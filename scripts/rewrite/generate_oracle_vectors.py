@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import importlib
 import json
 import sys
 from dataclasses import dataclass
@@ -42,6 +43,22 @@ REGISTER_ALIASES = {
     "R13": "UC_X86_REG_R13",
     "R14": "UC_X86_REG_R14",
     "R15": "UC_X86_REG_R15",
+    "XMM0": "UC_X86_REG_XMM0",
+    "XMM1": "UC_X86_REG_XMM1",
+    "XMM2": "UC_X86_REG_XMM2",
+    "XMM3": "UC_X86_REG_XMM3",
+    "XMM4": "UC_X86_REG_XMM4",
+    "XMM5": "UC_X86_REG_XMM5",
+    "XMM6": "UC_X86_REG_XMM6",
+    "XMM7": "UC_X86_REG_XMM7",
+    "XMM8": "UC_X86_REG_XMM8",
+    "XMM9": "UC_X86_REG_XMM9",
+    "XMM10": "UC_X86_REG_XMM10",
+    "XMM11": "UC_X86_REG_XMM11",
+    "XMM12": "UC_X86_REG_XMM12",
+    "XMM13": "UC_X86_REG_XMM13",
+    "XMM14": "UC_X86_REG_XMM14",
+    "XMM15": "UC_X86_REG_XMM15",
     "RFLAGS": "UC_X86_REG_EFLAGS",
 }
 
@@ -215,10 +232,34 @@ def create_provider(name: str) -> OracleProvider:
     if normalized == "unicorn":
         return UnicornOracleProvider()
     if normalized == "sleigh":
-        from sleigh_oracle import SleighOracleProvider
-        return SleighOracleProvider()
-    raise OracleError(f"Unsupported oracle provider '{name}'")
+        module_names = []
+        if __package__:
+            module_names.append(f"{__package__}.sleigh_oracle")
+        module_names.append("sleigh_oracle")
 
+        last_error = None
+        for module_name in module_names:
+            try:
+                module = importlib.import_module(module_name)
+                provider_class = getattr(module, "SleighOracleProvider")
+                return provider_class()
+            except ModuleNotFoundError as exc:
+                if exc.name == "pypcode":
+                    raise OracleError(
+                        "Sleigh provider requires `pypcode` Python package. "
+                        "Install with `pip install pypcode`."
+                    ) from exc
+                last_error = exc
+            except RuntimeError as exc:
+                raise OracleError(str(exc)) from exc
+            except AttributeError as exc:
+                last_error = exc
+        if last_error is not None:
+            raise OracleError(
+                f"Sleigh provider module import failed (tried: {', '.join(module_names)}): {last_error}"
+            ) from last_error
+
+    raise OracleError(f"Unsupported oracle provider '{name}'")
 
 def main():
     parser = argparse.ArgumentParser(description="Generate instruction oracle vectors")
@@ -287,7 +328,11 @@ def main():
                             f"'{provider.name}': {exc}"
                         ) from exc
                     else:
-                        # Secondary provider failure is a warning
+                        if args.strict:
+                            raise OracleError(
+                                f"Emulation failed for case '{case['name']}' with provider "
+                                f"'{provider.name}': {exc}"
+                            ) from exc
                         print(
                             f"WARNING: {provider.name} failed on '{case['name']}': {exc}",
                             file=sys.stderr,
@@ -349,4 +394,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except OracleError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(1)
