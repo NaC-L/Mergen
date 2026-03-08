@@ -18,6 +18,33 @@ if ($checks.Count -eq 0) {
 
 $failed = $false
 
+function Test-LineTokenMatch {
+    param(
+        [string]$Line,
+        [string]$Token
+    )
+
+    if ([string]::IsNullOrEmpty($Token)) {
+        return $true
+    }
+
+    $first = $Token[0]
+    $last = $Token[$Token.Length - 1]
+    $startsWithWord = [char]::IsLetterOrDigit($first) -or $first -eq '_'
+    $endsWithWord = [char]::IsLetterOrDigit($last) -or $last -eq '_'
+
+    $escaped = [System.Text.RegularExpressions.Regex]::Escape($Token)
+    $prefix = if ($startsWithWord) { '(?<![0-9A-Za-z_])' } else { '' }
+    $suffix = if ($endsWithWord) { '(?![0-9A-Za-z_])' } else { '' }
+    $pattern = "$prefix$escaped$suffix"
+
+    return [System.Text.RegularExpressions.Regex]::IsMatch(
+        $Line,
+        $pattern,
+        [System.Text.RegularExpressions.RegexOptions]::CultureInvariant
+    )
+}
+
 foreach ($check in $checks) {
     if ($check.PSObject.Properties['skip'] -and $check.skip) {
         Write-Host "SKIP: $($check.name) (known limitation)"
@@ -50,7 +77,7 @@ foreach ($check in $checks) {
             foreach ($line in $lines) {
                 $lineMatches = $true
                 foreach ($token in $tokens) {
-                    if ($line.IndexOf([string]$token, [System.StringComparison]::Ordinal) -lt 0) {
+                    if (-not (Test-LineTokenMatch -Line $line -Token ([string]$token))) {
                         $lineMatches = $false
                         break
                     }
