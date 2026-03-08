@@ -75,7 +75,7 @@ scripts\rewrite\run.cmd "C:\path\to\custom-workdir"
 
 ## Pass criteria
 
-`verify.ps1` enforces, for each non-skipped manifest entry:
+`run.ps1` enforces manifest/source parity before lifting, and `verify.ps1` enforces (for each non-skipped manifest entry):
 
 - lifted IR file exists at `ir_outputs/<sample>.ll`
 - every expected pattern declared in `instruction_microtests.json` is present in that IR output

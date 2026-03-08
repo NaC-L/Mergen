@@ -15,7 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
-from pypcode import Context, OpCode
+try:
+    from pypcode import Context, OpCode
+except ModuleNotFoundError as exc:
+    if exc.name != "pypcode":
+        raise
+    Context = None  # type: ignore[assignment]
+    OpCode = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -429,7 +435,7 @@ class PcodeEmulator:
 
 
 # -- Dispatch table --
-_OP_DISPATCH = {
+_OP_DISPATCH = {} if OpCode is None else {
     OpCode.IMARK: PcodeEmulator._op_imark,
     OpCode.COPY: PcodeEmulator._op_copy,
     OpCode.LOAD: PcodeEmulator._op_load,
@@ -511,13 +517,11 @@ class SleighOracleProvider:
     name = "sleigh"
 
     def __init__(self) -> None:
-        try:
-            from pypcode import Context as _Ctx
-        except ImportError as exc:
+        if Context is None:
             raise RuntimeError(
                 "Sleigh provider requires `pypcode`. Install with `pip install pypcode`."
-            ) from exc
-        self._ctx = _Ctx("x86:LE:64:default")
+            )
+        self._ctx = Context("x86:LE:64:default")
         self._regs = self._ctx.registers  # name -> Varnode
         self._af_offset = self._regs["AF"].offset  # 0x204 for x86_64
 
