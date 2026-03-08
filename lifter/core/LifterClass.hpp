@@ -149,56 +149,6 @@ public:
   InstructionCache& operator=(InstructionCache&&) = default;
 };
 
-class floatingPointValue {
-public:
-  Value* v1;
-  Value* v2;
-};
-
-/*
-struct simpleFPV {
-  Value* v1;
-  Value* v2;
-};
-class RegisterManagerFP {
-public:
-  enum RegisterIndexFP {
-    XMM0_ = 0,
-    XMM1_,
-    XMM2_,
-    XMM3_,
-    XMM4_,
-    XMM5_,
-    XMM6_,
-    XMM7_,
-    XMM8_,
-    XMM9_,
-    XMM10_,
-    XMM11_,
-    XMM12_,
-    XMM13_,
-    XMM14_,
-    XMM15_,
-    REGISTER_COUNT // Total number of registers
-  };
-  std::array<simpleFPV, REGISTER_COUNT> vec;
-
-  RegisterManagerFP() {}
-  RegisterManagerFP(const RegisterManagerFP& other) : vec(other.vec) {}
-
-  // Overload the [] operator for getting register values
-
-  int getRegisterIndex( Register key) const {
-    return key - Register::XMM0;
-  }
-
-  simpleFPV& operator[](Register key) {
-    int index = getRegisterIndex(key);
-    printvalue2(index);
-    return vec[index];
-  }
-};
-*/
 
 struct BBInfo {
   uint64_t block_address;
@@ -466,7 +416,6 @@ public:
 
   flagManager FlagList;
   RegisterManagerConcolic<Register> Registers;
-  // RegisterManagerFP RegistersFP;
 
   llvm::DomConditionCache* DC = new llvm::DomConditionCache();
 
@@ -751,12 +700,6 @@ public:
                  const std::string& address);
   std::vector<llvm::Value*> GetRFLAGS();
 
-  /*
-  simpleFPV GetOperandValueFP(const ZydisDecodedOperand& op,
-                              const std::string& address = "");
-  simpleFPV SetOperandValueFP(const ZydisDecodedOperand& op, simpleFPV value,
-                              const std::string& address = "");
-  */
 
   Register GetAccumulatorRegister(uint8_t size = 64) {
     switch (size) {

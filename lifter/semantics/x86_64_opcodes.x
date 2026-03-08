@@ -144,11 +144,8 @@ OPCODE(cwde, CWDE)
 OPCODE(cdqe, CDQE)
 OPCODE(bextr, BEXTR)
 
-// sse
-/*
-OPCODE(movdqa)
-OPCODE(pand)
-OPCODE(por)
-OPCODE(pxor)
-OPCODE(xorps)
-*/
+// sse2 integer (XMM forms only; MMX forms are rejected in semantic handlers)
+OPCODE(movdqa, MOVDQA)
+OPCODE(pand, PAND)
+OPCODE(por, POR)
+OPCODE(pxor, PXOR)

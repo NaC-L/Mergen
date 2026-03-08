@@ -52,13 +52,24 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
     modulePassManager =
         passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O1);
 
-    modulePassManager.addPass(GEPLoadPass(fnc->getArg(fnc->arg_size()),
-                                          this->fileBase, memoryPolicy));
+    llvm::Value* memoryArg = this->memoryAlloc;
+    if (!memoryArg) {
+      for (auto& arg : this->fnc->args()) {
+        if (arg.getName() == "memory") {
+          memoryArg = &arg;
+          break;
+        }
+      }
+    }
+    if (!memoryArg) {
+      UNREACHABLE("run_opts could not resolve memory argument");
+    }
+
+    modulePassManager.addPass(
+        GEPLoadPass(memoryArg, this->fileBase, memoryPolicy));
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
-    modulePassManager.addPass(
-        PromotePseudoStackPass(fnc->getArg(fnc->arg_size() - 1)));
-    modulePassManager.addPass(
-        PromotePseudoMemory(fnc->getArg(fnc->arg_size() - 1)));
+    modulePassManager.addPass(PromotePseudoStackPass(memoryArg));
+    modulePassManager.addPass(PromotePseudoMemory(memoryArg));
 
     modulePassManager.run(*module, moduleAnalysisManager);
 

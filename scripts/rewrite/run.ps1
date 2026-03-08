@@ -36,6 +36,26 @@ $srcNames = @(
     (Get-ChildItem -Path $srcDir -Filter '*.cpp' | ForEach-Object { $_.BaseName })
 )
 $sampleNames = @($samples | ForEach-Object { $_.name })
+$duplicateSrcNames = @(
+    $srcNames |
+    Group-Object |
+    Where-Object { $_.Count -gt 1 } |
+    ForEach-Object { $_.Name }
+)
+if ($duplicateSrcNames.Count -gt 0) {
+    throw "rewrite_smoke contains duplicate sample base names: $($duplicateSrcNames -join ', ')"
+}
+
+$duplicateManifestNames = @(
+    $sampleNames |
+    Group-Object |
+    Where-Object { $_.Count -gt 1 } |
+    ForEach-Object { $_.Name }
+)
+if ($duplicateManifestNames.Count -gt 0) {
+    throw "Manifest contains duplicate sample names: $($duplicateManifestNames -join ', ')"
+}
+
 
 $missing = @($srcNames | Where-Object { $_ -notin $sampleNames })
 if ($missing.Count -gt 0) {
