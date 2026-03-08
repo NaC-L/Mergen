@@ -244,6 +244,7 @@ def create_provider(name: str) -> OracleProvider:
         except RuntimeError as exc:
             raise OracleError(str(exc)) from exc
 
+    raise OracleError(f"Unsupported oracle provider '{name}'")
 
 def main():
     parser = argparse.ArgumentParser(description="Generate instruction oracle vectors")
