@@ -75,10 +75,11 @@ scripts\rewrite\run.cmd "C:\path\to\custom-workdir"
 
 ## Pass criteria
 
-`run.ps1` enforces manifest/source parity before lifting, and `verify.ps1` enforces (for each non-skipped manifest entry):
+`run.ps1` enforces manifest/source parity before lifting (every source in `testcases/rewrite_smoke/` has exactly one manifest entry: no missing, no extra).
+
+`verify.ps1` enforces, for each non-skipped manifest entry:
 
 - lifted IR file exists at `ir_outputs/<sample>.ll`
 - every expected pattern declared in `instruction_microtests.json` is present in that IR output
-- manifest/source parity check: every source in `testcases/rewrite_smoke/` has exactly one manifest entry (no missing, no extra)
 
 A rewrite change is not acceptable if this baseline fails.
