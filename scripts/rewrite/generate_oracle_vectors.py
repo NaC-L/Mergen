@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import importlib
 import json
 import sys
 from dataclasses import dataclass
@@ -231,18 +232,32 @@ def create_provider(name: str) -> OracleProvider:
     if normalized == "unicorn":
         return UnicornOracleProvider()
     if normalized == "sleigh":
-        try:
-            from sleigh_oracle import SleighOracleProvider
-            return SleighOracleProvider()
-        except ModuleNotFoundError as exc:
-            if exc.name == "pypcode":
-                raise OracleError(
-                    "Sleigh provider requires `pypcode` Python package. "
-                    "Install with `pip install pypcode`."
-                ) from exc
-            raise
-        except RuntimeError as exc:
-            raise OracleError(str(exc)) from exc
+        module_names = []
+        if __package__:
+            module_names.append(f"{__package__}.sleigh_oracle")
+        module_names.append("sleigh_oracle")
+
+        last_error = None
+        for module_name in module_names:
+            try:
+                module = importlib.import_module(module_name)
+                provider_class = getattr(module, "SleighOracleProvider")
+                return provider_class()
+            except ModuleNotFoundError as exc:
+                if exc.name == "pypcode":
+                    raise OracleError(
+                        "Sleigh provider requires `pypcode` Python package. "
+                        "Install with `pip install pypcode`."
+                    ) from exc
+                last_error = exc
+            except RuntimeError as exc:
+                raise OracleError(str(exc)) from exc
+            except AttributeError as exc:
+                last_error = exc
+        if last_error is not None:
+            raise OracleError(
+                f"Sleigh provider module import failed (tried: {', '.join(module_names)}): {last_error}"
+            ) from last_error
 
     raise OracleError(f"Unsupported oracle provider '{name}'")
 
