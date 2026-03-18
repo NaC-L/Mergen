@@ -6,6 +6,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'manifest_validation.ps1')
+
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $buildScript = Join-Path $PSScriptRoot 'build_samples.cmd'
 $verifyScript = Join-Path $PSScriptRoot 'verify.ps1'
@@ -19,16 +21,7 @@ if (-not (Test-Path $LifterPath)) {
     throw "Lifter not found at $LifterPath"
 }
 
-if (-not (Test-Path $ManifestPath)) {
-    throw "Manifest not found at $ManifestPath"
-}
-
-$manifest = Get-Content $ManifestPath -Raw | ConvertFrom-Json
-$samples = @($manifest.samples)
-if ($samples.Count -eq 0) {
-    throw "No samples found in $ManifestPath"
-}
-
+$samples = Get-ValidatedRewriteManifestSamples -ManifestPath $ManifestPath -RequireSymbol
 $srcDir = Join-Path $repoRoot 'testcases/rewrite_smoke'
 $srcNames = @(
     (Get-ChildItem -Path $srcDir -Filter '*.asm' | ForEach-Object { $_.BaseName }) +
@@ -56,7 +49,6 @@ if ($duplicateManifestNames.Count -gt 0) {
     throw "Manifest contains duplicate sample names: $($duplicateManifestNames -join ', ')"
 }
 
-
 $missing = @($srcNames | Where-Object { $_ -notin $sampleNames })
 if ($missing.Count -gt 0) {
     throw "Manifest is missing rewrite_smoke samples: $($missing -join ', ')"
@@ -69,6 +61,10 @@ if ($extra.Count -gt 0) {
 
 $irDir = Join-Path $WorkDir 'ir_outputs'
 New-Item -ItemType Directory -Path $irDir -Force | Out-Null
+Get-ChildItem -Path $irDir -Filter '*.ll' -File -ErrorAction SilentlyContinue | Remove-Item -Force
+
+$outputLl = Join-Path $repoRoot 'output.ll'
+$outputNoOptsLl = Join-Path $repoRoot 'output_no_opts.ll'
 
 Push-Location $repoRoot
 try {
@@ -83,18 +79,31 @@ try {
             throw "Map file not found: $mapPath"
         }
 
-        $symbolLine = Get-Content $mapPath | Where-Object { $_ -match "\s$($sample.symbol)\s" } | Select-Object -First 1
+        $binaryPath = Join-Path $WorkDir "$($sample.name).exe"
+        if (-not (Test-Path $binaryPath)) {
+            throw "Binary file not found: $binaryPath"
+        }
+
+        $escapedSymbol = [System.Text.RegularExpressions.Regex]::Escape($sample.symbol)
+        $symbolRegex = "^\s*[0-9A-Fa-f]{4}:[0-9A-Fa-f]{8}\s+$escapedSymbol\s+([0-9A-Fa-f]{8,16})\b"
+        $symbolLine = Get-Content $mapPath | Where-Object { $_ -match $symbolRegex } | Select-Object -First 1
         if (-not $symbolLine) {
             throw "Symbol $($sample.symbol) not found in $mapPath"
         }
 
-        $tokens = ($symbolLine -split '\s+') | Where-Object { $_ -ne '' }
-        if ($tokens.Count -lt 3) {
-            throw "Could not parse symbol line: $symbolLine"
+        $match = [System.Text.RegularExpressions.Regex]::Match(
+            $symbolLine,
+            $symbolRegex,
+            [System.Text.RegularExpressions.RegexOptions]::CultureInvariant
+        )
+        if (-not $match.Success) {
+            throw "Could not parse symbol address from line: $symbolLine"
         }
 
-        $targetAddress = "0x$($tokens[2])"
-        $binaryPath = Join-Path $WorkDir "$($sample.name).exe"
+        $targetAddress = "0x$($match.Groups[1].Value)"
+
+        Remove-Item $outputLl -Force -ErrorAction SilentlyContinue
+        Remove-Item $outputNoOptsLl -Force -ErrorAction SilentlyContinue
 
         Write-Host "Lifting $binaryPath @ $targetAddress"
         & $LifterPath $binaryPath $targetAddress
@@ -102,8 +111,12 @@ try {
             throw "Lifter failed for $($sample.name)"
         }
 
-        Copy-Item (Join-Path $repoRoot 'output.ll') (Join-Path $irDir "$($sample.name).ll") -Force
-        Copy-Item (Join-Path $repoRoot 'output_no_opts.ll') (Join-Path $irDir "$($sample.name)_no_opts.ll") -Force
+        if (-not (Test-Path $outputLl) -or -not (Test-Path $outputNoOptsLl)) {
+            throw "Lifter did not emit expected output.ll/output_no_opts.ll for '$($sample.name)'"
+        }
+
+        Copy-Item $outputLl (Join-Path $irDir "$($sample.name).ll") -Force
+        Copy-Item $outputNoOptsLl (Join-Path $irDir "$($sample.name)_no_opts.ll") -Force
     }
 }
 finally {

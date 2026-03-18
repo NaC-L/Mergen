@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, List
 
@@ -29,8 +30,65 @@ def _run(argv: List[str], extra_env: Dict[str, str] | None = None) -> None:
         raise SystemExit(result.returncode)
 
 
+def _run_capture(
+    argv: List[str],
+    *,
+    cwd: Path | None = None,
+    extra_env: Dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    if extra_env:
+        env.update(extra_env)
+
+    cmd = [str(arg) for arg in argv]
+    print("+", " ".join(cmd))
+    return subprocess.run(
+        cmd,
+        cwd=cwd or ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+
+
+def _assert_failure_contains(
+    result: subprocess.CompletedProcess[str],
+    *,
+    check_name: str,
+    required_substrings: List[str],
+) -> None:
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.returncode == 0:
+        raise SystemExit(
+            f"Negative check '{check_name}' unexpectedly succeeded. Output:\n{output}"
+        )
+
+    missing = [token for token in required_substrings if token not in output]
+    if missing:
+        raise SystemExit(
+            f"Negative check '{check_name}' failed to emit required markers {missing}. "
+            f"Output:\n{output}"
+        )
+
+    print(f"[OK] {check_name}")
+
+
 def _run_cmd(script: Path, args: List[str] | None = None, extra_env: Dict[str, str] | None = None) -> None:
     _run(["cmd", "/c", str(script), *(args or [])], extra_env=extra_env)
+
+
+def _resolve_repo_path(user_path: Path, label: str) -> Path:
+    resolved_root = ROOT.resolve()
+    resolved_path = (user_path if user_path.is_absolute() else ROOT / user_path).resolve()
+
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError as exc:
+        raise SystemExit(
+            f"{label} must be inside repository root '{resolved_root}', got '{resolved_path}'"
+        ) from exc
+
+    return resolved_path
 
 
 def compute_ir_hashes(ir_dir: Path) -> Dict[str, str]:
@@ -104,18 +162,21 @@ def run_micro(filter_tokens: List[str], check_flags: bool, regenerate_oracle: bo
 
     _run_cmd(REWRITE_DIR / "run_microtests.cmd", args=args, extra_env=env)
 
+
 def run_full(check_flags: bool) -> None:
     env: Dict[str, str] | None = None
     if check_flags:
         env = {"MERGEN_TEST_CHECK_FLAGS": "1"}
     _run_cmd(REWRITE_DIR / "run_all_handlers.cmd", extra_env=env)
 
+
 def run_flagstress(filter_tokens: List[str]) -> None:
     _run_cmd(REWRITE_DIR / "run_flagstress.cmd", args=filter_tokens)
 
+
 def run_coverage(vectors_file: Path) -> None:
-    rel = vectors_file.relative_to(ROOT) if vectors_file.is_absolute() else vectors_file
-    _run_cmd(REWRITE_DIR / "collect_instruction_tests.cmd", args=["--vectors-file", str(rel)])
+    vectors_arg = vectors_file.relative_to(ROOT)
+    _run_cmd(REWRITE_DIR / "collect_instruction_tests.cmd", args=["--vectors-file", str(vectors_arg)])
 
 
 def run_report(vectors_file: Path, as_json: bool) -> None:
@@ -123,6 +184,118 @@ def run_report(vectors_file: Path, as_json: bool) -> None:
     if as_json:
         args.append("--json")
     _run([sys.executable, str(REWRITE_DIR / "report_coverage.py")] + args)
+
+
+def run_negative_checks() -> None:
+    lifter_path = ROOT / "build_iced" / "lifter.exe"
+    if not lifter_path.exists():
+        raise SystemExit(
+            f"Negative checks require a built lifter at '{lifter_path}'. "
+            "Run `cmd /c scripts\\dev\\build_iced.cmd` first."
+        )
+
+    no_args_result = _run_capture(["cmd", "/c", str(lifter_path)])
+    _assert_failure_contains(
+        no_args_result,
+        check_name="lifter rejects missing positional args",
+        required_substrings=["Usage:"],
+    )
+
+    rewrite_workdir = ROOT.parent / "rewrite-regression-work"
+    verify_script = REWRITE_DIR / "verify.ps1"
+
+    with tempfile.TemporaryDirectory(prefix="mergen-negative-") as temp_dir:
+        temp_root = Path(temp_dir)
+
+        bad_name_manifest = temp_root / "bad_manifest_name.json"
+        bad_name_manifest.write_text(
+            json.dumps({"samples": [{"name": "..\\\\evil", "patterns": ["ret"]}]}, indent=2),
+            encoding="utf-8",
+        )
+        bad_name_result = _run_capture(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(verify_script),
+                "-WorkDir",
+                str(rewrite_workdir),
+                "-ManifestPath",
+                str(bad_name_manifest),
+            ]
+        )
+        _assert_failure_contains(
+            bad_name_result,
+            check_name="verify rejects path-traversal manifest sample name",
+            required_substrings=["invalid name", "path traversal"],
+        )
+
+        bad_patterns_manifest = temp_root / "bad_manifest_patterns.json"
+        bad_patterns_manifest.write_text(
+            json.dumps({"samples": [{"name": "branch", "patterns": "ret"}]}, indent=2),
+            encoding="utf-8",
+        )
+        bad_patterns_result = _run_capture(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(verify_script),
+                "-WorkDir",
+                str(rewrite_workdir),
+                "-ManifestPath",
+                str(bad_patterns_manifest),
+            ]
+        )
+        _assert_failure_contains(
+            bad_patterns_result,
+            check_name="verify rejects string patterns descriptors",
+            required_substrings=["patterns must be an array"],
+        )
+
+        bad_vectors_path = temp_root / "bad_vectors_skip.json"
+        bad_vectors_path.write_text(
+            json.dumps(
+                {"cases": [{"name": "x", "handler": "add", "skip": "false"}]},
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        bad_vectors_result = _run_capture(
+            [
+                sys.executable,
+                str(REWRITE_DIR / "collect_instruction_tests.py"),
+                "--vectors-file",
+                str(bad_vectors_path),
+                "--json",
+            ]
+        )
+        _assert_failure_contains(
+            bad_vectors_result,
+            check_name="coverage collector rejects non-boolean skip values",
+            required_substrings=["invalid 'skip' value", "expected boolean"],
+        )
+
+    outside_repo_vectors_result = _run_capture(
+        [
+            sys.executable,
+            str(ROOT / "test.py"),
+            "coverage",
+            "--vectors",
+            "C:/Windows/win.ini",
+        ]
+    )
+    _assert_failure_contains(
+        outside_repo_vectors_result,
+        check_name="test runner rejects vectors paths outside repository",
+        required_substrings=["must be inside repository root"],
+    )
+
+    print("Negative checks passed")
 
 
 def parse_args() -> argparse.Namespace:
@@ -135,6 +308,7 @@ def parse_args() -> argparse.Namespace:
     sub.add_parser("quick", help="baseline + microtests (skip oracle regen)")
     sub.add_parser("baseline", help="run scripts/rewrite/run.cmd")
     sub.add_parser("update-golden", help="run baseline then regenerate golden IR hashes")
+    sub.add_parser("negative", help="run explicit negative/failure contract checks")
     full = sub.add_parser("full", help="run scripts/rewrite/run_all_handlers.cmd")
     full.add_argument(
         "--check-flags",
@@ -189,6 +363,10 @@ def main() -> None:
         update_golden(IR_OUTPUT_DIR, GOLDEN_HASHES_FILE)
         return
 
+    if command == "negative":
+        run_negative_checks()
+        return
+
     if command == "micro":
         run_micro(args.filter, args.check_flags, args.regen_oracle)
         return
@@ -199,7 +377,7 @@ def main() -> None:
 
     if command == "coverage":
         if args.vectors is not None:
-            vectors_file = args.vectors if args.vectors.is_absolute() else ROOT / args.vectors
+            vectors_file = _resolve_repo_path(args.vectors, "Coverage vectors path")
         elif args.full:
             vectors_file = FULL_VECTORS
         else:
@@ -213,7 +391,7 @@ def main() -> None:
 
     if command == "report":
         if args.vectors is not None:
-            vectors_file = args.vectors if args.vectors.is_absolute() else ROOT / args.vectors
+            vectors_file = _resolve_repo_path(args.vectors, "Report vectors path")
         else:
             vectors_file = DEFAULT_VECTORS
         if not vectors_file.exists():
