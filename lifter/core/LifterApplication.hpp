@@ -11,15 +11,16 @@
 template <typename LiftEntryFn>
 inline int runLifterApplication(const std::vector<std::string>& args,
                                 LiftEntryFn&& liftEntry) {
+  const char* programName = args.empty() ? "mergen-lifter" : args.front().c_str();
   if (args.size() < 3) {
-    printLifterUsage(args[0].c_str());
+    printLifterUsage(programName);
     return 1;
   }
 
   uint64_t startAddr = 0;
   if (!parseStartAddressArg(args[2], startAddr)) {
     std::cerr << "Invalid startAddr value: " << args[2] << std::endl;
-    printLifterUsage(args[0].c_str());
+    printLifterUsage(programName);
     return 1;
   }
 
@@ -28,12 +29,15 @@ inline int runLifterApplication(const std::vector<std::string>& args,
     return 1;
   }
 
-  std::forward<LiftEntryFn>(liftEntry)(startAddr, std::move(fileData));
+  const bool liftSucceeded =
+      std::forward<LiftEntryFn>(liftEntry)(startAddr, std::move(fileData));
+  if (!liftSucceeded) {
+    return 1;
+  }
   auto milliseconds = timer::stopTimer();
   std::cout << "\n"
-            << std::dec << milliseconds << " milliseconds has past"
+            << std::dec << milliseconds << " milliseconds have passed"
             << std::endl;
-  std::cout << "Lifted and optimized " << debugging::increaseInstCounter() - 1
-            << " total insts";
+  std::cout << "Lift and optimization pipeline completed" << std::endl;
   return 0;
 }

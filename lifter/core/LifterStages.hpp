@@ -4,6 +4,9 @@
 #include "RuntimeImageContext.hpp"
 #include "Utils.h"
 #include <memory>
+#include <optional>
+#include <sstream>
+#include <string>
 #include <vector>
 
 struct LifterStageContext {
@@ -22,26 +25,38 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
   return lifter;
 }
 
-inline RuntimeImageContext
-resolveRuntimeContextOrDie(uint8_t* fileBase, size_t fileSize,
-                           uint64_t runtimeAddress) {
-  x86FileReader file(fileBase);
-  auto runtimeContext =
-      createRuntimeImageContext(fileBase, fileSize, runtimeAddress, file);
-  if (!runtimeContext.has_value()) {
-    UNREACHABLE("Only PE files are supported");
-  }
-
-  return *runtimeContext;
+inline std::string formatAddressHex(uint64_t address) {
+  std::ostringstream oss;
+  oss << "0x" << std::hex << address;
+  return oss.str();
 }
 
-inline LifterStageContext prepareLifterStageContext(
-    uint64_t runtimeAddress, std::vector<uint8_t>& fileData) {
-  auto fileBase = fileData.data();
-  auto lifter = createConfiguredLifterForRuntime(fileBase, runtimeAddress);
-  auto runtimeContext =
-      resolveRuntimeContextOrDie(fileBase, fileData.size(), runtimeAddress);
+inline std::string formatRuntimeContextFailure(RuntimeImageContextError error,
+                                               uint64_t runtimeAddress) {
+  std::ostringstream oss;
+  oss << "Failed to resolve runtime context: "
+      << runtimeImageContextErrorMessage(error)
+      << " (start address: " << formatAddressHex(runtimeAddress) << ")";
+  return oss.str();
+}
 
+inline std::optional<LifterStageContext>
+prepareLifterStageContext(uint64_t runtimeAddress, std::vector<uint8_t>& fileData,
+                         std::string& outError) {
+  if (fileData.empty()) {
+    outError = "Input file is empty";
+    return std::nullopt;
+  }
+
+  auto* fileBase = fileData.data();
+  auto runtimeResult =
+      createRuntimeImageContext(fileBase, fileData.size(), runtimeAddress);
+  if (!runtimeResult.ok()) {
+    outError = formatRuntimeContextFailure(runtimeResult.error, runtimeAddress);
+    return std::nullopt;
+  }
+
+  auto lifter = createConfiguredLifterForRuntime(fileBase, runtimeAddress);
   return LifterStageContext{.lifter = std::move(lifter),
-                            .runtimeContext = runtimeContext};
+                            .runtimeContext = *runtimeResult.context};
 }
