@@ -222,7 +222,7 @@ class PcodeEmulator:
 
     def _op_cbranch(self, op) -> Optional[int]:
         cond = self._read(op.inputs[1])
-        if cond & 1:
+        if cond != 0:
             target = op.inputs[0]
             if target.space.name == "const":
                 raw = target.offset
