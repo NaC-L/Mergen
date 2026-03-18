@@ -5648,14 +5648,14 @@
       },
       "expected": {
         "registers": {
-          "XMM0": "0xf000f000f000f00f000f000f000f00"
+          "XMM0": "0x00f000f000f000f00f000f000f000f00"
         },
         "flags": {}
       },
       "oracle_observations": {
         "unicorn": {
           "registers": {
-            "XMM0": "0xf000f000f000f00f000f000f000f00"
+            "XMM0": "0x00f000f000f000f00f000f000f000f00"
           },
           "flags": {}
         }

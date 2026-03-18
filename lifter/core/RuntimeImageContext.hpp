@@ -100,6 +100,12 @@ inline std::optional<uint64_t> mapRvaToFileOffset(const NtHeadersT* ntHeaders,
   const auto* sections = ntHeaders->get_sections();
   const auto sectionCount = ntHeaders->file_header.num_sections;
 
+  const auto headerSize =
+      static_cast<uint64_t>(ntHeaders->optional_header.size_headers);
+  if (static_cast<uint64_t>(rva) < headerSize) {
+    return static_cast<uint64_t>(rva);
+  }
+
   for (uint16_t index = 0; index < sectionCount; ++index) {
     const auto& section = sections[index];
     if (rva < section.virtual_address) {
