@@ -6,15 +6,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $irDir = Join-Path $WorkDir 'ir_outputs'
 
-if (-not (Test-Path $ManifestPath)) {
-    throw "Manifest not found at $ManifestPath"
-}
+. (Join-Path $PSScriptRoot 'manifest_validation.ps1')
 
-$manifest = Get-Content $ManifestPath -Raw | ConvertFrom-Json
-$checks = @($manifest.samples)
-if ($checks.Count -eq 0) {
-    throw "No checks found in $ManifestPath"
-}
+$checks = Get-ValidatedRewriteManifestSamples -ManifestPath $ManifestPath -RequirePatterns
 
 $failed = $false
 
@@ -50,6 +44,20 @@ foreach ($check in $checks) {
         Write-Host "SKIP: $($check.name) (known limitation)"
         continue
     }
+
+    if ($check.patterns -is [string]) {
+        Write-Host "FAIL: $($check.name) patterns must be an array; got string"
+        $failed = $true
+        continue
+    }
+
+    $patterns = @($check.patterns)
+    if ($patterns.Count -eq 0) {
+        Write-Host "FAIL: $($check.name) has no expected patterns in manifest; add patterns or mark sample as skip"
+        $failed = $true
+        continue
+    }
+
     $file = Join-Path $irDir "$($check.name).ll"
     if (-not (Test-Path $file)) {
         Write-Host "FAIL: missing $file"
@@ -59,8 +67,14 @@ foreach ($check in $checks) {
 
     $lines = Get-Content $file
 
-    foreach ($pattern in @($check.patterns)) {
+    foreach ($pattern in $patterns) {
         if ($pattern -is [string]) {
+            if ([string]::IsNullOrWhiteSpace($pattern)) {
+                Write-Host "FAIL: $($check.name) contains an empty string pattern descriptor"
+                $failed = $true
+                continue
+            }
+
             if ($lines | Select-String -SimpleMatch -Pattern $pattern -Quiet) {
                 Write-Host "PASS: $($check.name) contains '$pattern'"
             }
@@ -71,13 +85,32 @@ foreach ($check in $checks) {
             continue
         }
 
-        if ($pattern.PSObject.Properties['line_all']) {
+        if ($pattern -is [psobject] -and $pattern.PSObject.Properties['line_all']) {
+            if ($pattern.line_all -is [string]) {
+                Write-Host "FAIL: $($check.name) line_all descriptor must be an array of tokens"
+                $failed = $true
+                continue
+            }
+
             $tokens = @($pattern.line_all)
+            if ($tokens.Count -eq 0) {
+                Write-Host "FAIL: $($check.name) line_all descriptor has no tokens"
+                $failed = $true
+                continue
+            }
+
+            $invalidToken = $tokens | Where-Object { $_ -isnot [string] -or [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -First 1
+            if ($null -ne $invalidToken) {
+                Write-Host "FAIL: $($check.name) line_all descriptor contains non-string or empty token"
+                $failed = $true
+                continue
+            }
+
             $matched = $false
             foreach ($line in $lines) {
                 $lineMatches = $true
                 foreach ($token in $tokens) {
-                    if (-not (Test-LineTokenMatch -Line $line -Token ([string]$token))) {
+                    if (-not (Test-LineTokenMatch -Line $line -Token $token)) {
                         $lineMatches = $false
                         break
                     }
@@ -99,7 +132,8 @@ foreach ($check in $checks) {
             continue
         }
 
-        throw "Unsupported pattern descriptor in $ManifestPath for '$($check.name)'"
+        Write-Host "FAIL: $($check.name) has unsupported pattern descriptor; use string or {\"line_all\":[...]}"
+        $failed = $true
     }
 }
 
