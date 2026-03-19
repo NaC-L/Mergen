@@ -1,7 +1,11 @@
 #pragma once
 #include "llvm/IR/Value.h"
+#include <functional>
 #include <linuxpe>
 #include <llvm/Support/raw_ostream.h>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 // #define _NODEV why?
 
@@ -83,7 +87,19 @@ namespace debugging {
 } // namespace debugging
 
 namespace argparser {
-  void parseArguments(std::vector<std::string>& args);
+  struct ParseResult {
+    std::vector<std::string> positionalArgs;
+    bool showHelp = false;
+    bool enableDebug = false;
+    bool concretizeUnsafeReads = false;
+    std::vector<std::string> errors;
+
+    [[nodiscard]] bool ok() const { return errors.empty(); }
+  };
+
+  void printHelp();
+  ParseResult parseArguments(const std::vector<std::string>& args,
+                             bool allowUnknownOptions = false);
 } // namespace argparser
 
 namespace timer {

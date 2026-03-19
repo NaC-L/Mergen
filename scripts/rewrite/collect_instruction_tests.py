@@ -44,22 +44,49 @@ def parse_vector_signals(path: Path) -> dict:
             "active_name_prefixes": [],
         }
 
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"failed to read vectors file '{path}': {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"vectors file '{path}' is not valid JSON: "
+            f"{exc.msg} (line {exc.lineno}, column {exc.colno})"
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError(f"vectors file '{path}' must be a JSON object with a 'cases' array")
+
     cases = payload.get("cases", [])
     if not isinstance(cases, list):
-        cases = []
+        raise ValueError(f"vectors file '{path}' has invalid 'cases' field: expected array")
 
     active_handlers = set()
     skipped_handlers = set()
     active_names = []
     active_prefixes = set()
 
-    for case in cases:
+    for index, case in enumerate(cases):
         if not isinstance(case, dict):
-            continue
+            raise ValueError(f"vectors file '{path}' has non-object case at index {index}")
 
-        handler = str(case.get("handler", "")).strip().lower()
-        is_skipped = bool(case.get("skip"))
+        skip_value = case.get("skip", False)
+        if not isinstance(skip_value, bool):
+            raise ValueError(
+                f"vectors file '{path}' case[{index}] has invalid 'skip' value {skip_value!r}; expected boolean"
+            )
+        is_skipped = skip_value
+
+        handler_raw = case.get("handler", "")
+        if handler_raw is None:
+            handler = ""
+        elif isinstance(handler_raw, str):
+            handler = handler_raw.strip().lower()
+        else:
+            raise ValueError(
+                f"vectors file '{path}' case[{index}] has invalid 'handler' value {handler_raw!r}; expected string"
+            )
+
         if handler:
             if is_skipped:
                 skipped_handlers.add(handler)
@@ -69,7 +96,16 @@ def parse_vector_signals(path: Path) -> dict:
         if is_skipped:
             continue
 
-        name = str(case.get("name", "")).strip()
+        name_raw = case.get("name", "")
+        if name_raw is None:
+            name = ""
+        elif isinstance(name_raw, str):
+            name = name_raw.strip()
+        else:
+            raise ValueError(
+                f"vectors file '{path}' case[{index}] has invalid 'name' value {name_raw!r}; expected string"
+            )
+
         if name:
             active_names.append(name)
             active_prefixes.add(name.split("_", 1)[0].lower())
@@ -201,7 +237,10 @@ def main():
     legacy_path = Path(args.legacy_tests_file)
 
     handlers, mnemonic_to_handlers = parse_opcode_table(opcode_path)
-    vector_signals = parse_vector_signals(vectors_path)
+    try:
+        vector_signals = parse_vector_signals(vectors_path)
+    except ValueError as exc:
+        raise SystemExit(f"ERROR: {exc}")
     legacy_signals = parse_legacy_test_signals(legacy_path)
     coverage = compute_coverage(
         handlers, mnemonic_to_handlers, vector_signals, legacy_signals

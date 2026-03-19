@@ -17,8 +17,6 @@ if not defined VSROOT (
 call "%VSROOT%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
 if errorlevel 1 exit /b 1
 
-set "CARGO_BIN=%USERPROFILE%\.cargo\bin"
-if exist "%CARGO_BIN%\cargo.exe" set "PATH=%CARGO_BIN%;%PATH%"
 set "CMAKE_BIN="
 for /f "usebackq delims=" %%I in (`where cmake 2^>nul`) do (
     set "CMAKE_BIN=%%I"
@@ -42,10 +40,20 @@ if not defined LLVM_CMAKE_DIR (
 )
 
 for %%I in ("%~dp0..\..") do set "REPO_ROOT=%%~fI"
+set "BUILD_DIR=%REPO_ROOT%\build_zydis"
 
 set "MERGEN_C_COMPILER=%CMAKE_C_COMPILER%"
 if not defined MERGEN_C_COMPILER set "MERGEN_C_COMPILER=clang-cl"
 set "MERGEN_CXX_COMPILER=%CMAKE_CXX_COMPILER%"
 if not defined MERGEN_CXX_COMPILER set "MERGEN_CXX_COMPILER=%MERGEN_C_COMPILER%"
-"%CMAKE_BIN%" -G Ninja -S "%REPO_ROOT%" -B "%REPO_ROOT%\build" -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR="%LLVM_CMAKE_DIR%" -DBUILD_WITH_ZYDIS=ON -DCMAKE_C_COMPILER="%MERGEN_C_COMPILER%" -DCMAKE_CXX_COMPILER="%MERGEN_CXX_COMPILER%" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+if exist "%BUILD_DIR%\CMakeCache.txt" (
+    echo INFO: Reconfiguring existing build_zydis cache for Zydis-only lane
+    echo INFO: Clearing backend-selection cache keys to prevent stale backend state
+    set "CMAKE_CACHE_CLEAR_ARGS=-UICED_* -UCARGO_EXECUTABLE -UBUILD_WITH_ZYDIS"
+) else (
+    set "CMAKE_CACHE_CLEAR_ARGS="
+)
+
+"%CMAKE_BIN%" -G Ninja -S "%REPO_ROOT%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=Release %CMAKE_CACHE_CLEAR_ARGS% -DLLVM_DIR="%LLVM_CMAKE_DIR%" -DBUILD_WITH_ZYDIS=ON -DCMAKE_C_COMPILER="%MERGEN_C_COMPILER%" -DCMAKE_CXX_COMPILER="%MERGEN_CXX_COMPILER%" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 exit /b %errorlevel%

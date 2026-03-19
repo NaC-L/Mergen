@@ -31,19 +31,56 @@
 
 
 
-void InitFunction_and_LiftInstructions(const uint64_t runtime_address,
+bool InitFunction_and_LiftInstructions(const uint64_t runtime_address,
                                        std::vector<uint8_t> fileData) {
+  std::string stageError;
+  auto stageContext =
+      prepareLifterStageContext(runtime_address, fileData, stageError);
+  if (!stageContext.has_value()) {
+    std::cerr << stageError << std::endl;
+    return false;
+  }
 
-  auto stageContext = prepareLifterStageContext(runtime_address, fileData);
-  runLifterPipeline(stageContext.lifter.get(), stageContext.runtimeContext,
+  runLifterPipeline(stageContext->lifter.get(), stageContext->runtimeContext,
                     fileData.data(), fileData);
-  return;
+  return true;
 }
 
 // #define TEST
 int main(int argc, char* argv[]) {
-  std::vector<std::string> args(argv, argv + argc);
-  argparser::parseArguments(args);
+  std::vector<std::string> rawArgs(argv, argv + argc);
+#ifdef MERGEN_TEST
+  constexpr bool allowUnknownOptions = true;
+#else
+  constexpr bool allowUnknownOptions = false;
+#endif
+  auto parseResult = argparser::parseArguments(rawArgs, allowUnknownOptions);
+
+  if (!parseResult.ok()) {
+    for (const auto& error : parseResult.errors) {
+      std::cerr << error << std::endl;
+    }
+    argparser::printHelp();
+    return 1;
+  }
+
+  if (parseResult.showHelp) {
+    argparser::printHelp();
+    return 0;
+  }
+
+  if (parseResult.enableDebug) {
+    debugging::enableDebug("debug.txt");
+  }
+
+  if (parseResult.concretizeUnsafeReads) {
+    std::cerr << "Option '--concretize-unsafe-reads' is recognized but "
+                 "not implemented yet."
+              << std::endl;
+    return 1;
+  }
+
+  std::vector<std::string> args = std::move(parseResult.positionalArgs);
   timer::startTimer();
 
 #ifdef MERGEN_TEST
@@ -66,8 +103,8 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
-    return buildFullHandlerSeed(outputPath, "lifter/semantics/x86_64_opcodes.x", maxAttempts,
-                                randomSeed);
+    return buildFullHandlerSeed(outputPath, "lifter/semantics/x86_64_opcodes.x",
+                                maxAttempts, randomSeed);
   }
 
   const std::string suiteFilter = args.size() > 1 ? args[1] : "";

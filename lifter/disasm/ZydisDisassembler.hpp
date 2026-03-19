@@ -34,6 +34,7 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
     case 64:
       return OperandType::Immediate64;
     }
+    return OperandType::Invalid;
 
   case ZYDIS_OPERAND_TYPE_REGISTER: {
     switch (size) {
@@ -48,10 +49,10 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
     case 128:
       return OperandType::Register128;
     }
+    return OperandType::Invalid;
   }
 
   case ZYDIS_OPERAND_TYPE_MEMORY:
-
     switch (size) {
 
     case 8:
@@ -65,6 +66,7 @@ inline OperandType zydisTypeToMergenType(ZydisOperandType type, uint8_t size,
     case 128:
       return OperandType::Memory128;
     }
+    return OperandType::Invalid;
 
   default:
     return OperandType::Invalid;
