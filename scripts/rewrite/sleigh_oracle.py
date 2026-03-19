@@ -126,13 +126,18 @@ class PcodeEmulatorState:
 class PcodeEmulator:
     """Concretely execute a sequence of P-code ops on a PcodeEmulatorState."""
 
-    def __init__(self, state: PcodeEmulatorState) -> None:
+    def __init__(self, state: PcodeEmulatorState, rip_vn=None) -> None:
         self.state = state
         self._pc = 0
+        self._rip_vn = rip_vn
+        self._fallthrough_rip: Optional[int] = None
+        self._rip_committed = False
 
     def execute(self, ops: list) -> None:
         """Execute a list of PcodeOp objects (from a single translated instruction)."""
         self._pc = 0
+        self._fallthrough_rip = None
+        self._rip_committed = False
         intra_branch_ops = tuple(
             op for op in (OpCode.BRANCH, OpCode.CBRANCH, getattr(OpCode, "BRANCHIND", None))
             if op is not None
@@ -160,6 +165,9 @@ class PcodeEmulator:
             else:
                 self._pc += 1
 
+        if not self._rip_committed and self._fallthrough_rip is not None:
+            self._commit_rip(self._fallthrough_rip)
+
     # -- Helpers --
 
     def _read(self, vn) -> int:
@@ -167,6 +175,17 @@ class PcodeEmulator:
 
     def _write(self, vn, value: int) -> None:
         self.state.write_varnode(vn, value)
+
+    def _commit_rip(self, value: int) -> None:
+        if self._rip_vn is None:
+            return
+        self.state.write(
+            self._rip_vn.space.name,
+            self._rip_vn.offset,
+            self._rip_vn.size,
+            int(value),
+        )
+        self._rip_committed = True
 
     def _mask(self, size: int) -> int:
         return (1 << (size * 8)) - 1
@@ -186,7 +205,11 @@ class PcodeEmulator:
     # -- Opcode implementations --
 
     def _op_imark(self, op) -> None:
-        pass  # Instruction marker, no-op
+        if not op.inputs:
+            return
+        marker = op.inputs[0]
+        if marker.space.name == "ram":
+            self._fallthrough_rip = int(marker.offset) + int(marker.size)
 
     def _op_copy(self, op) -> None:
         self._write(op.output, self._read(op.inputs[0]))
@@ -217,7 +240,10 @@ class PcodeEmulator:
             if raw > 0x7FFFFFFF:  # handle negative as signed 32-bit
                 raw -= 0x100000000
             return self._pc + raw
-        # Inter-instruction branch (ram space) = end of this instruction
+        if target.space.name == "ram":
+            # Inter-instruction branch target: update architectural RIP and stop.
+            self._commit_rip(target.offset)
+            return -1
         return -1
 
     def _op_cbranch(self, op) -> Optional[int]:
@@ -229,7 +255,10 @@ class PcodeEmulator:
                 if raw > 0x7FFFFFFF:
                     raw -= 0x100000000
                 return self._pc + raw
-            return -1  # inter-instruction
+            if target.space.name == "ram":
+                self._commit_rip(target.offset)
+                return -1
+            return -1
         return None
 
     # -- Integer arithmetic --
@@ -631,7 +660,7 @@ class SleighOracleProvider:
         af_pre_operands = self._find_af_operands(translation.ops, state)
 
         # 7. Execute P-code
-        emu = PcodeEmulator(state)
+        emu = PcodeEmulator(state, rip_vn=rip_vn)
         emu.execute(translation.ops)
 
         # 8. Read back expected registers
