@@ -57,7 +57,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
     return;
   }
 
-  for (int i = 0; i < C_size; i++) {
+  for (uint64_t i = 0; i < C_size; i++) {
     if (!buffer.contains(C_src + i)) {
       printvalue2(C_src + i);
       printvalue2(C_dest + i);

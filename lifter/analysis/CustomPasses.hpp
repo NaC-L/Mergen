@@ -367,6 +367,13 @@ public:
       if (!isa<AllocaInst>(Allocated))
         continue;
 
+      // PromotePseudoStackPass now emits byte-addressed i8 allocas.
+      // This pass was designed for the legacy i128 format. Skip i8 allocas
+      // since they are already correctly sized.
+      auto* AI = cast<AllocaInst>(Allocated);
+      if (AI->getAllocatedType()->isIntegerTy(8))
+        continue;
+
       for (auto& BB : F) {
         for (auto& I : BB) {
           if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
