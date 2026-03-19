@@ -82,7 +82,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     auto firstcase = pv[0];
     auto secondcase = pv[1];
 
-    static auto try_simplify = [&](APInt c1,
+    auto try_simplify = [&](APInt c1,
                                    Value* simplifyv) -> std::optional<Value*> {
       if (auto si = dyn_cast<SelectInst>(simplifyv)) {
         auto firstcase_v = builder->getIntN(
@@ -152,12 +152,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     addUnvisitedAddr(blockInfo);
     addUnvisitedAddr(newblock);
 
-    // fix this later, is ugly
-    assumptions[cast<Instruction>(condition)] = 0;
-    branch_backup(blockInfo.block);
+    // Constant conditions are already resolved — only track assumptions
+    // for instruction-produced conditions that need runtime disambiguation.
+    if (auto* condInst = dyn_cast<Instruction>(condition)) {
+      assumptions[condInst] = 0;
+      branch_backup(blockInfo.block);
 
-    this->assumptions[cast<Instruction>(condition)] = 1;
-    branch_backup(newblock.block);
+      this->assumptions[condInst] = 1;
+      branch_backup(newblock.block);
+    } else {
+      // Condition is a constant (e.g., from folded ICMP). Both branches
+      // are statically determined — back them up without assumption state.
+      branch_backup(blockInfo.block);
+      branch_backup(newblock.block);
+    }
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_newpath.ll";
@@ -202,7 +210,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     // Destination remains unknown for multi-target switches.
     dest = 0;
-    result = PATH_unsolved;
+    result = PATH_multi_solved;
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_switch.ll";
@@ -213,6 +221,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     std::cout << "created multi-target switch with " << pv.size()
               << " targets\n"
               << std::flush;
+  }
+
+  if (pv.empty()) {
+    // computePossibleValues exhausted its budget without finding any concrete
+    // targets. Terminate the block with unreachable to satisfy the LLVM
+    // verifier — an unterminated basic block is invalid IR.
+    builder->CreateUnreachable();
   }
 
   return result;
