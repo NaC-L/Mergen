@@ -52,8 +52,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
 
   // check memory policy for source and destination
   if (memoryPolicy.isSymbolic(C_src) || memoryPolicy.isSymbolic(C_dest)) {
-    // Handle symbolic memory copy
-    // TODO: Implement symbolic memcpy
+    // At least one endpoint is in a symbolic memory range. We cannot
+    // track the copy in the concolic buffer, but we must preserve the
+    // operation in the IR so downstream passes see the data flow.
+    auto* srcPtr = getPointer(src);
+    auto* destPtr = getPointer(dest);
+    builder->CreateMemCpy(destPtr, Align(1), srcPtr, Align(1), size);
     return;
   }
 

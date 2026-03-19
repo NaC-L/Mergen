@@ -583,6 +583,17 @@ public:
     AC = new AssumptionCache(*fnc, TTI);
   };
 
+  ~lifterClassBase() {
+    // LLVM analysis objects have interdependent destructors (MemorySSA
+    // references DT and AA, MSSAU references MSSA, etc.). Deleting in any
+    // order risks use-after-free inside LLVM's own teardown. Since this is
+    // a CLI process that exits after the pipeline, we intentionally leak
+    // these allocations. The OS reclaims everything on process exit.
+    //
+    // TODO: Migrate to unique_ptr with a custom deleter that tears down in
+    // dependency order, or use LLVM's AnalysisManager which handles this.
+  }
+
   lifterClassBase(const lifterClassBase& other) = delete;
 
   void liftInstruction();

@@ -298,23 +298,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     rax = createZExtFolder(
         rax, builder->getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
     // put this in a function
-    std::vector<llvm::Type*> argTypes;
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
-    argTypes.push_back(llvm::Type::getInt64Ty(context));
+    // One entry per x64 GPR (RAX..R15).
+    std::vector<llvm::Type*> argTypes(16, llvm::Type::getInt64Ty(context));
     auto myStructType = StructType::create(context, argTypes, "returnStruct");
 
     auto myStruct = UndefValue::get(myStructType);
