@@ -375,7 +375,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
 
   SetRegisterValue(Register::RSP, rsp_result); // then add rsp 8
 
-  solvePath(function, destination, realval);
+  auto pathResult = solvePath(function, destination, realval);
+  if (pathResult == PATH_unsolved) {
+    ++liftStats.blocks_unreachable;
+    // ROP-style ret with non-constant target; log for triage
+    std::cout << "[diag] lift_ret: unresolved ROP chain at 0x"
+              << std::hex << (current_address - instruction.length)
+              << std::dec << "\n" << std::flush;
+  }
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
@@ -408,7 +415,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   default:
     break;
   }
-  solvePath(function, destination, trunc);
+  auto pathResult = solvePath(function, destination, trunc);
+  if (pathResult == PATH_unsolved) {
+    ++liftStats.blocks_unreachable;
+    // Indirect jump couldn't be resolved; likely CFF dispatch or computed target
+    std::cout << "[diag] lift_jmp: unresolved indirect jump at 0x"
+              << std::hex << (current_address - instruction.length)
+              << std::dec << "\n" << std::flush;
+  }
   printvalue2(destination);
   // printvalue(newRip);
   // SetRegisterValueWrapper(Register::RIP, newRip);
