@@ -39,3 +39,7 @@ check_*.py
 .tmp*
 =*
 scriptsdev/
+
+# review automation
+/artifacts/
+tmp_*.json
