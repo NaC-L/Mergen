@@ -19,6 +19,11 @@
 MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
 
+  // Clear memoization cache for value enumeration.
+  // Each solvePath invocation may have different assumptions
+  // (from different branch paths), so cached results don't carry over.
+  pv_cache.clear();
+
   // do static polymorphism here
 
   PATH_info result = PATH_unsolved;
@@ -224,10 +229,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   }
 
   if (pv.empty()) {
-    // computePossibleValues exhausted its budget without finding any concrete
-    // targets. Terminate the block with unreachable to satisfy the LLVM
-    // verifier — an unterminated basic block is invalid IR.
-    builder->CreateUnreachable();
+    // computePossibleValues exhausted its budget without resolving any
+    // concrete targets.  Emit an undef-return sentinel so the block has a
+    // valid terminator; do NOT use unreachable, which would let LLVM erase
+    // this reachable-but-unresolved path.
+    builder->CreateRet(UndefValue::get(function->getReturnType()));
   }
 
   return result;

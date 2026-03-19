@@ -242,6 +242,14 @@ concept lifterConcept = Registers<R> && requires(T t) {
                           Register>                                            \
   ret lifterClassBase<Derived, Mnemonic, Register, DisassemblerBase>
 
+struct LiftStats {
+  unsigned blocks_attempted = 0;
+  unsigned blocks_completed = 0;
+  unsigned blocks_unreachable = 0;
+  unsigned instructions_lifted = 0;
+  unsigned instructions_unsupported = 0;
+};
+
 // main lifter
 template <typename Derived = void,
 #ifdef ICED_FOUND
@@ -357,17 +365,19 @@ public:
   }
 
   void liftBasicBlockFromAddress(uint64_t addr) {
+    ++liftStats.blocks_attempted;
     printvalue2(this->finished);
     printvalue2(this->run);
     this->run = 1;
     while (this->finished == 0 && this->run) {
-      // TODO: refactor logic for finished and run, instead semantics should
-      // return the info about jumps
       auto currentblock = builder->GetInsertBlock()->getName();
       printvalue2(currentblock);
       liftAddress(addr);
+      ++liftStats.instructions_lifted;
       addr = current_address;
     }
+    if (this->finished)
+      ++liftStats.blocks_completed;
   }
 
   bool addUnvisitedAddr(BBInfo& bb) {
@@ -381,24 +391,25 @@ public:
   filter : filter for empty blocks
   */
   bool getUnvisitedAddr(BBInfo& out, bool filter = 0) {
-    if (unvisitedBlocks.empty())
-      return false;
+    while (!unvisitedBlocks.empty()) {
+      out = std::move(unvisitedBlocks.back());
+      unvisitedBlocks.pop_back();
 
-    out = std::move(unvisitedBlocks.back());
-    unvisitedBlocks.pop_back();
+      // In Basic mode, skip blocks that already have instructions
+      // (they were processed in a previous iteration).
+      if (getControlFlow() == ControlFlow::Basic && !out.block->empty() &&
+          filter) {
+        printvalue2("not empty ;D ");
+        continue;
+      }
 
-    if (getControlFlow() == ControlFlow::Basic && !(out.block->empty()) &&
-        filter) {
-      printvalue2("not empty ;D ");
-      return getUnvisitedAddr(out);
+      printvalue2("adding :" + std::to_string(out.block_address) +
+                  out.block->getName());
+      visitedAddresses.insert(out.block_address);
+      blockInfo = out;
+      return true;
     }
-
-    printvalue2("adding :" + std::to_string(out.block_address) +
-                out.block->getName());
-
-    visitedAddresses.insert(out.block_address);
-    blockInfo = out;
-    return true;
+    return false;
   }
 
   void writeFunctionToFile(const std::string filename) {
@@ -410,6 +421,8 @@ public:
 
   // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
   llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
+  // Memoization cache for computePossibleValues, cleared per solvePath call.
+  llvm::DenseMap<llvm::Value*, std::set<llvm::APInt, APIntComparator>> pv_cache;
   llvm::DenseMap<uint64_t, ValueByteReference> buffer;
   using flagManager = std::array<LazyValue, FLAGS_END>;
   // llvm::DenseMap<Value*, flagManager> flagbuffer;
@@ -420,6 +433,7 @@ public:
   llvm::DomConditionCache* DC = new llvm::DomConditionCache();
 
   unsigned int instct = 0;
+  LiftStats liftStats;
   llvm::SimplifyQuery* cachedquery;
 
   llvm::BasicBlock* lastBB = nullptr;

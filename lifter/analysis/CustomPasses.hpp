@@ -98,67 +98,95 @@ public:
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
     bool hasChanged = false;
-    llvm::Value* stackMemory = NULL;
+    llvm::Value* stackMemory = nullptr;
+
     for (auto& F : M) {
       llvm::Value* memory = mem;
+
+      // --- Pass 1: scan all stack GEPs to find the actual offset range ---
+      uint64_t min_offset = STACKP_VALUE;
+      uint64_t max_offset = 0;
+      bool found_any = false;
+      struct PendingGEP {
+        llvm::GetElementPtrInst* gep;
+        bool constant_offset;
+        uint64_t const_val; // only valid when constant_offset=true
+      };
+      std::vector<PendingGEP> pending;
+
+      for (auto& BB : F) {
+        for (auto& I : BB) {
+          auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I);
+          if (!GEP) continue;
+          auto* MemOp = GEP->getOperand(GEP->getNumOperands() - 2);
+          if (MemOp != memory) continue;
+          auto* OffOp = GEP->getOperand(GEP->getNumOperands() - 1);
+
+          if (auto* CI = dyn_cast<ConstantInt>(OffOp)) {
+            uint64_t val = CI->getZExtValue();
+            if (val < STACKP_VALUE) {
+              min_offset = std::min(min_offset, val);
+              max_offset = std::max(max_offset, val);
+              found_any = true;
+              pending.push_back({GEP, true, val});
+            }
+            continue;
+          }
+          // Non-constant offset: use KnownBits to bound the range
+          auto offsetKB = computeKnownBits(OffOp, M.getDataLayout());
+          auto SSKB = KnownBits::makeConstant(APInt(64, STACKP_VALUE));
+          if (KnownBits::ult(offsetKB, SSKB)) {
+            uint64_t kb_min = offsetKB.getMinValue().getZExtValue();
+            uint64_t kb_max = offsetKB.getMaxValue().getZExtValue();
+            min_offset = std::min(min_offset, kb_min);
+            max_offset = std::max(max_offset, kb_max);
+            found_any = true;
+            pending.push_back({GEP, false, 0});
+          } else if (auto* SI = dyn_cast<SelectInst>(OffOp)) {
+            // SelectInst with two constant arms: check both < STACKP_VALUE
+            if (isa<ConstantInt>(SI->getTrueValue()) &&
+                isa<ConstantInt>(SI->getFalseValue())) {
+              uint64_t tv = cast<ConstantInt>(SI->getTrueValue())->getZExtValue();
+              uint64_t fv = cast<ConstantInt>(SI->getFalseValue())->getZExtValue();
+              if (tv < STACKP_VALUE && fv < STACKP_VALUE) {
+                min_offset = std::min({min_offset, tv, fv});
+                max_offset = std::max({max_offset, tv, fv});
+                found_any = true;
+                pending.push_back({GEP, false, 0});
+              }
+            }
+          }
+        }
+      }
+      if (!found_any) continue;
+
+      // --- Create correctly-sized byte-addressed alloca instead of 22MB i128 ---
+      uint64_t alloca_size = max_offset - min_offset + 1;
       if (!stackMemory) {
         llvm::IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
         stackMemory = Builder.CreateAlloca(
-            llvm::Type::getInt128Ty(M.getContext()),
-            llvm::ConstantInt::get(llvm::Type::getInt128Ty(M.getContext()),
-                                   STACKP_VALUE),
+            llvm::Type::getInt8Ty(M.getContext()),
+            Builder.getInt64(alloca_size),
             "stackmemory");
       }
-      for (auto& BB : F) {
-        for (auto& I : BB) {
-          if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
 
-            // TODO: prettify here!!!
-            auto* MemoryOperand = GEP->getOperand(GEP->getNumOperands() - 2);
-            /*
-              printvalueforce(MemoryOperand);
-              printvalueforce(memory);
-            */
-            if (memory != MemoryOperand)
-              continue;
-
-            auto* OffsetOperand = GEP->getOperand(GEP->getNumOperands() - 1);
-            // printvalue(OffsetOperand)
-
-            if (isa<ConstantInt>(OffsetOperand)) {
-              if (auto* ConstInt =
-                      llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
-                uint64_t constintvalue = (uint64_t)ConstInt->getZExtValue();
-                if (constintvalue < STACKP_VALUE) {
-                  GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
-                }
-              }
-              continue;
-            }
-            // if OffsetOperand is not a constant:
-            auto offsetKB = computeKnownBits(OffsetOperand, M.getDataLayout());
-            auto StackSize = APInt(64, STACKP_VALUE);
-
-            auto SSKB = KnownBits::makeConstant(StackSize);
-            printvalue2(offsetKB);
-            printvalue2(SSKB);
-            if (KnownBits::ult(offsetKB, SSKB)) {
-              // minimum of offsetKB
-              GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
-            } else if (auto select_inst = dyn_cast<SelectInst>(OffsetOperand)) {
-              if (isa<ConstantInt>(select_inst->getFalseValue()) &&
-                  isa<ConstantInt>(select_inst->getTrueValue())) {
-                if ((cast<ConstantInt>(select_inst->getTrueValue())
-                         ->getZExtValue() < STACKP_VALUE) &&
-                    (cast<ConstantInt>(select_inst->getFalseValue())
-                         ->getZExtValue() < STACKP_VALUE)) {
-                  GEP->setOperand((GEP->getNumOperands() - 2), stackMemory);
-                }
-              }
-            }
-            // endif
-          }
+      // --- Pass 2: rewrite GEPs to use the new alloca with rebased offsets ---
+      for (auto& pg : pending) {
+        auto* GEP = pg.gep;
+        GEP->setOperand(GEP->getNumOperands() - 2, stackMemory);
+        if (pg.constant_offset) {
+          // Rebase constant offset relative to min_offset
+          uint64_t rebased = pg.const_val - min_offset;
+          GEP->setOperand(GEP->getNumOperands() - 1,
+                          ConstantInt::get(Type::getInt64Ty(M.getContext()), rebased));
+        } else {
+          // Rebase non-constant offset with a Sub instruction
+          llvm::IRBuilder<> B(GEP);
+          auto* OrigOff = GEP->getOperand(GEP->getNumOperands() - 1);
+          auto* Rebased = B.CreateSub(OrigOff, B.getInt64(min_offset), "stack.rebase");
+          GEP->setOperand(GEP->getNumOperands() - 1, Rebased);
         }
+        hasChanged = true;
       }
     }
     return hasChanged ? llvm::PreservedAnalyses::none()
