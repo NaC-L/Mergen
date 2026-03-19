@@ -33,9 +33,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::createMemcpy(Value* src, Value* dest,
                                                        Value* size) {
   if (!isa<ConstantInt>(src) || !isa<ConstantInt>(dest) ||
       !isa<ConstantInt>(size)) {
-    printvalue(src);
-    printvalue(dest);
-    printvalue(size);
+    // Non-constant args cannot be tracked in the concolic buffer.
+    // Emit an LLVM memcpy intrinsic so the IR preserves the operation.
+    auto* srcPtr = getPointer(src);
+    auto* destPtr = getPointer(dest);
+    builder->CreateMemCpy(destPtr, Align(1), srcPtr, Align(1), size);
     return;
   }
 
@@ -99,7 +101,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     auto isDifferentReferenceOrDiscontinuousOffset =
         [this](const ValueByteReferenceRange& lastRef,
                uint64_t currentAddress) {
-          const auto& currentValue = buffer[currentAddress];
+          auto buf_it = buffer.find(currentAddress);
+          if (buf_it == buffer.end()) return true; // no tracked value = different group
+          const auto& currentValue = buf_it->second;
           return lastRef.ref.value != currentValue.value ||
                  lastRef.ref.byteOffset !=
                      currentValue.byteOffset - (lastRef.end - lastRef.start);
@@ -442,7 +446,7 @@ using pvalueset = std::set<APInt, APIntComparator>;
 MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
     const llvm::KnownBits& known, unsigned max_unknown) {
 
-  if ((max_unknown == 0) || (max_unknown >= 4)) {
+  if ((max_unknown == 0) || (max_unknown >= 8)) {
     debugging::doIfDebug([&]() {
       std::string Filename = "output_too_many_unk.ll";
       std::error_code EC;
@@ -452,7 +456,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
     printvalueforce2(max_unknown);
     // Graceful bail: return empty set so caller treats this as PATH_unsolved.
     // max_unknown==0 means contradictory analysis (no solutions exist).
-    // max_unknown>=4 means too many unknowns (2^N blowup, >16 values).
+    // max_unknown>=8 means too many unknowns (2^N blowup, >128 values).
     return {};
   }
   llvm::APInt base = known.One;
@@ -602,6 +606,10 @@ calculatePossibleValues(std::set<APInt, APIntComparator> v1,
         return {};
       }
     }
+    if (res.size() > 256) {
+      // Result set blowup: bail to avoid combinatorial explosion.
+      return {};
+    }
   }
   return res;
 }
@@ -619,18 +627,29 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
     // Graceful bail: return empty set so caller treats this as PATH_unsolved.
     return {};
   }
+  // Memoization: reuse results for values already analyzed in this
+  // solvePath invocation. The cache is valid because assumptions
+  // don't change within a single path resolution.
+  auto cache_it = pv_cache.find(V);
+  if (cache_it != pv_cache.end())
+    return cache_it->second;
+
   std::set<APInt, APIntComparator> res;
   printvalue(V);
   if (auto v_ci = dyn_cast<ConstantInt>(V)) {
     res.insert(v_ci->getValue());
+    pv_cache[V] = res;
     return res;
   }
   if (auto v_inst = dyn_cast<Instruction>(V)) {
     if (v_inst->getOpcode() == Instruction::Alloca) {
       return {};
     }
-    if (v_inst->getNumOperands() == 1)
-      return computePossibleValues(v_inst->getOperand(0), Depth + 1);
+    if (v_inst->getNumOperands() == 1) {
+      auto result = computePossibleValues(v_inst->getOperand(0), Depth + 1);
+      pv_cache[V] = result;
+      return result;
+    }
 
     if (v_inst->getOpcode() == Instruction::Select) {
       auto cond = v_inst->getOperand(0);
@@ -644,12 +663,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
         auto falseValues = computePossibleValues(falseValue, Depth + 1);
 
         res.insert(falseValues.begin(), falseValues.end());
+        pv_cache[V] = res;
         return res;
       }
       if (kb.isNonZero()) {
         auto trueValues = computePossibleValues(trueValue, Depth + 1);
 
         res.insert(trueValues.begin(), trueValues.end());
+        pv_cache[V] = res;
         return res;
       }
       auto trueValues = computePossibleValues(trueValue, Depth + 1);
@@ -659,17 +680,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
       auto falseValues = computePossibleValues(falseValue, Depth + 1);
 
       res.insert(falseValues.begin(), falseValues.end());
+      pv_cache[V] = res;
       return res;
     }
     auto op1 = v_inst->getOperand(0);
     auto op2 = v_inst->getOperand(1);
     auto op1_knownbits = analyzeValueKnownBits(op1, v_inst);
     unsigned int op1_unknownbits_count = llvm::popcount(
-        ~(op1_knownbits.One | op1_knownbits.Zero).getZExtValue());
+        ~(op1_knownbits.One | op1_knownbits.Zero).getZExtValue()) -
+        64 + op1_knownbits.getBitWidth();
 
     auto op2_knownbits = analyzeValueKnownBits(op2, v_inst);
     unsigned int op2_unknownbits_count = llvm::popcount(
-        ~(op2_knownbits.One | op2_knownbits.Zero).getZExtValue());
+        ~(op2_knownbits.One | op2_knownbits.Zero).getZExtValue()) -
+        64 + op2_knownbits.getBitWidth();
     printvalue2(analyzeValueKnownBits(V, v_inst));
     auto v_knownbits = analyzeValueKnownBits(v_inst, v_inst);
     unsigned int res_unknownbits_count =
@@ -706,10 +730,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
         printvalue2(op2_knownbits);
         printvalue2(vv2);
       }
-      return calculatePossibleValues(v1, v2, v_inst);
+      auto cpv_result = calculatePossibleValues(v1, v2, v_inst);
+      pv_cache[V] = cpv_result;
+      return cpv_result;
     }
-    return getPossibleValues(v_knownbits, res_unknownbits_count);
+    auto gpv_result = getPossibleValues(v_knownbits, res_unknownbits_count);
+    pv_cache[V] = gpv_result;
+    return gpv_result;
   }
+  pv_cache[V] = res;
   return res;
 }
 

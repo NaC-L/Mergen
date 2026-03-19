@@ -18,7 +18,8 @@ inline std::unique_ptr<lifterConcolic<>>
 createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
   auto lifter = std::make_unique<lifterConcolic<>>();
   lifter->loadFile(fileBase);
-  configureDefaultMemoryPolicy(lifter.get());
+  // Memory policy configured later in prepareLifterStageContext
+  // when RuntimeImageContext (with PE stack reserve) is available.
 
   lifter->blockInfo = BBInfo(runtimeAddress, lifter->bb);
   lifter->unvisitedBlocks.push_back(lifter->blockInfo);
@@ -57,6 +58,8 @@ prepareLifterStageContext(uint64_t runtimeAddress, std::vector<uint8_t>& fileDat
   }
 
   auto lifter = createConfiguredLifterForRuntime(fileBase, runtimeAddress);
+  auto ctx = *runtimeResult.context;
+  configureDefaultMemoryPolicy(lifter.get(), ctx.stackReserve);
   return LifterStageContext{.lifter = std::move(lifter),
-                            .runtimeContext = *runtimeResult.context};
+                            .runtimeContext = ctx};
 }
