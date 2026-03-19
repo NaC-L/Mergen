@@ -11,6 +11,7 @@
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Support/ErrorHandling.h>
 
 using namespace llvm;
 
@@ -62,7 +63,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
       }
     }
     if (!memoryArg) {
-      UNREACHABLE("run_opts could not resolve memory argument");
+      llvm::report_fatal_error(
+          "run_opts requires a 'memory' argument; IR is missing expected state");
     }
 
     modulePassManager.addPass(

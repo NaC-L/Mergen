@@ -113,34 +113,69 @@ namespace debugging {
 } // namespace debugging
 
 namespace argparser {
-  void printHelp() {
-    std::cerr << "Options:\n"
-              << "  -d, --enable-debug        Enable debugging mode\n"
-              << "  -h                        Display this help message\n"
-              << "  --concretize-unsafe-reads Concretizes potentially unsafe "
-                 "reads to writable sections \n";
+namespace {
+bool isOptionToken(const std::string& arg) {
+  return !arg.empty() && arg.front() == '-';
+}
+} // namespace
+
+void printHelp() {
+  std::cerr << "Options:\n"
+            << "  -d, --enable-debug        Enable debugging mode\n"
+            << "  -h, --help                Display this help message\n"
+            << "  --concretize-unsafe-reads Concretizes potentially unsafe "
+               "reads to writable sections\n"
+            << "  --                        Stop option parsing\n";
+}
+
+ParseResult parseArguments(const std::vector<std::string>& args,
+                           bool allowUnknownOptions) {
+  ParseResult result;
+  if (args.empty()) {
+    return result;
   }
 
-  std::map<std::string, std::function<void()>> options = {
-      {"-d", []() { debugging::enableDebug("debug.txt"); }},
-      //
-      {"-h", printHelp}};
+  result.positionalArgs.reserve(args.size());
+  result.positionalArgs.push_back(args.front());
 
-  void parseArguments(std::vector<std::string>& args) {
-    std::vector<std::string> newArgs;
+  bool parsingOptions = true;
+  for (size_t index = 1; index < args.size(); ++index) {
+    const auto& arg = args[index];
 
-    for (const auto& arg : args) {
-      // cout << arg << "\n";
-      if (options.find(arg) != options.end())
-        options[arg]();
-      else if (*(arg.c_str()) == '-')
-        printHelp();
-      else
-        newArgs.push_back(arg);
+    if (parsingOptions && arg == "--") {
+      parsingOptions = false;
+      continue;
     }
 
-    args.swap(newArgs);
+    if (parsingOptions) {
+      if (arg == "-h" || arg == "--help") {
+        result.showHelp = true;
+        continue;
+      }
+      if (arg == "-d" || arg == "--enable-debug") {
+        result.enableDebug = true;
+        continue;
+      }
+      if (arg == "--concretize-unsafe-reads") {
+        result.concretizeUnsafeReads = true;
+        continue;
+      }
+
+      if (isOptionToken(arg)) {
+        if (allowUnknownOptions) {
+          result.positionalArgs.push_back(arg);
+        } else {
+          result.errors.push_back("Unknown option: " + arg);
+        }
+        continue;
+      }
+    }
+
+    result.positionalArgs.push_back(arg);
   }
+
+  return result;
+}
 
 } // namespace argparser
 
