@@ -137,29 +137,32 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
   for (auto v : values) {
     Value* byteValue = nullptr;
     uint8_t bytesize = v.end - v.start;
-
-    uint64_t mem_value;
     printvalue2(v.isRef);
 
-    auto read_mem = file.readMemory(v.memoryAddress, bytesize, mem_value);
-    printvalue2(read_mem);
-    printvalue2(mem_value);
-    if (!v.isRef && memoryPolicy.isSymbolic(v.memoryAddress)) {
-      // Symbolic address: preserve symbolic fallback when concrete mapping
-      // is not proven.
-      if (read_mem) {
-        byteValue = builder->getIntN(bytesize * 8, mem_value);
-      } else {
-        byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
-      }
-    } else if (v.isRef) {
+    if (v.isRef) {
+      // Active union member is ref — do not access memoryAddress (UB).
       byteValue = extractBytes(v.ref.value, v.ref.byteOffset,
                                v.ref.byteOffset + bytesize);
-    } else if (!v.isRef && read_mem) {
-      byteValue = builder->getIntN(bytesize * 8, mem_value);
-    } else if (!v.isRef) {
-      // Concrete read is unresolved when file mapping is unavailable.
-      byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+    } else {
+      // Active union member is memoryAddress — safe to read.
+      uint64_t mem_value;
+      auto read_mem = file.readMemory(v.memoryAddress, bytesize, mem_value);
+      printvalue2(read_mem);
+      printvalue2(mem_value);
+      if (memoryPolicy.isSymbolic(v.memoryAddress)) {
+        // Symbolic address: preserve symbolic fallback when concrete mapping
+        // is not proven.
+        if (read_mem) {
+          byteValue = builder->getIntN(bytesize * 8, mem_value);
+        } else {
+          byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+        }
+      } else if (read_mem) {
+        byteValue = builder->getIntN(bytesize * 8, mem_value);
+      } else {
+        // Concrete read is unresolved when file mapping is unavailable.
+        byteValue = extractBytes(orgLoad.get(), m, m + bytesize);
+      }
     }
     if (byteValue) {
       printvalue(byteValue);
