@@ -3,6 +3,7 @@
 #include "MemoryPolicySetup.hpp"
 #include "RuntimeImageContext.hpp"
 #include "Utils.h"
+#include <nt/directories/dir_export.hpp>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -20,6 +21,36 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
   lifter->loadFile(fileBase);
   // Memory policy configured later in prepareLifterStageContext
   // when RuntimeImageContext (with PE stack reserve) is available.
+
+  // Auto-outline PE exports: exported functions are separate entry points
+  // that should not be inlined when called from the lifted function.
+  {
+    auto* dosHdr = reinterpret_cast<win::dos_header_t*>(fileBase);
+    auto* ntHdr  = reinterpret_cast<win::nt_headers_t<true>*>(
+        fileBase + dosHdr->e_lfanew);
+    auto& expDir = ntHdr->optional_header.data_directories.export_directory;
+    if (expDir.size >= sizeof(win::export_directory_t)) {
+      uint64_t imageBase = ntHdr->optional_header.image_base;
+      auto fileOff = lifter->file.RvaToFileOffset(expDir.rva);
+      if (fileOff != 0) {
+        auto* exp = reinterpret_cast<const win::export_directory_t*>(
+            fileBase + fileOff);
+        auto funcTableOff = lifter->file.RvaToFileOffset(exp->rva_functions);
+        if (funcTableOff != 0 && exp->num_functions > 0) {
+          auto* funcRVAs = reinterpret_cast<const uint32_t*>(
+              fileBase + funcTableOff);
+          for (uint32_t i = 0; i < exp->num_functions; ++i) {
+            uint32_t rva = funcRVAs[i];
+            if (rva == 0) continue;
+            // Skip forwarded exports: RVA points within the export directory
+            // itself (to an ASCII forwarder string, not code).
+            if (rva >= expDir.rva && rva < expDir.rva + expDir.size) continue;
+            lifter->inlinePolicy.addAddress(imageBase + rva);
+          }
+        }
+      }
+    }
+  }
 
   lifter->blockInfo = BBInfo(runtimeAddress, lifter->bb);
   lifter->unvisitedBlocks.push_back(lifter->blockInfo);

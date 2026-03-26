@@ -1,6 +1,7 @@
 #pragma once
 #include "llvm/IR/Value.h"
 #include <functional>
+#include <cstdint>
 #include <linuxpe>
 #include <llvm/Support/raw_ostream.h>
 #include <string>
@@ -92,6 +93,7 @@ namespace argparser {
     bool showHelp = false;
     bool enableDebug = false;
     bool concretizeUnsafeReads = false;
+    std::vector<uint64_t> outlineAddresses;
     std::vector<std::string> errors;
 
     [[nodiscard]] bool ok() const { return errors.empty(); }

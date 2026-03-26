@@ -32,13 +32,18 @@
 
 
 bool InitFunction_and_LiftInstructions(const uint64_t runtime_address,
-                                       std::vector<uint8_t>&& fileData) {
+                                       std::vector<uint8_t>&& fileData,
+                                       const std::vector<uint64_t>& outlineAddresses) {
   std::string stageError;
   auto stageContext =
       prepareLifterStageContext(runtime_address, fileData, stageError);
   if (!stageContext.has_value()) {
     std::cerr << stageError << std::endl;
     return false;
+  }
+
+  for (const auto addr : outlineAddresses) {
+    stageContext->lifter->inlinePolicy.addAddress(addr);
   }
 
   runLifterPipeline(stageContext->lifter.get(), stageContext->runtimeContext,
@@ -110,5 +115,10 @@ int main(int argc, char* argv[]) {
   const std::string suiteFilter = args.size() > 1 ? args[1] : "";
   return testInit(suiteFilter);
 #endif
-  return runLifterApplication(args, InitFunction_and_LiftInstructions);
+  const auto& outlineAddrs = parseResult.outlineAddresses;
+  return runLifterApplication(args,
+      [&outlineAddrs](uint64_t runtime_address, std::vector<uint8_t>&& fileData) {
+        return InitFunction_and_LiftInstructions(runtime_address,
+                                                  std::move(fileData), outlineAddrs);
+      });
 }
