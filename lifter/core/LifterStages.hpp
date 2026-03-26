@@ -3,6 +3,7 @@
 #include "MemoryPolicySetup.hpp"
 #include "RuntimeImageContext.hpp"
 #include "Utils.h"
+#include <nt/directories/dir_import.hpp>
 #include <nt/directories/dir_export.hpp>
 #include <memory>
 #include <optional>
@@ -46,6 +47,48 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
             // itself (to an ASCII forwarder string, not code).
             if (rva >= expDir.rva && rva < expDir.rva + expDir.size) continue;
             lifter->inlinePolicy.addAddress(imageBase + rva);
+          }
+        }
+      }
+    }
+  }
+
+  // Build import name map: IAT slot VA -> function name.
+  // This enables named CreateCall declarations for outlined import thunks.
+  {
+    auto* dosHdr = reinterpret_cast<win::dos_header_t*>(fileBase);
+    auto* ntHdr  = reinterpret_cast<win::nt_headers_t<true>*>(
+        fileBase + dosHdr->e_lfanew);
+    auto& impDir = ntHdr->optional_header.data_directories.import_directory;
+    if (impDir.size >= sizeof(win::import_directory_t)) {
+      uint64_t imageBase = ntHdr->optional_header.image_base;
+      auto impOff = lifter->file.RvaToFileOffset(impDir.rva);
+      if (impOff != 0) {
+        auto* imports = reinterpret_cast<const win::import_directory_t*>(
+            fileBase + impOff);
+        // Walk import descriptors until the null terminator.
+        for (; imports->rva_name != 0; ++imports) {
+          auto iltOff = lifter->file.RvaToFileOffset(
+              imports->rva_original_first_thunk);
+          auto iatOff = lifter->file.RvaToFileOffset(
+              imports->rva_first_thunk);
+          if (iltOff == 0 || iatOff == 0) continue;
+
+          auto* ilt = reinterpret_cast<const uint64_t*>(fileBase + iltOff);
+          uint32_t iatRva = imports->rva_first_thunk;
+
+          for (size_t i = 0; ilt[i] != 0; ++i) {
+            uint64_t iatSlotVA = imageBase + iatRva + i * 8;
+            // Bit 63 set = import by ordinal, no name available.
+            if (ilt[i] & (1ULL << 63)) continue;
+            // Bits 30:0 = RVA to hint/name entry {uint16_t hint; char name[]}.
+            uint32_t hintNameRva = static_cast<uint32_t>(ilt[i] & 0x7FFFFFFF);
+            auto hnOff = lifter->file.RvaToFileOffset(hintNameRva);
+            if (hnOff == 0) continue;
+            // Skip the 2-byte hint, read the null-terminated name.
+            const char* funcName =
+                reinterpret_cast<const char*>(fileBase + hnOff + 2);
+            lifter->importMap[iatSlotVA] = funcName;
           }
         }
       }
