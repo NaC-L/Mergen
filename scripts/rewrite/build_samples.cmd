@@ -1,75 +1,133 @@
 @echo off
 setlocal
 
+:resolve_workdir
 if "%~1"=="" (
     set "WORKDIR=%~dp0..\..\..\rewrite-regression-work"
-) else (
+ ) else (
     set "WORKDIR=%~1"
-)
+ )
 for %%I in ("%WORKDIR%") do set "WORKDIR=%%~fI"
 
+:ensure_directories
 if not exist "%WORKDIR%" mkdir "%WORKDIR%"
 if not exist "%WORKDIR%\ir_outputs" mkdir "%WORKDIR%\ir_outputs"
 
-set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-if not exist "%VSWHERE%" (
-    echo ERROR: vswhere.exe not found at "%VSWHERE%"
-    exit /b 1
-)
-
-set "VSROOT="
-for /f "usebackq delims=" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
-if not defined VSROOT (
-    echo ERROR: Visual Studio installation with VC tools not found
-    exit /b 1
-)
-
-call "%VSROOT%\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64
-if errorlevel 1 exit /b 1
-
+:resolve_nasm
 set "NASM_BIN="
 if defined NASM_EXE (
     set "NASM_BIN=%NASM_EXE%"
-) else (
+ ) else (
     for /f "usebackq delims=" %%I in (`where nasm 2^>nul`) do (
         set "NASM_BIN=%%I"
         goto found_nasm
     )
-)
-
+ )
 if exist "%~dp0..\..\..\nasm-portable\nasm-3.01\nasm.exe" set "NASM_BIN=%~dp0..\..\..\nasm-portable\nasm-3.01\nasm.exe"
 
 :found_nasm
 if not defined NASM_BIN (
     echo ERROR: NASM not found. Install NASM or set NASM_EXE environment variable.
     exit /b 1
-)
+ )
 
+:resolve_clang
+set "CLANG_CL_BIN="
+if defined CLANG_CL_EXE (
+    set "CLANG_CL_BIN=%CLANG_CL_EXE%"
+ ) else (
+    for /f "usebackq delims=" %%I in (`where clang-cl 2^>nul`) do (
+        set "CLANG_CL_BIN=%%I"
+        goto found_clang
+    )
+ )
+if exist "%~dp0..\..\..\llvm18-install\bin\clang-cl.exe" set "CLANG_CL_BIN=%~dp0..\..\..\llvm18-install\bin\clang-cl.exe"
+if not defined CLANG_CL_BIN if exist "C:\Program Files\LLVM\bin\clang-cl.exe" set "CLANG_CL_BIN=C:\Program Files\LLVM\bin\clang-cl.exe"
+
+:found_clang
+if not defined CLANG_CL_BIN (
+    echo ERROR: clang-cl not found. Install LLVM or set CLANG_CL_EXE.
+    exit /b 1
+ )
+
+:build_asm_samples
 for %%F in ("%~dp0..\..\testcases\rewrite_smoke\*.asm") do (
-    "%NASM_BIN%" -f win64 -gcv8 -o "%WORKDIR%\%%~nF.obj" "%%~fF"
-    if errorlevel 1 exit /b 1
+    call :should_skip_build "%%~fF" "%WORKDIR%\%%~nF.obj" "%WORKDIR%\%%~nF.exe" "%WORKDIR%\%%~nF.map"
+    if not errorlevel 1 (
+        echo SKIP ASM up-to-date: %%~nxF
+    ) else (
+        "%NASM_BIN%" -f win64 -gcv8 -o "%WORKDIR%\%%~nF.obj" "%%~fF"
+        if errorlevel 1 exit /b 1
 
-    link.exe /nologo /entry:start /subsystem:console /out:"%WORKDIR%\%%~nF.exe" /map:"%WORKDIR%\%%~nF.map" "%WORKDIR%\%%~nF.obj" kernel32.lib
-    if errorlevel 1 exit /b 1
-)
+        "%CLANG_CL_BIN%" /nologo "%WORKDIR%\%%~nF.obj" kernel32.lib /link /entry:start /subsystem:console /out:"%WORKDIR%\%%~nF.exe" /map:"%WORKDIR%\%%~nF.map"
+        if errorlevel 1 exit /b 1
+    )
+ )
 
+:build_c_samples_od
 rem --- Compile C test programs (real binaries with CRT) ---
 for %%F in ("%~dp0..\..\testcases\rewrite_smoke\*.c") do (
-    cl.exe /nologo /Od /GS- /c /Fo"%WORKDIR%\%%~nF.obj" "%%~fF"
-    if errorlevel 1 exit /b 1
+    echo %%~nF | findstr /I "_jumptable" >nul
+    if not errorlevel 1 (
+        echo SKIP C /Od pass for jumptable sample: %%~nxF
+    ) else (
+        call :should_skip_build "%%~fF" "%WORKDIR%\%%~nF.obj" "%WORKDIR%\%%~nF.exe" "%WORKDIR%\%%~nF.map"
+        if not errorlevel 1 (
+            echo SKIP C up-to-date: %%~nxF
+        ) else (
+            "%CLANG_CL_BIN%" /nologo /Od /GS- /c /Fo"%WORKDIR%\%%~nF.obj" "%%~fF"
+            if errorlevel 1 exit /b 1
 
-    link.exe /nologo /subsystem:console /out:"%WORKDIR%\%%~nF.exe" /map:"%WORKDIR%\%%~nF.map" "%WORKDIR%\%%~nF.obj"
-    if errorlevel 1 exit /b 1
-)
+            "%CLANG_CL_BIN%" /nologo "%WORKDIR%\%%~nF.obj" /link /subsystem:console /out:"%WORKDIR%\%%~nF.exe" /map:"%WORKDIR%\%%~nF.map"
+            if errorlevel 1 exit /b 1
+        )
+    )
+ )
 
+:build_c_samples_o2
+rem --- Compile jump-table C tests with /O2 (need optimizer for real jmp tables) ---
+for %%F in ("%~dp0..\..\testcases\rewrite_smoke\*_jumptable*.c") do (
+    call :should_skip_build "%%~fF" "%WORKDIR%\%%~nF.obj" "%WORKDIR%\%%~nF.exe" "%WORKDIR%\%%~nF.map"
+    if not errorlevel 1 (
+        echo SKIP C /O2 up-to-date: %%~nxF
+    ) else (
+        "%CLANG_CL_BIN%" /nologo /O2 /GS- /c /Fo"%WORKDIR%\%%~nF.obj" "%%~fF"
+        if errorlevel 1 exit /b 1
+
+        "%CLANG_CL_BIN%" /nologo "%WORKDIR%\%%~nF.obj" /link /subsystem:console /out:"%WORKDIR%\%%~nF.exe" /map:"%WORKDIR%\%%~nF.map"
+        if errorlevel 1 exit /b 1
+    )
+ )
+
+:build_cpp_samples
 rem --- Compile C++ test programs (real binaries with CRT + STL) ---
 for %%F in ("%~dp0..\..\testcases\rewrite_smoke\*.cpp") do (
-    cl.exe /nologo /Od /GS- /EHsc /c /Fo"%WORKDIR%\%%~nF.obj" "%%~fF"
-    if errorlevel 1 exit /b 1
+    call :should_skip_build "%%~fF" "%WORKDIR%\%%~nF.obj" "%WORKDIR%\%%~nF.exe" "%WORKDIR%\%%~nF.map"
+    if not errorlevel 1 (
+        echo SKIP C++ up-to-date: %%~nxF
+    ) else (
+        "%CLANG_CL_BIN%" /nologo /Od /GS- /EHsc /c /Fo"%WORKDIR%\%%~nF.obj" "%%~fF"
+        if errorlevel 1 exit /b 1
 
-    link.exe /nologo /subsystem:console /out:"%WORKDIR%\%%~nF.exe" /map:"%WORKDIR%\%%~nF.map" "%WORKDIR%\%%~nF.obj"
-    if errorlevel 1 exit /b 1
-)
+        "%CLANG_CL_BIN%" /nologo "%WORKDIR%\%%~nF.obj" /link /subsystem:console /out:"%WORKDIR%\%%~nF.exe" /map:"%WORKDIR%\%%~nF.map"
+        if errorlevel 1 exit /b 1
+    )
+ )
 
+:done
 echo Built rewrite regression samples in "%WORKDIR%"
 exit /b 0
+
+:should_skip_build
+set "SRC=%~1"
+set "OBJ=%~2"
+set "EXE=%~3"
+set "MAP=%~4"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$ErrorActionPreference='Stop';" ^
+  "$src=Get-Item -LiteralPath '%SRC%';" ^
+  "$outs=@('%OBJ%','%EXE%','%MAP%');" ^
+  "if(($outs | Where-Object { -not (Test-Path -LiteralPath $_) }).Count -gt 0){ exit 1 };" ^
+  "$latest=($outs | ForEach-Object { (Get-Item -LiteralPath $_).LastWriteTimeUtc } | Sort-Object -Descending | Select-Object -First 1);" ^
+  "if($latest -ge $src.LastWriteTimeUtc){ exit 0 } else { exit 1 }"
+exit /b %errorlevel%

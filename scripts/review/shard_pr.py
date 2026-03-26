@@ -105,7 +105,7 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     repo_root = args.repo_root.resolve()
-    if args.paths:
+    if args.paths is not None:
         changed_paths = [normalize_path(path) for path in args.paths]
     else:
         changed_paths = load_changed_paths(repo_root, args.base, args.head)

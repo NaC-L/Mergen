@@ -17,6 +17,7 @@ FULL_VECTORS = ROOT / "lifter" / "test" / "test_vectors" / "oracle_vectors_full_
 DEFAULT_VECTORS = ROOT / "lifter" / "test" / "test_vectors" / "oracle_vectors.json"
 IR_OUTPUT_DIR = ROOT.parent / "rewrite-regression-work" / "ir_outputs"
 GOLDEN_HASHES_FILE = ROOT / "lifter" / "test" / "test_vectors" / "golden_ir_hashes.json"
+SEMANTIC_SCRIPT = REWRITE_DIR / "check_semantic.py"
 
 
 def _run(argv: List[str], extra_env: Dict[str, str] | None = None) -> None:
@@ -186,6 +187,15 @@ def run_report(vectors_file: Path, as_json: bool) -> None:
     _run([sys.executable, str(REWRITE_DIR / "report_coverage.py")] + args)
 
 
+def run_semantic(filters: List[str] | None = None, input_ir: Path | None = None) -> None:
+    args = [sys.executable, str(SEMANTIC_SCRIPT), "--ir-dir", str(IR_OUTPUT_DIR)]
+    if filters:
+        args.extend(["--filter"] + filters)
+    if input_ir is not None:
+        args.extend(["--input-ir", str(input_ir)])
+    _run(args)
+
+
 def run_negative_checks() -> None:
     lifter_path = ROOT / "build_iced" / "lifter.exe"
     if not lifter_path.exists():
@@ -347,6 +357,9 @@ def parse_args() -> argparse.Namespace:
     report_cmd = sub.add_parser("report", help="print handler test coverage report")
     report_cmd.add_argument("--json", action="store_true", help="output as JSON")
     report_cmd.add_argument("--vectors", type=Path, default=None, help="explicit vectors file")
+    semantic = sub.add_parser("semantic", help="run runtime semantic regression for all samples")
+    semantic.add_argument("--input-ir", type=Path, default=None, help="override IR file (single sample)")
+    semantic.add_argument("filter", nargs="*", help="optional sample name filter tokens")
     return parser.parse_args()
 
 
@@ -399,12 +412,18 @@ def main() -> None:
         run_report(vectors_file, args.json)
         return
 
+    if command == "semantic":
+        run_semantic(args.filter, args.input_ir)
+        return
+
+
     if command == "flags":
         run_flagstress(args.filter)
         return
 
     if command == "all":
         run_baseline()
+        run_semantic()
         run_full(check_flags=True)
         if not args.no_coverage:
             run_coverage(FULL_VECTORS)
@@ -412,6 +431,7 @@ def main() -> None:
 
     if command == "quick":
         run_baseline()
+        run_semantic()
         run_micro([], check_flags=True, regenerate_oracle=False)
         return
 

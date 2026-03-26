@@ -1,17 +1,6 @@
 @echo off
 setlocal
 
-call "%~dp0..\dev\build_iced.cmd"
-if errorlevel 1 exit /b 1
-
-set "CMAKE_EXE=%ProgramFiles%\CMake\bin\cmake.exe"
-if not exist "%CMAKE_EXE%" (
-    echo ERROR: CMake executable not found at "%CMAKE_EXE%"
-    exit /b 1
-)
-
-"%CMAKE_EXE%" --build "%~dp0..\..\build_iced" --target rewrite_microtests
-if errorlevel 1 exit /b 1
 
 set "FULL_SEED=%~dp0oracle_seed_full_handlers.json"
 set "ENRICHED_SEED=%~dp0oracle_seed_full_handlers_enriched.json"

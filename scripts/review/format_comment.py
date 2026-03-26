@@ -9,19 +9,19 @@ from typing import Any
 
 _SEVERITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 
-_STATUS_ICON = {"PASS": "\u2705", "FAIL": "\u274c", "SKIP": "\u23ed\ufe0f"}
+_STATUS_ICON = {"PASS": "\u2705", "FAIL": "\u274c", "SKIP": "\u23ed\ufe0f", "BLOCKED": "\u26d4"}
 
 
 def _verdict(payload: dict[str, Any]) -> str:
     """Determine review verdict from invariant results and verification runs.
 
-    FAIL in either → request_changes.  Otherwise → approve.
+    FAIL or BLOCKED in either → request_changes.  Otherwise → approve.
     """
     for result in payload.get("invariant_results", []):
         if str(result.get("status", "")).upper() == "FAIL":
             return "request_changes"
     for run in payload.get("verification_runs", []):
-        if str(run.get("status", "")).upper() == "FAIL":
+        if str(run.get("status", "")).upper() in {"FAIL", "BLOCKED"}:
             return "request_changes"
     return "approve"
 

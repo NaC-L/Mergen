@@ -16,7 +16,7 @@ These rules are for PR review of this repository. They are intentionally strict 
    - `git diff --name-status <base>...<head>`
 2. **Review by subsystem bucket** (core, disasm/semantics, rewrite scripts, vectors, build scripts, docs)
 3. **Inspect each bucket deeply**
-   - `git diff -- <files>`
+   - `git diff <base>...<head> -- <files>`
    - read surrounding context for changed hunks
 4. **Run targeted verification** (see matrix below)
 5. **Report findings with evidence**
@@ -124,7 +124,7 @@ Verification run:
 
 ```bat
 git diff --name-status main...<branch>
-git diff -- main...<branch> -- <path>
+git diff main...<branch> -- <path>
 python test.py negative
 python test.py baseline
 python test.py micro --check-flags
