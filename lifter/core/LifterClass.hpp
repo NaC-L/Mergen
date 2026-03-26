@@ -1,6 +1,7 @@
 #ifndef LIFTERCLASSBASE_H
 #define LIFTERCLASSBASE_H
 #include "CommonDisassembler.hpp"
+#include "AbiCallContract.hpp"
 #include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
 #include "InlinePolicy.hpp"
@@ -286,6 +287,78 @@ public:
   MemoryPolicy memoryPolicy;
   FunctionInlinePolicy inlinePolicy;
 
+  // ABI call-boundary configuration.
+  // Strict: clobber volatile regs after non-inlineable calls (ABI-correct).
+  // Compat: preserve all registers (legacy behavior, for diagnostics only).
+  CallModelMode callModelMode = CallModelMode::Strict;
+  AbiKind       defaultAbi    = AbiKind::Unknown; // auto-detected from arch mode
+
+  // Returns the effective ABI for this binary. If defaultAbi is Unknown,
+  // infers from file mode.
+  AbiKind getEffectiveAbi() {
+    if (defaultAbi != AbiKind::Unknown) return defaultAbi;
+    return (file.getMode() == arch_mode::X64) ? AbiKind::X64_MSVC
+                                                : AbiKind::X86_CDECL;
+  }
+
+  // Build CallEffects for an unknown call target using current config.
+  CallEffects<Register> buildUnknownCallFx() {
+    return abi::buildUnknownCallEffects<Register>(getEffectiveAbi(),
+                                                  callModelMode);
+  }
+
+  // Import thunk detection for auto-outline policy.
+  // Detects `jmp [rip+disp32]` (FF 25) thunks that read from the IAT.
+  // Returns true if targetVA is an import thunk that should be outlined.
+  bool isImportThunk(uint64_t targetVA) {
+    // Read the first 6 bytes at the target address.
+    uint64_t mapped = file.address_to_mapped_address(targetVA);
+    if (mapped == 0) return false;
+    auto* bytes = reinterpret_cast<const uint8_t*>(mapped);
+
+    // Check for `jmp [rip+disp32]` = FF 25 xx xx xx xx
+    if (bytes[0] != 0xFF || bytes[1] != 0x25) return false;
+
+    // Decode RIP-relative displacement (next instruction is target + 6).
+    int32_t disp;
+    std::memcpy(&disp, bytes + 2, 4);
+    uint64_t iatSlot = targetVA + 6 + disp;
+
+    // Verify the IAT slot points outside the binary by reading its value.
+    uint64_t importAddr = 0;
+    if (!file.readMemory(iatSlot, 8, importAddr)) return false;
+
+    // If the target address is not mapped in the PE, it's an external import.
+    uint64_t externalMapped = file.address_to_mapped_address(importAddr);
+    return externalMapped == 0;
+  }
+
+  // Returns true if the target should be outlined instead of inlined.
+  bool shouldOutlineCall(uint64_t targetVA) {
+    return isImportThunk(targetVA);
+  }
+
+  // ── Speculative call inlining with rollback ──────────────────────
+  //
+  // When the lifter encounters a `call` to a constant in-binary target,
+  // it tries to inline the callee (Unflatten path). But if the callee
+  // is too complex (statically-linked library, deep STL code), inlining
+  // explodes. Speculative inlining sets a budget: if the callee exceeds
+  // it, the lifter bails out and emits CreateCall + ABI effects instead.
+  //
+  // The return continuation BB is pre-created with a backup of the
+  // pre-call state. On bail-out, the worklist resumes from that BB.
+
+  struct SpeculativeCallInfo {
+    bool     active         = false;
+    uint64_t returnAddr     = 0;      // instruction after the call
+    size_t   worklistFloor  = 0;      // worklist size before inlining
+    bool     bailedOut      = false;   // set when budget exhausted
+  };
+  SpeculativeCallInfo speculativeCall;
+  uint32_t speculativeCallBudget    = 0;   // instructions remaining (0 = inactive)
+  uint32_t maxCallInlineBudget      = 0;   // 0 = disabled (no speculative limit)
+
   void runDisassembler(const void* buffer, size_t size = 15) {
 
     instruction = dis.disassemble(buffer, size);
@@ -370,6 +443,37 @@ public:
     printvalue2(this->run);
     this->run = 1;
     while (this->finished == 0 && this->run) {
+      // Speculative call budget check: bail if callee is too complex.
+      if (speculativeCall.active && speculativeCallBudget > 0) {
+        speculativeCallBudget--;
+        if (speculativeCallBudget == 0) {
+          // Budget exhausted — abandon speculative inline.
+          if (!builder->GetInsertBlock()->getTerminator()) {
+            builder->CreateUnreachable();
+          }
+          run = 0;
+          speculativeCall.bailedOut = true;
+          speculativeCall.active = false;
+
+          // Trim worklist: remove all callee blocks pushed since the call.
+          unvisitedBlocks.resize(speculativeCall.worklistFloor);
+
+          // Push the return continuation BB onto the worklist.
+          auto it = addrToBB.find(speculativeCall.returnAddr);
+          if (it != addrToBB.end()) {
+            BBInfo retInfo(speculativeCall.returnAddr, it->second);
+            unvisitedBlocks.push_back(retInfo);
+          }
+
+          std::cout << "[call-abi] speculative inline bail-out at 0x"
+                    << std::hex << (addr) << std::dec
+                    << ", resuming at 0x" << std::hex
+                    << speculativeCall.returnAddr << std::dec
+                    << "\n" << std::flush;
+          return;
+        }
+      }
+
       auto currentblock = builder->GetInsertBlock()->getName();
       printvalue2(currentblock);
       liftAddress(addr);
@@ -776,6 +880,10 @@ public:
   llvm::FunctionType*
   parseArgsType(funcsignatures<Register>::functioninfo* funcInfo,
                 llvm::LLVMContext& context);
+
+  // Apply post-call ABI effects: write return value, clobber volatile regs.
+  void applyPostCallEffects(llvm::Value* callResult,
+                            const CallEffects<Register>& fx);
 
   llvm::Value* computeSignFlag(Value* value);
   llvm::Value* computeZeroFlag(Value* value);

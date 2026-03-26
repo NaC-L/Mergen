@@ -1,43 +1,53 @@
 // Semantics_Helpers.ipp — Flag computation, branch helper, call support
+
+// GPR order used for unknown-call argument passing (compat mode).
+// This is the canonical x64 GPR ordering without duplicates.
+// The memory pointer is appended separately.
+template <typename Register>
+static constexpr std::array<Register, 16> kAllGPROrder = {
+    Register::RAX, Register::RCX, Register::RDX, Register::RBX,
+    Register::RSP, Register::RBP, Register::RSI, Register::RDI,
+    Register::R8,  Register::R9,  Register::R10, Register::R11,
+    Register::R12, Register::R13, Register::R14, Register::R15,
+};
+
 MERGEN_LIFTER_DEFINITION_TEMPLATES(FunctionType*)::parseArgsType(
     funcsignatures<Register>::functioninfo* funcInfo, LLVMContext& context) {
   if (!funcInfo) {
-    FunctionType* externFuncType = FunctionType::get(
-        Type::getInt64Ty(context),
-        {llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context),
-         llvm::Type::getInt64Ty(context), llvm::Type::getInt64Ty(context)},
-        false);
+    // Unknown call: build type from ABI config.
+    //
+    // Compat mode: 16 GPRs (i64) + memory ptr = 17 args, returns i64.
+    // Strict mode: only ABI arg registers + memory ptr, returns i64.
+    //
+    // Both modes include the memory pointer as the final argument
+    // so the callee can model memory side effects.
+    const auto fx = this->buildUnknownCallFx();
+    std::vector<llvm::Type*> argTypes;
 
-    return externFuncType;
+    if (this->callModelMode == CallModelMode::Compat) {
+      // Pass all 16 GPRs for maximum information preservation.
+      argTypes.assign(16, llvm::Type::getInt64Ty(context));
+    } else {
+      // Strict: only ABI argument registers.
+      argTypes.assign(fx.argRegs.size(), llvm::Type::getInt64Ty(context));
+    }
+    // Memory pointer (always last).
+    argTypes.push_back(llvm::PointerType::get(context, 0));
+
+    return FunctionType::get(Type::getInt64Ty(context), argTypes, false);
   }
+
+  // Known function: build type from funcInfo arg descriptors.
   std::vector<llvm::Type*> argTypes;
   for (const auto& arg : funcInfo->args) {
     unsigned bitWidth = 64;
     switch (static_cast<ArgType>(arg.argtype.size)) {
-    case ArgType::I8:
-      bitWidth = 8;
-      break;
-    case ArgType::I16:
-      bitWidth = 16;
-      break;
-    case ArgType::I32:
-      bitWidth = 32;
-      break;
-    case ArgType::I64:
-      bitWidth = 64;
-      break;
-    case ArgType::I128:
-      bitWidth = 128;
-      break;
-    default:
-      bitWidth = 64;
-      break;
+    case ArgType::I8:   bitWidth = 8;   break;
+    case ArgType::I16:  bitWidth = 16;  break;
+    case ArgType::I32:  bitWidth = 32;  break;
+    case ArgType::I64:  bitWidth = 64;  break;
+    case ArgType::I128: bitWidth = 128; break;
+    default:            bitWidth = 64;  break;
     }
 
     llvm::Type* type = llvm::Type::getIntNTy(context, bitWidth);
@@ -55,106 +65,116 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(std::vector<Value*>)::parseArgs(
     funcsignatures<Register>::functioninfo* funcInfo) {
   auto& context = builder->getContext();
 
-  auto RspRegister = GetRegisterValue(Register::RSP);
-  if (!funcInfo)
-    return {createZExtFolder(GetRegisterValue(Register::RAX),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RCX),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RDX),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RBX),
-                             Type::getInt64Ty(context)),
-            RspRegister,
-            createZExtFolder(GetRegisterValue(Register::RBP),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RSI),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RDI),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::RDI),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R8),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R9),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R10),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R11),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R12),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R13),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R14),
-                             Type::getInt64Ty(context)),
-            createZExtFolder(GetRegisterValue(Register::R15),
-                             Type::getInt64Ty(context)),
-            memoryAlloc};
+  if (!funcInfo) {
+    // Unknown call: build arg list from ABI config.
+    const auto fx = this->buildUnknownCallFx();
+    std::vector<Value*> args;
 
+    if (this->callModelMode == CallModelMode::Compat) {
+      // Compat: pass all 16 GPRs in canonical order (no duplicates).
+      for (auto reg : kAllGPROrder<Register>) {
+        args.push_back(
+            createZExtFolder(GetRegisterValue(reg),
+                             Type::getInt64Ty(context)));
+      }
+    } else {
+      // Strict: only ABI argument registers.
+      for (auto reg : fx.argRegs) {
+        args.push_back(
+            createZExtFolder(GetRegisterValue(reg),
+                             Type::getInt64Ty(context)));
+      }
+    }
+    // Memory pointer (always last).
+    args.push_back(memoryAlloc);
+    return args;
+  }
+
+  // Known function: build args from funcInfo descriptors.
   std::vector<Value*> args;
   for (const auto& arg : funcInfo->args) {
     Value* argValue = GetRegisterValue(arg.reg);
 
     unsigned bitWidth = 64;
     switch (static_cast<ArgType>(arg.argtype.size)) {
-    case ArgType::I8:
-      bitWidth = 8;
-      break;
-    case ArgType::I16:
-      bitWidth = 16;
-      break;
-    case ArgType::I32:
-      bitWidth = 32;
-      break;
-    case ArgType::I64:
-      bitWidth = 64;
-      break;
-    case ArgType::I128:
-      bitWidth = 128;
-      break;
-    default:
-      bitWidth = 64;
-      break;
+    case ArgType::I8:   bitWidth = 8;   break;
+    case ArgType::I16:  bitWidth = 16;  break;
+    case ArgType::I32:  bitWidth = 32;  break;
+    case ArgType::I64:  bitWidth = 64;  break;
+    case ArgType::I128: bitWidth = 128; break;
+    default:            bitWidth = 64;  break;
     }
 
     argValue =
         createZExtOrTruncFolder(argValue, Type::getIntNTy(context, bitWidth));
     if (arg.argtype.isPtr)
       argValue = getPointer(argValue);
-    //  now convert to pointer if its a pointer
     args.push_back(argValue);
   }
   return args;
 }
 
-// probably move this stuff somewhere else
+// Apply post-call ABI effects after a CreateCall for an external/unknown target.
+// In compat mode: only assign return value (RAX = call result).
+// In strict mode: assign return value + clobber all volatile registers.
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::applyPostCallEffects(
+    Value* callResult, const CallEffects<Register>& fx) {
+  auto& context = builder->getContext();
+
+  // 1. Assign return value to the ABI return register(s).
+  //    For x64 MSVC and all x86 CCs, the primary return register is RAX.
+  if (!fx.retRegs.empty()) {
+    auto retReg = *fx.retRegs.begin();
+    auto retVal = createZExtOrTruncFolder(
+        callResult,
+        Type::getIntNTy(context,
+                        file.getMode() == arch_mode::X64 ? 64 : 32));
+    SetRegisterValue(retReg, retVal);
+  }
+
+  // 2. Clobber volatile registers (strict mode only).
+  //    Write UndefValue to each volatile register to model the fact that
+  //    the callee may have destroyed their contents.
+  //    Skip registers that are also return registers (already written above).
+  for (auto reg : fx.volatileRegs) {
+    if (fx.retRegs.contains(reg))
+      continue;
+    auto undef = llvm::UndefValue::get(
+        Type::getIntNTy(context,
+                        file.getMode() == arch_mode::X64 ? 64 : 32));
+    SetRegisterValue(reg, undef);
+  }
+
+  // 3. Memory effects.
+  //    MayReadWrite: no action needed in the current memory model (the
+  //    memory pointer is passed to the callee and any alias analysis
+  //    already treats external calls as opaque).
+  //    Preserve: no action needed (default).
+}
+
+// Called for known-name function calls (imports, signature-matched).
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::callFunctionIR(
     const std::string& functionName,
     funcsignatures<Register>::functioninfo* funcInfo) {
   auto& context = builder->getContext();
 
   if (!funcInfo) {
-    // try to get funcinfo from name
     funcInfo = signatures.getFunctionInfo(functionName);
   }
   FunctionType* externFuncType = parseArgsType(funcInfo, context);
   auto M = builder->GetInsertBlock()->getParent()->getParent();
 
-  // what about ordinals???????
   Function* externFunc = cast<Function>(
       M->getOrInsertFunction(functionName, externFuncType).getCallee());
-  // fix calling
   std::vector<Value*> args = parseArgs(funcInfo);
   auto callresult = builder->CreateCall(externFunc, args);
 
-  SetRegisterValue(Register::RAX,
-                   callresult); // rax = externalfunc()
-  /*
-  SetRegisterValueWrapper(Register::RAX,
-                   builder->getInt64(1337)); // rax = externalfunc()
-  */
-  // check if the function is exit or something similar to that
+  // Build call effects for the known call.
+  // Known calls use the same ABI but with KnownByName target class.
+  auto fx = this->buildUnknownCallFx();
+  fx.target = CallTargetClass::KnownByName;
+  applyPostCallEffects(callresult, fx);
+
   return callresult;
 }
 

@@ -17,10 +17,45 @@ inline void runLiftWorklist(lifterConcolic<>* lifter) {
     lifter->load_backup(bbinfo.block);
     lifter->finished = 0;
 
+    // Speculative call bail-out: the callee exceeded the inline budget.
+    // This BB is the return continuation with pre-call state restored.
+    // Emit CreateCall + ABI effects, then continue lifting normally.
+    if (lifter->speculativeCall.bailedOut &&
+        bbinfo.block_address == lifter->speculativeCall.returnAddr) {
+      lifter->speculativeCall.bailedOut = false;
+
+      lifter->builder->SetInsertPoint(bbinfo.block);
+
+      // Emit an opaque call representing the outlined callee.
+      auto& context = lifter->builder->getContext();
+      auto fx = lifter->buildUnknownCallFx();
+      fx.target = CallTargetClass::UnknownDirect;
+
+      // The call target is unknown (we bailed out of inlining it).
+      // Use a poison-ish constant so the IR shows what happened.
+      auto* callTarget = llvm::ConstantInt::get(
+          llvm::Type::getInt64Ty(context), 0xBA11ED);  // "bailed"
+      auto* callPtr = lifter->builder->CreateIntToPtr(
+          callTarget, llvm::PointerType::get(context, 0));
+
+      auto* callResult = lifter->builder->CreateCall(
+          lifter->parseArgsType(nullptr, context), callPtr,
+          lifter->parseArgs(nullptr));
+
+      lifter->applyPostCallEffects(callResult, fx);
+
+      abi::printCallEffectsDiag(fx, bbinfo.block_address);
+      std::cout << "[call-abi] outlined via speculative bail-out\n"
+                << std::flush;
+
+      // Now continue lifting from the return address normally.
+    } else {
+      lifter->builder->SetInsertPoint(bbinfo.block);
+    }
+
     auto nextBlockName = bbinfo.block->getName();
     printvalue2(nextBlockName);
 
-    lifter->builder->SetInsertPoint(bbinfo.block);
     lifter->liftBasicBlockFromAddress(bbinfo.block_address);
   }
 
