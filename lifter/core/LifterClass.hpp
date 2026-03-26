@@ -334,6 +334,28 @@ public:
     return externalMapped == 0;
   }
 
+  // Import name resolution map: IAT slot VA -> import function name.
+  // Built from PE import directory at setup. Used to emit named
+  // function declarations instead of opaque inttoptr calls.
+  std::unordered_map<uint64_t, std::string> importMap;
+
+  // If targetVA is an import thunk, returns the import name.
+  // Otherwise returns empty string.
+  std::string resolveImportName(uint64_t targetVA) {
+    uint64_t mapped = file.address_to_mapped_address(targetVA);
+    if (mapped == 0) return {};
+    auto* bytes = reinterpret_cast<const uint8_t*>(mapped);
+    if (bytes[0] != 0xFF || bytes[1] != 0x25) return {};
+
+    int32_t disp;
+    std::memcpy(&disp, bytes + 2, 4);
+    uint64_t iatSlot = targetVA + 6 + disp;
+
+    auto it = importMap.find(iatSlot);
+    if (it != importMap.end()) return it->second;
+    return {};
+  }
+
   // Returns true if the target should be outlined instead of inlined.
   bool shouldOutlineCall(uint64_t targetVA) {
     return isImportThunk(targetVA);
