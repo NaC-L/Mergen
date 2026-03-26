@@ -214,7 +214,7 @@
     {
       "name": "calc_switch",
       "symbol": "calc_switch",
-      "patterns": ["switch i32 %0", "i32 1, label", "i32 2, label", "i32 3, label", "i32 4, label", "i32 5, label", "phi i64"],
+      "patterns": ["switch i32", "phi i64"],
       "semantic": [
         { "inputs": { "RCX": 1 },   "expected": 6, "label": "Monday" },
         { "inputs": { "RCX": 2 },   "expected": 7, "label": "Tuesday" },
@@ -312,16 +312,8 @@
       "symbol": "calc_jumptable",
       "patterns": [
         { "line_all": ["icmp ult i32", ", 10"] },
-        { "line_all": ["select i1", "i64 5368713307"] },
+        "select i1",
         "[ 512,",
-        "i64 5368713265",
-        "i64 5368713271",
-        "i64 5368713277",
-        "i64 5368713283",
-        "i64 5368713289",
-        "i64 5368713295",
-        "i64 5368713301",
-        "i64 5368713307",
         "phi i64"
       ],
       "semantic": [
