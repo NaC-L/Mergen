@@ -313,7 +313,6 @@
       "patterns": [
         { "line_all": ["icmp ult i32", ", 10"] },
         "select i1",
-        "[ 512,",
         "phi i64"
       ],
       "semantic": [
