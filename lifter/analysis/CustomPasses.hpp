@@ -98,11 +98,10 @@ public:
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
     bool hasChanged = false;
-    llvm::Value* stackMemory = nullptr;
 
     for (auto& F : M) {
       llvm::Value* memory = mem;
-
+      llvm::Value* stackMemory = nullptr;
       // --- Pass 1: scan all stack GEPs to find the actual offset range ---
       uint64_t min_offset = STACKP_VALUE;
       uint64_t max_offset = 0;

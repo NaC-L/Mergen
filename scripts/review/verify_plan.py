@@ -67,7 +67,7 @@ def _docs_only(paths: list[str]) -> bool:
     return bool(paths) and all(path.lower().endswith(".md") for path in paths)
 
 
-def _build_plan(paths: list[str], include_invariant_guard: bool) -> list[PlannedCheck]:
+def build_plan(paths: list[str], include_invariant_guard: bool) -> list[PlannedCheck]:
     grouped = bucket_paths(paths)
     ordered_buckets = bucket_order(grouped.keys())
 
@@ -92,7 +92,7 @@ def _build_plan(paths: list[str], include_invariant_guard: bool) -> list[Planned
     return planned
 
 
-def _run_plan(plan: list[PlannedCheck], repo_root: Path, fail_fast: bool) -> list[dict]:
+def run_plan(plan: list[PlannedCheck], repo_root: Path, fail_fast: bool) -> list[dict]:
     run_results: list[dict] = []
 
     for item in plan:
@@ -215,16 +215,16 @@ def main() -> None:
     args = _parse_args()
     repo_root = args.repo_root.resolve()
 
-    if args.paths:
+    if args.paths is not None:
         changed_paths = [normalize_path(path) for path in args.paths]
     else:
         changed_paths = load_changed_paths(repo_root, args.base, args.head)
 
-    plan = _build_plan(changed_paths, include_invariant_guard=not args.no_invariant_guard)
+    plan = build_plan(changed_paths, include_invariant_guard=not args.no_invariant_guard)
 
     run_results = None
     if args.run:
-        run_results = _run_plan(plan, repo_root=repo_root, fail_fast=args.fail_fast)
+        run_results = run_plan(plan, repo_root=repo_root, fail_fast=args.fail_fast)
 
     payload = _plan_payload(changed_paths, plan, run_results)
 
