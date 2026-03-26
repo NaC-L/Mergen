@@ -285,6 +285,7 @@ public:
 
   Disassembler dis;
   MemoryPolicy memoryPolicy;
+  uint64_t stackReserve = 0x1000; // clamped reserve, set by configureDefaultMemoryPolicy
   FunctionInlinePolicy inlinePolicy;
 
   // ABI call-boundary configuration.
@@ -543,7 +544,7 @@ public:
   llvm::BasicBlock* lastBB = nullptr;
   unsigned int BIlistsize = 0;
 
-  std::map<int64_t, int64_t> pageMap;
+  std::map<uint64_t, uint64_t> pageMap;
   std::vector<llvm::BranchInst*> BIlist;
 
   // Set by branchHelper after resolving a conditional branch.
@@ -909,21 +910,17 @@ public:
     BIlist.push_back(BI);
   }
 
-  void markMemPaged(const int64_t start, const int64_t end) {
-    //
+  void markMemPaged(uint64_t start, uint64_t end) {
     pageMap[start] = end;
   }
 
-  bool isMemPaged(const int64_t address) {
-
+  bool isMemPaged(uint64_t address) {
     auto it = pageMap.upper_bound(address);
     if (it == pageMap.begin())
       return false;
 
     --it;
-
-    auto rs = address >= it->first && address < it->second;
-    return rs;
+    return address >= it->first && address < it->second;
   }
 
   std::set<llvm::APInt, APIntComparator>
