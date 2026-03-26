@@ -2,6 +2,7 @@
 #include "llvm/IR/Value.h"
 #include <chrono>
 #include <iostream>
+#include <sstream>
 #include <llvm/Analysis/ValueLattice.h>
 #include <llvm/Support/KnownBits.h>
 #include <map>
@@ -125,6 +126,7 @@ void printHelp() {
             << "  -h, --help                Display this help message\n"
             << "  --concretize-unsafe-reads Concretizes potentially unsafe "
                "reads to writable sections\n"
+            << "  --outline <addrs>         Comma-separated addresses to outline (not inline)\n"
             << "  --                        Stop option parsing\n";
 }
 
@@ -158,6 +160,28 @@ ParseResult parseArguments(const std::vector<std::string>& args,
       }
       if (arg == "--concretize-unsafe-reads") {
         result.concretizeUnsafeReads = true;
+        continue;
+      }
+      if (arg == "--outline" || arg.rfind("--outline=", 0) == 0) {
+        std::string value;
+        if (arg.size() > 10 && arg[9] == '=') {
+          value = arg.substr(10);
+        } else if (index + 1 < args.size()) {
+          value = args[++index];
+        } else {
+          result.errors.push_back("--outline requires an argument");
+          continue;
+        }
+        std::istringstream stream(value);
+        std::string token;
+        while (std::getline(stream, token, ',')) {
+          if (token.empty()) continue;
+          try {
+            result.outlineAddresses.push_back(std::stoull(token, nullptr, 0));
+          } catch (const std::exception&) {
+            result.errors.push_back("Invalid outline address: " + token);
+          }
+        }
         continue;
       }
 
