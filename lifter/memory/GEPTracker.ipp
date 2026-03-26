@@ -450,7 +450,7 @@ using pvalueset = std::set<APInt, APIntComparator>;
 MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
     const llvm::KnownBits& known, unsigned max_unknown) {
 
-  if ((max_unknown == 0) || (max_unknown >= 8)) {
+  if ((max_unknown == 0) || (max_unknown >= 10)) {
     debugging::doIfDebug([&]() {
       std::string Filename = "output_too_many_unk.ll";
       std::error_code EC;
@@ -460,7 +460,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::getPossibleValues(
     printvalueforce2(max_unknown);
     // Graceful bail: return empty set so caller treats this as PATH_unsolved.
     // max_unknown==0 means contradictory analysis (no solutions exist).
-    // max_unknown>=8 means too many unknowns (2^N blowup, >128 values).
+    // max_unknown>=10 means too many unknowns (2^N blowup, >512 values).
     return {};
   }
   llvm::APInt base = known.One;
@@ -717,8 +717,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
     printvalue2(op2_unknownbits_count);
     printvalue2(total_unknownbits_count);
 
-    if ((res_unknownbits_count >= total_unknownbits_count) &&
-        res_unknownbits_count != 1) {
+    // Recurse into operands when the result has more than 1 unknown bit.
+    // The old heuristic (res >= total) incorrectly skipped recursion for
+    // instructions like SHL that reduce unknowns slightly (e.g. 31 vs 32),
+    // causing the fallthrough to getPossibleValues which bails on >budget
+    // unknowns.  Depth limit (16) and memoization bound the recursion.
+    if (res_unknownbits_count > 1) {
       auto v1 = computePossibleValues(op1, Depth + 1);
       auto v2 = computePossibleValues(op2, Depth + 1);
 
@@ -773,30 +777,293 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
       return valueExtractedFromVirtualStack;
     }
   } else {
-    // Get possible values from loadOffset
+    auto stripIntegerCasts = [](Value* candidate) -> Value* {
+      while (auto* castInst = dyn_cast<CastInst>(candidate)) {
+        auto* srcTy = castInst->getOperand(0)->getType();
+        auto* dstTy = castInst->getType();
+        if (!srcTy->isIntegerTy() || !dstTy->isIntegerTy()) {
+          break;
+        }
+        candidate = castInst->getOperand(0);
+      }
+      return candidate;
+    };
 
-    if (isa<SelectInst>(loadOffset)) { // dyn_cast
-      auto select_inst = cast<SelectInst>(loadOffset);
-      if (isa<ConstantInt>(select_inst->getTrueValue()) &&
-          isa<ConstantInt>(select_inst->getFalseValue()))
-        // we should be able to do this whether
-        // this is a constant or not
-        return createSelectFolder(
-            select_inst->getCondition(),
-            retrieveCombinedValue(
-                cast<ConstantInt>(select_inst->getTrueValue())->getZExtValue(),
-                cloadsize, load),
-            retrieveCombinedValue(
-                cast<ConstantInt>(select_inst->getFalseValue())->getZExtValue(),
-                cloadsize, load));
-    }
+    auto matchIndexEqualsConst = [&](Value* condValue, Value* expectedIndex,
+                                     uint64_t& equalValueOut) -> bool {
+      auto* icmp = dyn_cast<ICmpInst>(condValue);
+      if (!icmp || icmp->getPredicate() != CmpInst::ICMP_EQ) {
+        return false;
+      }
+
+      auto* lhs = stripIntegerCasts(icmp->getOperand(0));
+      auto* rhs = stripIntegerCasts(icmp->getOperand(1));
+
+      if (lhs == expectedIndex) {
+        if (auto* rhsCI = dyn_cast<ConstantInt>(rhs)) {
+          equalValueOut = rhsCI->getZExtValue();
+          return true;
+        }
+      }
+      if (rhs == expectedIndex) {
+        if (auto* lhsCI = dyn_cast<ConstantInt>(lhs)) {
+          equalValueOut = lhsCI->getZExtValue();
+          return true;
+        }
+      }
+
+      auto matchSubEqZero = [&](Value* subCandidate, Value* zeroCandidate) -> bool {
+        auto* subInst = dyn_cast<BinaryOperator>(subCandidate);
+        auto* zeroCI = dyn_cast<ConstantInt>(zeroCandidate);
+        if (!subInst || subInst->getOpcode() != Instruction::Sub || !zeroCI ||
+            !zeroCI->isZero()) {
+          return false;
+        }
+
+        auto* subLHS = stripIntegerCasts(subInst->getOperand(0));
+        auto* subRHS = stripIntegerCasts(subInst->getOperand(1));
+        if (subLHS == expectedIndex) {
+          if (auto* rhsCI = dyn_cast<ConstantInt>(subRHS)) {
+            equalValueOut = rhsCI->getZExtValue();
+            return true;
+          }
+        }
+        if (subRHS == expectedIndex) {
+          if (auto* lhsCI = dyn_cast<ConstantInt>(subLHS)) {
+            equalValueOut = lhsCI->getZExtValue();
+            return true;
+          }
+        }
+        return false;
+      };
+
+      return matchSubEqZero(lhs, rhs) || matchSubEqZero(rhs, lhs);
+    };
+
+    auto matchIndexUpperBound =
+        [&](auto&& self, Value* condValue, Value* expectedIndex,
+            uint64_t& upperInclusiveOut) -> bool {
+      auto* icmp = dyn_cast<ICmpInst>(condValue);
+      if (icmp) {
+        auto pred = icmp->getPredicate();
+        auto* lhs = stripIntegerCasts(icmp->getOperand(0));
+        auto* rhs = stripIntegerCasts(icmp->getOperand(1));
+
+        if (rhs == expectedIndex && lhs != expectedIndex) {
+          pred = CmpInst::getSwappedPredicate(pred);
+          std::swap(lhs, rhs);
+        }
+        if (lhs != expectedIndex) {
+          return false;
+        }
+
+        auto* rhsCI = dyn_cast<ConstantInt>(rhs);
+        if (!rhsCI) {
+          return false;
+        }
+
+        switch (pred) {
+        case CmpInst::ICMP_ULT:
+          if (rhsCI->isZero()) {
+            return false;
+          }
+          upperInclusiveOut = rhsCI->getZExtValue() - 1;
+          return true;
+        case CmpInst::ICMP_ULE:
+          upperInclusiveOut = rhsCI->getZExtValue();
+          return true;
+        case CmpInst::ICMP_SLT: {
+          int64_t signedBound = rhsCI->getSExtValue();
+          if (signedBound <= 0) {
+            return false;
+          }
+          upperInclusiveOut = static_cast<uint64_t>(signedBound - 1);
+          return true;
+        }
+        case CmpInst::ICMP_SLE: {
+          int64_t signedBound = rhsCI->getSExtValue();
+          if (signedBound < 0) {
+            return false;
+          }
+          upperInclusiveOut = static_cast<uint64_t>(signedBound);
+          return true;
+        }
+        default:
+          return false;
+        }
+      }
+
+      auto* binOp = dyn_cast<BinaryOperator>(condValue);
+      if (!binOp || binOp->getOpcode() != Instruction::Or) {
+        return false;
+      }
+
+      uint64_t leftUpper = 0;
+      uint64_t rightUpper = 0;
+      uint64_t leftEqual = 0;
+      uint64_t rightEqual = 0;
+
+      const bool hasLeftUpper =
+          self(self, binOp->getOperand(0), expectedIndex, leftUpper);
+      const bool hasRightUpper =
+          self(self, binOp->getOperand(1), expectedIndex, rightUpper);
+      const bool hasLeftEqual =
+          matchIndexEqualsConst(binOp->getOperand(0), expectedIndex, leftEqual);
+      const bool hasRightEqual =
+          matchIndexEqualsConst(binOp->getOperand(1), expectedIndex, rightEqual);
+
+      auto combineUpperAndEqual = [&](uint64_t upper, uint64_t equalValue) -> bool {
+        if (equalValue == upper || equalValue == upper + 1) {
+          upperInclusiveOut = std::max(upper, equalValue);
+          return true;
+        }
+        return false;
+      };
+
+      if (hasLeftUpper && hasRightEqual &&
+          combineUpperAndEqual(leftUpper, rightEqual)) {
+        return true;
+      }
+      if (hasRightUpper && hasLeftEqual &&
+          combineUpperAndEqual(rightUpper, leftEqual)) {
+        return true;
+      }
+      return false;
+    };
+
+    auto inferIndexedOffsetsFromAssumptions =
+        [&](Value* offsetExpr) -> std::set<APInt, APIntComparator> {
+      std::set<APInt, APIntComparator> inferredOffsets;
+
+      SmallVector<Value*, 8> addTerms;
+      auto collectAddTerms = [&](auto&& self, Value* expr,
+                                 SmallVectorImpl<Value*>& terms) -> bool {
+        if (auto* addInst = dyn_cast<BinaryOperator>(expr);
+            addInst && addInst->getOpcode() == Instruction::Add) {
+          return self(self, addInst->getOperand(0), terms) &&
+                 self(self, addInst->getOperand(1), terms);
+        }
+        terms.push_back(expr);
+        return true;
+      };
+
+      if (!collectAddTerms(collectAddTerms, offsetExpr, addTerms)) {
+        return inferredOffsets;
+      }
+
+      uint64_t baseOffset = 0;
+      Value* indexValue = nullptr;
+      uint64_t indexScale = 0;
+
+      auto matchScaledIndexTerm = [&](Value* term, Value*& outIndex,
+                                      uint64_t& outScale) -> bool {
+        auto* stripped = stripIntegerCasts(term);
+        if (auto* mulInst = dyn_cast<BinaryOperator>(stripped);
+            mulInst && mulInst->getOpcode() == Instruction::Mul) {
+          auto* lhs = stripIntegerCasts(mulInst->getOperand(0));
+          auto* rhs = stripIntegerCasts(mulInst->getOperand(1));
+          if (auto* lhsCI = dyn_cast<ConstantInt>(lhs)) {
+            outIndex = rhs;
+            outScale = lhsCI->getZExtValue();
+            return true;
+          }
+          if (auto* rhsCI = dyn_cast<ConstantInt>(rhs)) {
+            outIndex = lhs;
+            outScale = rhsCI->getZExtValue();
+            return true;
+          }
+        }
+        if (auto* shlInst = dyn_cast<BinaryOperator>(stripped);
+            shlInst && shlInst->getOpcode() == Instruction::Shl) {
+          auto* lhs = stripIntegerCasts(shlInst->getOperand(0));
+          auto* rhs = stripIntegerCasts(shlInst->getOperand(1));
+          if (auto* shiftCI = dyn_cast<ConstantInt>(rhs)) {
+            uint64_t shift = shiftCI->getZExtValue();
+            if (shift < 63) {
+              outIndex = lhs;
+              outScale = 1ULL << shift;
+              return true;
+            }
+          }
+        }
+
+        outIndex = stripped;
+        outScale = 1;
+        return true;
+      };
+
+      for (Value* term : addTerms) {
+        if (auto* ci = dyn_cast<ConstantInt>(term)) {
+          baseOffset += ci->getZExtValue();
+          continue;
+        }
+
+        Value* candidateIndex = nullptr;
+        uint64_t candidateScale = 0;
+        if (!matchScaledIndexTerm(term, candidateIndex, candidateScale)) {
+          return {};
+        }
+        candidateIndex = stripIntegerCasts(candidateIndex);
+
+        if (!indexValue) {
+          indexValue = candidateIndex;
+          indexScale = candidateScale;
+          continue;
+        }
+
+        if (indexValue != candidateIndex || indexScale != candidateScale) {
+          return {};
+        }
+      }
+
+      if (!indexValue || indexScale == 0) {
+        return inferredOffsets;
+      }
+
+      uint64_t upperInclusive = 0;
+      bool foundUpper = false;
+      for (const auto& assumption : assumptions) {
+        if (!assumption.first || !assumption.second.isOne()) {
+          continue;
+        }
+
+        uint64_t candidateUpper = 0;
+        if (!matchIndexUpperBound(matchIndexUpperBound, assumption.first,
+                                  indexValue, candidateUpper)) {
+          continue;
+        }
+
+        if (!foundUpper || candidateUpper < upperInclusive) {
+          upperInclusive = candidateUpper;
+          foundUpper = true;
+        }
+      }
+
+      constexpr uint64_t kMaxJumpTableTargets = 64;
+      if (!foundUpper || upperInclusive >= kMaxJumpTableTargets) {
+        return inferredOffsets;
+      }
+
+      for (uint64_t idx = 0; idx <= upperInclusive; ++idx) {
+        uint64_t possibleOffset = baseOffset + idx * indexScale;
+        if (!isMemPaged(possibleOffset)) {
+          continue;
+        }
+        inferredOffsets.insert(APInt(64, possibleOffset));
+      }
+
+      return inferredOffsets;
+    };
+
     if (getControlFlow() == ControlFlow::Unflatten) {
       auto possibleValues = computePossibleValues(loadOffset, 0);
+      if (possibleValues.empty()) {
+        possibleValues = inferIndexedOffsetsFromAssumptions(loadOffset);
+      }
 
-      llvm::Value* selectedValue = nullptr;
+      Value* selectedValue = nullptr;
 
-      for (auto possibleValue : possibleValues) { // rename
-
+      for (auto possibleValue : possibleValues) {
         auto isPaged = isMemPaged(possibleValue.getZExtValue());
         if (!isPaged)
           continue;
@@ -805,14 +1072,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
             possibleValue.getZExtValue(), cloadsize, load);
         printvalue2((uint64_t)cloadsize);
         printvalue(possible_values_from_mem);
+        if (!possible_values_from_mem) {
+          continue;
+        }
 
         if (selectedValue == nullptr) {
           selectedValue = possible_values_from_mem;
         } else {
 
+          auto normalizedPossibleValue = possibleValue.zextOrTrunc(
+              loadOffset->getType()->getIntegerBitWidth());
           llvm::Value* comparison = createICMPFolder(
               CmpInst::ICMP_EQ, loadOffset,
-              llvm::ConstantInt::get(loadOffset->getType(), possibleValue));
+              llvm::ConstantInt::get(loadOffset->getType(),
+                                     normalizedPossibleValue));
           printvalue(comparison);
           selectedValue =
               createSelectFolder(comparison, possible_values_from_mem,
