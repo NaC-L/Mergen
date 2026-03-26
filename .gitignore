@@ -42,6 +42,7 @@ debug*.txt
 *.exe
 emu_*.py
 check_*.py
+!scripts/rewrite/check_semantic.py
 .tmp*
 =*
 scriptsdev/
