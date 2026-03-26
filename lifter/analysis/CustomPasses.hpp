@@ -7,6 +7,7 @@
 #include "Utils.h"
 #include "llvm/IR/PassManager.h"
 #include <algorithm>
+#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Function.h>
@@ -94,7 +95,20 @@ class PromotePseudoStackPass
     : public llvm::PassInfoMixin<PromotePseudoStackPass> {
 public:
   Value* mem = nullptr;
-  PromotePseudoStackPass(Value* val) : mem(val){};
+  uint64_t stackLower; // STACKP_VALUE - reserve
+  uint64_t stackUpper; // STACKP_VALUE + reserve
+  PromotePseudoStackPass(Value* val, uint64_t reserve)
+      : mem(val),
+        stackLower(reserve <= STACKP_VALUE ? STACKP_VALUE - reserve : 0),
+        stackUpper(STACKP_VALUE + reserve) {
+    assert(reserve <= STACKP_VALUE &&
+           "reserve exceeds STACKP_VALUE; stackLower would underflow");
+  }
+
+  bool isStackAddress(uint64_t val) const {
+    return val >= stackLower && val <= stackUpper;
+  }
+
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
 
     bool hasChanged = false;
@@ -103,7 +117,13 @@ public:
       llvm::Value* memory = mem;
       llvm::Value* stackMemory = nullptr;
       // --- Pass 1: scan all stack GEPs to find the actual offset range ---
-      uint64_t min_offset = STACKP_VALUE;
+      // The stack spans both below and above STACKP_VALUE:
+      //   below = locals/saved regs (frame grows downward)
+      //   above = return address, shadow space, stack-passed arguments
+      // We use explicit stack bounds [stackLower, stackUpper] derived from the
+      // PE header's stack reserve, NOT isConcrete() — because PE image sections
+      // are also concrete and would be misclassified as stack.
+      uint64_t min_offset = UINT64_MAX;
       uint64_t max_offset = 0;
       bool found_any = false;
       struct PendingGEP {
@@ -117,13 +137,12 @@ public:
         for (auto& I : BB) {
           auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I);
           if (!GEP) continue;
-          auto* MemOp = GEP->getOperand(GEP->getNumOperands() - 2);
-          if (MemOp != memory) continue;
+          if (GEP->getPointerOperand() != memory) continue;
           auto* OffOp = GEP->getOperand(GEP->getNumOperands() - 1);
 
           if (auto* CI = dyn_cast<ConstantInt>(OffOp)) {
             uint64_t val = CI->getZExtValue();
-            if (val < STACKP_VALUE) {
+            if (isStackAddress(val)) {
               min_offset = std::min(min_offset, val);
               max_offset = std::max(max_offset, val);
               found_any = true;
@@ -133,21 +152,21 @@ public:
           }
           // Non-constant offset: use KnownBits to bound the range
           auto offsetKB = computeKnownBits(OffOp, M.getDataLayout());
-          auto SSKB = KnownBits::makeConstant(APInt(64, STACKP_VALUE));
-          if (KnownBits::ult(offsetKB, SSKB)) {
-            uint64_t kb_min = offsetKB.getMinValue().getZExtValue();
-            uint64_t kb_max = offsetKB.getMaxValue().getZExtValue();
+          uint64_t kb_min = offsetKB.getMinValue().getZExtValue();
+          uint64_t kb_max = offsetKB.getMaxValue().getZExtValue();
+          // Accept if the entire KnownBits range falls within stack bounds.
+          if (isStackAddress(kb_min) && isStackAddress(kb_max)) {
             min_offset = std::min(min_offset, kb_min);
             max_offset = std::max(max_offset, kb_max);
             found_any = true;
             pending.push_back({GEP, false, 0});
           } else if (auto* SI = dyn_cast<SelectInst>(OffOp)) {
-            // SelectInst with two constant arms: check both < STACKP_VALUE
+            // SelectInst with two constant arms: check both in stack range
             if (isa<ConstantInt>(SI->getTrueValue()) &&
                 isa<ConstantInt>(SI->getFalseValue())) {
               uint64_t tv = cast<ConstantInt>(SI->getTrueValue())->getZExtValue();
               uint64_t fv = cast<ConstantInt>(SI->getFalseValue())->getZExtValue();
-              if (tv < STACKP_VALUE && fv < STACKP_VALUE) {
+              if (isStackAddress(tv) && isStackAddress(fv)) {
                 min_offset = std::min({min_offset, tv, fv});
                 max_offset = std::max({max_offset, tv, fv});
                 found_any = true;
@@ -204,43 +223,74 @@ public:
 
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
     bool hasChanged = false;
+    std::vector<llvm::Instruction*> toEraseLoads;
+
     for (auto& F : M) {
       for (auto& BB : F) {
         for (auto& I : BB) {
-          if (auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I)) {
+          auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I);
+          if (!GEP) continue;
 
-            auto* OffsetOperand = GEP->getOperand(GEP->getNumOperands() - 1);
-            if (auto* ConstInt =
-                    llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand)) {
-              uint64_t constintvalue = (uint64_t)ConstInt->getZExtValue();
-              if (mempolicy.isSymbolic(constintvalue)) {
-                continue;
-              }
-              if (uint64_t offset =
-                      file.address_to_mapped_address(constintvalue)) {
-                for (auto* User : GEP->users()) {
-                  if (auto* LoadInst = llvm::dyn_cast<llvm::LoadInst>(User)) {
-                    // todo check if bytes are concrete/symbolic
-                    llvm::Type* loadType = LoadInst->getType();
-                    unsigned byteSize = loadType->getIntegerBitWidth() / 8;
-                    uint64_t tempvalue;
+          // Only fold GEPs rooted on the lifter's flat memory base.
+          if (GEP->getPointerOperand() != mem) continue;
 
-                    file.readMemory(constintvalue, byteSize, tempvalue);
+          auto* OffsetOperand = GEP->getOperand(GEP->getNumOperands() - 1);
+          auto* ConstInt =
+                    llvm::dyn_cast<llvm::ConstantInt>(OffsetOperand);
+          if (!ConstInt) continue;
 
-                    llvm::APInt readValue(byteSize * 8, tempvalue);
-                    llvm::Constant* newVal =
-                        llvm::ConstantInt::get(loadType, readValue);
+          uint64_t constintvalue = ConstInt->getZExtValue();
+          if (mempolicy.isSymbolic(constintvalue)) continue;
 
-                    LoadInst->replaceAllUsesWith(newVal);
-                    hasChanged = true;
-                  }
-                }
-              }
-            }
+          if (!file.address_to_mapped_address(constintvalue)) continue;
+
+          for (auto* User : GEP->users()) {
+            auto* LI = llvm::dyn_cast<llvm::LoadInst>(User);
+            if (!LI) continue;
+
+            llvm::Type* loadType = LI->getType();
+
+            // Skip non-integer loads (float, vector, pointer).
+            // getIntegerBitWidth() asserts on non-integer types.
+            if (!loadType->isIntegerTy()) continue;
+
+            unsigned byteSize = loadType->getIntegerBitWidth() / 8;
+            uint64_t tempvalue;
+
+            // Skip if readMemory fails (unmapped, BSS boundary, >8-byte load).
+            if (!file.readMemory(constintvalue, byteSize, tempvalue)) continue;
+
+            llvm::APInt readValue(byteSize * 8, tempvalue);
+            llvm::Constant* newVal =
+                llvm::ConstantInt::get(loadType, readValue);
+
+            LI->replaceAllUsesWith(newVal);
+            toEraseLoads.push_back(LI);
+            hasChanged = true;
           }
         }
       }
     }
+
+    for (auto* Inst : toEraseLoads)
+      Inst->eraseFromParent();
+
+    // Erase GEPs that became dead after all their load users were folded.
+    // Collect in a second pass to avoid invalidating the erased loads' operands.
+    for (auto& F : M) {
+      for (auto& BB : F) {
+        for (auto it = BB.begin(); it != BB.end();) {
+          auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&*it++);
+          if (!GEP) continue;
+          if (GEP->getPointerOperand() != mem) continue;
+          if (GEP->use_empty()) {
+            GEP->eraseFromParent();
+            hasChanged = true;
+          }
+        }
+      }
+    }
+
     return hasChanged ? llvm::PreservedAnalyses::none()
                       : llvm::PreservedAnalyses::all();
   }
@@ -251,7 +301,8 @@ class ReplaceTruncWithLoadPass
 public:
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
     bool hasChanged = false;
-    std::vector<llvm::Instruction*> toRemove;
+    std::vector<llvm::Instruction*> toRemoveTruncs;
+    llvm::SmallPtrSet<llvm::LoadInst*, 16> loadCandidates;
     for (auto& F : M) {
       for (auto& BB : F) {
         for (auto I = BB.begin(), E = BB.end(); I != E;) {
@@ -260,8 +311,11 @@ public:
 
           if (auto* TruncInst = llvm::dyn_cast<llvm::TruncInst>(&*CurrentI)) {
 
-            if (TruncInst->getSrcTy()->isIntegerTy(64) &&
-                TruncInst->getDestTy()->isIntegerTy(32)) {
+            // Handle any integer narrowing (e.g. i64->i32, i32->i16, i16->i8).
+            // Safe on little-endian (x86): narrower load from same address reads
+            // the correct low bytes.
+            if (TruncInst->getSrcTy()->isIntegerTy() &&
+                TruncInst->getDestTy()->isIntegerTy()) {
 
               if (auto* LoadInst = llvm::dyn_cast<llvm::LoadInst>(
                       TruncInst->getOperand(0))) {
@@ -272,7 +326,8 @@ public:
 
                 TruncInst->replaceAllUsesWith(newLoad);
 
-                toRemove.push_back(TruncInst);
+                toRemoveTruncs.push_back(TruncInst);
+                loadCandidates.insert(LoadInst);
 
                 hasChanged = true;
               }
@@ -281,10 +336,16 @@ public:
         }
       }
     }
-    for (llvm::Instruction* Inst : toRemove) {
+    // Erase truncs first so their operand loads lose a user.
+    for (llvm::Instruction* Inst : toRemoveTruncs)
       Inst->eraseFromParent();
+
+    // Now erase wide loads that became dead after their trunc users were removed.
+    for (llvm::LoadInst* LI : loadCandidates) {
+      if (LI->use_empty())
+        LI->eraseFromParent();
     }
-    toRemove.clear();
+
     return hasChanged ? llvm::PreservedAnalyses::none()
                       : llvm::PreservedAnalyses::all();
   }

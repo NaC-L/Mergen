@@ -12,8 +12,6 @@ enum PATH_info {
 PATH_info getConstraintVal(llvm::Function* function, llvm::Value* constraint,
                            uint64_t& dest);
 
-void final_optpass(llvm::Function* clonedFuncx, llvm::Value* mem,
-                   uint8_t* filebase, MemoryPolicy memoryPolicy);
 
 PATH_info solvePath(llvm::Function* function, uint64_t& dest,
                     llvm::Value* simplifyValue);
