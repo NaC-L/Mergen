@@ -84,7 +84,7 @@ def main() -> None:
     output_dir = args.output_dir.resolve()
 
     # 1. Load changed paths
-    if args.paths:
+    if args.paths is not None:
         changed_paths = [normalize_path(path) for path in args.paths]
     else:
         changed_paths = load_changed_paths(repo_root, args.base, args.head)
@@ -104,13 +104,13 @@ def main() -> None:
     invariant_dicts = [_invariant_result_to_dict(r) for r in invariant_results]
 
     # 5. Verification plan (invariant guard already ran separately)
-    plan = verify_plan._build_plan(changed_paths, include_invariant_guard=False)
+    plan = verify_plan.build_plan(changed_paths, include_invariant_guard=False)
     plan_dicts = [_planned_check_to_dict(item) for item in plan]
 
     # 6. Optionally execute verification
     verification_runs: list[dict[str, Any]] = []
     if args.run_verification:
-        verification_runs = verify_plan._run_plan(
+        verification_runs = verify_plan.run_plan(
             plan, repo_root=repo_root, fail_fast=False,
         )
 
@@ -119,9 +119,9 @@ def main() -> None:
         "base": args.base,
         "head": args.head,
         "changed_files": changed_paths,
-        "risk": risk_payload,
+        "risk_map": risk_payload,
         "shards": shard_payload,
-        "invariants": invariant_dicts,
+        "invariant_results": invariant_dicts,
         "verification_plan": plan_dicts,
         "verification_runs": verification_runs,
     }
