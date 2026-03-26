@@ -15,16 +15,39 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <llvm/Support/Casting.h>
+#include <limits>
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
+
+  // Clear memoization cache for value enumeration.
+  // Each solvePath invocation may have different assumptions
+  // (from different branch paths), so cached results don't carry over.
+  pv_cache.clear();
+
+  auto normalizeTargetAddress = [&](uint64_t target) -> uint64_t {
+    if (isMemPaged(target)) {
+      return target;
+    }
+
+    if (target <= std::numeric_limits<uint32_t>::max() &&
+        file.imageBase > std::numeric_limits<uint32_t>::max()) {
+      const uint64_t highBits = file.imageBase & 0xFFFFFFFF00000000ULL;
+      const uint64_t widened = highBits | target;
+      if (isMemPaged(widened)) {
+        return widened;
+      }
+    }
+
+    return target;
+  };
 
   // do static polymorphism here
 
   PATH_info result = PATH_unsolved;
   if (llvm::ConstantInt* constInt =
           dyn_cast<llvm::ConstantInt>(simplifyValue)) {
-    dest = constInt->getZExtValue();
+    dest = normalizeTargetAddress(constInt->getZExtValue());
     result = PATH_solved;
     run = 0;
 
@@ -39,6 +62,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   }
 
   if (PATH_info solved = getConstraintVal(function, simplifyValue, dest)) {
+      dest = normalizeTargetAddress(dest);
     if (solved == PATH_solved) {
       run = 0;
       std::cout << "Solved the constraint and moving to next path\n"
@@ -62,7 +86,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   std::vector<APInt> pv(pvset.begin(), pvset.end());
   if (pv.size() == 1) {
     printvalue2(pv[0]);
-    dest = pv[0].getZExtValue();
+    dest = normalizeTargetAddress(pv[0].getZExtValue());
     result = PATH_solved;
 
     auto bb_solved = getOrCreateBB(dest, "bb_single");
@@ -82,7 +106,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     auto firstcase = pv[0];
     auto secondcase = pv[1];
 
-    static auto try_simplify = [&](APInt c1,
+    auto try_simplify = [&](APInt c1,
                                    Value* simplifyv) -> std::optional<Value*> {
       if (auto si = dyn_cast<SelectInst>(simplifyv)) {
         auto firstcase_v = builder->getIntN(
@@ -126,8 +150,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     printvalue2(firstcase);
     printvalue2(secondcase);
-    auto bb_true = getOrCreateBB(firstcase.getZExtValue(), "bb_true");
-    auto bb_false = getOrCreateBB(secondcase.getZExtValue(), "bb_false");
+    const uint64_t firstTarget =
+        normalizeTargetAddress(firstcase.getZExtValue());
+    const uint64_t secondTarget =
+        normalizeTargetAddress(secondcase.getZExtValue());
+    auto bb_true = getOrCreateBB(firstTarget, "bb_true");
+    auto bb_false = getOrCreateBB(secondTarget, "bb_false");
     printvalue(condition);
     auto BR = builder->CreateCondBr(condition, bb_true, bb_false);
 
@@ -135,13 +163,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     printvalue2(firstcase);
     printvalue2(secondcase);
-    blockInfo = BBInfo(secondcase.getZExtValue(), bb_false);
+    blockInfo = BBInfo(secondTarget, bb_false);
     // for [this], we can assume condition is true
     // we can simplify any value tied to is dependent on condition,
     // and try to simplify any value calculates condition
 
     // for [newlifter], we can assume condition is false
-    auto newblock = BBInfo(firstcase.getZExtValue(), bb_true);
+    auto newblock = BBInfo(firstTarget, bb_true);
 
     // this->blockInfo = newblock;
     printvalue(condition);
@@ -152,12 +180,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     addUnvisitedAddr(blockInfo);
     addUnvisitedAddr(newblock);
 
-    // fix this later, is ugly
-    assumptions[cast<Instruction>(condition)] = 0;
-    branch_backup(blockInfo.block);
+    // Constant conditions are already resolved — only track assumptions
+    // for instruction-produced conditions that need runtime disambiguation.
+    if (auto* condInst = dyn_cast<Instruction>(condition)) {
+      assumptions[condInst] = 0;
+      branch_backup(blockInfo.block);
 
-    this->assumptions[cast<Instruction>(condition)] = 1;
-    branch_backup(newblock.block);
+      this->assumptions[condInst] = 1;
+      branch_backup(newblock.block);
+    } else {
+      // Condition is a constant (e.g., from folded ICMP). Both branches
+      // are statically determined — back them up without assumption state.
+      branch_backup(blockInfo.block);
+      branch_backup(newblock.block);
+    }
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_newpath.ll";
@@ -182,27 +218,55 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
         simplifyValue, bb_default_unresolved, static_cast<unsigned>(pv.size()));
 
     // Add every discovered target as an explicit case.
-    for (size_t i = 0; i < pv.size(); ++i) {
-      auto caseVal = pv[i];
-      auto bb_case = getOrCreateBB(caseVal.getZExtValue(),
-                                   "bb_switch_" + std::to_string(i));
+    std::set<uint64_t> emittedTargets;
+    size_t switchCaseIndex = 0;
+    for (const auto& caseVal : pv) {
+      const uint64_t normalizedTarget =
+          normalizeTargetAddress(caseVal.getZExtValue());
+      if (!emittedTargets.insert(normalizedTarget).second) {
+        continue;
+      }
+
+      // computePossibleValues cross-products uncorrelated select branches,
+      // which can produce spurious targets outside mapped memory.  Skip them
+      // rather than crashing when the lifter tries to decode bytes there.
+      if (!isMemPaged(normalizedTarget)) {
+        std::cout << "[diag] skipping unmapped switch target 0x"
+                  << std::hex << normalizedTarget << std::dec << "\n"
+                  << std::flush;
+        continue;
+      }
+
+      auto bb_case = getOrCreateBB(
+          normalizedTarget, "bb_switch_" + std::to_string(switchCaseIndex++));
       SI->addCase(
-          cast<ConstantInt>(builder->getIntN(bitWidth, caseVal.getZExtValue())),
+          cast<ConstantInt>(builder->getIntN(bitWidth, normalizedTarget)),
           bb_case);
 
-      auto caseBlock = BBInfo(caseVal.getZExtValue(), bb_case);
+      auto caseBlock = BBInfo(normalizedTarget, bb_case);
       addUnvisitedAddr(caseBlock);
       branch_backup(caseBlock.block);
     }
 
     // Conservative fallback for values not enumerated in pv:
-    // keep default unresolved instead of assuming impossible behavior.
+    // keep default path data-dependent instead of returning undef, which can
+    // let later optimizations fold valid cases into arbitrary constants.
     llvm::IRBuilder<> defaultBuilder(bb_default_unresolved);
-    defaultBuilder.CreateRet(UndefValue::get(function->getReturnType()));
-
+    Value* unresolvedRet = simplifyValue;
+    if (unresolvedRet->getType() != function->getReturnType()) {
+      if (unresolvedRet->getType()->isIntegerTy() &&
+          function->getReturnType()->isIntegerTy()) {
+        unresolvedRet = defaultBuilder.CreateZExtOrTrunc(
+            unresolvedRet, function->getReturnType(),
+            "switch_default_unresolved");
+      } else {
+        unresolvedRet = UndefValue::get(function->getReturnType());
+      }
+    }
+    defaultBuilder.CreateRet(unresolvedRet);
     // Destination remains unknown for multi-target switches.
     dest = 0;
-    result = PATH_unsolved;
+    result = PATH_multi_solved;
 
     debugging::doIfDebug([&]() {
       std::string Filename = "output_switch.ll";
@@ -210,9 +274,17 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       llvm::raw_fd_ostream OS(Filename, EC);
       function->getParent()->print(OS, nullptr);
     });
-    std::cout << "created multi-target switch with " << pv.size()
+    std::cout << "created multi-target switch with " << emittedTargets.size()
               << " targets\n"
               << std::flush;
+  }
+
+  if (pv.empty()) {
+    // computePossibleValues exhausted its budget without resolving any
+    // concrete targets.  Emit an undef-return sentinel so the block has a
+    // valid terminator; do NOT use unreachable, which would let LLVM erase
+    // this reachable-but-unresolved path.
+    builder->CreateRet(UndefValue::get(function->getReturnType()));
   }
 
   return result;

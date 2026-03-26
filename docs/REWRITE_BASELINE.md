@@ -15,13 +15,13 @@ Sample sources live in:
 
 ## Script layout
 
-- `scripts/rewrite/build_samples.cmd` — assembles/links every `testcases/rewrite_smoke/*.asm` sample
-- `scripts/rewrite/instruction_microtests.json` — source of truth for sample symbols and expected IR patterns
+- `scripts/rewrite/build_samples.cmd` — assembles/links rewrite smoke samples with incremental timestamp checks (rebuilds only when source is newer than obj/exe/map) using `clang-cl`; jump-table C samples compile in the dedicated `/O2` pass only
+- `scripts/rewrite/instruction_microtests.json` — source of truth for sample symbols, expected IR patterns, and runtime semantic test cases
 - `scripts/rewrite/run.ps1` — builds samples, clears stale `ir_outputs/*.ll` artifacts, runs lifter, stores fresh IR artifacts, invokes verifier using manifest entries
 - `scripts/rewrite/verify.ps1` — checks lifted output patterns/results from manifest entries and rejects non-skipped samples with empty `patterns` arrays
 - `scripts/rewrite/manifest_validation.ps1` — shared strict manifest validator used by both `run.ps1` and `verify.ps1`
 - `scripts/rewrite/run.cmd` — one-command Windows entrypoint
-- `scripts/rewrite/run_microtests.cmd` — builds and runs `rewrite_microtests.exe`, which executes in-process instruction-byte tests from `lifter/test/TestInstructions.cpp` (register/flag assertions)
+- `scripts/rewrite/run_microtests.cmd` — runs `rewrite_microtests.exe` (in-process instruction-byte tests from `lifter/test/TestInstructions.cpp`); builds lazily only when the executable is missing, supports `--build` to force rebuild and `--no-build` to require prebuilt binaries
 - `scripts/rewrite/collect_instruction_tests.cmd` — reports handler coverage against `lifter/x86_64_opcodes.x` using oracle vector metadata (`handler` field) to track missing instruction tests
 - `scripts/rewrite/generate_oracle_vectors.cmd` — regenerates `lifter/test_vectors/oracle_vectors.json` from seed vectors using oracle providers (currently Unicorn)
 - `scripts/rewrite/oracle_seed_vectors.json` — seed cases with instruction bytes, initial state, and tracked outputs for oracle generation
@@ -32,20 +32,34 @@ Sample sources live in:
 - `scripts/rewrite/generate_flag_stress_vectors.py` — derives flag-writing handlers from `lifter/Semantics.ipp`, generates deterministic initial states, and computes expected flags via Unicorn
 - `scripts/rewrite/run_flagstress.cmd` — one-command strict flag suite runner (auto-generates flag-stress vectors and executes microtests with strict flag assertions)
 - `run.ps1` validates that `instruction_microtests.json` covers every `testcases/rewrite_smoke/*` source file
+- `scripts/rewrite/check_semantic.py` — runtime semantic regression for all lifted samples; reads `semantic` cases from the manifest, generates lli-executable wrappers, and verifies return values across all declared inputs (23 samples, 107 test cases)
 
 Helper build scripts for local development are in:
 
+- `scripts/dev/configure_iced.cmd` — CMake configure (Ninja + clang-cl, auto-detects MSVC headers/libs)
+- `scripts/dev/build_iced.cmd` — incremental `cmake --build` for iced backend
+- `scripts/dev/configure_zydis.cmd` — CMake configure for Zydis-only lane
+- `scripts/dev/build_zydis.cmd` — incremental `cmake --build` for Zydis backend
+
+These scripts do **not** invoke `VsDevCmd.bat`. `clang-cl` discovers MSVC include/lib paths on its own, and CMake/Ninja bakes all resolved paths into `build.ninja` at configure time. This avoids loading the full VS Developer Environment (CLR, MSBuild, Roslyn) and saves ~200-400 MB of RAM per invocation.
+
+### Build parallelism
+
+All build scripts default to 4 parallel jobs. Override with `MERGEN_BUILD_JOBS`:
+
+```bat
+set MERGEN_BUILD_JOBS=2    &rem low-memory machines
+set MERGEN_BUILD_JOBS=8    &rem fast builds on large machines
+```
 
 `run_microtests.cmd` regenerates oracle vectors by default, then runs `rewrite_microtests.exe`. It forwards optional args as name filters (example: `run_microtests.cmd xor`).
 Use `run_microtests.cmd --check-flags <filter>` to enforce oracle flag comparisons (strict mode, expected to fail until flag semantics are fixed).
+Use `run_microtests.cmd --build <filter>` to force rebuilding `rewrite_microtests.exe`, or `run_microtests.cmd --no-build <filter>` to skip any build step.
 Set `SKIP_ORACLE_GENERATION=1` to reuse a pre-generated oracle file. Set `MERGEN_TEST_VECTORS=<path>` to point tests at a custom oracle JSON file.
-Use `run_all_handlers.cmd` to exercise full handler coverage smoke tests. It writes `lifter/test_vectors/oracle_vectors_full_handlers.json` and then runs microtests against it.
+Use `run_all_handlers.cmd` to exercise full handler coverage smoke tests. It writes `lifter/test_vectors/oracle_vectors_full_handlers.json` and then runs microtests against it through `run_microtests.cmd` (which now builds lazily).
 Full-handler vectors are expected to execute end-to-end (no default `skip: true` crash exclusions).
 Use `run_flagstress.cmd` (or `python test.py flags`) for broad strict-flag validation across all handlers that explicitly write flags.
-- `scripts/dev/configure_iced.cmd`
-- `scripts/dev/build_iced.cmd`
-- `scripts/dev/configure_zydis.cmd`
-- `scripts/dev/build_zydis.cmd`
+Use `python test.py semantic` to run runtime semantic regression for all samples (accepts `--filter` to narrow scope and `--input-ir` to override the IR file for a single sample).
 
 ## Output location
 
@@ -58,6 +72,7 @@ Artifacts include:
 
 - compiled sample binaries/maps/objects for every manifest entry
 - `ir_outputs/*.ll` and `ir_outputs/*_no_opts.ll` (replaced on each run after stale `.ll` cleanup)
+- `ir_outputs/*_semantic.ll` (generated by `check_semantic.py` for lli execution)
 
 - `lifter/test_vectors/oracle_vectors_full_handlers.json` (generated by `run_all_handlers.cmd`)
 ## Running the baseline gate
@@ -97,3 +112,27 @@ This gate asserts explicit failure behavior for malformed manifests/vectors, vec
 - lifted IR file exists at `ir_outputs/<sample>.ll`
 - every expected pattern declared in `instruction_microtests.json` is present in that IR output
 A rewrite change is not acceptable if this baseline fails.
+`python test.py quick` and `python test.py all` additionally run runtime semantic validation for **all** samples after baseline lifting, executing each lifted IR module via LLVM `lli` and asserting correct return values across all declared input vectors. This prevents regressions where lifted IR looks structurally correct (passes pattern checks) but computes wrong results.
+
+
+## Runtime semantic regression
+
+Every non-skipped sample in the manifest may declare a `semantic` field: an array of `{inputs, expected, label}` objects. The `check_semantic.py` runner:
+
+1. Reads the optimized lifted IR from `ir_outputs/<sample>.ll`
+2. Strips dead stores to unmapped binary addresses (`inttoptr`)
+3. Renames `@main` to `@lifted_<sample>` and generates an `@semantic_main` wrapper
+4. Runs the wrapper via `lli --entry-function=semantic_main`
+5. Reports per-case pass/fail with input/expected detail on failure
+
+Samples without a `semantic` field are not tested. The `semantic` field is optional but recommended for every sample with a deterministic expected return value.
+
+### Coverage summary
+
+| Category | Samples | Total cases |
+|---|---|---|
+| Constant-return (no inputs) | 8 | 8 |
+| Single-input branching | 12 | 87 |
+| Multi-input | 1 | 5 |
+| Jump-table dispatch | 2 | 7 |
+| **Total** | **23** | **107** |

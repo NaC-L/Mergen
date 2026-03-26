@@ -32,7 +32,7 @@
 
 
 bool InitFunction_and_LiftInstructions(const uint64_t runtime_address,
-                                       std::vector<uint8_t> fileData) {
+                                       std::vector<uint8_t>&& fileData) {
   std::string stageError;
   auto stageContext =
       prepareLifterStageContext(runtime_address, fileData, stageError);
