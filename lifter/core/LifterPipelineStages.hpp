@@ -22,9 +22,13 @@ inline void printRuntimeImageContext(const RuntimeImageContext& runtimeContext,
 
 inline void prepareRuntimePagedMemory(lifterConcolic<>* lifter,
                                       const RuntimeImageContext& runtimeContext) {
-  lifter->markMemPaged(STACKP_VALUE - runtimeContext.stackReserve,
-                       STACKP_VALUE + runtimeContext.stackReserve);
-  printvalue2(runtimeContext.stackReserve);
+  // Use the clamped stack reserve (set by configureDefaultMemoryPolicy) so that
+  // pageMap and memoryPolicy agree on stack bounds. The raw PE header value
+  // (runtimeContext.stackReserve) can be very large (e.g. 16MB) and would
+  // create an unreasonably wide paged region.
+  const uint64_t reserve = lifter->stackReserve;
+  lifter->markMemPaged(STACKP_VALUE - reserve, STACKP_VALUE + reserve);
+  printvalue2(reserve);
   lifter->markMemPaged(runtimeContext.imageBase,
                        runtimeContext.imageBase + runtimeContext.imageSize);
 }

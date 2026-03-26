@@ -23,6 +23,7 @@ inline void configureDefaultMemoryPolicy(lifterConcolic<>* lifter,
   // Clamp to reasonable bounds: at least 0x1000, at most 0x100000 (1MB).
   uint64_t clampedReserve = std::max(stackReserve, uint64_t(0x1000));
   clampedReserve = std::min(clampedReserve, uint64_t(0x100000));
+  lifter->stackReserve = clampedReserve;
   lifter->memoryPolicy.addRange(STACKP_VALUE - clampedReserve,
                                 STACKP_VALUE + clampedReserve,
                                 MemoryAccessMode::CONCRETE);

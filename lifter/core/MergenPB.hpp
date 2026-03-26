@@ -55,22 +55,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
 
     llvm::Value* memoryArg = this->memoryAlloc;
     if (!memoryArg) {
-      for (auto& arg : this->fnc->args()) {
-        if (arg.getName() == "memory") {
-          memoryArg = &arg;
-          break;
-        }
-      }
-    }
-    if (!memoryArg) {
       llvm::report_fatal_error(
-          "run_opts requires a 'memory' argument; IR is missing expected state");
+          "run_opts: memoryAlloc is null; lifter setup did not initialize it");
     }
 
     modulePassManager.addPass(
         GEPLoadPass(memoryArg, this->fileBase, memoryPolicy));
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
-    modulePassManager.addPass(PromotePseudoStackPass(memoryArg));
+    modulePassManager.addPass(PromotePseudoStackPass(memoryArg, this->stackReserve));
     modulePassManager.addPass(PromotePseudoMemory(memoryArg));
 
     modulePassManager.run(*module, moduleAnalysisManager);
