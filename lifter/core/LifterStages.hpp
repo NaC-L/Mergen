@@ -95,6 +95,45 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
     }
   }
 
+  // Auto-outline .pdata function starts: real functions with unwind info
+  // should be outlined when called, not inlined.  Validates each entry
+  // (rva_begin < imageSize and rva_begin < rva_end) to discard garbage
+  // entries produced by obfuscators like VMP.
+  {
+    auto* dosHdr = reinterpret_cast<win::dos_header_t*>(fileBase);
+    auto* ntHdr  = reinterpret_cast<win::nt_headers_t<true>*>(
+        fileBase + dosHdr->e_lfanew);
+    auto& excDir = ntHdr->optional_header.data_directories.exception_directory;
+    uint32_t imageSize = ntHdr->optional_header.size_image;
+    if (excDir.size >= 12) {
+      uint64_t imageBase = ntHdr->optional_header.image_base;
+      auto excOff = lifter->file.RvaToFileOffset(excDir.rva);
+      if (excOff != 0) {
+        // Each RUNTIME_FUNCTION is {uint32_t BeginAddress, EndAddress, UnwindInfo}.
+        size_t numEntries = excDir.size / 12;
+        const uint8_t* entries = fileBase + excOff;
+        size_t added = 0;
+        for (size_t i = 0; i < numEntries; ++i) {
+          uint32_t rvaBegin, rvaEnd;
+          std::memcpy(&rvaBegin, entries + i * 12, 4);
+          std::memcpy(&rvaEnd,   entries + i * 12 + 4, 4);
+          // Validate: both RVAs inside image, begin < end.
+          if (rvaBegin >= imageSize || rvaEnd > imageSize || rvaBegin >= rvaEnd)
+            continue;
+          // Skip the start address itself — it's the root, not a call target.
+          uint64_t funcVA = imageBase + rvaBegin;
+          if (funcVA == runtimeAddress) continue;
+          lifter->inlinePolicy.addAddress(funcVA);
+          ++added;
+        }
+        if (added > 0) {
+          std::cout << "[outline] .pdata: " << added
+                    << " function starts added to outline set\n" << std::flush;
+        }
+      }
+    }
+  }
+
   lifter->blockInfo = BBInfo(runtimeAddress, lifter->bb);
   lifter->unvisitedBlocks.push_back(lifter->blockInfo);
   return lifter;
