@@ -40,10 +40,12 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
           auto* funcRVAs = reinterpret_cast<const uint32_t*>(
               fileBase + funcTableOff);
           for (uint32_t i = 0; i < exp->num_functions; ++i) {
-            if (funcRVAs[i] != 0) {
-              uint64_t va = imageBase + funcRVAs[i];
-              lifter->inlinePolicy.addAddress(va);
-            }
+            uint32_t rva = funcRVAs[i];
+            if (rva == 0) continue;
+            // Skip forwarded exports: RVA points within the export directory
+            // itself (to an ASCII forwarder string, not code).
+            if (rva >= expDir.rva && rva < expDir.rva + expDir.size) continue;
+            lifter->inlinePolicy.addAddress(imageBase + rva);
           }
         }
       }
