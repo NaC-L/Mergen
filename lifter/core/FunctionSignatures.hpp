@@ -1,5 +1,6 @@
 #ifndef FUNCSIGNATURES_H
 #define FUNCSIGNATURES_H
+#include "AbiCallContract.hpp"
 #include "FileReader.hpp"
 #include <iostream>
 #include <map>
@@ -53,6 +54,10 @@ public:
         funcArgInfo(Register::DS, I64, 1)};
 
     std::vector<unsigned char> bytes;
+
+    // ABI metadata (optional). Default values preserve backward compatibility.
+    AbiKind      abiKind      = AbiKind::Unknown;
+    StackCleanup stackCleanup = StackCleanup::Unknown;
     // DS represents memory
     // (yeah i hate it aswell)
     // so the default is

@@ -12,7 +12,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 | Instruction set | 115 handlers covering general-purpose integer, BMI1/BMI2, bit manipulation, string ops, conditional moves, flag manipulation, and SSE2 integer XMM ops (`MOVDQA`, `PAND`, `POR`, `PXOR`) |
 | Control flow | Linear, conditional branches (2-way), direct jumps, call/ret |
 | Output | LLVM IR (text), optimizable via LLVM pass pipeline |
-| Calling convention awareness | x64 Microsoft (manual signature fixup may be needed) |
+| Calling convention awareness | x64 Microsoft ABI (cross-ABI framework: x64 MSVC, x86 cdecl/stdcall/fastcall). Dual-mode: `compat` (default, preserves exploration stability) and `strict` (ABI-enforced clobber/memory effects, opt-in). |
 | Optimization profiles | safe, aggressive, debug (planned — Phase 2) |
 
 ## Unsupported / Known Limitations
@@ -26,7 +26,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 | ELF / Mach-O / non-PE formats | Not supported |
 | 32-bit x86 | Not supported |
 | ARM / RISC-V / other architectures | Not supported |
-| Automatic ABI/prototype normalization | Planned — Phase 2 |
+| Automatic ABI/prototype normalization | Stage 1 complete (call-boundary ABI contract + dual-mode). Post-lift prototype minimization planned. |
 | Full deterministic output | Planned — Phase 3 |
 
 ## Tested Protectors
