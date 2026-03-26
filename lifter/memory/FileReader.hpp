@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <coff/section_header.hpp>
 #include <cstdint>
+#include <cstdio>
 #include <vector>
 
 enum arch_mode : uint8_t { X86 = 0, X64 = 1 };
@@ -152,6 +153,13 @@ public:
   }
 
   bool readMemory_impl(uint64_t addr, unsigned byteSize, uint64_t& value) {
+    // Guard against buffer overflow: memcpy into uint64_t is only safe for
+    // reads up to 8 bytes. Wider loads (SSE/AVX 128/256/512-bit) must not
+    // reach this path — they require vector-aware memory handling.
+    if (byteSize > sizeof(uint64_t)) {
+      fprintf(stderr, "readMemory: wide load rejected (byteSize=%u > 8)\n", byteSize);
+      return 0;
+    }
     uint64_t mappedAddr = address_to_mapped_address(addr);
     if (mappedAddr > 0) {
       uint64_t tempValue = 0;
@@ -309,6 +317,13 @@ public:
   }
 
   bool readMemory_impl(uint64_t addr, unsigned byteSize, uint64_t& value) {
+    // Guard against buffer overflow: memcpy into uint64_t is only safe for
+    // reads up to 8 bytes. Wider loads (SSE/AVX 128/256/512-bit) must not
+    // reach this path — they require vector-aware memory handling.
+    if (byteSize > sizeof(uint64_t)) {
+      fprintf(stderr, "readMemory: wide load rejected (byteSize=%u > 8)\n", byteSize);
+      return 0;
+    }
     uint64_t mappedAddr = address_to_mapped_address(addr);
     if (mappedAddr > 0) {
       uint64_t tempValue = 0;

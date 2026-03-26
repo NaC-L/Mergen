@@ -1232,12 +1232,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
   }
 
   if (key == Register::GS) {
-    auto funcInfo = new funcsignatures<Register>::functioninfo("loadGS", {});
-    return callFunctionIR("loadGS", funcInfo);
+    typename funcsignatures<Register>::functioninfo funcInfo("loadGS", {});
+    return callFunctionIR("loadGS", &funcInfo);
   }
   if (key == Register::DS) {
-    auto funcInfo = new funcsignatures<Register>::functioninfo("loadDS", {});
-    return callFunctionIR("loadDS", funcInfo);
+    typename funcsignatures<Register>::functioninfo funcInfo("loadDS", {});
+    return callFunctionIR("loadDS", &funcInfo);
   }
   /*
   if (Registers.find(newKey) == Registers.end()) {

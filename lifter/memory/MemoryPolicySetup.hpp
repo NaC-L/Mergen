@@ -1,8 +1,11 @@
 #pragma once
 
 #include "LifterClass_Concolic.hpp"
+#include <algorithm>
+#include <cstdint>
 
-inline void configureDefaultMemoryPolicy(lifterConcolic<>* lifter) {
+inline void configureDefaultMemoryPolicy(lifterConcolic<>* lifter,
+                                         uint64_t stackReserve = 0x1000) {
   lifter->memoryPolicy.setDefaultMode(MemoryAccessMode::SYMBOLIC);
 
   for (auto& section : lifter->file.sections_v) {
@@ -16,6 +19,11 @@ inline void configureDefaultMemoryPolicy(lifterConcolic<>* lifter) {
                                   MemoryAccessMode::CONCRETE);
   }
 
-  lifter->memoryPolicy.addRange(STACKP_VALUE - 0x1000, STACKP_VALUE + 0x1000,
+  // Use actual stack reserve from PE header instead of hardcoded 0x1000.
+  // Clamp to reasonable bounds: at least 0x1000, at most 0x100000 (1MB).
+  uint64_t clampedReserve = std::max(stackReserve, uint64_t(0x1000));
+  clampedReserve = std::min(clampedReserve, uint64_t(0x100000));
+  lifter->memoryPolicy.addRange(STACKP_VALUE - clampedReserve,
+                                STACKP_VALUE + clampedReserve,
                                 MemoryAccessMode::CONCRETE);
 }

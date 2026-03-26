@@ -431,86 +431,24 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_rdtsc() {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
   LLVMContext& context = builder->getContext();
 
-  // operands[0]  = eax
-  // operands[1] = ebx
-  // operands[2] = ecx
-  // operands[3] = edx
-  /*
-
-  c++
-  #include <intrin.h>
-
-  int getcpuid() {
-          int cpuInfo[4];
-          __cpuid(cpuInfo, 1);
-          return cpuInfo[0] + cpuInfo[1];
-  }
-
-  ir
-  define dso_local noundef i32 @getcpuid() #0 {
-    %1 = alloca [4 x i32], align 16
-    %2 = getelementptr inbounds [4 x i32], ptr %1, i64 0, i64 0
-    %3 = call { i32, i32, i32, i32 } asm "xchgq %rbx,
-  ${1:q}\0Acpuid\0Axchgq %rbx, ${1:q}", "={ax},=r,={cx},={dx},0,2"(i32 1,
-  i32 0) %4 = getelementptr inbounds [4 x i32], ptr %1, i64 0, i64 0 %5 =
-  extractvalue { i32, i32, i32, i32 } %3, 0 %6 = getelementptr inbounds
-  i32, ptr %4, i32 0 store i32 %5, ptr %6, align 4 %7 = extractvalue {
-  i32, i32, i32, i32 } %3, 1 %8 = getelementptr inbounds i32, ptr %4, i32
-  1 store i32 %7, ptr %8, align 4 %9 = extractvalue { i32, i32, i32, i32 }
-  %3, 2 %10 = getelementptr inbounds i32, ptr %4, i32 2 store i32 %9, ptr
-  %10, align 4 %11 = extractvalue { i32, i32, i32, i32 } %3, 3 %12 =
-  getelementptr inbounds i32, ptr %4, i32 3 store i32 %11, ptr %12, align
-  4
-
-    %13 = getelementptr inbounds [4 x i32], ptr %1, i64 0, i64 0
-    %14 = load i32, ptr %13, align 16
-
-    %15 = getelementptr inbounds [4 x i32], ptr %1, i64 0, i64 1
-    %16 = load i32, ptr %15, align 4
-    %17 = add nsw i32 %14, %16
-    ret i32 %17
-  }
-  opt
-  define dso_local noundef i32 @getcpuid() local_unnamed_addr {
-    %1 = tail call { i32, i32, i32, i32 } asm "xchgq %rbx,
-  ${1:q}\0Acpuid\0Axchgq %rbx, ${1:q}", "={ax},=r,={cx},={dx},0,2"(i32 1,
-  i32 0) #0 %2 = extractvalue { i32, i32, i32, i32 } %1, 1 ret i32 %2
-  }
-
-  */
-  // int cpuInfo[4];
-  // ArrayType* CpuInfoTy = ArrayType::get(Type::getInt32Ty(context), 4);
-
-  Value* eax = GetRegisterValue(Register::EAX);
-
-  // one is eax, other is always 0?
-  std::vector<Type*> AsmOutputs = {
-      Type::getInt32Ty(context), Type::getInt32Ty(context),
-      Type::getInt32Ty(context), Type::getInt32Ty(context)};
-  StructType* AsmStructType = StructType::get(context, AsmOutputs);
-
-  std::vector<Type*> ArgTypes = {Type::getInt32Ty(context),
-                                 Type::getInt32Ty(context)};
-
-  // this is probably incorrect
-  InlineAsm* IA =
-      InlineAsm::get(FunctionType::get(AsmStructType, ArgTypes, false),
-                     "xchgq %rbx, ${1:q}\ncpuid\nxchgq %rbx, ${1:q}",
-                     "={ax},=r,={cx},={dx},0,2", true);
-
-  std::vector<Value*> Args{eax, ConstantInt::get(eax->getType(), 0)};
-
-  Value* cpuidCall = builder->CreateCall(IA, Args);
-
-  Value* eaxv = builder->CreateExtractValue(cpuidCall, 0, "eax");
-  Value* ebx = builder->CreateExtractValue(cpuidCall, 1, "ebx");
-  Value* ecx = builder->CreateExtractValue(cpuidCall, 2, "ecx");
-  Value* edx = builder->CreateExtractValue(cpuidCall, 3, "edx");
-
-  SetRegisterValue(Register::EAX, eaxv);
-  SetRegisterValue(Register::EBX, ebx);
-  SetRegisterValue(Register::ECX, ecx);
-  SetRegisterValue(Register::EDX, edx);
+  // For static lifting / deobfuscation, CPUID is an opaque value barrier.
+  // Emitting inline asm makes all four output registers invisible to
+  // KnownBits analysis, which poisons downstream value chains and causes
+  // path solver bail-outs (e.g., VMP 3.6 ROP chain resolution fails
+  // because the dispatch address becomes fully unknown).
+  //
+  // Fix: model CPUID as returning fixed constants.  The exact values
+  // don't matter for deobfuscation — what matters is that they are
+  // deterministic so the path solver can reason through them.
+  // These represent a generic modern x86-64 processor (CPUID leaf 1).
+  SetRegisterValue(Register::EAX,
+                   ConstantInt::get(Type::getInt32Ty(context), 0x000806C1));
+  SetRegisterValue(Register::EBX,
+                   ConstantInt::get(Type::getInt32Ty(context), 0x00800800));
+  SetRegisterValue(Register::ECX,
+                   ConstantInt::get(Type::getInt32Ty(context), 0x7FFAFBBF));
+  SetRegisterValue(Register::EDX,
+                   ConstantInt::get(Type::getInt32Ty(context), 0xBFEBFBFF));
 }
 
 uint64_t alternative_pext(uint64_t source, uint64_t mask) {
