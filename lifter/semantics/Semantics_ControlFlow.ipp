@@ -137,15 +137,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cmovcc() {
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   LLVMContext& context = builder->getContext();
 
-  // 0 = function
-  // 1 = rip
-  // 2 = register rsp
-  // 3 = [rsp]
-  /*
-  auto src = operands[0];        // value that we are pushing
-  auto rsp = operands[2];        // value that we are pushing
-  auto rsp_memory = operands[3]; // value that we are pushing
-  */
   auto RspValue = GetRegisterValue(Register::RSP);
 
   auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
@@ -157,24 +148,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
 
   std::string block_name = "jmp_call-" + std::to_string(jump_address) + "-";
 
+  // Track whether we emitted an external CreateCall (not inlineable).
+  // When true, skip the Unflatten inlining path below.
+  bool emittedExternalCall = false;
+
   auto registerValue = GetIndexValue(0);
   switch (instruction.types[0]) {
   case OperandType::Immediate8:
-  case OperandType::Immediate16: // todo : pretty sure this 8 and 16 will cause
-                                 // troubles later
+  case OperandType::Immediate16:
   case OperandType::Immediate32:
   case OperandType::Immediate64: {
-
-    // if (auto imm = dyn_cast<ConstantInt>(GetIndexValue(0))) {
-    //   jump_address += imm->getSExtValue();
-    //   break;
-    // }
-    // UNREACHABLE("wont reach");
-    // break;
+    // Fall through to register/memory handling.
   }
   case OperandType::Memory8:
-  case OperandType::Memory16: // todo : pretty sure this 8 and 16 will cause
-                              // troubles later
+  case OperandType::Memory16:
   case OperandType::Memory32:
   case OperandType::Memory64:
   case OperandType::Register8:
@@ -183,33 +170,45 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   case OperandType::Register64: {
     registerValue =
         createAddFolder(registerValue, GetRegisterValue(Register::RIP));
-    // auto registerValue = GetIndexValue(0);
     if (getControlFlow() == ControlFlow::Basic ||
         !isa<ConstantInt>(registerValue)) {
 
-      std::cout << "did call";
-      registerValue->print(outs());
-      std::cout << "\n";
+      // --- Emit external call (unknown/indirect target) ---
+      auto fx = this->buildUnknownCallFx();
+      fx.target = isa<ConstantInt>(registerValue)
+                      ? CallTargetClass::UnknownDirect
+                      : CallTargetClass::UnknownIndirect;
+
       auto idltvm =
           builder->CreateIntToPtr(registerValue, PointerType::get(context, 0));
 
-      builder->CreateCall(parseArgsType(nullptr, context), idltvm,
-                          parseArgs(nullptr));
+      auto callResult =
+          builder->CreateCall(parseArgsType(nullptr, context), idltvm,
+                             parseArgs(nullptr));
 
+      applyPostCallEffects(callResult, fx);
+      abi::printCallEffectsDiag(fx, current_address - instruction.length);
+      emittedExternalCall = true;
       break;
     }
     auto registerCValue = cast<ConstantInt>(registerValue);
-    if (inlinePolicy.isOutline(registerCValue->getZExtValue())) {
+    if (inlinePolicy.isOutline(registerCValue->getZExtValue()) ||
+        shouldOutlineCall(registerCValue->getZExtValue())) {
 
-      std::cout << "did call";
-      registerValue->print(outs());
-      std::cout << "\n";
+      // --- Emit external call (outlined known-address target) ---
+      auto fx = this->buildUnknownCallFx();
+      fx.target = CallTargetClass::UnknownDirect;
+
       auto idltvm =
           builder->CreateIntToPtr(registerValue, PointerType::get(context, 0));
 
-      builder->CreateCall(parseArgsType(nullptr, context), idltvm,
-                          parseArgs(nullptr));
+      auto callResult =
+          builder->CreateCall(parseArgsType(nullptr, context), idltvm,
+                             parseArgs(nullptr));
 
+      applyPostCallEffects(callResult, fx);
+      abi::printCallEffectsDiag(fx, current_address - instruction.length);
+      emittedExternalCall = true;
       break;
     }
     jump_address = registerCValue->getZExtValue();
@@ -220,25 +219,34 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
     break;
   }
 
-  // if inlining call
-  // TODO:
-  if (getControlFlow() == ControlFlow::Unflatten) {
+  // Unflatten inlining path: push return address to stack and branch to
+  // the call target.  Skip this when we already emitted a CreateCall for
+  // an external/indirect target — the call semantics are fully handled.
+  if (!emittedExternalCall && getControlFlow() == ControlFlow::Unflatten) {
+
+    // Speculative inlining: only start if enabled (maxCallInlineBudget > 0)
+    // and not already inside a speculative inline.
+    if (maxCallInlineBudget > 0 && !speculativeCall.active) {
+      auto returnBB = getOrCreateBB(current_address, "call_return_cont");
+      branch_backup(returnBB);
+
+      speculativeCall.active        = true;
+      speculativeCall.returnAddr    = current_address;
+      speculativeCall.worklistFloor = unvisitedBlocks.size();
+      speculativeCall.bailedOut     = false;
+      speculativeCallBudget         = maxCallInlineBudget;
+    }
+
+    // Normal Unflatten path: push return address, branch to callee.
     SetRegisterValue(Register::RSP, result);
-    // // sub rsp 8 last,
 
     auto push_into_rsp = GetRegisterValue(Register::RIP);
 
     SetMemoryValue(getSPaddress(), push_into_rsp);
-    // // sub rsp 8 last,
 
     auto bb = getOrCreateBB(jump_address, "bb_call");
-    // if its trying to jump somewhere else than our binary, call it and
-    // continue from [rsp]
 
-    // // TODO: add some of this code to solvePath
     builder->CreateBr(bb);
-
-    // printvalue2(jump_address);
 
     blockInfo = BBInfo(jump_address, bb);
     printvalue2("pushing block");
@@ -344,29 +352,47 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     return;
   }
 
-  // lastinst->eraseFromParent();
 
-  auto val = ConstantInt::getSigned(Type::getInt64Ty(context),
-                                    file.getMode() == arch_mode::X64 ? 8 : 4);
+  // --- ROP/continuation return: pop return address and adjust RSP ---
+  const int ptrSize = (file.getMode() == arch_mode::X64) ? 8 : 4;
+  auto val = ConstantInt::getSigned(Type::getInt64Ty(context), ptrSize);
   auto rsp_result = createAddFolder(
       rspvalue, val, "ret-new-rsp-" + std::to_string(current_address) + "-");
 
+  // Handle `ret imm16` (callee-cleanup: stdcall, fastcall, or thunks).
   if (instruction.types[0] == OperandType::Immediate16) {
-
     rsp_result =
         createAddFolder(rsp_result, ConstantInt::get(rsp_result->getType(),
                                                      instruction.immediate));
+
+    // Diagnostic: callee-cleanup detected via ret-immediate.
+    const auto retCleanup =
+        (getEffectiveAbi() == AbiKind::X86_STDCALL ||
+         getEffectiveAbi() == AbiKind::X86_FASTCALL)
+            ? StackCleanup::Callee
+            : StackCleanup::Unknown;
+    std::cout << "[call-abi] ret imm=" << instruction.immediate
+              << " cleanup=" << abi::stackCleanupName(retCleanup)
+              << " at 0x" << std::hex
+              << (current_address - instruction.length)
+              << std::dec << "\n" << std::flush;
   }
 
-  SetRegisterValue(Register::RSP, rsp_result); // then add rsp 8
+  SetRegisterValue(Register::RSP, rsp_result);
 
   auto pathResult = solvePath(function, destination, realval);
   if (pathResult == PATH_unsolved) {
     ++liftStats.blocks_unreachable;
-    // ROP-style ret with non-constant target; log for triage
     std::cout << "[diag] lift_ret: unresolved ROP chain at 0x"
               << std::hex << (current_address - instruction.length)
               << std::dec << "\n" << std::flush;
+  }
+
+  // If the callee returned to our speculative call's return address,
+  // the inline succeeded — deactivate the budget.
+  if (speculativeCall.active && destination == speculativeCall.returnAddr) {
+    speculativeCall.active = false;
+    speculativeCallBudget = 0;
   }
 }
 

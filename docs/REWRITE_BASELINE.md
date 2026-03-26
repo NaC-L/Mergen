@@ -136,3 +136,32 @@ Samples without a `semantic` field are not tested. The `semantic` field is optio
 | Multi-input | 1 | 5 |
 | Jump-table dispatch | 2 | 7 |
 | **Total** | **23** | **107** |
+
+## Call-boundary ABI framework
+
+The lifter includes a cross-ABI call-boundary contract (`AbiCallContract.hpp`) that models:
+
+- **ABI kind**: x64 MSVC, x86 cdecl/stdcall/fastcall, unknown
+- **Call model mode**: `compat` (default) or `strict` (opt-in)
+- **Call effects**: argument registers, return registers, volatile clobber set, stack cleanup convention, memory effect assumption
+
+### Dual-mode behavior
+
+| Mode | Return value | Volatile clobber | Memory effect | Arg list |
+|------|-------------|-----------------|---------------|----------|
+| `compat` | RAX = call result | None (all regs preserved) | Preserve | All 16 GPRs + memory ptr |
+| `strict` | RAX = call result | RAX, RCX, RDX, R8-R11 set to undef | MayReadWrite | ABI arg regs only + memory ptr |
+
+### Configuration
+
+- `lifterClassBase::callModelMode` controls the mode (default: `Strict`)
+- `lifterClassBase::defaultAbi` overrides auto-detection (default: `Unknown`, inferred from file mode)
+- Diagnostics printed to stdout with `[call-abi]` prefix at each call site
+
+### Verification expectations
+
+- **Strict mode is the default.** It is ABI-correct: volatile registers (RAX, RCX, RDX, R8-R11) become `undef` after non-inlineable calls, non-volatile registers (RBX, RSI, RDI, RBP, R12-R15) survive. This is safe for all compiler-generated code because the compiler saves volatile values to non-volatile registers before calls. The lifter operates in SSA, so values computed before the call are bound and survive regardless of register clobber.
+- **Compat mode** is available as opt-in fallback (`CallModelMode::Compat`). It preserves all registers across calls. Use for diagnostic comparison only.
+- **Inlineable calls are unaffected.** The Unflatten path follows the call target and returns; no CreateCall is emitted, no ABI effects are applied. This covers all VMP/Themida internal calls.
+- `ret imm16` diagnostics note callee-cleanup detection.
+- The `parseArgs(nullptr)` path no longer has a duplicated RDI register (was a pre-existing bug).

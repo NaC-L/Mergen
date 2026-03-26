@@ -136,6 +136,136 @@ private:
     return true;
   }
 
+  // ── Call-boundary ABI contract tests ──────────────────────────────
+  //
+  // These exercise the dual-mode (compat/strict) call effects directly.
+  // We create a lifter, set a known value in a volatile register (R10),
+  // simulate a post-call effect via applyPostCallEffects, and verify:
+  //   compat → R10 keeps its value (no clobber)
+  //   strict → R10 becomes undef (clobbered)
+
+  bool runCallAbiCompatPreservesVolatile(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.callModelMode = CallModelMode::Compat;
+
+    // Set R10 to a known constant.
+    const uint64_t r10_value = 0xCAFEBABE;
+    lifter.SetRegisterValue(
+        RegisterUnderTest::R10,
+        llvm::ConstantInt::get(lifter.builder->getContext(),
+                              llvm::APInt(64, r10_value)));
+
+    // Simulate a call returning 0x1337.
+    auto* callResult = llvm::ConstantInt::get(
+        llvm::Type::getInt64Ty(lifter.builder->getContext()), 0x1337);
+    auto fx = lifter.buildUnknownCallFx();
+    lifter.applyPostCallEffects(callResult, fx);
+
+    // In compat mode, R10 should still be the original constant.
+    auto r10After = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::R10));
+    if (!r10After.has_value()) {
+      details = "  compat: R10 is not constant after call (expected preserved)\n";
+      return false;
+    }
+    if (r10After->getZExtValue() != r10_value) {
+      details = "  compat: R10 mismatch: expected=0xcafebabe actual=" +
+                formatAPIntHex(*r10After) + "\n";
+      return false;
+    }
+
+    // RAX should be the call result.
+    auto raxAfter = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::RAX));
+    if (!raxAfter.has_value() || raxAfter->getZExtValue() != 0x1337) {
+      details = "  compat: RAX not set to call result\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runCallAbiStrictClobbersVolatile(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.callModelMode = CallModelMode::Strict;
+
+    // Set R10 to a known constant.
+    lifter.SetRegisterValue(
+        RegisterUnderTest::R10,
+        llvm::ConstantInt::get(lifter.builder->getContext(),
+                              llvm::APInt(64, 0xCAFEBABE)));
+    // Set RBX (non-volatile) to a known constant.
+    const uint64_t rbx_value = 0xDEADBEEF;
+    lifter.SetRegisterValue(
+        RegisterUnderTest::RBX,
+        llvm::ConstantInt::get(lifter.builder->getContext(),
+                              llvm::APInt(64, rbx_value)));
+
+    // Simulate a call returning 0x1337.
+    auto* callResult = llvm::ConstantInt::get(
+        llvm::Type::getInt64Ty(lifter.builder->getContext()), 0x1337);
+    auto fx = lifter.buildUnknownCallFx();
+    lifter.applyPostCallEffects(callResult, fx);
+
+    // In strict mode, R10 should be undef (not a constant).
+    auto r10After = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::R10));
+    if (r10After.has_value()) {
+      details = "  strict: R10 is still constant (" +
+                formatAPIntHex(*r10After) +
+                ") but should be undef after clobber\n";
+      return false;
+    }
+
+    // RBX (non-volatile) should still be preserved.
+    auto rbxAfter = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::RBX));
+    if (!rbxAfter.has_value()) {
+      details = "  strict: RBX is not constant (should survive as non-volatile)\n";
+      return false;
+    }
+    if (rbxAfter->getZExtValue() != rbx_value) {
+      details = "  strict: RBX mismatch: expected=0xdeadbeef actual=" +
+                formatAPIntHex(*rbxAfter) + "\n";
+      return false;
+    }
+
+    // RAX should be the call result (it's volatile but also the return reg).
+    auto raxAfter = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::RAX));
+    if (!raxAfter.has_value() || raxAfter->getZExtValue() != 0x1337) {
+      details = "  strict: RAX not set to call result\n";
+      return false;
+    }
+    return true;
+  }
+
+  // Verify strict is the default — no explicit mode set.
+  bool runCallAbiDefaultIsStrict(std::string& details) {
+    LifterUnderTest lifter;
+    // Do NOT set callModelMode — rely on the default.
+
+    lifter.SetRegisterValue(
+        RegisterUnderTest::R10,
+        llvm::ConstantInt::get(lifter.builder->getContext(),
+                              llvm::APInt(64, 0xCAFEBABE)));
+
+    auto* callResult = llvm::ConstantInt::get(
+        llvm::Type::getInt64Ty(lifter.builder->getContext()), 0x1337);
+    auto fx = lifter.buildUnknownCallFx();
+    lifter.applyPostCallEffects(callResult, fx);
+
+    // R10 should be undef (default = strict = clobber volatile).
+    auto r10After = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::R10));
+    if (r10After.has_value()) {
+      details = "  default mode: R10 is constant (" +
+                formatAPIntHex(*r10After) +
+                ") — expected undef (strict default)\n";
+      return false;
+    }
+    return true;
+  }
+
   int runCustomKnownBitsTests(const std::string& suiteFilter) {
     int failures = 0;
 
@@ -162,6 +292,22 @@ private:
       }
       failures += !ok;
     }
+
+    // Call-ABI contract tests
+    auto runCustom = [&](const std::string& name, auto method) {
+      if (!shouldRunByFilter(name, suiteFilter)) return;
+      std::string details;
+      const bool ok = (this->*method)(details);
+      std::cout << "[" << (ok ? "  OK  " : " FAIL ") << "] " << name << "\n";
+      if (!ok && !details.empty()) std::cout << details;
+      failures += !ok;
+    };
+    runCustom("call_abi_compat_preserves_volatile",
+             &InstructionTester::runCallAbiCompatPreservesVolatile);
+    runCustom("call_abi_strict_clobbers_volatile",
+             &InstructionTester::runCallAbiStrictClobbersVolatile);
+    runCustom("call_abi_default_is_strict",
+             &InstructionTester::runCallAbiDefaultIsStrict);
 
     return failures;
   }
