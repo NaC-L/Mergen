@@ -164,8 +164,12 @@ ParseResult parseArguments(const std::vector<std::string>& args,
       }
       if (arg == "--outline" || arg.rfind("--outline=", 0) == 0) {
         std::string value;
-        if (arg.size() > 10 && arg[9] == '=') {
+        if (arg.rfind("--outline=", 0) == 0) {
           value = arg.substr(10);
+          if (value.empty()) {
+            result.errors.push_back("--outline= requires a value after '='");
+            continue;
+          }
         } else if (index + 1 < args.size()) {
           value = args[++index];
         } else {
