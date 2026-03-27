@@ -195,7 +195,12 @@ public:
                                       })}};
 
   static inline std::unordered_map<uint64_t, functioninfo> functions;
+  // Known Win32 API signatures for named import call emission.
+  // Only register-passed arguments (RCX, RDX, R8, R9) are modeled;
+  // stack-passed arguments (5th+ params) are not yet supported.
+  // Functions with >4 params emit declarations for the first 4 only.
   static inline std::unordered_map<std::string, functioninfo> functionsByName{
+      // ── UI / Dialog ──
       {"MessageBoxW", functioninfo("MessageBoxW",
                                    {
                                        funcArgInfo(Register::RCX, I64, 0),
@@ -203,9 +208,145 @@ public:
                                        funcArgInfo(Register::R8, I64, 1),
                                        funcArgInfo(Register::R9, I64, 0),
                                    })},
+      {"MessageBoxA", functioninfo("MessageBoxA",
+                                   {
+                                       funcArgInfo(Register::RCX, I64, 0),
+                                       funcArgInfo(Register::RDX, I64, 1),
+                                       funcArgInfo(Register::R8, I64, 1),
+                                       funcArgInfo(Register::R9, I64, 0),
+                                   })},
+
+      // ── Timing ──
       {"GetTickCount64", functioninfo("GetTickCount64", {})},
+      {"GetTickCount", functioninfo("GetTickCount", {})},
+      {"QueryPerformanceCounter", functioninfo("QueryPerformanceCounter",
+                                                {funcArgInfo(Register::RCX, I64, 1)})},
+      {"QueryPerformanceFrequency", functioninfo("QueryPerformanceFrequency",
+                                                  {funcArgInfo(Register::RCX, I64, 1)})},
+      {"Sleep", functioninfo("Sleep", {funcArgInfo(Register::RCX, I32, 0)})},
+
+      // ── Memory ──
+      {"VirtualAlloc", functioninfo("VirtualAlloc",
+                                    {
+                                        funcArgInfo(Register::RCX, I64, 1),
+                                        funcArgInfo(Register::RDX, I64, 0),
+                                        funcArgInfo(Register::R8, I32, 0),
+                                        funcArgInfo(Register::R9, I32, 0),
+                                    })},
+      {"VirtualFree", functioninfo("VirtualFree",
+                                   {
+                                       funcArgInfo(Register::RCX, I64, 1),
+                                       funcArgInfo(Register::RDX, I64, 0),
+                                       funcArgInfo(Register::R8, I32, 0),
+                                   })},
+      {"VirtualProtect", functioninfo("VirtualProtect",
+                                      {
+                                          funcArgInfo(Register::RCX, I64, 1),
+                                          funcArgInfo(Register::RDX, I64, 0),
+                                          funcArgInfo(Register::R8, I32, 0),
+                                          funcArgInfo(Register::R9, I64, 1),
+                                      })},
+      {"HeapAlloc", functioninfo("HeapAlloc",
+                                 {
+                                     funcArgInfo(Register::RCX, I64, 0),
+                                     funcArgInfo(Register::RDX, I32, 0),
+                                     funcArgInfo(Register::R8, I64, 0),
+                                 })},
+      {"HeapFree", functioninfo("HeapFree",
+                                {
+                                    funcArgInfo(Register::RCX, I64, 0),
+                                    funcArgInfo(Register::RDX, I32, 0),
+                                    funcArgInfo(Register::R8, I64, 1),
+                                })},
+
+      // ── File I/O ──
+      {"CreateFileW", functioninfo("CreateFileW",
+                                   {
+                                       funcArgInfo(Register::RCX, I64, 1),
+                                       funcArgInfo(Register::RDX, I32, 0),
+                                       funcArgInfo(Register::R8, I32, 0),
+                                       funcArgInfo(Register::R9, I64, 1),
+                                   })},
+      {"CreateFileA", functioninfo("CreateFileA",
+                                   {
+                                       funcArgInfo(Register::RCX, I64, 1),
+                                       funcArgInfo(Register::RDX, I32, 0),
+                                       funcArgInfo(Register::R8, I32, 0),
+                                       funcArgInfo(Register::R9, I64, 1),
+                                   })},
+      {"ReadFile", functioninfo("ReadFile",
+                                {
+                                    funcArgInfo(Register::RCX, I64, 0),
+                                    funcArgInfo(Register::RDX, I64, 1),
+                                    funcArgInfo(Register::R8, I32, 0),
+                                    funcArgInfo(Register::R9, I64, 1),
+                                })},
+      {"WriteFile", functioninfo("WriteFile",
+                                 {
+                                     funcArgInfo(Register::RCX, I64, 0),
+                                     funcArgInfo(Register::RDX, I64, 1),
+                                     funcArgInfo(Register::R8, I32, 0),
+                                     funcArgInfo(Register::R9, I64, 1),
+                                 })},
+      {"CloseHandle", functioninfo("CloseHandle",
+                                   {funcArgInfo(Register::RCX, I64, 0)})},
+
+      // ── Process / Module ──
+      {"GetCurrentProcess", functioninfo("GetCurrentProcess", {})},
+      {"GetCurrentProcessId", functioninfo("GetCurrentProcessId", {})},
+      {"GetCurrentThreadId", functioninfo("GetCurrentThreadId", {})},
+      {"GetModuleHandleW", functioninfo("GetModuleHandleW",
+                                        {funcArgInfo(Register::RCX, I64, 1)})},
+      {"GetModuleHandleA", functioninfo("GetModuleHandleA",
+                                        {funcArgInfo(Register::RCX, I64, 1)})},
+      {"GetProcAddress", functioninfo("GetProcAddress",
+                                      {
+                                          funcArgInfo(Register::RCX, I64, 0),
+                                          funcArgInfo(Register::RDX, I64, 1),
+                                      })},
+      {"LoadLibraryW", functioninfo("LoadLibraryW",
+                                    {funcArgInfo(Register::RCX, I64, 1)})},
+      {"LoadLibraryA", functioninfo("LoadLibraryA",
+                                    {funcArgInfo(Register::RCX, I64, 1)})},
+      {"LoadLibraryExW", functioninfo("LoadLibraryExW",
+                                      {
+                                          funcArgInfo(Register::RCX, I64, 1),
+                                          funcArgInfo(Register::RDX, I64, 0),
+                                          funcArgInfo(Register::R8, I32, 0),
+                                      })},
+      {"ExitProcess", functioninfo("ExitProcess",
+                                   {funcArgInfo(Register::RCX, I32, 0)})},
+
+      // ── Error handling ──
+      {"GetLastError", functioninfo("GetLastError", {})},
+      {"SetLastError", functioninfo("SetLastError",
+                                    {funcArgInfo(Register::RCX, I32, 0)})},
+
+      // ── Sync ──
+      {"WaitForSingleObject", functioninfo("WaitForSingleObject",
+                                           {
+                                               funcArgInfo(Register::RCX, I64, 0),
+                                               funcArgInfo(Register::RDX, I32, 0),
+                                           })},
+
+      // ── Registry ──
+      {"RegOpenKeyExW", functioninfo("RegOpenKeyExW",
+                                     {
+                                         funcArgInfo(Register::RCX, I64, 0),
+                                         funcArgInfo(Register::RDX, I64, 1),
+                                         funcArgInfo(Register::R8, I32, 0),
+                                         funcArgInfo(Register::R9, I32, 0),
+                                     })},
+      {"RegQueryValueExW", functioninfo("RegQueryValueExW",
+                                        {
+                                            funcArgInfo(Register::RCX, I64, 0),
+                                            funcArgInfo(Register::RDX, I64, 1),
+                                            funcArgInfo(Register::R8, I64, 1),
+                                            funcArgInfo(Register::R9, I64, 1),
+                                        })},
+      {"RegCloseKey", functioninfo("RegCloseKey",
+                                   {funcArgInfo(Register::RCX, I64, 0)})},
   };
-  ;
 
   static inline std::unordered_map<std::vector<unsigned char>, functioninfo,
                                    VectorHash>

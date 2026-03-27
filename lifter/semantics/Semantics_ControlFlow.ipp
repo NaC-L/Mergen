@@ -152,6 +152,31 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
   // When true, skip the Unflatten inlining path below.
   bool emittedExternalCall = false;
 
+  // Fast path: detect `call [rip+disp]` (FF 15) direct IAT calls.
+  // These are memory-operand calls where the effective address is an IAT slot.
+  // Resolve the import name and emit a named function call without loading
+  // the stale on-disk IAT value.
+  if (instruction.types[0] >= OperandType::Memory8 &&
+      instruction.types[0] <= OperandType::Memory64 &&
+      instruction.mem_base == Register::RIP &&
+      instruction.mem_index == Register::None) {
+    // EA = RIP (post-instruction) + displacement.  current_address is already
+    // advanced past the instruction, so it equals RIP at this point.
+    uint64_t ea = current_address + instruction.mem_disp;
+    auto it = importMap.find(ea);
+    if (it != importMap.end()) {
+      const auto& importName = it->second;
+      callFunctionIR(importName, nullptr);
+      std::cout << "[call-abi] resolved import: " << importName << "\n"
+                << std::flush;
+      emittedExternalCall = true;
+
+      // Skip the switch/Unflatten path entirely.
+      goto call_done;
+    }
+  }
+
+  { // Non-IAT call path: operand-based dispatch.
   auto registerValue = GetIndexValue(0);
   switch (instruction.types[0]) {
   case OperandType::Immediate8:
@@ -196,18 +221,27 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
         shouldOutlineCall(registerCValue->getZExtValue())) {
 
       // --- Emit external call (outlined known-address target) ---
-      auto fx = this->buildUnknownCallFx();
-      fx.target = CallTargetClass::UnknownDirect;
+      uint64_t targetAddr = registerCValue->getZExtValue();
+      auto importName = resolveImportName(targetAddr);
 
-      auto idltvm =
-          builder->CreateIntToPtr(registerValue, PointerType::get(context, 0));
+      if (!importName.empty()) {
+        // Named import: emit a proper LLVM function declaration.
+        callFunctionIR(importName, nullptr);
+        std::cout << "[call-abi] resolved import: " << importName << "\n"
+                  << std::flush;
+      } else {
+        // Unknown outlined target: emit opaque inttoptr call.
+        auto fx = this->buildUnknownCallFx();
+        fx.target = CallTargetClass::UnknownDirect;
 
-      auto callResult =
-          builder->CreateCall(parseArgsType(nullptr, context), idltvm,
-                             parseArgs(nullptr));
+        auto idltvm = builder->CreateIntToPtr(
+            registerValue, PointerType::get(context, 0));
+        auto callResult = builder->CreateCall(
+            parseArgsType(nullptr, context), idltvm, parseArgs(nullptr));
 
-      applyPostCallEffects(callResult, fx);
-      abi::printCallEffectsDiag(fx, current_address - instruction.length);
+        applyPostCallEffects(callResult, fx);
+        abi::printCallEffectsDiag(fx, current_address - instruction.length);
+      }
       emittedExternalCall = true;
       break;
     }
@@ -253,6 +287,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
     addUnvisitedAddr(blockInfo);
     run = 0;
   }
+  } // end non-IAT call path
+call_done:;
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
