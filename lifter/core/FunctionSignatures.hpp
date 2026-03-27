@@ -195,6 +195,10 @@ public:
                                       })}};
 
   static inline std::unordered_map<uint64_t, functioninfo> functions;
+  // Known Win32 API signatures for named import call emission.
+  // Only register-passed arguments (RCX, RDX, R8, R9) are modeled;
+  // stack-passed arguments (5th+ params) are not yet supported.
+  // Functions with >4 params emit declarations for the first 4 only.
   static inline std::unordered_map<std::string, functioninfo> functionsByName{
       // ── UI / Dialog ──
       {"MessageBoxW", functioninfo("MessageBoxW",
