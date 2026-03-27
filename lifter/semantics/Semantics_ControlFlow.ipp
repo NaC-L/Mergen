@@ -166,19 +166,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
     auto it = importMap.find(ea);
     if (it != importMap.end()) {
       const auto& importName = it->second;
-      auto fx = this->buildUnknownCallFx();
-      fx.target = CallTargetClass::KnownByName;
-
-      auto* funcInfo = signatures.getFunctionInfo(importName);
-      auto* externFuncType = parseArgsType(funcInfo, context);
-      auto M = builder->GetInsertBlock()->getParent()->getParent();
-      auto* externFunc = cast<llvm::Function>(
-          M->getOrInsertFunction(importName, externFuncType).getCallee());
-      auto args = parseArgs(funcInfo);
-      auto callResult = builder->CreateCall(externFunc, args);
-
-      applyPostCallEffects(callResult, fx);
-      abi::printCallEffectsDiag(fx, current_address - instruction.length);
+      callFunctionIR(importName, nullptr);
       std::cout << "[call-abi] resolved import: " << importName << "\n"
                 << std::flush;
       emittedExternalCall = true;
@@ -238,20 +226,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
 
       if (!importName.empty()) {
         // Named import: emit a proper LLVM function declaration.
-        auto fx = this->buildUnknownCallFx();
-        fx.target = CallTargetClass::KnownByName;
-
-        // Look up known signature, or fall back to generic.
-        auto* funcInfo = signatures.getFunctionInfo(importName);
-        auto* externFuncType = parseArgsType(funcInfo, context);
-        auto M = builder->GetInsertBlock()->getParent()->getParent();
-        auto* externFunc = cast<llvm::Function>(
-            M->getOrInsertFunction(importName, externFuncType).getCallee());
-        auto args = parseArgs(funcInfo);
-        auto callResult = builder->CreateCall(externFunc, args);
-
-        applyPostCallEffects(callResult, fx);
-        abi::printCallEffectsDiag(fx, current_address - instruction.length);
+        callFunctionIR(importName, nullptr);
         std::cout << "[call-abi] resolved import: " << importName << "\n"
                   << std::flush;
       } else {
