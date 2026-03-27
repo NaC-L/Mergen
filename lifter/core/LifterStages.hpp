@@ -17,21 +17,24 @@ struct LifterStageContext {
 };
 
 inline std::unique_ptr<lifterConcolic<>>
-createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
+createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
+                                uint64_t runtimeAddress) {
   auto lifter = std::make_unique<lifterConcolic<>>();
   lifter->loadFile(fileBase);
   // Memory policy configured later in prepareLifterStageContext
   // when RuntimeImageContext (with PE stack reserve) is available.
 
+  // Parse PE headers once for all directory walks below.
+  auto* dosHdr = reinterpret_cast<win::dos_header_t*>(fileBase);
+  auto* ntHdr  = reinterpret_cast<win::nt_headers_t<true>*>(
+      fileBase + dosHdr->e_lfanew);
+  uint64_t imageBase = ntHdr->optional_header.image_base;
+
   // Auto-outline PE exports: exported functions are separate entry points
   // that should not be inlined when called from the lifted function.
   {
-    auto* dosHdr = reinterpret_cast<win::dos_header_t*>(fileBase);
-    auto* ntHdr  = reinterpret_cast<win::nt_headers_t<true>*>(
-        fileBase + dosHdr->e_lfanew);
     auto& expDir = ntHdr->optional_header.data_directories.export_directory;
     if (expDir.size >= sizeof(win::export_directory_t)) {
-      uint64_t imageBase = ntHdr->optional_header.image_base;
       auto fileOff = lifter->file.RvaToFileOffset(expDir.rva);
       if (fileOff != 0) {
         auto* exp = reinterpret_cast<const win::export_directory_t*>(
@@ -56,12 +59,8 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
   // Build import name map: IAT slot VA -> function name.
   // This enables named CreateCall declarations for outlined import thunks.
   {
-    auto* dosHdr = reinterpret_cast<win::dos_header_t*>(fileBase);
-    auto* ntHdr  = reinterpret_cast<win::nt_headers_t<true>*>(
-        fileBase + dosHdr->e_lfanew);
     auto& impDir = ntHdr->optional_header.data_directories.import_directory;
     if (impDir.size >= sizeof(win::import_directory_t)) {
-      uint64_t imageBase = ntHdr->optional_header.image_base;
       auto impOff = lifter->file.RvaToFileOffset(impDir.rva);
       if (impOff != 0) {
         auto* imports = reinterpret_cast<const win::import_directory_t*>(
@@ -85,9 +84,14 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
             uint32_t hintNameRva = static_cast<uint32_t>(ilt[i] & 0x7FFFFFFF);
             auto hnOff = lifter->file.RvaToFileOffset(hintNameRva);
             if (hnOff == 0) continue;
-            // Skip the 2-byte hint, read the null-terminated name.
+            // Bounds-check: hint (2 bytes) + at least 1 byte of name must
+            // fit within the file buffer.
+            if (hnOff + 3 > fileSize) continue;
             const char* funcName =
                 reinterpret_cast<const char*>(fileBase + hnOff + 2);
+            // Ensure the name is null-terminated within the file.
+            size_t maxLen = fileSize - (hnOff + 2);
+            if (strnlen(funcName, maxLen) == maxLen) continue;
             lifter->importMap[iatSlotVA] = funcName;
           }
         }
@@ -100,13 +104,9 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, uint64_t runtimeAddress) {
   // (rva_begin < imageSize and rva_begin < rva_end) to discard garbage
   // entries produced by obfuscators like VMP.
   {
-    auto* dosHdr = reinterpret_cast<win::dos_header_t*>(fileBase);
-    auto* ntHdr  = reinterpret_cast<win::nt_headers_t<true>*>(
-        fileBase + dosHdr->e_lfanew);
     auto& excDir = ntHdr->optional_header.data_directories.exception_directory;
     uint32_t imageSize = ntHdr->optional_header.size_image;
     if (excDir.size >= 12) {
-      uint64_t imageBase = ntHdr->optional_header.image_base;
       auto excOff = lifter->file.RvaToFileOffset(excDir.rva);
       if (excOff != 0) {
         // Each RUNTIME_FUNCTION is {uint32_t BeginAddress, EndAddress, UnwindInfo}.
@@ -170,7 +170,8 @@ prepareLifterStageContext(uint64_t runtimeAddress, std::vector<uint8_t>& fileDat
     return std::nullopt;
   }
 
-  auto lifter = createConfiguredLifterForRuntime(fileBase, runtimeAddress);
+  auto lifter = createConfiguredLifterForRuntime(fileBase, fileData.size(),
+                                                 runtimeAddress);
   auto ctx = *runtimeResult.context;
   configureDefaultMemoryPolicy(lifter.get(), ctx.stackReserve);
   return LifterStageContext{.lifter = std::move(lifter),
