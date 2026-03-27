@@ -308,30 +308,47 @@ public:
                                                   callModelMode);
   }
 
-  // Import thunk detection for auto-outline policy.
+  // Parse an FF 25 (jmp [rip+disp32]) import thunk at targetVA.
+  // Returns the IAT slot VA on success, or 0 if not a thunk.
+  uint64_t parseImportThunk(uint64_t targetVA) {
+    // Read opcode (2 bytes) and displacement (4 bytes) via readMemory
+    // to avoid raw pointer access past section boundaries.
+    uint64_t opcodeVal = 0;
+    if (!file.readMemory(targetVA, 2, opcodeVal)) return 0;
+    // Little-endian: FF 25 -> 0x25FF.
+    if ((opcodeVal & 0xFFFF) != 0x25FF) return 0;
+
+    uint64_t dispVal = 0;
+    if (!file.readMemory(targetVA + 2, 4, dispVal)) return 0;
+    int32_t disp = static_cast<int32_t>(dispVal & 0xFFFFFFFF);
+    return targetVA + 6 + disp;
+  }
+
   // Detects `jmp [rip+disp32]` (FF 25) thunks that read from the IAT.
-  // Returns true if targetVA is an import thunk that should be outlined.
+  // Returns true if targetVA is an import thunk pointing outside the PE.
   bool isImportThunk(uint64_t targetVA) {
-    // Read the first 6 bytes at the target address.
-    uint64_t mapped = file.address_to_mapped_address(targetVA);
-    if (mapped == 0) return false;
-    auto* bytes = reinterpret_cast<const uint8_t*>(mapped);
+    uint64_t iatSlot = parseImportThunk(targetVA);
+    if (iatSlot == 0) return false;
 
-    // Check for `jmp [rip+disp32]` = FF 25 xx xx xx xx
-    if (bytes[0] != 0xFF || bytes[1] != 0x25) return false;
-
-    // Decode RIP-relative displacement (next instruction is target + 6).
-    int32_t disp;
-    std::memcpy(&disp, bytes + 2, 4);
-    uint64_t iatSlot = targetVA + 6 + disp;
-
-    // Verify the IAT slot points outside the binary by reading its value.
     uint64_t importAddr = 0;
     if (!file.readMemory(iatSlot, 8, importAddr)) return false;
+    return file.address_to_mapped_address(importAddr) == 0;
+  }
 
-    // If the target address is not mapped in the PE, it's an external import.
-    uint64_t externalMapped = file.address_to_mapped_address(importAddr);
-    return externalMapped == 0;
+  // Import name resolution map: IAT slot VA -> import function name.
+  // Built from PE import directory at setup. Used to emit named
+  // function declarations instead of opaque inttoptr calls.
+  std::unordered_map<uint64_t, std::string> importMap;
+
+  // If targetVA is an import thunk, returns the import name.
+  // Otherwise returns empty string.
+  std::string resolveImportName(uint64_t targetVA) {
+    uint64_t iatSlot = parseImportThunk(targetVA);
+    if (iatSlot == 0) return {};
+
+    auto it = importMap.find(iatSlot);
+    if (it != importMap.end()) return it->second;
+    return {};
   }
 
   // Returns true if the target should be outlined instead of inlined.

@@ -174,6 +174,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::callFunctionIR(
   auto fx = this->buildUnknownCallFx();
   fx.target = CallTargetClass::KnownByName;
   applyPostCallEffects(callresult, fx);
+  abi::printCallEffectsDiag(fx, current_address - instruction.length);
 
   return callresult;
 }
