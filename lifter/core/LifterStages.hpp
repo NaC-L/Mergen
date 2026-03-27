@@ -41,9 +41,13 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
             fileBase + fileOff);
         auto funcTableOff = lifter->file.RvaToFileOffset(exp->rva_functions);
         if (funcTableOff != 0 && exp->num_functions > 0) {
+          // Clamp to file bounds to prevent OOB on corrupted export tables.
+          uint32_t maxFuncs = (fileSize > funcTableOff)
+              ? static_cast<uint32_t>(std::min<size_t>((fileSize - funcTableOff) / 4, exp->num_functions))
+              : 0;
           auto* funcRVAs = reinterpret_cast<const uint32_t*>(
               fileBase + funcTableOff);
-          for (uint32_t i = 0; i < exp->num_functions; ++i) {
+          for (uint32_t i = 0; i < maxFuncs; ++i) {
             uint32_t rva = funcRVAs[i];
             if (rva == 0) continue;
             // Skip forwarded exports: RVA points within the export directory

@@ -26,9 +26,13 @@ endif()
 
 # Variables
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -gfull")
 
 project(Mergen)
+
+# Force release CRT (/MD) in all configs to match pre-built LLVM libs.
+# Without this, Debug config uses /MDd which sets _ITERATOR_DEBUG_LEVEL=2,
+# mismatching LLVM's _ITERATOR_DEBUG_LEVEL=0 and causing a linker error.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "MSVC runtime library" FORCE)
 
 # Packages
 find_package(Iced-Wrapper REQUIRED)
