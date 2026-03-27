@@ -311,13 +311,16 @@ public:
   // Parse an FF 25 (jmp [rip+disp32]) import thunk at targetVA.
   // Returns the IAT slot VA on success, or 0 if not a thunk.
   uint64_t parseImportThunk(uint64_t targetVA) {
-    uint64_t mapped = file.address_to_mapped_address(targetVA);
-    if (mapped == 0) return 0;
-    auto* bytes = reinterpret_cast<const uint8_t*>(mapped);
-    if (bytes[0] != 0xFF || bytes[1] != 0x25) return 0;
+    // Read opcode (2 bytes) and displacement (4 bytes) via readMemory
+    // to avoid raw pointer access past section boundaries.
+    uint64_t opcodeVal = 0;
+    if (!file.readMemory(targetVA, 2, opcodeVal)) return 0;
+    // Little-endian: FF 25 -> 0x25FF.
+    if ((opcodeVal & 0xFFFF) != 0x25FF) return 0;
 
-    int32_t disp;
-    std::memcpy(&disp, bytes + 2, 4);
+    uint64_t dispVal = 0;
+    if (!file.readMemory(targetVA + 2, 4, dispVal)) return 0;
+    int32_t disp = static_cast<int32_t>(dispVal & 0xFFFFFFFF);
     return targetVA + 6 + disp;
   }
 

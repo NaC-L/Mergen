@@ -71,12 +71,18 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
               imports->rva_original_first_thunk);
           auto iatOff = lifter->file.RvaToFileOffset(
               imports->rva_first_thunk);
-          if (iltOff == 0 || iatOff == 0) continue;
+          if (iatOff == 0) continue;
+          // PE spec: if OriginalFirstThunk is zero, use FirstThunk for
+          // name lookup (common with bound imports and some linkers).
+          if (iltOff == 0) iltOff = iatOff;
 
           auto* ilt = reinterpret_cast<const uint64_t*>(fileBase + iltOff);
           uint32_t iatRva = imports->rva_first_thunk;
+          // Cap iteration to prevent walking off mapped memory when the
+          // ILT lacks a null terminator (truncated/malformed PE).
+          size_t maxIltEntries = (fileSize > iltOff) ? (fileSize - iltOff) / 8 : 0;
 
-          for (size_t i = 0; ilt[i] != 0; ++i) {
+          for (size_t i = 0; i < maxIltEntries && ilt[i] != 0; ++i) {
             uint64_t iatSlotVA = imageBase + iatRva + i * 8;
             // Bit 63 set = import by ordinal, no name available.
             if (ilt[i] & (1ULL << 63)) continue;
@@ -110,7 +116,9 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
       auto excOff = lifter->file.RvaToFileOffset(excDir.rva);
       if (excOff != 0) {
         // Each RUNTIME_FUNCTION is {uint32_t BeginAddress, EndAddress, UnwindInfo}.
-        size_t numEntries = excDir.size / 12;
+        // Clamp to actual file bounds to prevent OOB reads on corrupted headers.
+        size_t safeSize = (excOff < fileSize) ? std::min<size_t>(excDir.size, fileSize - excOff) : 0;
+        size_t numEntries = safeSize / 12;
         const uint8_t* entries = fileBase + excOff;
         size_t added = 0;
         for (size_t i = 0; i < numEntries; ++i) {
