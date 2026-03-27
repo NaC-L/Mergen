@@ -98,13 +98,13 @@ class FunctionInlinePolicyDynamicOutlineDefault
     : public FunctionInlinePolicyBase<
           FunctionInlinePolicyDynamicOutlineDefault> {
 public:
-  // inline by default
-  // keep track of outlines, everything else is inline?
+  // outline by default
+  // keep track of addresses to outline, everything else defaults to outline
   std::set<uint64_t> range;
   FunctionInlineMode defaultMode;
 
   FunctionInlinePolicyDynamicOutlineDefault() {
-    defaultMode = FunctionInlineMode::INLINE;
+    defaultMode = FunctionInlineMode::OUTLINE;
   }
 
   FunctionInlinePolicyDynamicOutlineDefault(

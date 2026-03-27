@@ -12,7 +12,7 @@ testmode = "DEFINED MERGEN_TEST"
 
 [variables]
 CMAKE_MODULE_PATH = "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
-CMAKE_CXX_FLAGS_DEBUG = "-O0 -gfull"
+CMAKE_MSVC_RUNTIME_LIBRARY = "MultiThreadedDLL"
 
 [fetch-content.linux-pe]
 git = "https://github.com/can1357/linux-pe"
