@@ -37,6 +37,6 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 ## Quality Contract
 
 - Handler test coverage: 97.4% (112/115 with oracle verification against Unicorn).
-- Regression corpus: 28 active samples, 146 semantic test cases, 56 golden IR hashes.
+- Regression corpus: 28 active samples, 146 semantic test cases, 42 golden IR hashes (asm-only; C-compiled excluded as address-dependent).
 - Jump table coverage: 7 samples across 6 patterns (absolute, rel32, shifted, shared, computation, C-compiled /O2).
 - CI gates enforce register and flag correctness.
