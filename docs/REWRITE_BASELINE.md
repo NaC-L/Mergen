@@ -134,8 +134,10 @@ Samples without a `semantic` field are not tested. The `semantic` field is optio
 | Constant-return (no inputs) | 8 | 8 |
 | Single-input branching | 12 | 87 |
 | Multi-input | 1 | 5 |
-| Jump-table dispatch | 2 | 7 |
-| **Total** | **23** | **107** |
+| Jump-table dispatch (absolute qword) | 2 | 16 |
+| Jump-table dispatch (rel32 / shifted / shared / computation) | 4 | 31 |
+| Jump-table dispatch (C-compiled /O2, 16-case) | 1 | 10 |
+| **Total** | **28** | **146** (+ 1 skipped: calc_cout) |
 
 ## Call-boundary ABI framework
 

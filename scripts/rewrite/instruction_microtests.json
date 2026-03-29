@@ -329,6 +329,123 @@
         { "inputs": { "RCX": 9 },  "expected": 512,        "label": "2^9" },
         { "inputs": { "RCX": 10 }, "expected": 4294967295, "label": "default (above range)" }
       ]
+    },
+    {
+      "name": "jumptable_rel32",
+      "symbol": "jumptable_rel32_target",
+      "patterns": [
+        { "line_all": ["icmp ult i32", ", 5"] },
+        "switch i32",
+        "phi i64",
+        "[ 10,",
+        "[ 20,",
+        "[ 30,",
+        "[ 40,",
+        "[ 50,",
+        "[ 999,"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 10,  "label": "case 0" },
+        { "inputs": { "RCX": 1 },   "expected": 20,  "label": "case 1" },
+        { "inputs": { "RCX": 2 },   "expected": 30,  "label": "case 2" },
+        { "inputs": { "RCX": 3 },   "expected": 40,  "label": "case 3" },
+        { "inputs": { "RCX": 4 },   "expected": 50,  "label": "case 4" },
+        { "inputs": { "RCX": 5 },   "expected": 999, "label": "default (>4)" },
+        { "inputs": { "RCX": 100 }, "expected": 999, "label": "default far" }
+      ]
+    },
+    {
+      "name": "jumptable_shifted",
+      "symbol": "jumptable_shifted_target",
+      "patterns": [
+        "add i32",
+        "switch i32",
+        "phi i64",
+        "[ 100,",
+        "[ 200,",
+        "[ 300,",
+        "[ 400,",
+        "[ 500,",
+        "[ 0,"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 10 },  "expected": 100, "label": "case 10" },
+        { "inputs": { "RCX": 11 },  "expected": 200, "label": "case 11" },
+        { "inputs": { "RCX": 12 },  "expected": 300, "label": "case 12" },
+        { "inputs": { "RCX": 13 },  "expected": 400, "label": "case 13" },
+        { "inputs": { "RCX": 14 },  "expected": 500, "label": "case 14" },
+        { "inputs": { "RCX": 9 },   "expected": 0,   "label": "default (below range)" },
+        { "inputs": { "RCX": 15 },  "expected": 0,   "label": "default (above range)" },
+        { "inputs": { "RCX": 0 },   "expected": 0,   "label": "default (zero)" },
+        { "inputs": { "RCX": 100 }, "expected": 0,   "label": "default far" }
+      ]
+    },
+    {
+      "name": "jumptable_shared_targets",
+      "symbol": "jumptable_shared_target",
+      "patterns": [
+        { "line_all": ["icmp ult i32", ", 6"] },
+        "switch i32",
+        "phi i64",
+        "[ 10,",
+        "[ 20,",
+        "[ 30,",
+        "[ 40,",
+        "[ 999,"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 10,  "label": "case 0 (group a)" },
+        { "inputs": { "RCX": 1 },   "expected": 10,  "label": "case 1 (group a shared)" },
+        { "inputs": { "RCX": 2 },   "expected": 20,  "label": "case 2 (solo b)" },
+        { "inputs": { "RCX": 3 },   "expected": 30,  "label": "case 3 (group c)" },
+        { "inputs": { "RCX": 4 },   "expected": 30,  "label": "case 4 (group c shared)" },
+        { "inputs": { "RCX": 5 },   "expected": 40,  "label": "case 5 (solo d)" },
+        { "inputs": { "RCX": 6 },   "expected": 999, "label": "default (>5)" },
+        { "inputs": { "RCX": 100 }, "expected": 999, "label": "default far" }
+      ]
+    },
+    {
+      "name": "jumptable_computation",
+      "symbol": "jumptable_computation_target",
+      "patterns": [
+        { "line_all": ["icmp ult i32", ", 4"] },
+        "switch i32",
+        "phi i64",
+        "shl",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 1,   "label": "case 0: 0*2+1" },
+        { "inputs": { "RCX": 1 },   "expected": 8,   "label": "case 1: 1*3+5" },
+        { "inputs": { "RCX": 2 },   "expected": 18,  "label": "case 2: 2*4+10" },
+        { "inputs": { "RCX": 3 },   "expected": 103, "label": "case 3: 3+100" },
+        { "inputs": { "RCX": 4 },   "expected": 0,   "label": "default (>3)" },
+        { "inputs": { "RCX": 100 }, "expected": 0,   "label": "default far" },
+        { "inputs": { "RCX": 5 },   "expected": 0,   "label": "default (5 > 3)" }
+      ]
+    },
+    {
+      "name": "calc_jumptable_large",
+      "symbol": "calc_jumptable_large",
+      "patterns": [
+        "icmp eq",
+        "select i1",
+        "phi i64",
+        "ret i64"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 7,            "label": "case 0" },
+        { "inputs": { "RCX": 1 },   "expected": 42,           "label": "case 1" },
+        { "inputs": { "RCX": 5 },   "expected": 31,           "label": "case 5" },
+        { "inputs": { "RCX": 7 },   "expected": 3,            "label": "case 7" },
+        { "inputs": { "RCX": 10 },  "expected": 404,          "label": "case 10" },
+        { "inputs": { "RCX": 14 },  "expected": 65535,        "label": "case 14" },
+        { "inputs": { "RCX": 15 },  "expected": 21,           "label": "case 15" },
+        { "inputs": { "RCX": -1 },  "expected": 4294967295,   "label": "default (negative)" },
+        { "inputs": { "RCX": 16 },  "expected": 4294967295,   "label": "default (above range)" },
+        { "inputs": { "RCX": 100 }, "expected": 4294967295,   "label": "default far" }
+      ]
     }
   ]
 }
