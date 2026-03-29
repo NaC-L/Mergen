@@ -73,6 +73,12 @@ try {
             Write-Host "SKIP: $($sample.name) (known limitation)"
             continue
         }
+        # ci_skip: sample depends on toolchain-specific codegen (e.g. STL layout)
+        # and cannot be reliably lifted on CI where the compiler version differs.
+        if ($env:CI -and $sample.PSObject.Properties['ci_skip'] -and $sample.ci_skip) {
+            Write-Host "SKIP: $($sample.name) (ci_skip: toolchain-dependent)"
+            continue
+        }
 
         $mapPath = Join-Path $WorkDir "$($sample.name).map"
         if (-not (Test-Path $mapPath)) {

@@ -26,10 +26,12 @@ C_SOURCES_DIR = ROOT / "testcases" / "rewrite_smoke"
 
 
 def _c_compiled_prefixes() -> set:
-    """Return base names of C-compiled test samples (without extension)."""
+    """Return base names of C/C++-compiled test samples (without extension)."""
     if not C_SOURCES_DIR.is_dir():
         return set()
-    return {p.stem for p in C_SOURCES_DIR.glob("*.c")}
+    result = {p.stem for p in C_SOURCES_DIR.glob("*.c")}
+    result |= {p.stem for p in C_SOURCES_DIR.glob("*.cpp")}
+    return result
 
 
 def _is_golden_eligible(ll_name: str) -> bool:
