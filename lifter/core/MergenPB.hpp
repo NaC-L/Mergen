@@ -77,9 +77,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
 
   modulePassManager.run(*module, moduleAnalysisManager);
 
-  // Remove unused parameters from lifted function signatures.
-  // Runs after all optimization so dead args are truly eliminated.
+  // Post-optimization passes: normalize IR, strip unused params, canonicalize names.
   llvm::ModulePassManager postPassManager;
+  postPassManager.addPass(SwitchNormalizationPass());
   postPassManager.addPass(PrototypeMinimizationPass());
   postPassManager.addPass(CanonicalNamingPass());
   postPassManager.run(*module, moduleAnalysisManager);
