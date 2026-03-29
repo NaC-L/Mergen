@@ -25,8 +25,9 @@ REWRITE_DIR = ROOT / "scripts" / "rewrite"
 MANIFEST_PATH = REWRITE_DIR / "instruction_microtests.json"
 DEFAULT_IR_DIR = ROOT.parent / "rewrite-regression-work" / "ir_outputs"
 
-# Every lifted function uses this parameter order.
-LIFTED_PARAMS: List[Tuple[str, str]] = [
+# Hardcoded fallback parameter list for lifted functions that haven't been
+# minimized. After PrototypeMinimizationPass, signatures are parsed from IR.
+LIFTED_PARAMS_FULL: List[Tuple[str, str]] = [
     ("i64", "RAX"),  ("i64", "RCX"),  ("i64", "RDX"),  ("i64", "RBX"),
     ("i64", "RSP"),  ("i64", "RBP"),  ("i64", "RSI"),  ("i64", "RDI"),
     ("i64", "R8"),   ("i64", "R9"),   ("i64", "R10"),  ("i64", "R11"),
@@ -37,6 +38,54 @@ LIFTED_PARAMS: List[Tuple[str, str]] = [
     ("i128", "XMM8"),  ("i128", "XMM9"),  ("i128", "XMM10"), ("i128", "XMM11"),
     ("i128", "XMM12"), ("i128", "XMM13"), ("i128", "XMM14"), ("i128", "XMM15"),
 ]
+
+# Regex to extract parameter list from a define line.
+# Handles optional linkage/visibility keywords (dso_local, etc.) and attributes.
+# Examples matched:
+#   define i64 @main(i64 %RCX) {
+#   define dso_local i64 @main(i64 %RCX) local_unnamed_addr #0 {
+#   define i64 @main() {
+_DEFINE_RE = re.compile(
+    r'^define\s+.*?@main\((.*?)\)\s*(?:local_unnamed_addr\s*)?(?:#\d+\s*)?\{',
+    re.MULTILINE,
+)
+
+
+def _parse_params_from_ir(ir_text: str) -> List[Tuple[str, str]]:
+    """Parse the actual function parameter list from the IR define line.
+
+    Returns a list of (type, name) tuples.  Falls back to the full 34-param
+    list if parsing fails (e.g. un-minimized IR from an older lifter build).
+    """
+    m = _DEFINE_RE.search(ir_text)
+    if not m:
+        return LIFTED_PARAMS_FULL
+
+    raw_params = m.group(1)
+    if not raw_params.strip():
+        return []
+
+    result: List[Tuple[str, str]] = []
+    for param in raw_params.split(","):
+        param = param.strip()
+        if not param:
+            continue
+        # Strip attributes like 'nocapture readnone' that appear between type and name.
+        # Pattern: type [attrs...] %name
+        # Examples: 'i64 %RCX', 'ptr nocapture readnone %EIP', 'i128 %XMM0'
+        parts = param.split()
+        ty = parts[0]  # first token is the type
+        # Find the %name token (last token starting with %)
+        name = None
+        for tok in reversed(parts):
+            if tok.startswith("%"):
+                name = tok[1:]  # strip the % prefix
+                break
+        if name is None:
+            # Unnamed parameter -- shouldn't happen with our lifter, fallback.
+            return LIFTED_PARAMS_FULL
+        result.append((ty, name))
+    return result
 
 # Pre-compiled pattern for stores to inttoptr addresses.  These are dead
 # stores to original-binary stack locations that would segfault lli.
@@ -113,10 +162,13 @@ def _rename_entry(ir_text: str, new_name: str) -> str:
     return ir_text.replace("@main(", f"@{new_name}(")
 
 
-def _build_call_args(inputs: Dict[str, int]) -> str:
-    """Build the LLVM IR argument list for calling the lifted function."""
+def _build_call_args(inputs: Dict[str, int], params: List[Tuple[str, str]]) -> str:
+    """Build the LLVM IR argument list for calling the lifted function.
+
+    Uses the actual parameter list parsed from the IR, not a hardcoded list.
+    """
     parts: List[str] = []
-    for ty, name in LIFTED_PARAMS:
+    for ty, name in params:
         if ty == "ptr":
             parts.append("ptr null")
         else:
@@ -125,7 +177,7 @@ def _build_call_args(inputs: Dict[str, int]) -> str:
     return ", ".join(parts)
 
 
-def _generate_wrapper(fn_name: str, cases: List[dict]) -> str:
+def _generate_wrapper(fn_name: str, cases: List[dict], params: List[Tuple[str, str]]) -> str:
     """Generate ``@semantic_main`` that asserts every test case."""
     lines: List[str] = ["", "define i32 @semantic_main() {", "entry:"]
 
@@ -138,7 +190,7 @@ def _generate_wrapper(fn_name: str, cases: List[dict]) -> str:
             lines.append(f"  br label %{label}")
         lines.append("")
         lines.append(f"{label}:")
-        call_args = _build_call_args(inputs)
+        call_args = _build_call_args(inputs, params)
         lines.append(f"  %ret{idx} = call i64 @{fn_name}({call_args})")
         lines.append(f"  %ok{idx} = icmp eq i64 %ret{idx}, {expected}")
         next_label = "pass" if idx == len(cases) - 1 else f"case{idx + 1}"
@@ -180,9 +232,10 @@ def _run_sample(
         return False, "IR does not contain @main function"
 
     cleaned = _strip_inttoptr_stores(base_ir)
+    params = _parse_params_from_ir(cleaned)
     fn_name = f"lifted_{name}"
     renamed = _rename_entry(cleaned, fn_name)
-    wrapper = _generate_wrapper(fn_name, cases)
+    wrapper = _generate_wrapper(fn_name, cases, params)
 
     semantic_path = ir_dir / f"{name}_semantic.ll"
     semantic_path.parent.mkdir(parents=True, exist_ok=True)

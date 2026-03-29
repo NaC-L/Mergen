@@ -8,6 +8,7 @@
 #include "llvm/IR/PassManager.h"
 #include <algorithm>
 #include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Function.h>
@@ -393,6 +394,203 @@ public:
     }
     return hasChanged ? llvm::PreservedAnalyses::none()
                       : llvm::PreservedAnalyses::all();
+  }
+};
+
+// Removes unused function arguments from lifted function signatures.
+// Runs after all optimization passes so that dead arguments are truly unused.
+// Creates a new function with only live parameters, remaps the body, and
+// replaces all call sites.
+class PrototypeMinimizationPass
+    : public llvm::PassInfoMixin<PrototypeMinimizationPass> {
+public:
+  llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
+    bool changed = false;
+
+    // Collect functions first to avoid mutating the module while iterating.
+    llvm::SmallVector<llvm::Function*, 4> funcs;
+    for (auto& F : M) {
+      if (F.isDeclaration()) continue;
+      funcs.push_back(&F);
+    }
+
+    for (auto* F : funcs) {
+      // Identify which arguments are live (have at least one use).
+      llvm::SmallVector<unsigned, 16> liveArgIndices;
+      for (auto& Arg : F->args()) {
+        if (!Arg.use_empty())
+          liveArgIndices.push_back(Arg.getArgNo());
+      }
+
+      // Nothing to do if all args are used.
+      if (liveArgIndices.size() == F->arg_size()) continue;
+
+      // Skip functions that have non-call users (bitcasts, constant exprs,
+      // aliases, function pointer stores). We can only safely rewrite plain
+      // CallInst users; anything else would be left pointing at an empty shell.
+      bool hasUnsupportedUsers = false;
+      for (auto* U : F->users()) {
+        if (!llvm::isa<llvm::CallInst>(U)) {
+          hasUnsupportedUsers = true;
+          break;
+        }
+      }
+      if (hasUnsupportedUsers) continue;
+
+      // Build the new function type with only live parameters.
+      llvm::SmallVector<llvm::Type*, 8> newParamTypes;
+      for (unsigned idx : liveArgIndices)
+        newParamTypes.push_back(F->getFunctionType()->getParamType(idx));
+
+      auto* newFnTy = llvm::FunctionType::get(
+          F->getReturnType(), newParamTypes, false);
+
+      // Save the name before we create the new function.
+      std::string origName = F->getName().str();
+
+      // Rename old function to make room for the new one.
+      F->setName(origName + ".old");
+
+      auto* newFn = llvm::Function::Create(
+          newFnTy, F->getLinkage(), origName, &M);
+
+      // Name the new function's arguments after the originals.
+      for (unsigned i = 0; i < liveArgIndices.size(); ++i) {
+        llvm::Argument* oldArg = F->getArg(liveArgIndices[i]);
+        newFn->getArg(i)->setName(oldArg->getName());
+      }
+
+      // Move the function body: splice all basic blocks into newFn.
+      newFn->splice(newFn->begin(), F);
+
+      // Remap old live args to new args.
+      for (unsigned i = 0; i < liveArgIndices.size(); ++i) {
+        llvm::Argument* oldArg = F->getArg(liveArgIndices[i]);
+        llvm::Argument* newArg = newFn->getArg(i);
+        oldArg->replaceAllUsesWith(newArg);
+      }
+
+      // Dead args have no uses (that's why they're dead), but defensively
+      // replace with undef to satisfy the verifier before erasure.
+      for (auto& Arg : F->args()) {
+        if (!Arg.use_empty())
+          Arg.replaceAllUsesWith(llvm::UndefValue::get(Arg.getType()));
+      }
+
+      // Update call sites that directly call the old function.
+      // Only handle plain CallInst; InvokeInst/CallBrInst would need
+      // successor edge preservation which the lifter never emits.
+      llvm::SmallVector<llvm::CallInst*, 4> callsToRewrite;
+      for (auto* U : F->users()) {
+        if (auto* CI = llvm::dyn_cast<llvm::CallInst>(U))
+          callsToRewrite.push_back(CI);
+      }
+      for (auto* CI : callsToRewrite) {
+        llvm::SmallVector<llvm::Value*, 8> newCallArgs;
+        for (unsigned idx : liveArgIndices)
+          newCallArgs.push_back(CI->getArgOperand(idx));
+
+        llvm::IRBuilder<> B(CI);
+        auto* newCall = B.CreateCall(newFn, newCallArgs);
+        newCall->setCallingConv(CI->getCallingConv());
+        if (!CI->getType()->isVoidTy())
+          CI->replaceAllUsesWith(newCall);
+        CI->eraseFromParent();
+      }
+
+      F->eraseFromParent();
+      changed = true;
+    }
+
+    return changed ? llvm::PreservedAnalyses::none()
+                   : llvm::PreservedAnalyses::all();
+  }
+};
+
+// Strips address-dependent suffixes from block and value names to produce
+// deterministic IR output that is stable across rebuilds.
+//
+// Naming scheme after canonicalization:
+//   Blocks:  entry, bb1, bb2, ... (first block is 'entry')
+//   Values:  semantic prefix preserved, address suffix removed.
+//            e.g. 'realadd-5368713230-' -> 'realadd'
+//            Unnamed values keep LLVM's default %0, %1, etc.
+class CanonicalNamingPass
+    : public llvm::PassInfoMixin<CanonicalNamingPass> {
+
+  // Strip trailing '-<digits>-' or '-<digits>' suffixes that encode addresses.
+  // Examples:
+  //   'realadd-5368713230-'     -> 'realadd'
+  //   'real_return-5368713239-'  -> 'real_return'
+  //   'previousjmp_block-0-'     -> 'previousjmp_block'
+  //   'lol-15'                   -> 'lol'
+  //   'jle_Condition'            -> 'jle_Condition' (no change)
+  static std::string stripAddressSuffix(llvm::StringRef name) {
+    // Repeatedly strip trailing '-<digits>' or '-<digits>-' groups.
+    std::string s = name.str();
+    while (s.size() > 1) {
+      // Strip trailing '-'
+      if (s.back() == '-') s.pop_back();
+      if (s.empty()) break;
+
+      // Check if trailing segment is '-<digits>'
+      auto dashPos = s.rfind('-');
+      if (dashPos == std::string::npos || dashPos == 0) break;
+
+      llvm::StringRef tail(s.data() + dashPos + 1, s.size() - dashPos - 1);
+      bool allDigits = !tail.empty();
+      for (char c : tail)
+        allDigits &= (c >= '0' && c <= '9');
+
+      if (!allDigits) break;
+      s.resize(dashPos);
+    }
+    return s;
+  }
+
+public:
+  llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
+    for (auto& F : M) {
+      if (F.isDeclaration()) continue;
+
+      // Rename basic blocks.
+      unsigned bbIdx = 0;
+      for (auto& BB : F) {
+        if (bbIdx == 0)
+          BB.setName("entry");
+        else
+          BB.setName("bb" + llvm::Twine(bbIdx));
+        ++bbIdx;
+      }
+
+      // Rename instructions that have address-derived names.
+      // Instructions without names (unnamed temporaries) are left alone —
+      // LLVM assigns them sequential %0, %1, etc. during printing.
+      llvm::StringMap<unsigned> nameCounters;
+      for (auto& BB : F) {
+        for (auto& I : BB) {
+          if (!I.hasName()) continue;
+
+          std::string base = stripAddressSuffix(I.getName());
+          if (base.empty()) {
+            I.setName("");
+            continue;
+          }
+
+          // Deduplicate: first occurrence keeps the name, subsequent get
+          // a numeric suffix.
+          auto& counter = nameCounters[base];
+          if (counter == 0)
+            I.setName(base);
+          else
+            I.setName(base + "." + llvm::Twine(counter));
+          ++counter;
+        }
+      }
+    }
+
+    // This is purely cosmetic; no semantics change.
+    return llvm::PreservedAnalyses::all();
   }
 };
 #endif

@@ -19,6 +19,33 @@ IR_OUTPUT_DIR = ROOT.parent / "rewrite-regression-work" / "ir_outputs"
 GOLDEN_HASHES_FILE = ROOT / "lifter" / "test" / "test_vectors" / "golden_ir_hashes.json"
 SEMANTIC_SCRIPT = REWRITE_DIR / "check_semantic.py"
 
+# C-compiled samples produce toolchain-dependent IR (different addresses across
+# compiler versions/machines). Exclude them from golden hash determinism checks;
+# their correctness is validated by semantic tests instead.
+C_SOURCES_DIR = ROOT / "testcases" / "rewrite_smoke"
+
+
+def _c_compiled_prefixes() -> set:
+    """Return base names of C-compiled test samples (without extension)."""
+    if not C_SOURCES_DIR.is_dir():
+        return set()
+    return {p.stem for p in C_SOURCES_DIR.glob("*.c")}
+
+
+def _is_golden_eligible(ll_name: str) -> bool:
+    """Return True if an IR file should be tracked in the golden hash set.
+
+    Excludes all files derived from C-compiled samples (optimized, no_opts,
+    and semantic variants) since they are toolchain-dependent.
+    """
+    prefixes = _c_compiled_prefixes()
+    base = ll_name.removesuffix(".ll")
+    for suffix in ("", "_no_opts", "_semantic"):
+        candidate = base.removesuffix(suffix) if suffix else base
+        if candidate in prefixes:
+            return False
+    return True
+
 
 def _run(argv: List[str], extra_env: Dict[str, str] | None = None) -> None:
     env = os.environ.copy()
@@ -145,13 +172,19 @@ def check_determinism(ir_dir: Path, golden_file: Path) -> None:
 
 
 def update_golden(ir_dir: Path, golden_file: Path) -> None:
-    hashes = compute_ir_hashes(ir_dir)
-    if not hashes:
+    all_hashes = compute_ir_hashes(ir_dir)
+    if not all_hashes:
         print("WARNING: no .ll files found in", ir_dir, "— nothing to write")
         return
+    # Exclude C-compiled samples — their IR is toolchain-dependent.
+    hashes = {k: v for k, v in all_hashes.items() if _is_golden_eligible(k)}
     golden_file.parent.mkdir(parents=True, exist_ok=True)
     golden_file.write_text(json.dumps(hashes, indent=2) + "\n", encoding="utf-8")
-    print(f"Golden hashes updated: {golden_file} ({len(hashes)} files)")
+    excluded = len(all_hashes) - len(hashes)
+    msg = f"Golden hashes updated: {golden_file} ({len(hashes)} files)"
+    if excluded:
+        msg += f" ({excluded} C-compiled files excluded)"
+    print(msg)
 
 
 def run_baseline() -> None:
