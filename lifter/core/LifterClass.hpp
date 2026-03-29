@@ -5,6 +5,7 @@
 #include "FunctionSignatures.hpp"
 #include "GEPTracker.h"
 #include "InlinePolicy.hpp"
+#include "LiftDiagnostics.hpp"
 #include "PathSolver.h"
 #include "RegisterManager.hpp"
 #include "ZydisDisassembler.hpp"
@@ -243,13 +244,7 @@ concept lifterConcept = Registers<R> && requires(T t) {
                           Register>                                            \
   ret lifterClassBase<Derived, Mnemonic, Register, DisassemblerBase>
 
-struct LiftStats {
-  unsigned blocks_attempted = 0;
-  unsigned blocks_completed = 0;
-  unsigned blocks_unreachable = 0;
-  unsigned instructions_lifted = 0;
-  unsigned instructions_unsupported = 0;
-};
+// LiftStats is defined in LiftDiagnostics.hpp
 
 // main lifter
 template <typename Derived = void,
@@ -488,6 +483,8 @@ public:
                     << ", resuming at 0x" << std::hex
                     << speculativeCall.returnAddr << std::dec
                     << "\n" << std::flush;
+          diagnostics.info(DiagCode::CallOutlinedSpecBailout, addr,
+                           "Speculative inline bail-out, resuming at return address");
           return;
         }
       }
@@ -556,6 +553,8 @@ public:
 
   unsigned int instct = 0;
   LiftStats liftStats;
+  LiftDiagnostics diagnostics;
+  PipelineProfiler profiler;
   llvm::SimplifyQuery* cachedquery;
 
   llvm::BasicBlock* lastBB = nullptr;
