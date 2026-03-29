@@ -229,6 +229,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
         callFunctionIR(importName, nullptr);
         std::cout << "[call-abi] resolved import: " << importName << "\n"
                   << std::flush;
+        diagnostics.info(DiagCode::CallOutlinedImportThunk,
+                         current_address - instruction.length,
+                         "Outlined import call: " + importName);
       } else {
         // Unknown outlined target: emit opaque inttoptr call.
         auto fx = this->buildUnknownCallFx();
@@ -241,6 +244,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
 
         applyPostCallEffects(callResult, fx);
         abi::printCallEffectsDiag(fx, current_address - instruction.length);
+        diagnostics.info(DiagCode::CallAbiApplied,
+                         current_address - instruction.length,
+                         "Outlined unknown-target call (inttoptr)");
       }
       emittedExternalCall = true;
       break;
@@ -419,9 +425,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   auto pathResult = solvePath(function, destination, realval);
   if (pathResult == PATH_unsolved) {
     ++liftStats.blocks_unreachable;
+    uint64_t diagAddr = current_address - instruction.length;
     std::cout << "[diag] lift_ret: unresolved ROP chain at 0x"
-              << std::hex << (current_address - instruction.length)
-              << std::dec << "\n" << std::flush;
+              << std::hex << diagAddr << std::dec << "\n" << std::flush;
+    diagnostics.warning(DiagCode::UnresolvedRetChain, diagAddr,
+                        "Unresolved ROP chain (ret to symbolic address)");
   }
 
   // If the callee returned to our speculative call's return address,
@@ -465,10 +473,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   auto pathResult = solvePath(function, destination, trunc);
   if (pathResult == PATH_unsolved) {
     ++liftStats.blocks_unreachable;
-    // Indirect jump couldn't be resolved; likely CFF dispatch or computed target
+    uint64_t diagAddr = current_address - instruction.length;
     std::cout << "[diag] lift_jmp: unresolved indirect jump at 0x"
-              << std::hex << (current_address - instruction.length)
-              << std::dec << "\n" << std::flush;
+              << std::hex << diagAddr << std::dec << "\n" << std::flush;
+    diagnostics.warning(DiagCode::UnresolvedIndirectJump, diagAddr,
+                        "Unresolved indirect jump (symbolic target)");
   }
   printvalue2(destination);
   // printvalue(newRip);

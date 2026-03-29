@@ -137,6 +137,8 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
         if (added > 0) {
           std::cout << "[outline] .pdata: " << added
                     << " function starts added to outline set\n" << std::flush;
+          lifter->diagnostics.info(DiagCode::PdataOutlineCount, 0,
+                                  std::to_string(added) + " .pdata function starts outlined");
         }
       }
     }
