@@ -1,0 +1,136 @@
+name: Windows Build
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: iced
+            configure_script: scripts\dev\configure_iced.cmd
+            build_script: scripts\dev\build_iced.cmd
+            build_dir: build_iced
+            needs_rust: true
+          - variant: zydis
+            configure_script: scripts\dev\configure_zydis.cmd
+            build_script: scripts\dev\build_zydis.cmd
+            build_dir: build_zydis
+            needs_rust: false
+
+    name: windows-${{ matrix.variant }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Rust toolchain
+        if: ${{ matrix.needs_rust }}
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          choco install ninja --no-progress -y
+
+      - name: Resolve LLVM 18
+        shell: pwsh
+        run: |
+          $llvmVersion = "18.1.8"
+          $llvmArchiveName = "llvm-$llvmVersion-windows-amd64-msvc17-msvcrt.7z"
+          $llvmUrl = "https://github.com/vovkos/llvm-package-windows/releases/download/llvm-$llvmVersion/$llvmArchiveName"
+          $llvmWork = Join-Path $env:RUNNER_TEMP "llvm-package"
+
+          if (Test-Path $llvmWork) { Remove-Item -Recurse -Force $llvmWork }
+          New-Item -ItemType Directory -Path $llvmWork | Out-Null
+
+          Write-Host "Downloading LLVM $llvmVersion..."
+          Invoke-WebRequest -Uri $llvmUrl -OutFile (Join-Path $llvmWork $llvmArchiveName)
+
+          Write-Host "Extracting..."
+          7z x -y (Join-Path $llvmWork $llvmArchiveName) "-o$llvmWork" | Out-Null
+
+          $llvmConfig = (Get-ChildItem -Path $llvmWork -Filter LLVMConfig.cmake -Recurse -File | Select-Object -First 1).FullName
+          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found after extraction" }
+
+          $llvmDir = Split-Path -Parent $llvmConfig
+          $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmDir))
+          $llvmBin = Join-Path $llvmRoot "bin"
+
+          "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if (Test-Path (Join-Path $llvmBin "clang-cl.exe")) {
+            $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+          Write-Host "LLVM_DIR=$llvmDir"
+
+      - name: Configure
+        run: cmd /c ${{ matrix.configure_script }}
+
+      - name: Build
+        env:
+          MERGEN_BUILD_JOBS: "4"
+        run: cmd /c ${{ matrix.build_script }}
+
+      - name: Verify binary exists
+        shell: pwsh
+        run: |
+          $exe = Join-Path "${{ matrix.build_dir }}" "lifter.exe"
+          if (!(Test-Path $exe)) { throw "lifter.exe not found at $exe" }
+          $info = Get-Item $exe
+          Write-Host "Built: $($info.FullName) ($([math]::Round($info.Length / 1MB, 2)) MB)"
+
+      - name: Rename binaries for release
+        shell: pwsh
+        run: |
+          Copy-Item "${{ matrix.build_dir }}/lifter.exe" "lifter-windows-${{ matrix.variant }}.exe"
+          if (Test-Path "${{ matrix.build_dir }}/rewrite_microtests.exe") {
+            Copy-Item "${{ matrix.build_dir }}/rewrite_microtests.exe" "rewrite-microtests-windows-${{ matrix.variant }}.exe"
+          }
+
+      - name: Upload lifter binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifter-windows-${{ matrix.variant }}
+          path: lifter-windows-${{ matrix.variant }}.exe
+          if-no-files-found: error
+
+      - name: Upload microtests binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rewrite-microtests-windows-${{ matrix.variant }}
+          path: rewrite-microtests-windows-${{ matrix.variant }}.exe
+          if-no-files-found: warn
+
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/lifter-windows-iced/lifter-windows-iced.exe
+            artifacts/lifter-windows-zydis/lifter-windows-zydis.exe
+            artifacts/rewrite-microtests-windows-iced/rewrite-microtests-windows-iced.exe
+            artifacts/rewrite-microtests-windows-zydis/rewrite-microtests-windows-zydis.exe
