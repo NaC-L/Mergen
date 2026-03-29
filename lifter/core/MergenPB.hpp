@@ -76,4 +76,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
       passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
 
   modulePassManager.run(*module, moduleAnalysisManager);
+
+  // Remove unused parameters from lifted function signatures.
+  // Runs after all optimization so dead args are truly eliminated.
+  llvm::ModulePassManager postPassManager;
+  postPassManager.addPass(PrototypeMinimizationPass());
+  postPassManager.addPass(CanonicalNamingPass());
+  postPassManager.run(*module, moduleAnalysisManager);
 }

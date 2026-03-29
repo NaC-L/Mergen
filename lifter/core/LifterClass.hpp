@@ -538,7 +538,7 @@ public:
 
     std::error_code EC_noopt;
     llvm::raw_fd_ostream OS_noopt(filename, EC_noopt);
-    fnc->getParent()->print(OS_noopt, nullptr);
+    M->print(OS_noopt, nullptr);
   }
 
   // ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];

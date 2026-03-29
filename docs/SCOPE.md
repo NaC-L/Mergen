@@ -26,8 +26,8 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 | ELF / Mach-O / non-PE formats | Not supported |
 | 32-bit x86 | Not supported |
 | ARM / RISC-V / other architectures | Not supported |
-| Automatic ABI/prototype normalization | Stage 1 complete (call-boundary ABI contract + dual-mode). Post-lift prototype minimization planned. |
-| Full deterministic output | Planned — Phase 3 |
+| Automatic ABI/prototype normalization | Stage 2 complete: prototype minimization strips unused parameters post-optimization. Call-boundary ABI contract with dual-mode (strict/compat). |
+| Deterministic output | Implemented: CanonicalNamingPass strips address-derived suffixes from block/value names. Same input produces identical IR across rebuilds. Golden hash verification in CI. |
 
 ## Tested Protectors
 

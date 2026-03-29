@@ -105,7 +105,7 @@
     {
       "name": "multi_arg",
       "symbol": "multi_arg_target",
-      "patterns": ["trunc i64 %RCX to i32", "trunc i64 %RDX to i32", "add i32", "mul i32", "zext i32", "i128 %XMM0", "i128 %XMM15"],
+      "patterns": ["trunc i64 %RCX to i32", "trunc i64 %RDX to i32", "add i32", "mul i32", "zext i32"],
       "semantic": [
         { "inputs": { "RCX": 5,   "RDX": 3 }, "expected": 56,  "label": "(5+3)*7" },
         { "inputs": { "RCX": 0,   "RDX": 0 }, "expected": 0,   "label": "(0+0)*7" },
@@ -275,7 +275,7 @@
       "name": "jumptable_dense",
       "symbol": "jumptable_dense_target",
       "patterns": [
-        "switch i64 %lol-",
+        "switch i64 %lol",
         "i64 5368713237, label",
         "i64 5368713244, label",
         "i64 5368713251, label",
