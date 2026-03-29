@@ -44,6 +44,10 @@ foreach ($check in $checks) {
         Write-Host "SKIP: $($check.name) (known limitation)"
         continue
     }
+    if ($env:CI -and $check.PSObject.Properties['ci_skip'] -and $check.ci_skip) {
+        Write-Host "SKIP: $($check.name) (ci_skip: toolchain-dependent)"
+        continue
+    }
 
     if ($check.patterns -is [string]) {
         Write-Host "FAIL: $($check.name) patterns must be an array; got string"

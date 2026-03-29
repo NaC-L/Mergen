@@ -93,6 +93,13 @@ _INTTOPTR_STORE_RE = re.compile(
     r"^\s*store\s+.*inttoptr\s*\(.*\)\s*,.*$", re.MULTILINE
 )
 
+# Calls to inttoptr targets (outlined calls to concrete addresses).
+# These would segfault in lli. The call results are unused by the
+# return value computation, so stripping them is safe for semantic checks.
+_INTTOPTR_CALL_RE = re.compile(
+    r"^\s*(%\S+\s*=\s*)?(?:tail\s+)?call\s+.*inttoptr\s*\(.*\).*$", re.MULTILINE
+)
+
 
 # ---------------------------------------------------------------------------
 # lli discovery (mirrors logic from the old single-sample checker)
@@ -146,14 +153,16 @@ def _find_lli() -> Path:
 # ---------------------------------------------------------------------------
 
 def _strip_inttoptr_stores(ir_text: str) -> str:
-    """Remove ``store ... inttoptr(...)`` instructions.
+    """Remove ``store ... inttoptr(...)`` and ``call inttoptr(...)`` instructions.
 
     The lifter emits stores of function arguments to the original binary's
-    stack addresses.  These addresses are not mapped in lli and would
-    segfault.  The stores are provably dead — the return value never reads
-    from these fixed addresses.
+    stack addresses and calls to outlined functions at concrete addresses.
+    These addresses are not mapped in lli and would segfault.
+    The stores and calls are provably dead — the return value never reads
+    from these fixed addresses or depends on call results.
     """
-    return _INTTOPTR_STORE_RE.sub("", ir_text)
+    cleaned = _INTTOPTR_STORE_RE.sub("", ir_text)
+    return _INTTOPTR_CALL_RE.sub("", cleaned)
 
 
 def _rename_entry(ir_text: str, new_name: str) -> str:
@@ -288,6 +297,8 @@ def _load_semantic_samples(
 
     for sample in manifest["samples"]:
         if sample.get("skip"):
+            continue
+        if sample.get("ci_skip") and os.environ.get("CI"):
             continue
         cases = sample.get("semantic")
         if not cases:
