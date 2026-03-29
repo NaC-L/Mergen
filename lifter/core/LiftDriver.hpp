@@ -2,6 +2,7 @@
 
 #include "LifterClass_Concolic.hpp"
 #include <iostream>
+#include <sstream>
 
 inline void runLiftWorklist(lifterConcolic<>* lifter) {
   BBInfo bbinfo;
@@ -67,4 +68,13 @@ inline void runLiftWorklist(lifterConcolic<>* lifter) {
             << lifter->liftStats.instructions_lifted << " instructions, "
             << lifter->liftStats.instructions_unsupported << " unsupported"
             << std::endl;
+  {
+    std::ostringstream ss;
+    ss << lifter->liftStats.blocks_attempted << " blocks ("
+       << lifter->liftStats.blocks_completed << " completed, "
+       << lifter->liftStats.blocks_unreachable << " unreachable), "
+       << lifter->liftStats.instructions_lifted << " instructions ("
+       << lifter->liftStats.instructions_unsupported << " unsupported)";
+    lifter->diagnostics.info(DiagCode::LiftComplete, 0, ss.str());
+  }
 }

@@ -95,10 +95,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
   }
   default: {
 
-    printvalueforce2(this->counter);
-    std::cout << "not implemented: "
-              << magic_enum::enum_name(instruction.mnemonic)
-              << " runtime: " << std::hex << current_address << std::endl;
+    {
+      std::string mnem(magic_enum::enum_name(instruction.mnemonic));
+      uint64_t instrAddr = current_address - instruction.length;
+      printvalueforce2(this->counter);
+      std::cout << "not implemented: " << mnem
+                << " runtime: " << std::hex << instrAddr << std::endl;
+      diagnostics.error(DiagCode::InstructionNotImplemented, instrAddr,
+                        "Instruction not implemented: " + mnem, mnem);
+    }
     /*
         std::string Filename = "output_notimplemented.ll";
         std::error_code EC;

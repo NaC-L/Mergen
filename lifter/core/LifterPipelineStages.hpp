@@ -3,6 +3,7 @@
 #include "RuntimeImageContext.hpp"
 #include "LifterClass_Concolic.hpp"
 #include "Utils.h"
+#include <llvm/Support/raw_ostream.h>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -54,11 +55,39 @@ inline void reportLiftCompletionTiming(double elapsedMilliseconds) {
             << " milliseconds has past" << std::endl;
 }
 inline void emitLiftOutputs(lifterConcolic<>* lifter, double elapsedMilliseconds) {
+  lifter->profiler.begin("write_unopt_ir");
   lifter->writeFunctionToFile("output_no_opts.ll");
+  lifter->profiler.end();
 
   std::cout << "\nwriting complete, " << std::dec << elapsedMilliseconds
             << " milliseconds has past" << std::endl;
 
+  lifter->profiler.begin("optimization");
   lifter->run_opts();
+  lifter->profiler.end();
+
+  lifter->profiler.begin("write_opt_ir");
   lifter->writeFunctionToFile("output.ll");
+  lifter->profiler.end();
+
+  // Write structured diagnostics + profile + stats to JSON.
+  {
+    auto& profile = lifter->profiler.getStages();
+    auto json = lifter->diagnostics.toJson(&profile, &lifter->liftStats);
+    std::string diagPath = "output_diagnostics.json";
+    std::error_code EC;
+    llvm::raw_fd_ostream diagFile(diagPath, EC);
+    if (!EC) {
+      diagFile << json;
+      diagFile.close();
+      if (diagFile.has_error()) {
+        std::cerr << "[diagnostics] write error for " << diagPath << "\n";
+        diagFile.clear_error();
+      }
+    } else {
+      std::cerr << "[diagnostics] failed to open " << diagPath
+                << ": " << EC.message() << "\n";
+    }
+    lifter->diagnostics.printSummary();
+  }
 }
