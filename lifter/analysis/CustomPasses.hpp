@@ -507,6 +507,209 @@ public:
   }
 };
 
+// Normalizes switch instructions that dispatch on concrete addresses back to
+// logical case indices. The lifter's GEPLoadPass folds memory reads from jump
+// tables into select chains / switches over concrete target addresses. This
+// pass detects the pattern and rewrites the switch to use the original input
+// index (0, 1, 2, ...) instead.
+//
+// Detected pattern:
+//   %idx = add i64 %scaled_input, BASE
+//   ... (select chain reading table entries)
+//   switch {i32,i64} %val, label %default [
+//     {i32,i64} ADDR_0, label %bb0
+//     {i32,i64} ADDR_1, label %bb1  ; ADDR_1 = ADDR_0 + STRIDE
+//     ...
+//   ]
+// Rewritten to:
+//   switch i64 %original_input, label %default [
+//     i64 0, label %bb0
+//     i64 1, label %bb1
+//     ...
+//   ]
+class SwitchNormalizationPass
+    : public llvm::PassInfoMixin<SwitchNormalizationPass> {
+public:
+  llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
+    bool changed = false;
+
+    for (auto& F : M) {
+      for (auto& BB : F) {
+        auto* SI = llvm::dyn_cast<llvm::SwitchInst>(BB.getTerminator());
+        if (!SI || SI->getNumCases() < 2) continue;
+
+        // Collect case values and check if they form an arithmetic progression.
+        llvm::SmallVector<std::pair<int64_t, llvm::BasicBlock*>, 16> cases;
+        for (auto& C : SI->cases())
+          cases.push_back({C.getCaseValue()->getSExtValue(), C.getCaseSuccessor()});
+
+        // Sort by case value to find the progression.
+        llvm::sort(cases, [](const auto& a, const auto& b) {
+          return a.first < b.first;
+        });
+
+        // Check for arithmetic progression with constant stride.
+        int64_t base = cases[0].first;
+        int64_t stride = cases[1].first - base;
+        if (stride <= 0) continue;
+
+        bool isProgression = true;
+        for (unsigned i = 2; i < cases.size(); ++i) {
+          if (cases[i].first != base + (int64_t)i * stride) {
+            isProgression = false;
+            break;
+          }
+        }
+        if (!isProgression) continue;
+
+        // Skip if case values look like logical indices already.
+        // Concrete addresses from the lifter are large (imageBase is typically
+        // 0x140000000). Logical values from user code are small.
+        uint64_t maxCaseVal = static_cast<uint64_t>(cases.back().first);
+        if (maxCaseVal < 0x10000) continue;
+
+        // Verify the normalization is safe: the select chain must establish
+        // a 1:1 mapping from input index to switch case. If the range guard
+        // says the input ranges over N values but the switch has fewer than
+        // N cases, some inputs share targets and normalization would break.
+        // Heuristic: walk predecessors looking for `icmp ult %input, N` and
+        // check N == numCases.
+        bool rangeVerified = false;
+        // Quick check: if stride == 1 in the table-address domain and there
+        // are exactly (maxAddr - minAddr)/tableStride + 1 cases, the mapping
+        // is likely 1:1. But the safest check is via the range guard.
+        // For now, skip if the switch block has a predecessor with a branch
+        // on `icmp ult` whose bound doesn't match numCases.
+        for (auto* Pred : llvm::predecessors(&BB)) {
+          auto* BI = llvm::dyn_cast<llvm::BranchInst>(Pred->getTerminator());
+          if (!BI || !BI->isConditional()) continue;
+          auto* Cmp = llvm::dyn_cast<llvm::ICmpInst>(BI->getCondition());
+          if (!Cmp) continue;
+          // Look for icmp ult/eq pattern. The range guard is typically
+          // `icmp ult %x, N` or `icmp eq (and %x, ~(N-1)), 0`.
+          if (Cmp->getPredicate() == llvm::ICmpInst::ICMP_ULT) {
+            if (auto* Bound = llvm::dyn_cast<llvm::ConstantInt>(Cmp->getOperand(1))) {
+              if (Bound->getZExtValue() == SI->getNumCases())
+                rangeVerified = true;
+            }
+          }
+          // Also handle the `and` + `icmp eq 0` pattern used for power-of-2 ranges.
+          // e.g. `(RCX & ~3) == 0` means RCX < 4.
+          if (Cmp->getPredicate() == llvm::ICmpInst::ICMP_EQ) {
+            if (auto* Zero = llvm::dyn_cast<llvm::ConstantInt>(Cmp->getOperand(1))) {
+              if (Zero->isZero()) {
+                if (auto* AndInst = llvm::dyn_cast<llvm::BinaryOperator>(Cmp->getOperand(0))) {
+                  if (AndInst->getOpcode() == llvm::Instruction::And) {
+                    if (auto* Mask = llvm::dyn_cast<llvm::ConstantInt>(AndInst->getOperand(1))) {
+                      // The mask zeroes the low bits of the input.
+                      // Count trailing zero bits to get log2(range).
+                      // e.g. mask=0xFFFFFFFC -> low 2 bits cleared -> range=4.
+                      uint64_t maskVal = Mask->getZExtValue();
+                      // Invert and isolate: ~0xFFFFFFFC = 0x...00000003
+                      // range = lowest set bit position in (mask+1)
+                      // For mask with trailing zeros: range = (mask ^ (mask-1)) >> 1 + 1
+                      // Simpler: count trailing zeros of ~mask, but ~mask
+                      // in 64-bit has high bits set. Use countTrailingZeros on mask.
+                      unsigned trailingZeros = llvm::countr_zero(maskVal);
+                      if (trailingZeros > 0 && trailingZeros < 32) {
+                        uint64_t rangeSize = 1ULL << trailingZeros;
+                        if (rangeSize == SI->getNumCases())
+                          rangeVerified = true;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (!rangeVerified) continue;
+
+        // Trace back the switch condition to find the original input.
+        // Pattern: switch on trunc(select-chain(add(scaled_input, BASE)))
+        // We need to find the original unscaled input register value.
+        llvm::Value* switchCond = SI->getCondition();
+
+        // Strip trunc if present.
+        if (auto* trunc = llvm::dyn_cast<llvm::TruncInst>(switchCond))
+          switchCond = trunc->getOperand(0);
+
+        // Try to trace through the select chain to find the add instruction
+        // that computes the table index: %idx = add %scaled, BASE
+        // The select chain reads: icmp eq %idx, BASE+i*STRIDE; select ...
+        // We need the value BEFORE the add, then normalize.
+        llvm::Value* tableIndex = switchCond;
+
+        // Walk through select chain to find the root comparison base.
+        // The select chain all compare against the same %idx value.
+        llvm::Value* idxValue = nullptr;
+        {
+          llvm::Value* v = switchCond;
+          for (unsigned depth = 0; depth < 64; ++depth) {
+            auto* sel = llvm::dyn_cast<llvm::SelectInst>(v);
+            if (!sel) break;
+            auto* cmp = llvm::dyn_cast<llvm::ICmpInst>(sel->getCondition());
+            if (!cmp) break;
+            idxValue = cmp->getOperand(0);
+            v = sel->getFalseValue(); // walk the chain
+          }
+        }
+
+        // If we found the index value, try to extract the original input.
+        // Pattern: %idx = add nuw nsw i64 %mul_ea, BASE_CONST
+        //          %mul_ea = and i64 %shifted, MASK
+        //          %shifted = shl i64 %INPUT, LOG2_STRIDE
+        llvm::Value* originalInput = nullptr;
+        if (idxValue) {
+          if (auto* addInst = llvm::dyn_cast<llvm::BinaryOperator>(idxValue)) {
+            if (addInst->getOpcode() == llvm::Instruction::Add) {
+              llvm::Value* scaledInput = addInst->getOperand(0);
+              // Strip 'and' mask.
+              if (auto* andInst = llvm::dyn_cast<llvm::BinaryOperator>(scaledInput)) {
+                if (andInst->getOpcode() == llvm::Instruction::And)
+                  scaledInput = andInst->getOperand(0);
+              }
+              // Strip 'shl' to get original input.
+              if (auto* shlInst = llvm::dyn_cast<llvm::BinaryOperator>(scaledInput)) {
+                if (shlInst->getOpcode() == llvm::Instruction::Shl)
+                  originalInput = shlInst->getOperand(0);
+              }
+            }
+          }
+        }
+
+        if (!originalInput) continue;
+
+        // Build the normalized switch.
+        llvm::IRBuilder<> B(SI);
+        // Ensure the input is the right width for the switch.
+        llvm::Type* switchTy = originalInput->getType();
+        auto* newSwitch = B.CreateSwitch(originalInput, SI->getDefaultDest(),
+                                         SI->getNumCases());
+
+        // Map: sorted case index i -> label, with case value = i.
+        for (unsigned i = 0; i < cases.size(); ++i) {
+          auto* caseVal = llvm::ConstantInt::get(
+              llvm::cast<llvm::IntegerType>(switchTy), i);
+          newSwitch->addCase(caseVal, cases[i].second);
+        }
+
+        // Clean up the old switch and any now-dead trunc/select chain.
+        llvm::Value* oldCond = SI->getCondition();
+        SI->eraseFromParent();
+        // If the old condition (trunc) is now dead, remove it.
+        if (auto* I = llvm::dyn_cast<llvm::Instruction>(oldCond)) {
+          if (I->use_empty()) I->eraseFromParent();
+        }
+        changed = true;
+      }
+    }
+
+    return changed ? llvm::PreservedAnalyses::none()
+                   : llvm::PreservedAnalyses::all();
+  }
+};
+
 // Strips address-dependent suffixes from block and value names to produce
 // deterministic IR output that is stable across rebuilds.
 //
