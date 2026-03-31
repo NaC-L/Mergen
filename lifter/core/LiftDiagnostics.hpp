@@ -5,6 +5,7 @@
 #include <sstream>
 #include <chrono>
 #include <iomanip>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -125,13 +126,17 @@ public:
     if (profile && !profile->empty()) {
       os << "  \"profile\": {\n";
       double total = 0;
-      for (size_t i = 0; i < profile->size(); ++i) {
-        const auto& [name, ms] = (*profile)[i];
+      std::map<std::string, double> aggregatedProfile;
+      for (const auto& [name, ms] : *profile) {
+        aggregatedProfile[name] += ms;
+        total += ms;
+      }
+      size_t emitted = 0;
+      for (const auto& [name, ms] : aggregatedProfile) {
         os << "    \"" << escapeJson(name) << "\": " << std::fixed
            << std::setprecision(3) << ms;
-        if (i + 1 < profile->size()) os << ",";
+        if (++emitted < aggregatedProfile.size()) os << ",";
         os << "\n";
-        total += ms;
       }
       os << "  },\n";
       os << "  \"total_ms\": " << std::fixed << std::setprecision(3) << total << ",\n";
@@ -214,6 +219,46 @@ class PipelineProfiler {
   bool running = false;
 
 public:
+  class ScopedSample {
+    PipelineProfiler* profiler;
+    std::string name;
+    time_point start;
+
+  public:
+    ScopedSample(PipelineProfiler& profilerRef, const std::string& sampleName)
+        : profiler(&profilerRef), name(sampleName), start(clock::now()) {}
+
+    ScopedSample(const ScopedSample&) = delete;
+    ScopedSample& operator=(const ScopedSample&) = delete;
+
+    ScopedSample(ScopedSample&& other) noexcept
+        : profiler(other.profiler), name(std::move(other.name)),
+          start(other.start) {
+      other.profiler = nullptr;
+    }
+
+    ScopedSample& operator=(ScopedSample&& other) noexcept {
+      if (this == &other)
+        return *this;
+      if (profiler) {
+        profiler->addSample(
+            name, std::chrono::duration<double, std::milli>(clock::now() - start).count());
+      }
+      profiler = other.profiler;
+      name = std::move(other.name);
+      start = other.start;
+      other.profiler = nullptr;
+      return *this;
+    }
+
+    ~ScopedSample() {
+      if (!profiler)
+        return;
+      profiler->addSample(
+          name, std::chrono::duration<double, std::milli>(clock::now() - start).count());
+    }
+  };
+
   void begin(const std::string& name) {
     end(); // close previous stage if any
     currentStage = name;
@@ -227,6 +272,14 @@ public:
         clock::now() - stageStart).count();
     stages.push_back({currentStage, elapsed});
     running = false;
+  }
+
+  void addSample(const std::string& name, double elapsedMilliseconds) {
+    stages.push_back({name, elapsedMilliseconds});
+  }
+
+  ScopedSample sample(const std::string& name) {
+    return ScopedSample(*this, name);
   }
 
   const std::vector<std::pair<std::string, double>>& getStages() const {
