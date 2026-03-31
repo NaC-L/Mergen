@@ -35,9 +35,11 @@ inline int runLifterApplication(const std::vector<std::string>& args,
     return 1;
   }
   auto milliseconds = timer::stopTimer();
-  std::cout << "\n"
-            << std::dec << milliseconds << " milliseconds have passed"
-            << std::endl;
-  std::cout << "Lift and optimization pipeline completed" << std::endl;
+  debugging::doIfDebug([&]() {
+    std::cout << "\n"
+              << std::dec << milliseconds << " milliseconds have passed"
+              << std::endl;
+    std::cout << "Lift and optimization pipeline completed" << std::endl;
+  });
   return 0;
 }

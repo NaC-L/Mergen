@@ -10,16 +10,19 @@
 
 inline void printRuntimeImageContext(const RuntimeImageContext& runtimeContext,
                                      const uint8_t* fileBase) {
-  std::cout << std::hex << "0x" << static_cast<int>(runtimeContext.firstOpcodeByte)
-            << std::endl;
+  debugging::doIfDebug([&]() {
+    std::cout << std::hex << "0x" << static_cast<int>(runtimeContext.firstOpcodeByte)
+              << std::endl;
 
-  std::cout << "address: " << runtimeContext.imageBase
-            << " imageSize: " << runtimeContext.imageSize
-            << " filebase: " << reinterpret_cast<uint64_t>(fileBase)
-            << " fOffset: " << runtimeContext.fileOffset
-            << " RVA: " << runtimeContext.rva
-            << " stackSize: " << runtimeContext.stackReserve << std::endl;
+    std::cout << "address: " << runtimeContext.imageBase
+              << " imageSize: " << runtimeContext.imageSize
+              << " filebase: " << reinterpret_cast<uint64_t>(fileBase)
+              << " fOffset: " << runtimeContext.fileOffset
+              << " RVA: " << runtimeContext.rva
+              << " stackSize: " << runtimeContext.stackReserve << std::endl;
+  });
 }
+
 
 inline void prepareRuntimePagedMemory(lifterConcolic<>* lifter,
                                       const RuntimeImageContext& runtimeContext) {
@@ -38,29 +41,35 @@ inline void runSignatureStage(lifterConcolic<>* lifter,
                               std::vector<uint8_t>& fileData) {
   lifter->signatures.search_signatures(fileData);
   lifter->signatures.createOffsetMap();
-  for (const auto& [key, value] : lifter->signatures.siglookup) {
-    value.display();
-  }
+  debugging::doIfDebug([&]() {
+    lifter->signatures.displayMatches();
+  });
 }
 
 inline double captureElapsedMilliseconds() { return timer::getTimer(); }
 
 inline void reportSignatureStageTiming(double elapsedMilliseconds) {
-  std::cout << "\n" << std::dec << elapsedMilliseconds
-            << " milliseconds has past" << std::endl;
+  debugging::doIfDebug([&]() {
+    std::cout << "\n" << std::dec << elapsedMilliseconds
+              << " milliseconds has past" << std::endl;
+  });
 }
 
 inline void reportLiftCompletionTiming(double elapsedMilliseconds) {
-  std::cout << "\nlifting complete, " << std::dec << elapsedMilliseconds
-            << " milliseconds has past" << std::endl;
+  debugging::doIfDebug([&]() {
+    std::cout << "\nlifting complete, " << std::dec << elapsedMilliseconds
+              << " milliseconds has past" << std::endl;
+  });
 }
 inline void emitLiftOutputs(lifterConcolic<>* lifter, double elapsedMilliseconds) {
   lifter->profiler.begin("write_unopt_ir");
   lifter->writeFunctionToFile("output_no_opts.ll");
   lifter->profiler.end();
 
-  std::cout << "\nwriting complete, " << std::dec << elapsedMilliseconds
-            << " milliseconds has past" << std::endl;
+  debugging::doIfDebug([&]() {
+    std::cout << "\nwriting complete, " << std::dec << elapsedMilliseconds
+              << " milliseconds has past" << std::endl;
+  });
 
   lifter->profiler.begin("optimization");
   lifter->run_opts();

@@ -60,14 +60,16 @@ inline void runLiftWorklist(lifterConcolic<>* lifter) {
     lifter->liftBasicBlockFromAddress(bbinfo.block_address);
   }
 
-  // Lifting summary: provides visibility into lift quality.
-  std::cout << "Lift summary: "
-            << lifter->liftStats.blocks_attempted << " blocks attempted, "
-            << lifter->liftStats.blocks_completed << " completed, "
-            << lifter->liftStats.blocks_unreachable << " unreachable, "
-            << lifter->liftStats.instructions_lifted << " instructions, "
-            << lifter->liftStats.instructions_unsupported << " unsupported"
-            << std::endl;
+  // Lifting summary remains in structured diagnostics; keep stdout quiet unless debugging.
+  debugging::doIfDebug([&]() {
+    std::cout << "Lift summary: "
+              << lifter->liftStats.blocks_attempted << " blocks attempted, "
+              << lifter->liftStats.blocks_completed << " completed, "
+              << lifter->liftStats.blocks_unreachable << " unreachable, "
+              << lifter->liftStats.instructions_lifted << " instructions, "
+              << lifter->liftStats.instructions_unsupported << " unsupported"
+              << std::endl;
+  });
   {
     std::ostringstream ss;
     ss << lifter->liftStats.blocks_attempted << " blocks ("

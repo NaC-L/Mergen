@@ -138,81 +138,89 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
   // printvalue(rsp);
   printvalue2(current_address);
 
-  auto funcInfo = signatures.getFunctionInfo(current_address);
+  {
+    auto prologueSample = profiler.sample("lift_prologue");
+    auto funcInfo = signatures.getFunctionInfo(current_address);
 
-  if (funcInfo) {
-    callFunctionIR(funcInfo->name.c_str(), funcInfo);
-    outs() << "calling: " << funcInfo->name.c_str() << "\n";
-    outs().flush();
-    auto next_jump = popStack(file.getMode() == arch_mode::X64 ? 8 : 4);
+    if (funcInfo) {
+      callFunctionIR(funcInfo->name.c_str(), funcInfo);
+      debugging::doIfDebug([&]() {
+        outs() << "calling: " << funcInfo->name.c_str() << "\n";
+        outs().flush();
+      });
+      auto next_jump = popStack(file.getMode() == arch_mode::X64 ? 8 : 4);
 
-    // get [rsp], jump there
-    if (!isa<ConstantInt>(next_jump)) {
-      UNREACHABLE("next_jump is not a ConstantInt.");
+      // get [rsp], jump there
+      if (!isa<ConstantInt>(next_jump)) {
+        UNREACHABLE("next_jump is not a ConstantInt.");
+        return;
+      }
+      auto RIP_value = cast<ConstantInt>(next_jump);
+      auto jump_address = RIP_value->getZExtValue();
+
+      auto bb = getOrCreateBB(jump_address, "bb_call");
+      builder->CreateBr(bb);
+
+      blockInfo = BBInfo(jump_address, bb);
+      run = 0;
       return;
     }
-    auto RIP_value = cast<ConstantInt>(next_jump);
-    auto jump_address = RIP_value->getZExtValue();
 
-    auto bb = getOrCreateBB(jump_address, "bb_call");
-    builder->CreateBr(bb);
+    // if really an import, jump_address + imagebase should return a std::string
+    // (?)
+    uint64_t jump_address = current_address;
+    uint64_t temp;
+    bool isReadable = file.readMemory(jump_address, 1, temp);
+    // bool isImport = file.isImport(jump_address); check if rwx?
 
-    blockInfo = BBInfo(jump_address, bb);
-    run = 0;
-    return;
-  }
+    // this ~~would~~ SHOULD catch missed function calls, probably take care of
+    // this in solvePath?
 
-  // if really an import, jump_address + imagebase should return a std::string
-  // (?)
-  uint64_t jump_address = current_address;
-  uint64_t temp;
-  bool isReadable = file.readMemory(jump_address, 1, temp);
-  // bool isImport = file.isImport(jump_address); check if rwx?
+    if (!isReadable &&
+        cast<ConstantInt>(GetRegisterValue(Register::RSP))->getValue() !=
+            STACKP_VALUE) {
+      printvalueforce2(jump_address);
 
-  // this ~~would~~ SHOULD catch missed function calls, probably take care of
-  // this in solvePath?
+      // TODO: ideally remove this part
+      auto bb = getOrCreateBB(jump_address, "bb_indirectly_called");
+      // actually call the function first
 
-  if (!isReadable &&
-      cast<ConstantInt>(GetRegisterValue(Register::RSP))->getValue() !=
-          STACKP_VALUE) {
-    printvalueforce2(jump_address);
+      auto functionName = file.getName(jump_address);
+      debugging::doIfDebug([&]() {
+        outs() << "calling : " << functionName
+               << " addr: " << (uint64_t)jump_address;
+        outs().flush();
+      });
 
-    // TODO: ideally remove this part
-    auto bb = getOrCreateBB(jump_address, "bb_indirectly_called");
-    // actually call the function first
+      callFunctionIR(functionName, nullptr);
 
-    auto functionName = file.getName(jump_address);
-    outs() << "calling : " << functionName
-           << " addr: " << (uint64_t)jump_address;
-    outs().flush();
+      auto next_jump = popStack(file.getMode() == arch_mode::X64 ? 8 : 4);
 
-    callFunctionIR(functionName, nullptr);
+      // get [rsp], jump there
+      auto RIP_value = cast<ConstantInt>(next_jump);
+      jump_address = RIP_value->getZExtValue();
 
-    auto next_jump = popStack(file.getMode() == arch_mode::X64 ? 8 : 4);
+      builder->CreateBr(bb);
 
-    // get [rsp], jump there
-    auto RIP_value = cast<ConstantInt>(next_jump);
-    jump_address = RIP_value->getZExtValue();
-
-    builder->CreateBr(bb);
-
-    blockInfo = BBInfo(jump_address, bb);
-    run = 0;
-    return;
-  }
-
-  /*
-    if (!isReadable && !isImport) {
-      // done something wrong;
-      std::string Filename = "output_external.ll";
-      std::error_code EC;
-      raw_fd_ostream OS(Filename, EC);
-      builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
-
-      outs().flush();
-      // UNREACHABLE("Trying to execute invalid external function");
+      blockInfo = BBInfo(jump_address, bb);
+      run = 0;
+      return;
     }
-   */
-  // do something for prefixes like rep here
+
+    /*
+      if (!isReadable && !isImport) {
+        // done something wrong;
+        std::string Filename = "output_external.ll";
+        std::error_code EC;
+        raw_fd_ostream OS(Filename, EC);
+        builder->GetInsertBlock()->getParent()->getParent()->print(OS, nullptr);
+
+        outs().flush();
+        // UNREACHABLE("Trying to execute invalid external function");
+      }
+    */
+    // do something for prefixes like rep here
+  }
+  auto semanticsSample = profiler.sample("lift_semantics");
   liftInstructionSemantics();
 }
