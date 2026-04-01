@@ -158,6 +158,60 @@
       }
     },
     {
+      "name": "movq_xmm0_rcx_zero_upper",
+      "handler": "movq",
+      "instruction_bytes": [102, 72, 15, 110, 193],
+      "initial": {
+        "registers": {
+          "XMM0": "0xffffffffffffffff1111111111111111",
+          "RCX": "0x0123456789abcdef"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "XMM0": null
+        },
+        "flags": {}
+      }
+    },
+    {
+      "name": "movq_rax_xmm1_low64",
+      "handler": "movq",
+      "instruction_bytes": [102, 72, 15, 126, 200],
+      "initial": {
+        "registers": {
+          "RAX": "0xdeadbeefcafebabe",
+          "XMM1": "0x112233445566778899aabbccddeeff00"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {}
+      }
+    },
+    {
+      "name": "movq_xmm0_xmm1_zero_upper",
+      "handler": "movq",
+      "instruction_bytes": [243, 15, 126, 193],
+      "initial": {
+        "registers": {
+          "XMM0": "0xaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbb",
+          "XMM1": "0x0123456789abcdeffedcba9876543210"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "XMM0": null
+        },
+        "flags": {}
+      }
+    },
+    {
       "name": "pxor_xmm0_xmm1_basic",
       "handler": "pxor",
       "instruction_bytes": [102, 15, 239, 193],
