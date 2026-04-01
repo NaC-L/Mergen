@@ -57,6 +57,7 @@ Use `run_microtests.cmd --check-flags <filter>` to enforce oracle flag compariso
 Use `run_microtests.cmd --build <filter>` to force rebuilding `rewrite_microtests.exe`, or `run_microtests.cmd --no-build <filter>` to skip any build step.
 Set `SKIP_ORACLE_GENERATION=1` to reuse a pre-generated oracle file. Set `MERGEN_TEST_VECTORS=<path>` to point tests at a custom oracle JSON file.
 Use `run_all_handlers.cmd` to exercise full handler coverage smoke tests. It writes `lifter/test_vectors/oracle_vectors_full_handlers.json` and then runs microtests against it through `run_microtests.cmd` (which now builds lazily).
+Oracle vector JSON fixtures are deterministic by design; regenerating them should only change tracked files when the underlying cases change, not because of wall-clock metadata.
 Full-handler vectors are expected to execute end-to-end (no default `skip: true` crash exclusions).
 Use `run_flagstress.cmd` (or `python test.py flags`) for broad strict-flag validation across all handlers that explicitly write flags.
 Use `python test.py semantic` to run runtime semantic regression for all samples (accepts `--filter` to narrow scope and `--input-ir` to override the IR file for a single sample).
