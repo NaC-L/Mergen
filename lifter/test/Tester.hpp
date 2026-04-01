@@ -393,6 +393,24 @@ private:
            checkRejected("repe scasb", std::vector<uint8_t>{0xF3, 0xAE});
   }
 
+  bool runLoopAddressSizeOverrideRejected(std::string& details) {
+    auto checkRejected = [&](const std::string& name,
+                             const std::vector<uint8_t>& instructionBytes) {
+      LifterUnderTest lifter;
+      lifter.SetRegisterValue(RegisterUnderTest::RCX, makeI64(lifter.builder->getContext(), 2));
+      lifter.liftBytes(instructionBytes.data(), instructionBytes.size());
+      if (!functionHasDirectCallTo(lifter.fnc, "not_implemented")) {
+        details += "  " + name + ": expected call to not_implemented\n";
+        return false;
+      }
+      return true;
+    };
+
+    return checkRejected("addr32 loop", std::vector<uint8_t>{0x67, 0xE2, 0x10}) &&
+           checkRejected("addr32 loope", std::vector<uint8_t>{0x67, 0xE1, 0x10}) &&
+           checkRejected("addr32 loopne", std::vector<uint8_t>{0x67, 0xE0, 0x10});
+  }
+
 
   int runCustomKnownBitsTests(const std::string& suiteFilter) {
     int failures = 0;
@@ -446,6 +464,8 @@ private:
              &InstructionTester::runScasBasicPointerAdvance);
     runCustom("scas_repeat_prefixes_rejected",
              &InstructionTester::runScasRepeatPrefixesRejected);
+    runCustom("loop_addrsize_override_rejected",
+             &InstructionTester::runLoopAddressSizeOverrideRejected);
 
     return failures;
   }

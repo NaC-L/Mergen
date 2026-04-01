@@ -252,6 +252,225 @@
       }
     },
     {
+      "name": "loop_rcx_two_taken",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        226,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x2"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0x1"
+        },
+        "flags": {},
+        "branch_taken": true
+      },
+      "oracle_observations": {}
+    },
+    {
+      "name": "loop_rcx_one_fallthrough",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        226,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x1"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0x0"
+        },
+        "flags": {},
+        "branch_taken": false
+      },
+      "oracle_observations": {}
+    },
+    {
+      "name": "loop_rcx_zero_wraps_taken",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        226,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x0"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0xffffffffffffffff"
+        },
+        "flags": {},
+        "branch_taken": true
+      },
+      "oracle_observations": {}
+    },
+    {
+      "name": "loope_zf_taken",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        225,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x2"
+        },
+        "flags": {
+          "FLAG_ZF": 1
+        }
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0x1"
+        },
+        "flags": {},
+        "branch_taken": true
+      },
+      "oracle_observations": {}
+    },
+    {
+      "name": "loope_count_zero_fallthrough",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        225,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x1"
+        },
+        "flags": {
+          "FLAG_ZF": 1
+        }
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0x0"
+        },
+        "flags": {},
+        "branch_taken": false
+      },
+      "oracle_observations": {}
+    },
+    {
+      "name": "loope_zf_clear_fallthrough",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        225,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x2"
+        },
+        "flags": {
+          "FLAG_ZF": 0
+        }
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0x1"
+        },
+        "flags": {},
+        "branch_taken": false
+      },
+      "oracle_observations": {}
+    },
+    {
+      "name": "loopne_zf_clear_taken",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        224,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x2"
+        },
+        "flags": {
+          "FLAG_ZF": 0
+        }
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0x1"
+        },
+        "flags": {},
+        "branch_taken": true
+      },
+      "oracle_observations": {}
+    },
+    {
+      "name": "loopne_count_zero_fallthrough",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        224,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x1"
+        },
+        "flags": {
+          "FLAG_ZF": 0
+        }
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0x0"
+        },
+        "flags": {},
+        "branch_taken": false
+      },
+      "oracle_observations": {}
+    },
+    {
+      "name": "loopne_zf_set_fallthrough",
+      "handler": "loopx",
+      "oracle_mode": "computed",
+      "instruction_bytes": [
+        224,
+        16
+      ],
+      "initial": {
+        "registers": {
+          "RCX": "0x2"
+        },
+        "flags": {
+          "FLAG_ZF": 1
+        }
+      },
+      "expected": {
+        "registers": {
+          "RCX": "0x1"
+        },
+        "flags": {},
+        "branch_taken": false
+      },
+      "oracle_observations": {}
+    },
+    {
       "name": "movdqa_xmm0_xmm1_basic",
       "handler": "movdqa",
       "oracle_mode": "unicorn",
