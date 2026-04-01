@@ -4,6 +4,7 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/Support/Casting.h>
 
 #include <cstdint>
@@ -89,6 +90,38 @@ private:
                                 const std::string& suiteFilter) {
     return suiteFilter.empty() ||
            caseName.find(suiteFilter) != std::string::npos;
+  }
+
+  static bool functionHasDirectCallTo(llvm::Function* function,
+                                      llvm::StringRef calleeName) {
+    for (auto& block : *function) {
+      for (auto& instruction : block) {
+        if (auto* call = llvm::dyn_cast<llvm::CallBase>(&instruction)) {
+          if (auto* callee = call->getCalledFunction();
+              callee && callee->getName() == calleeName) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  static llvm::ConstantInt* makeI64(llvm::LLVMContext& context, uint64_t value) {
+    return llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), value);
+  }
+
+  static void seedScasbState(LifterUnderTest& lifter, uint64_t addressValue,
+                             uint8_t accumByte, uint8_t memoryByte,
+                             uint64_t count = 1) {
+    auto& context = lifter.builder->getContext();
+    auto* address = makeI64(context, addressValue);
+    lifter.SetRegisterValue(RegisterUnderTest::RDI, address);
+    lifter.SetRegisterValue(RegisterUnderTest::RAX, makeI64(context, accumByte));
+    lifter.SetRegisterValue(RegisterUnderTest::RCX, makeI64(context, count));
+    lifter.SetFlagValue_impl(FLAG_DF, lifter.builder->getFalse());
+    lifter.SetMemoryValue(
+        address, llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), memoryByte));
   }
 
   bool runKnownBitsI64ConstantCase(std::string& details) {
@@ -266,6 +299,101 @@ private:
     return true;
   }
 
+  bool runFunctionSignatureZeroArgPreserved(std::string& details) {
+    using SignatureTable = funcsignatures<RegisterUnderTest>;
+    auto* info = SignatureTable::getFunctionInfo(std::string("GetTickCount64"));
+    if (!info) {
+      details = "  missing GetTickCount64 signature info\n";
+      return false;
+    }
+    if (!info->args.empty()) {
+      details = "  GetTickCount64 arg count mismatch: expected=0 actual=" +
+                std::to_string(info->args.size()) + "\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runFunctionSignatureBinaryNameLookup(std::string& details) {
+    using SignatureTable = funcsignatures<RegisterUnderTest>;
+    auto* info = SignatureTable::getFunctionInfo(std::string("swprintf_s"));
+    if (!info) {
+      details = "  missing swprintf_s signature info\n";
+      return false;
+    }
+    if (info->args.size() != 4) {
+      details = "  swprintf_s arg count mismatch: expected=4 actual=" +
+                std::to_string(info->args.size()) + "\n";
+      return false;
+    }
+    if (info->args[0].reg != RegisterUnderTest::RCX ||
+        info->args[1].reg != RegisterUnderTest::RDX ||
+        info->args[2].reg != RegisterUnderTest::R8 ||
+        info->args[3].reg != RegisterUnderTest::R9) {
+      details = "  swprintf_s register order mismatch\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runFunctionSignatureBinaryFallbackArgs(std::string& details) {
+    using SignatureTable = funcsignatures<RegisterUnderTest>;
+    auto* info = SignatureTable::getFunctionInfo(
+        std::string("??$?6U?$char_traits@D@std@@@std@@YAAEAV?$basic_ostream@DU?$char_traits@D@std@@@0@AEAV10@PEBD@Z"));
+    if (!info) {
+      details = "  missing ostream binary signature info\n";
+      return false;
+    }
+    if (info->args.size() != 17) {
+      details = "  ostream fallback arg count mismatch: expected=17 actual=" +
+                std::to_string(info->args.size()) + "\n";
+      return false;
+    }
+    return true;
+  }
+
+
+  bool runScasBasicPointerAdvance(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.builder->getContext();
+    auto* address = makeI64(context, 0x2000);
+    auto* value = makeI64(context, 0x4142434445464748ULL);
+    lifter.SetRegisterValue(RegisterUnderTest::RDI, address);
+    lifter.SetRegisterValue(RegisterUnderTest::RAX, value);
+    lifter.SetFlagValue_impl(FLAG_DF, lifter.builder->getFalse());
+    lifter.SetMemoryValue(address, value);
+
+    static constexpr uint8_t kScasq[] = {0x48, 0xAF};
+    lifter.liftBytes(kScasq, sizeof(kScasq));
+
+    auto rdiAfter = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::RDI));
+    if (!rdiAfter.has_value() || rdiAfter->getZExtValue() != 0x2008) {
+      details = "  SCASQ did not advance RDI by eight bytes\n";
+      return false;
+    }
+
+    return true;
+  }
+
+  bool runScasRepeatPrefixesRejected(std::string& details) {
+    auto checkRejected = [&](const std::string& name,
+                             const std::vector<uint8_t>& instructionBytes) {
+      LifterUnderTest lifter;
+      seedScasbState(lifter, 0x2100, 0x41, 0x41, 3);
+      lifter.liftBytes(instructionBytes.data(), instructionBytes.size());
+      if (!functionHasDirectCallTo(lifter.fnc, "not_implemented")) {
+        details += "  " + name + ": expected call to not_implemented\n";
+        return false;
+      }
+      return true;
+    };
+
+    return checkRejected("repne scasb", std::vector<uint8_t>{0xF2, 0xAE}) &&
+           checkRejected("repe scasb", std::vector<uint8_t>{0xF3, 0xAE});
+  }
+
+
   int runCustomKnownBitsTests(const std::string& suiteFilter) {
     int failures = 0;
 
@@ -308,6 +436,16 @@ private:
              &InstructionTester::runCallAbiStrictClobbersVolatile);
     runCustom("call_abi_default_is_strict",
              &InstructionTester::runCallAbiDefaultIsStrict);
+    runCustom("function_signature_zero_arg_preserved",
+             &InstructionTester::runFunctionSignatureZeroArgPreserved);
+    runCustom("function_signature_binary_name_lookup",
+             &InstructionTester::runFunctionSignatureBinaryNameLookup);
+    runCustom("function_signature_binary_fallback_args",
+             &InstructionTester::runFunctionSignatureBinaryFallbackArgs);
+    runCustom("scas_basic_pointer_advance",
+             &InstructionTester::runScasBasicPointerAdvance);
+    runCustom("scas_repeat_prefixes_rejected",
+             &InstructionTester::runScasRepeatPrefixesRejected);
 
     return failures;
   }

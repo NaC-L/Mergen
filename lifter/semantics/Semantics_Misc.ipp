@@ -690,6 +690,19 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_scasx() {
     UNREACHABLE("unreachable case on lift_scasx");
   }
 
+  if (instruction.attributes != InstructionPrefix::None) {
+    // REP/REPE/REPNE SCAS requires loop/count semantics; reject it until
+    // the lifter can model repeated scan termination correctly.
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
+
   const auto addressRegisterSize = file.getMode() == arch_mode::X64 ? 64 : 32;
   const auto addressRegister = getRegOfSize(Register::RDI, addressRegisterSize);
   const auto sourceRegister = getRegOfSize(Register::RAX, byteSizeValue * 8);
