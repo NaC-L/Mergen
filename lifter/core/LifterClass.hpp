@@ -407,31 +407,34 @@ public:
     this->lastConditionalBranchResolved = false;
     this->lastBranchTaken = false;
 
-    this->current_address = addr;
-    auto offset = file.address_to_mapped_address(addr);
-    if (offset == 0) {
-      this->run = 0;
-      this->finished = 1;
-      builder->CreateUnreachable();
-      return;
-    }
-    // what about the basicblock?
-    printvalue2(offset);
-    printvalue2(*(uint8_t*)offset);
+    {
+      auto decodeSample = profiler.sample("lift_decode");
+      this->current_address = addr;
+      auto offset = file.address_to_mapped_address(addr);
+      if (offset == 0) {
+        this->run = 0;
+        this->finished = 1;
+        builder->CreateUnreachable();
+        return;
+      }
+      // what about the basicblock?
+      printvalue2(offset);
+      printvalue2(*(uint8_t*)offset);
 
-    runDisassembler((void*)offset, size);
+      runDisassembler((void*)offset, size);
 
-    const auto ct = (llvm::format_hex_no_prefix(this->counter, 0));
-    const auto runtime_address =
-        (llvm::format_hex_no_prefix(this->current_address, 0));
-    printvalue2(ct);
-    printvalue2(runtime_address);
+      const auto ct = (llvm::format_hex_no_prefix(this->counter, 0));
+      const auto runtime_address =
+          (llvm::format_hex_no_prefix(this->current_address, 0));
+      printvalue2(ct);
+      printvalue2(runtime_address);
 #ifndef _NODEV
-    debugging::doIfDebug([&]() { printvalue2(this->instruction.text); });
+      debugging::doIfDebug([&]() { printvalue2(this->instruction.text); });
 #endif
 
-    // also pass the file to address_to_mapped_address?
-    this->current_address += instruction.length;
+      // also pass the file to address_to_mapped_address?
+      this->current_address += instruction.length;
+    }
 
     liftInstruction();
     this->counter++;
@@ -456,41 +459,44 @@ public:
     printvalue2(this->run);
     this->run = 1;
     while (this->finished == 0 && this->run) {
-      // Speculative call budget check: bail if callee is too complex.
-      if (speculativeCall.active && speculativeCallBudget > 0) {
-        speculativeCallBudget--;
-        if (speculativeCallBudget == 0) {
-          // Budget exhausted — abandon speculative inline.
-          if (!builder->GetInsertBlock()->getTerminator()) {
-            builder->CreateUnreachable();
+      {
+        auto blockSetupSample = profiler.sample("lift_block_setup");
+        // Speculative call budget check: bail if callee is too complex.
+        if (speculativeCall.active && speculativeCallBudget > 0) {
+          speculativeCallBudget--;
+          if (speculativeCallBudget == 0) {
+            // Budget exhausted — abandon speculative inline.
+            if (!builder->GetInsertBlock()->getTerminator()) {
+              builder->CreateUnreachable();
+            }
+            run = 0;
+            speculativeCall.bailedOut = true;
+            speculativeCall.active = false;
+
+            // Trim worklist: remove all callee blocks pushed since the call.
+            unvisitedBlocks.resize(speculativeCall.worklistFloor);
+
+            // Push the return continuation BB onto the worklist.
+            auto it = addrToBB.find(speculativeCall.returnAddr);
+            if (it != addrToBB.end()) {
+              BBInfo retInfo(speculativeCall.returnAddr, it->second);
+              unvisitedBlocks.push_back(retInfo);
+            }
+
+            std::cout << "[call-abi] speculative inline bail-out at 0x"
+                      << std::hex << (addr) << std::dec
+                      << ", resuming at 0x" << std::hex
+                      << speculativeCall.returnAddr << std::dec
+                      << "\n" << std::flush;
+            diagnostics.info(DiagCode::CallOutlinedSpecBailout, addr,
+                             "Speculative inline bail-out, resuming at return address");
+            return;
           }
-          run = 0;
-          speculativeCall.bailedOut = true;
-          speculativeCall.active = false;
-
-          // Trim worklist: remove all callee blocks pushed since the call.
-          unvisitedBlocks.resize(speculativeCall.worklistFloor);
-
-          // Push the return continuation BB onto the worklist.
-          auto it = addrToBB.find(speculativeCall.returnAddr);
-          if (it != addrToBB.end()) {
-            BBInfo retInfo(speculativeCall.returnAddr, it->second);
-            unvisitedBlocks.push_back(retInfo);
-          }
-
-          std::cout << "[call-abi] speculative inline bail-out at 0x"
-                    << std::hex << (addr) << std::dec
-                    << ", resuming at 0x" << std::hex
-                    << speculativeCall.returnAddr << std::dec
-                    << "\n" << std::flush;
-          diagnostics.info(DiagCode::CallOutlinedSpecBailout, addr,
-                           "Speculative inline bail-out, resuming at return address");
-          return;
         }
-      }
 
-      auto currentblock = builder->GetInsertBlock()->getName();
-      printvalue2(currentblock);
+        auto currentblock = builder->GetInsertBlock()->getName();
+        printvalue2(currentblock);
+      }
       liftAddress(addr);
       ++liftStats.instructions_lifted;
       addr = current_address;

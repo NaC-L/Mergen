@@ -2,6 +2,8 @@
 #define FUNCSIGNATURES_H
 #include "AbiCallContract.hpp"
 #include "FileReader.hpp"
+#include <array>
+#include <cstddef>
 #include <iostream>
 #include <map>
 #include <queue>
@@ -21,10 +23,10 @@ public:
       uint8_t size : 4; // 4 bits for size
       uint8_t isPtr : 1;
       uint8_t pad : 3;
-      argTypeInfo(ArgType type, bool isPtr)
+      constexpr argTypeInfo(ArgType type, bool isPtr)
           : size(static_cast<uint8_t>(type)), isPtr(isPtr ? 1 : 0), pad(0) {}
     } argtype;
-    funcArgInfo(Register Reg, ArgType type, bool isPtr)
+    constexpr funcArgInfo(Register Reg, ArgType type, bool isPtr)
         : reg(Reg), argtype(type, isPtr){};
   };
 
@@ -36,10 +38,6 @@ public:
 
     functioninfo(const std::string& Name, std::vector<funcArgInfo> Args)
         : name(Name), args(Args) {}
-
-    functioninfo(const std::string& Name, const std::vector<funcArgInfo> Args,
-                 const std::vector<unsigned char> Bytes)
-        : name(Name), args(Args), bytes(Bytes) {}
     std::string name;
     //
     funcArgInfos args = {
@@ -53,8 +51,6 @@ public:
         funcArgInfo(Register::R14, I64, 0), funcArgInfo(Register::R15, I64, 0),
         funcArgInfo(Register::DS, I64, 1)};
 
-    std::vector<unsigned char> bytes;
-
     // ABI metadata (optional). Default values preserve backward compatibility.
     AbiKind      abiKind      = AbiKind::Unknown;
     StackCleanup stackCleanup = StackCleanup::Unknown;
@@ -65,76 +61,63 @@ public:
     // also
     // should SS represent stack ? (rsp+0x20 + (8 * arg) )
     // (SS is always ptr)
-    static inline std::vector<uint64_t> offsets;
-    static void add_offset(x86_64FileReader& file, uint64_t offset) {
-      offsets.push_back(file.fileOffsetToRVA(offset));
-    };
-    void display() const {
-      std::cout << "Function Name: " << name << ", Offsets: ";
-      for (const auto& offset : offsets) {
-        std::cout << offset << " ";
-      }
-      std::cout << "end" << std::endl;
-    };
   };
 
-  struct siginfo {
-    siginfo(const std::vector<unsigned char>& Bytes);
-    siginfo(const std::vector<unsigned char>& Bytes,
-            const std::vector<unsigned char>& Args);
-
-    std::vector<unsigned char> bytes;
-    std::vector<unsigned char> args;
-  };
-
-  struct VectorHash {
-    std::size_t operator()(const std::vector<unsigned char>& v) const {
-      std::hash<unsigned char> hasher;
-      std::size_t seed = 0;
-      for (unsigned char i : v) {
-        seed ^= hasher(i) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-      }
-      return seed;
-    }
+private:
+  struct SignatureSpec {
+    const char*        name;
+    const unsigned char* bytes;
+    size_t             byteCount;
+    const funcArgInfo* args;
+    size_t             argCount;
   };
 
   class AhoCorasick {
   public:
-    AhoCorasick(
-        const std::unordered_map<std::vector<unsigned char>, functioninfo,
-                                 VectorHash>& patterns_map) {
+    template <size_t N>
+    explicit AhoCorasick(const std::array<SignatureSpec, N>& specs) {
       trie.emplace_back();
-      int id = 0;
-      for (const auto& [pattern, _] : patterns_map) {
+      patternLengths.reserve(N);
+      for (size_t id = 0; id < N; ++id) {
+        const auto& spec = specs[id];
         int current = 0;
-        for (unsigned char c : pattern) {
-          if (trie[current].children.count(c) == 0) {
-            trie[current].children[c] = trie.size();
+        for (size_t i = 0; i < spec.byteCount; ++i) {
+          const unsigned char c = spec.bytes[i];
+          auto childIt = trie[current].children.find(c);
+          if (childIt == trie[current].children.end()) {
+            trie[current].children[c] = static_cast<int>(trie.size());
             trie.emplace_back();
+            current = static_cast<int>(trie.size()) - 1;
+          } else {
+            current = childIt->second;
           }
-          current = trie[current].children[c];
         }
         trie[current].output.push_back(id);
-        patterns[id++] = pattern;
+        patternLengths.push_back(spec.byteCount);
       }
       build();
     };
 
-    std::vector<std::pair<uint64_t, int>>
-    search(const std::vector<unsigned char>& text) {
-      std::vector<std::pair<uint64_t, int>> results;
+    std::vector<std::pair<uint64_t, size_t>>
+    search(const std::vector<unsigned char>& text) const {
+      std::vector<std::pair<uint64_t, size_t>> results;
       int current = 0;
       for (uint64_t i = 0; i < text.size(); ++i) {
-        while (current != -1 && trie[current].children.count(text[i]) == 0) {
+        const unsigned char c = text[i];
+        while (current != -1) {
+          auto childIt = trie[current].children.find(c);
+          if (childIt != trie[current].children.end()) {
+            current = childIt->second;
+            break;
+          }
           current = trie[current].fail;
         }
         if (current == -1) {
           current = 0;
           continue;
         }
-        current = trie[current].children[text[i]];
-        for (int id : trie[current].output) {
-          results.emplace_back(i - patterns[id].size() + 1, id);
+        for (size_t id : trie[current].output) {
+          results.emplace_back(i - patternLengths[id] + 1, id);
         }
       }
       return results;
@@ -143,11 +126,11 @@ public:
     struct Node {
       std::map<unsigned char, int> children;
       int fail = -1;
-      std::vector<int> output;
+      std::vector<size_t> output;
     };
 
     std::vector<Node> trie;
-    std::unordered_map<int, std::vector<unsigned char>> patterns;
+    std::vector<size_t> patternLengths;
 
     void build() {
       std::queue<int> q;
@@ -160,12 +143,15 @@ public:
         q.pop();
         for (const auto& [c, next] : trie[current].children) {
           int fail = trie[current].fail;
-          while (fail != -1 && trie[fail].children.count(c) == 0) {
+          while (fail != -1) {
+            auto failIt = trie[fail].children.find(c);
+            if (failIt != trie[fail].children.end()) {
+              trie[next].fail = failIt->second;
+              break;
+            }
             fail = trie[fail].fail;
           }
-          if (fail != -1) {
-            trie[next].fail = trie[fail].children[c];
-          } else {
+          if (fail == -1) {
             trie[next].fail = 0;
           }
           trie[next].output.insert(trie[next].output.end(),
@@ -177,217 +163,248 @@ public:
     };
   };
 
-  static inline std::unordered_map<std::vector<unsigned char>, functioninfo,
-                                   VectorHash>
-      siglookup{
-          {{0x55, 0x48, 0x81, 0xEC, 0xA0, 00, 00, 00, 0x48, 0x8D, 0xAC, 0x24,
-            0x80, 00, 00, 00},
-           functioninfo("??$?6U?$char_traits@D@std@@@std@@YAAEAV?$basic_"
-                        "ostream@DU?$char_traits@D@std@@@0@AEAV10@PEBD@Z")},
+  static inline constexpr std::array<unsigned char, 16> kOstreamBytes = {
+      0x55, 0x48, 0x81, 0xEC, 0xA0, 0x00, 0x00, 0x00,
+      0x48, 0x8D, 0xAC, 0x24, 0x80, 0x00, 0x00, 0x00};
 
-          {{0x4C, 0x8B, 0xDC, 0x4D, 0x89, 0x43, 0x18, 0x4D, 0x89, 0x4B, 0x20,
-            0x48, 0x83, 0xEC, 0x38},
-           functioninfo("swprintf_s", {
-                                          funcArgInfo(Register::RCX, I64, 1),
-                                          funcArgInfo(Register::RDX, I64, 0),
-                                          funcArgInfo(Register::R8, I64, 1),
-                                          funcArgInfo(Register::R9, I64, 0),
-                                      })}};
+  static inline constexpr std::array<unsigned char, 15> kSwprintfBytes = {
+      0x4C, 0x8B, 0xDC, 0x4D, 0x89, 0x43, 0x18,
+      0x4D, 0x89, 0x4B, 0x20, 0x48, 0x83, 0xEC, 0x38};
 
+  static inline constexpr std::array<funcArgInfo, 4> kSwprintfArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+      funcArgInfo(Register::RDX, I64, 0),
+      funcArgInfo(Register::R8, I64, 1),
+      funcArgInfo(Register::R9, I64, 0),
+  };
+
+  static inline constexpr std::array<SignatureSpec, 2> kBinarySignatureSpecs = {{
+      {"??$?6U?$char_traits@D@std@@@std@@YAAEAV?$basic_ostream@DU?$char_traits@D@std@@@0@AEAV10@PEBD@Z",
+       kOstreamBytes.data(), kOstreamBytes.size(), nullptr, 0},
+      {"swprintf_s", kSwprintfBytes.data(), kSwprintfBytes.size(),
+       kSwprintfArgs.data(), kSwprintfArgs.size()},
+  }};
+
+  static functioninfo buildFunctionInfo(
+      const SignatureSpec& spec, bool preserveDefaultArgsWhenUnspecified = false) {
+    if (spec.argCount == 0 && preserveDefaultArgsWhenUnspecified) {
+      return functioninfo(spec.name);
+    }
+    funcArgInfos args;
+    args.reserve(spec.argCount);
+    for (size_t i = 0; i < spec.argCount; ++i) {
+      args.push_back(spec.args[i]);
+    }
+    return functioninfo(spec.name, args);
+  }
+
+  static const AhoCorasick& getBinarySignatureMatcher() {
+    static const AhoCorasick matcher(kBinarySignatureSpecs);
+    return matcher;
+  }
+
+public:
   static inline std::unordered_map<uint64_t, functioninfo> functions;
+  static inline std::unordered_map<std::string, std::vector<uint64_t>>
+      signatureOffsets;
+
   // Known Win32 API signatures for named import call emission.
   // Only register-passed arguments (RCX, RDX, R8, R9) are modeled;
   // stack-passed arguments (5th+ params) are not yet supported.
   // Functions with >4 params emit declarations for the first 4 only.
-  static inline std::unordered_map<std::string, functioninfo> functionsByName{
-      // ── UI / Dialog ──
-      {"MessageBoxW", functioninfo("MessageBoxW",
-                                   {
-                                       funcArgInfo(Register::RCX, I64, 0),
-                                       funcArgInfo(Register::RDX, I64, 1),
-                                       funcArgInfo(Register::R8, I64, 1),
-                                       funcArgInfo(Register::R9, I64, 0),
-                                   })},
-      {"MessageBoxA", functioninfo("MessageBoxA",
-                                   {
-                                       funcArgInfo(Register::RCX, I64, 0),
-                                       funcArgInfo(Register::RDX, I64, 1),
-                                       funcArgInfo(Register::R8, I64, 1),
-                                       funcArgInfo(Register::R9, I64, 0),
-                                   })},
-
-      // ── Timing ──
-      {"GetTickCount64", functioninfo("GetTickCount64", {})},
-      {"GetTickCount", functioninfo("GetTickCount", {})},
-      {"QueryPerformanceCounter", functioninfo("QueryPerformanceCounter",
-                                                {funcArgInfo(Register::RCX, I64, 1)})},
-      {"QueryPerformanceFrequency", functioninfo("QueryPerformanceFrequency",
-                                                  {funcArgInfo(Register::RCX, I64, 1)})},
-      {"Sleep", functioninfo("Sleep", {funcArgInfo(Register::RCX, I32, 0)})},
-
-      // ── Memory ──
-      {"VirtualAlloc", functioninfo("VirtualAlloc",
-                                    {
-                                        funcArgInfo(Register::RCX, I64, 1),
-                                        funcArgInfo(Register::RDX, I64, 0),
-                                        funcArgInfo(Register::R8, I32, 0),
-                                        funcArgInfo(Register::R9, I32, 0),
-                                    })},
-      {"VirtualFree", functioninfo("VirtualFree",
-                                   {
-                                       funcArgInfo(Register::RCX, I64, 1),
-                                       funcArgInfo(Register::RDX, I64, 0),
-                                       funcArgInfo(Register::R8, I32, 0),
-                                   })},
-      {"VirtualProtect", functioninfo("VirtualProtect",
-                                      {
-                                          funcArgInfo(Register::RCX, I64, 1),
-                                          funcArgInfo(Register::RDX, I64, 0),
-                                          funcArgInfo(Register::R8, I32, 0),
-                                          funcArgInfo(Register::R9, I64, 1),
-                                      })},
-      {"HeapAlloc", functioninfo("HeapAlloc",
-                                 {
-                                     funcArgInfo(Register::RCX, I64, 0),
-                                     funcArgInfo(Register::RDX, I32, 0),
-                                     funcArgInfo(Register::R8, I64, 0),
-                                 })},
-      {"HeapFree", functioninfo("HeapFree",
-                                {
-                                    funcArgInfo(Register::RCX, I64, 0),
-                                    funcArgInfo(Register::RDX, I32, 0),
-                                    funcArgInfo(Register::R8, I64, 1),
-                                })},
-
-      // ── File I/O ──
-      {"CreateFileW", functioninfo("CreateFileW",
-                                   {
-                                       funcArgInfo(Register::RCX, I64, 1),
-                                       funcArgInfo(Register::RDX, I32, 0),
-                                       funcArgInfo(Register::R8, I32, 0),
-                                       funcArgInfo(Register::R9, I64, 1),
-                                   })},
-      {"CreateFileA", functioninfo("CreateFileA",
-                                   {
-                                       funcArgInfo(Register::RCX, I64, 1),
-                                       funcArgInfo(Register::RDX, I32, 0),
-                                       funcArgInfo(Register::R8, I32, 0),
-                                       funcArgInfo(Register::R9, I64, 1),
-                                   })},
-      {"ReadFile", functioninfo("ReadFile",
-                                {
-                                    funcArgInfo(Register::RCX, I64, 0),
-                                    funcArgInfo(Register::RDX, I64, 1),
-                                    funcArgInfo(Register::R8, I32, 0),
-                                    funcArgInfo(Register::R9, I64, 1),
-                                })},
-      {"WriteFile", functioninfo("WriteFile",
-                                 {
-                                     funcArgInfo(Register::RCX, I64, 0),
-                                     funcArgInfo(Register::RDX, I64, 1),
-                                     funcArgInfo(Register::R8, I32, 0),
-                                     funcArgInfo(Register::R9, I64, 1),
-                                 })},
-      {"CloseHandle", functioninfo("CloseHandle",
-                                   {funcArgInfo(Register::RCX, I64, 0)})},
-
-      // ── Process / Module ──
-      {"GetCurrentProcess", functioninfo("GetCurrentProcess", {})},
-      {"GetCurrentProcessId", functioninfo("GetCurrentProcessId", {})},
-      {"GetCurrentThreadId", functioninfo("GetCurrentThreadId", {})},
-      {"GetModuleHandleW", functioninfo("GetModuleHandleW",
-                                        {funcArgInfo(Register::RCX, I64, 1)})},
-      {"GetModuleHandleA", functioninfo("GetModuleHandleA",
-                                        {funcArgInfo(Register::RCX, I64, 1)})},
-      {"GetProcAddress", functioninfo("GetProcAddress",
-                                      {
-                                          funcArgInfo(Register::RCX, I64, 0),
-                                          funcArgInfo(Register::RDX, I64, 1),
-                                      })},
-      {"LoadLibraryW", functioninfo("LoadLibraryW",
-                                    {funcArgInfo(Register::RCX, I64, 1)})},
-      {"LoadLibraryA", functioninfo("LoadLibraryA",
-                                    {funcArgInfo(Register::RCX, I64, 1)})},
-      {"LoadLibraryExW", functioninfo("LoadLibraryExW",
-                                      {
-                                          funcArgInfo(Register::RCX, I64, 1),
-                                          funcArgInfo(Register::RDX, I64, 0),
-                                          funcArgInfo(Register::R8, I32, 0),
-                                      })},
-      {"ExitProcess", functioninfo("ExitProcess",
-                                   {funcArgInfo(Register::RCX, I32, 0)})},
-
-      // ── Error handling ──
-      {"GetLastError", functioninfo("GetLastError", {})},
-      {"SetLastError", functioninfo("SetLastError",
-                                    {funcArgInfo(Register::RCX, I32, 0)})},
-
-      // ── Sync ──
-      {"WaitForSingleObject", functioninfo("WaitForSingleObject",
-                                           {
-                                               funcArgInfo(Register::RCX, I64, 0),
-                                               funcArgInfo(Register::RDX, I32, 0),
-                                           })},
-
-      // ── Registry ──
-      {"RegOpenKeyExW", functioninfo("RegOpenKeyExW",
-                                     {
-                                         funcArgInfo(Register::RCX, I64, 0),
-                                         funcArgInfo(Register::RDX, I64, 1),
-                                         funcArgInfo(Register::R8, I32, 0),
-                                         funcArgInfo(Register::R9, I32, 0),
-                                     })},
-      {"RegQueryValueExW", functioninfo("RegQueryValueExW",
-                                        {
-                                            funcArgInfo(Register::RCX, I64, 0),
-                                            funcArgInfo(Register::RDX, I64, 1),
-                                            funcArgInfo(Register::R8, I64, 1),
-                                            funcArgInfo(Register::R9, I64, 1),
-                                        })},
-      {"RegCloseKey", functioninfo("RegCloseKey",
-                                   {funcArgInfo(Register::RCX, I64, 0)})},
+  static inline constexpr std::array<funcArgInfo, 4> kMessageBoxArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I64, 1),
+      funcArgInfo(Register::R8, I64, 1),
+      funcArgInfo(Register::R9, I64, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 1> kQueryCounterArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 1> kSleepArgs = {
+      funcArgInfo(Register::RCX, I32, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 4> kVirtualAllocArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+      funcArgInfo(Register::RDX, I64, 0),
+      funcArgInfo(Register::R8, I32, 0),
+      funcArgInfo(Register::R9, I32, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 3> kVirtualFreeArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+      funcArgInfo(Register::RDX, I64, 0),
+      funcArgInfo(Register::R8, I32, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 4> kVirtualProtectArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+      funcArgInfo(Register::RDX, I64, 0),
+      funcArgInfo(Register::R8, I32, 0),
+      funcArgInfo(Register::R9, I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 3> kHeapAllocArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I32, 0),
+      funcArgInfo(Register::R8, I64, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 3> kHeapFreeArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I32, 0),
+      funcArgInfo(Register::R8, I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 4> kCreateFileArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+      funcArgInfo(Register::RDX, I32, 0),
+      funcArgInfo(Register::R8, I32, 0),
+      funcArgInfo(Register::R9, I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 4> kReadWriteFileArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I64, 1),
+      funcArgInfo(Register::R8, I32, 0),
+      funcArgInfo(Register::R9, I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 1> kCloseHandleArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 1> kModuleHandleArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 2> kGetProcAddressArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 3> kLoadLibraryExWArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+      funcArgInfo(Register::RDX, I64, 0),
+      funcArgInfo(Register::R8, I32, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 1> kExitProcessArgs = {
+      funcArgInfo(Register::RCX, I32, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 2> kWaitForSingleObjectArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I32, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 4> kRegOpenKeyExWArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I64, 1),
+      funcArgInfo(Register::R8, I32, 0),
+      funcArgInfo(Register::R9, I32, 0),
+  };
+  static inline constexpr std::array<funcArgInfo, 4> kRegQueryValueExWArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I64, 1),
+      funcArgInfo(Register::R8, I64, 1),
+      funcArgInfo(Register::R9, I64, 1),
   };
 
-  static inline std::unordered_map<std::vector<unsigned char>, functioninfo,
-                                   VectorHash>
-  search_signatures(std::vector<unsigned char>& data) {
-    x86_64FileReader file(data.data());
-    AhoCorasick ac(siglookup);
-    std::vector<std::pair<uint64_t, int>> matches = ac.search(data);
-    for (const auto& [pos, id] : matches) {
-      auto it = siglookup.find(ac.patterns[id]);
-      if (it != siglookup.end()) {
-        it->second.add_offset(file, pos);
+  static inline constexpr std::array<SignatureSpec, 33> kNamedFunctionSpecs = {{
+      {"MessageBoxW", nullptr, 0, kMessageBoxArgs.data(), kMessageBoxArgs.size()},
+      {"MessageBoxA", nullptr, 0, kMessageBoxArgs.data(), kMessageBoxArgs.size()},
+      {"GetTickCount64", nullptr, 0, nullptr, 0},
+      {"GetTickCount", nullptr, 0, nullptr, 0},
+      {"QueryPerformanceCounter", nullptr, 0, kQueryCounterArgs.data(), kQueryCounterArgs.size()},
+      {"QueryPerformanceFrequency", nullptr, 0, kQueryCounterArgs.data(), kQueryCounterArgs.size()},
+      {"Sleep", nullptr, 0, kSleepArgs.data(), kSleepArgs.size()},
+      {"VirtualAlloc", nullptr, 0, kVirtualAllocArgs.data(), kVirtualAllocArgs.size()},
+      {"VirtualFree", nullptr, 0, kVirtualFreeArgs.data(), kVirtualFreeArgs.size()},
+      {"VirtualProtect", nullptr, 0, kVirtualProtectArgs.data(), kVirtualProtectArgs.size()},
+      {"HeapAlloc", nullptr, 0, kHeapAllocArgs.data(), kHeapAllocArgs.size()},
+      {"HeapFree", nullptr, 0, kHeapFreeArgs.data(), kHeapFreeArgs.size()},
+      {"CreateFileW", nullptr, 0, kCreateFileArgs.data(), kCreateFileArgs.size()},
+      {"CreateFileA", nullptr, 0, kCreateFileArgs.data(), kCreateFileArgs.size()},
+      {"ReadFile", nullptr, 0, kReadWriteFileArgs.data(), kReadWriteFileArgs.size()},
+      {"WriteFile", nullptr, 0, kReadWriteFileArgs.data(), kReadWriteFileArgs.size()},
+      {"CloseHandle", nullptr, 0, kCloseHandleArgs.data(), kCloseHandleArgs.size()},
+      {"GetCurrentProcess", nullptr, 0, nullptr, 0},
+      {"GetCurrentProcessId", nullptr, 0, nullptr, 0},
+      {"GetCurrentThreadId", nullptr, 0, nullptr, 0},
+      {"GetModuleHandleW", nullptr, 0, kModuleHandleArgs.data(), kModuleHandleArgs.size()},
+      {"GetModuleHandleA", nullptr, 0, kModuleHandleArgs.data(), kModuleHandleArgs.size()},
+      {"GetProcAddress", nullptr, 0, kGetProcAddressArgs.data(), kGetProcAddressArgs.size()},
+      {"LoadLibraryW", nullptr, 0, kModuleHandleArgs.data(), kModuleHandleArgs.size()},
+      {"LoadLibraryA", nullptr, 0, kModuleHandleArgs.data(), kModuleHandleArgs.size()},
+      {"LoadLibraryExW", nullptr, 0, kLoadLibraryExWArgs.data(), kLoadLibraryExWArgs.size()},
+      {"ExitProcess", nullptr, 0, kExitProcessArgs.data(), kExitProcessArgs.size()},
+      {"GetLastError", nullptr, 0, nullptr, 0},
+      {"SetLastError", nullptr, 0, kExitProcessArgs.data(), kExitProcessArgs.size()},
+      {"WaitForSingleObject", nullptr, 0, kWaitForSingleObjectArgs.data(), kWaitForSingleObjectArgs.size()},
+      {"RegOpenKeyExW", nullptr, 0, kRegOpenKeyExWArgs.data(), kRegOpenKeyExWArgs.size()},
+      {"RegQueryValueExW", nullptr, 0, kRegQueryValueExWArgs.data(), kRegQueryValueExWArgs.size()},
+      {"RegCloseKey", nullptr, 0, kCloseHandleArgs.data(), kCloseHandleArgs.size()},
+  }};
+
+  static std::unordered_map<std::string, functioninfo>& getNamedFunctionsByName() {
+    static std::unordered_map<std::string, functioninfo> functionsByName = []() {
+      std::unordered_map<std::string, functioninfo> map;
+      map.reserve(kNamedFunctionSpecs.size() + kBinarySignatureSpecs.size());
+      for (const auto& spec : kNamedFunctionSpecs) {
+        map.emplace(spec.name, buildFunctionInfo(spec));
       }
-    }
-    return siglookup;
-  };
+      for (const auto& spec : kBinarySignatureSpecs) {
+        map.emplace(spec.name, buildFunctionInfo(spec, true));
+      }
+      return map;
+    }();
+    return functionsByName;
+  }
 
-  std::vector<unsigned char> convertToVector(const unsigned char* data,
-                                             size_t size) {
-    return std::vector<unsigned char>(data, data + size);
+  static void search_signatures(std::vector<unsigned char>& data) {
+    signatureOffsets.clear();
+    if (data.empty()) {
+      return;
+    }
+
+    x86_64FileReader file(data.data());
+    const auto& matcher = getBinarySignatureMatcher();
+    std::vector<std::pair<uint64_t, size_t>> matches = matcher.search(data);
+    for (const auto& [pos, id] : matches) {
+      const auto& spec = kBinarySignatureSpecs[id];
+      signatureOffsets[spec.name].push_back(file.fileOffsetToRVA(pos));
+    }
   };
 
   static void createOffsetMap() {
-    for (auto value : siglookup) {
-      for (auto offsets : value.second.offsets) {
-        functions[offsets] = value.second;
+    functions.clear();
+    for (const auto& spec : kBinarySignatureSpecs) {
+      auto it = signatureOffsets.find(spec.name);
+      if (it == signatureOffsets.end())
+        continue;
+
+      functioninfo info = buildFunctionInfo(spec, true);
+      for (const auto offset : it->second) {
+        functions[offset] = info;
       }
-      functionsByName[value.second.name] = value.second;
     }
   };
+
+  static void displayMatches() {
+    for (const auto& spec : kBinarySignatureSpecs) {
+      std::cout << "Function Name: " << spec.name << ", Offsets: ";
+      auto it = signatureOffsets.find(spec.name);
+      if (it != signatureOffsets.end()) {
+        for (const auto& offset : it->second) {
+          std::cout << offset << " ";
+        }
+      }
+      std::cout << "end" << std::endl;
+    }
+  }
+
   static functioninfo* getFunctionInfo(uint64_t addr) {
-    if (functions.count(addr) == 0)
+    auto it = functions.find(addr);
+    if (it == functions.end())
       return nullptr;
-    return &(functions[addr]);
+    return &it->second;
   };
 
   static functioninfo* getFunctionInfo(const std::string& name) {
-    if (functionsByName.count(name) == 0)
+    auto& functionsByName = getNamedFunctionsByName();
+    auto it = functionsByName.find(name);
+    if (it == functionsByName.end())
       return nullptr;
-    return &(functionsByName[name]);
+    return &it->second;
   };
-
 }; // funcsignatures
 
 #endif // FUNCSIGNATURES_H

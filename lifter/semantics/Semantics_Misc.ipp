@@ -669,9 +669,96 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_stosx() {
 
   SetRegisterValue(addressRegister, nextAddress);
 }
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_scasx() {
+  LLVMContext& context = builder->getContext();
+
+  int byteSizeValue = 0;
+  switch (instruction.mnemonic) {
+  case Mnemonic::SCASB:
+    byteSizeValue = 1;
+    break;
+  case Mnemonic::SCASW:
+    byteSizeValue = 2;
+    break;
+  case Mnemonic::SCASD:
+    byteSizeValue = 4;
+    break;
+  case Mnemonic::SCASQ:
+    byteSizeValue = 8;
+    break;
+  default:
+    UNREACHABLE("unreachable case on lift_scasx");
+  }
+
+  if (instruction.attributes != InstructionPrefix::None) {
+    // REP/REPE/REPNE SCAS requires loop/count semantics; reject it until
+    // the lifter can model repeated scan termination correctly.
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
+
+  const auto addressRegisterSize = file.getMode() == arch_mode::X64 ? 64 : 32;
+  const auto addressRegister = getRegOfSize(Register::RDI, addressRegisterSize);
+  const auto sourceRegister = getRegOfSize(Register::RAX, byteSizeValue * 8);
+  auto compareType = Type::getIntNTy(context, byteSizeValue * 8);
+
+  auto destAddress = GetRegisterValue(addressRegister);
+  auto accumValue = GetRegisterValue(sourceRegister);
+  accumValue = createZExtOrTruncFolder(accumValue, compareType);
+  auto memoryValue = GetMemoryValue(destAddress, byteSizeValue * 8);
+  memoryValue = createZExtOrTruncFolder(memoryValue, compareType);
+  auto cmpResult = createSubFolder(accumValue, memoryValue,
+                                   "scas-" + std::to_string(current_address) + "-");
+
+  setFlag(FLAG_OF, [this, accumValue, memoryValue, cmpResult]() {
+    Value* signL = createICMPFolder(CmpInst::ICMP_SLT, accumValue,
+                                    ConstantInt::get(accumValue->getType(), 0));
+    Value* signR = createICMPFolder(CmpInst::ICMP_SLT, memoryValue,
+                                    ConstantInt::get(memoryValue->getType(), 0));
+    Value* signResult =
+        createICMPFolder(CmpInst::ICMP_SLT, cmpResult,
+                         ConstantInt::get(cmpResult->getType(), 0));
+
+    return createOrFolder(
+        createAndFolder(signL, createAndFolder(createNotFolder(signR),
+                                               createNotFolder(signResult),
+                                               "scas-and1-")),
+        createAndFolder(createNotFolder(signL),
+                        createAndFolder(signR, signResult), "scas-and2-"),
+        "scas-of-or");
+  });
+  setFlag(FLAG_CF, [this, accumValue, memoryValue]() {
+    return createICMPFolder(CmpInst::ICMP_ULT, accumValue, memoryValue);
+  });
+  setFlag(FLAG_SF, [this, cmpResult]() { return computeSignFlag(cmpResult); });
+  setFlag(FLAG_ZF, [this, cmpResult]() { return computeZeroFlag(cmpResult); });
+  setFlag(FLAG_PF, [this, cmpResult]() { return computeParityFlag(cmpResult); });
+  setFlag(FLAG_AF, [this, accumValue, memoryValue]() {
+    auto lowerNibbleMask = ConstantInt::get(accumValue->getType(), 0xF);
+    auto lhsLowerNibble =
+        createAndFolder(accumValue, lowerNibbleMask, "scas-lvalLowerNibble");
+    auto rhsLowerNibble =
+        createAndFolder(memoryValue, lowerNibbleMask, "scas-rvalLowerNibble");
+    return createICMPFolder(CmpInst::ICMP_ULT, lhsLowerNibble, rhsLowerNibble,
+                            "scas-sub_af");
+  });
+
+  Value* DF = getFlag(FLAG_DF);
+  auto step = ConstantInt::get(destAddress->getType(), byteSizeValue);
+  auto nextAddress = createSelectFolder(
+      DF, createSubFolder(destAddress, step), createAddFolder(destAddress, step));
+
+  SetRegisterValue(addressRegister, nextAddress);
+}
+
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_setz() {
   LLVMContext& context = builder->getContext();
-  // auto dest = operands[0];
 
   Value* zf = getFlag(FLAG_ZF);
   printvalue(zf);
