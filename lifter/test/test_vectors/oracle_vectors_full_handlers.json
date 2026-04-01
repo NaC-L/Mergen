@@ -284,6 +284,104 @@
       }
     },
     {
+      "name": "movq_xmm0_rcx_zero_upper",
+      "handler": "movq",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        102,
+        72,
+        15,
+        110,
+        193
+      ],
+      "initial": {
+        "registers": {
+          "XMM0": "0xffffffffffffffff1111111111111111",
+          "RCX": "0x0123456789abcdef"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "XMM0": "0x00000000000000000123456789abcdef"
+        },
+        "flags": {}
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "XMM0": "0x00000000000000000123456789abcdef"
+          },
+          "flags": {}
+        }
+      }
+    },
+    {
+      "name": "movq_rax_xmm1_low64",
+      "handler": "movq",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        102,
+        72,
+        15,
+        126,
+        200
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0xdeadbeefcafebabe",
+          "XMM1": "0x112233445566778899aabbccddeeff00"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "RAX": "0x99aabbccddeeff00"
+        },
+        "flags": {}
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "RAX": "0x99aabbccddeeff00"
+          },
+          "flags": {}
+        }
+      }
+    },
+    {
+      "name": "movq_xmm0_xmm1_zero_upper",
+      "handler": "movq",
+      "oracle_mode": "unicorn",
+      "instruction_bytes": [
+        243,
+        15,
+        126,
+        193
+      ],
+      "initial": {
+        "registers": {
+          "XMM0": "0xaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbb",
+          "XMM1": "0x0123456789abcdeffedcba9876543210"
+        },
+        "flags": {}
+      },
+      "expected": {
+        "registers": {
+          "XMM0": "0x0000000000000000fedcba9876543210"
+        },
+        "flags": {}
+      },
+      "oracle_observations": {
+        "unicorn": {
+          "registers": {
+            "XMM0": "0x0000000000000000fedcba9876543210"
+          },
+          "flags": {}
+        }
+      }
+    },
+    {
       "name": "pxor_xmm0_xmm1_basic",
       "handler": "pxor",
       "oracle_mode": "unicorn",
