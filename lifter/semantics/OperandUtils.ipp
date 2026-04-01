@@ -758,11 +758,45 @@ KnownBits computeKnownBitsFromOperation(KnownBits& vv1, KnownBits& vv2,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::folderBinOps(
     Value* LHS, Value* RHS, const Twine& Name, Instruction::BinaryOps opcode) {
-
+  auto folderSample = profiler.sample("sem_folder_binops");
   if (LHS->getType() != RHS->getType()) {
     printvalue(LHS);
     printvalue(RHS);
-    printvalueforce2(this->counter);
+    printvalue2(this->counter);
+  }
+
+  if (LHS == RHS) {
+    switch (opcode) {
+    case Instruction::Xor:
+    case Instruction::Sub:
+      return builder->getIntN(LHS->getType()->getIntegerBitWidth(), 0);
+    case Instruction::And:
+    case Instruction::Or:
+      return LHS;
+    default:
+      break;
+    }
+  }
+
+  if (auto* LHSConst = dyn_cast<ConstantInt>(LHS)) {
+    if (auto* RHSConst = dyn_cast<ConstantInt>(RHS)) {
+      const llvm::APInt& lhsValue = LHSConst->getValue();
+      const llvm::APInt& rhsValue = RHSConst->getValue();
+      switch (opcode) {
+      case Instruction::Add:
+        return ConstantInt::get(LHSConst->getType(), lhsValue + rhsValue);
+      case Instruction::Sub:
+        return ConstantInt::get(LHSConst->getType(), lhsValue - rhsValue);
+      case Instruction::And:
+        return ConstantInt::get(LHSConst->getType(), lhsValue & rhsValue);
+      case Instruction::Or:
+        return ConstantInt::get(LHSConst->getType(), lhsValue | rhsValue);
+      case Instruction::Xor:
+        return ConstantInt::get(LHSConst->getType(), lhsValue ^ rhsValue);
+      default:
+        break;
+      }
+    }
   }
 
   // ideally we go cheaper to more expensive
@@ -1044,6 +1078,7 @@ Value* ICMPPatternMatcher(IRBuilder<llvm::InstSimplifyFolder>* builder,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createICMPFolder(
     CmpInst::Predicate P, Value* LHS, Value* RHS, const Twine& Name) {
+  auto folderSample = profiler.sample("sem_folder_icmp");
   if (auto patternCheck =
           ICMPPatternMatcher(builder.get(), P, LHS, RHS, Name)) {
     printvalue(patternCheck);
@@ -1112,6 +1147,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createZExtFolder(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createZExtOrTruncFolder(
     Value* V, Type* DestTy, const Twine& Name) {
+  auto folderSample = profiler.sample("sem_folder_zext_or_trunc");
   Type* VTy = V->getType();
   if (VTy->getScalarSizeInBits() < DestTy->getScalarSizeInBits())
     return createZExtFolder(V, DestTy, Name);
@@ -1137,6 +1173,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtFolder(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtOrTruncFolder(
     Value* V, Type* DestTy, const Twine& Name) {
+  auto folderSample = profiler.sample("sem_folder_sext_or_trunc");
   Type* VTy = V->getType();
   if (VTy->getScalarSizeInBits() < DestTy->getScalarSizeInBits())
     return createSExtFolder(V, DestTy, Name);
@@ -1148,11 +1185,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::createSExtOrTruncFolder(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::setFlag(const Flag flag,
                                                   Value* newValue) {
+  auto flagSample = profiler.sample("sem_flags");
   return setFlagValue(flag, newValue);
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::setFlag(
     const Flag flag, std::function<Value*()> calculation) {
+  auto flagSample = profiler.sample("sem_flags");
   return setFlagValue(flag, calculation());
 }
 
@@ -1162,7 +1201,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(LazyValue)::getLazyFlag(const Flag flag) {
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getFlag(const Flag flag) {
-
+  auto flagSample = profiler.sample("sem_flags");
   return getFlagValue(flag);
 }
 
@@ -1213,6 +1252,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRFLAGSValue() {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetRegisterValue(
     const Register key) {
+  auto registerSample = profiler.sample("sem_registers");
   // printvalue2(magic_enum::enum_name(key));
 
   if (key == Register::RIP || key == Register::EIP) {
@@ -1335,7 +1375,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::SetValueToSubRegister_16b(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
                                                            Value* value) {
-
+  auto registerSample = profiler.sample("sem_registers");
   if (key == Register::EIP || key == Register::RIP)
     return;
 
@@ -1359,6 +1399,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetEffectiveAddress() {
+  auto memorySample = profiler.sample("sem_memory_effective_address");
   LLVMContext& context = builder->getContext();
 
   Value* effectiveAddress = nullptr;
@@ -1425,6 +1466,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::getPointer(Value* address) {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetMemoryValue(Value* address,
                                                            uint8_t size) {
+  auto memorySample = profiler.sample("sem_memory_load");
 
   // convert to pointer first
   auto pointer = getPointer(address);
@@ -1450,6 +1492,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetMemoryValue(Value* address,
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetMemoryValue(llvm::Value* address,
                                                          llvm::Value* value) {
+  auto memorySample = profiler.sample("sem_memory_store");
 
   auto pointer = getPointer(address);
 

@@ -312,13 +312,15 @@ inline const char* callMemoryEffectName(CallMemoryEffect e) {
 template <typename Register>
 inline void printCallEffectsDiag(const CallEffects<Register>& fx,
                                  uint64_t callAddr) {
-  std::cout << "[call-abi] 0x" << std::hex << callAddr << std::dec
-            << " target=" << callTargetClassName(fx.target)
-            << " abi=" << abiKindName(fx.abi)
-            << " cleanup=" << stackCleanupName(fx.cleanup)
-            << " memory=" << callMemoryEffectName(fx.memory)
-            << " clobbers=" << static_cast<int>(fx.volatileRegs.size())
-            << "\n" << std::flush;
+  debugging::doIfDebug([&]() {
+    std::cout << "[call-abi] 0x" << std::hex << callAddr << std::dec
+              << " target=" << callTargetClassName(fx.target)
+              << " abi=" << abiKindName(fx.abi)
+              << " cleanup=" << stackCleanupName(fx.cleanup)
+              << " memory=" << callMemoryEffectName(fx.memory)
+              << " clobbers=" << static_cast<int>(fx.volatileRegs.size())
+              << "\n" << std::flush;
+  });
 }
 
 } // namespace abi

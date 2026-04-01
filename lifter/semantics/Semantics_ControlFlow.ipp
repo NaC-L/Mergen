@@ -167,8 +167,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
     if (it != importMap.end()) {
       const auto& importName = it->second;
       callFunctionIR(importName, nullptr);
-      std::cout << "[call-abi] resolved import: " << importName << "\n"
-                << std::flush;
+      debugging::doIfDebug([&]() {
+        std::cout << "[call-abi] resolved import: " << importName << "\n"
+                  << std::flush;
+      });
       emittedExternalCall = true;
 
       // Skip the switch/Unflatten path entirely.
@@ -227,8 +229,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
       if (!importName.empty()) {
         // Named import: emit a proper LLVM function declaration.
         callFunctionIR(importName, nullptr);
-        std::cout << "[call-abi] resolved import: " << importName << "\n"
-                  << std::flush;
+        debugging::doIfDebug([&]() {
+          std::cout << "[call-abi] resolved import: " << importName << "\n"
+                    << std::flush;
+        });
         diagnostics.info(DiagCode::CallOutlinedImportThunk,
                          current_address - instruction.length,
                          "Outlined import call: " + importName);
@@ -413,11 +417,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
          getEffectiveAbi() == AbiKind::X86_FASTCALL)
             ? StackCleanup::Callee
             : StackCleanup::Unknown;
-    std::cout << "[call-abi] ret imm=" << instruction.immediate
-              << " cleanup=" << abi::stackCleanupName(retCleanup)
-              << " at 0x" << std::hex
-              << (current_address - instruction.length)
-              << std::dec << "\n" << std::flush;
+    debugging::doIfDebug([&]() {
+      std::cout << "[call-abi] ret imm=" << instruction.immediate
+                << " cleanup=" << abi::stackCleanupName(retCleanup)
+                << " at 0x" << std::hex
+                << (current_address - instruction.length)
+                << std::dec << "\n" << std::flush;
+    });
   }
 
   SetRegisterValue(Register::RSP, rsp_result);

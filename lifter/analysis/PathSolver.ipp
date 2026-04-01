@@ -19,12 +19,12 @@
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     llvm::Function* function, uint64_t& dest, Value* simplifyValue) {
+  auto pathSolveSample = profiler.sample("lift_path_solve");
 
   // Clear memoization cache for value enumeration.
   // Each solvePath invocation may have different assumptions
   // (from different branch paths), so cached results don't carry over.
   pv_cache.clear();
-
   auto normalizeTargetAddress = [&](uint64_t target) -> uint64_t {
     if (isMemPaged(target)) {
       return target;
@@ -200,8 +200,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       std::error_code EC;
       llvm::raw_fd_ostream OS(Filename, EC);
       function->getParent()->print(OS, nullptr);
+      std::cout << "created a new path\n" << std::flush;
     });
-    std::cout << "created a new path\n" << std::flush;
   }
 
   if (pv.size() > 2) {
@@ -273,10 +273,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       std::error_code EC;
       llvm::raw_fd_ostream OS(Filename, EC);
       function->getParent()->print(OS, nullptr);
+      std::cout << "created multi-target switch with " << emittedTargets.size()
+                << " targets\n"
+                << std::flush;
     });
-    std::cout << "created multi-target switch with " << emittedTargets.size()
-              << " targets\n"
-              << std::flush;
   }
 
   if (pv.empty()) {
