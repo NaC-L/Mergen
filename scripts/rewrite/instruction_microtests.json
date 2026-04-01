@@ -243,8 +243,6 @@
     {
       "name": "calc_cout",
       "symbol": "?calc_cout@@YAHH@Z",
-      "ci_skip": true,
-      "ci_skip_reason": "Depends on STL code layout which varies by toolchain. Lifter hits unimplemented MOVQ in CI's STL build.",
       "patterns": ["mul i32", "add i32", "ret i64"],
       "semantic": [
         { "inputs": { "RCX": 10 },  "expected": 37,  "label": "10*3+7" },

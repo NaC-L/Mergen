@@ -147,6 +147,7 @@ OPCODE(bextr, BEXTR)
 
 // sse2 integer (XMM forms only; MMX forms are rejected in semantic handlers)
 OPCODE(movdqa, MOVDQA)
+OPCODE(movq, MOVQ)
 OPCODE(pand, PAND)
 OPCODE(por, POR)
 OPCODE(pxor, PXOR)
