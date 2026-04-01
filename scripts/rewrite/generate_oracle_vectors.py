@@ -4,7 +4,6 @@ import importlib
 import json
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -176,6 +175,12 @@ def load_seed(path: Path) -> dict:
     return payload
 
 
+def _format_register_hex(reg_name: str, value: int) -> str:
+    if reg_name.upper().startswith("XMM"):
+        return f"0x{value:032x}"
+    return f"0x{value:x}"
+
+
 def normalize_expected(case: dict, oracle_result: OracleResult) -> dict:
     expected = case.get("expected", {})
     out = {
@@ -184,7 +189,9 @@ def normalize_expected(case: dict, oracle_result: OracleResult) -> dict:
     }
 
     for reg_name in expected.get("registers", {}).keys():
-        out["registers"][reg_name] = f"0x{oracle_result.registers[reg_name]:x}"
+        out["registers"][reg_name] = _format_register_hex(
+            reg_name, oracle_result.registers[reg_name]
+        )
 
     for flag_name in expected.get("flags", {}).keys():
         out["flags"][flag_name] = int(oracle_result.flags[flag_name])
@@ -218,9 +225,10 @@ def compare_results(results: Dict[str, OracleResult], case_name: str, *, strict:
 
 
 def build_output(seed_payload: dict, provider_names: List[str], output_cases: List[dict]) -> dict:
+    # These oracle fixtures are checked into the repo, so wall-clock metadata
+    # would create meaningless diffs on every regeneration.
     return {
         "schema": "mergen-oracle-v1",
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_seed_schema": seed_payload["schema"],
         "providers": provider_names,
         "cases": output_cases,
@@ -371,7 +379,7 @@ def main():
             "oracle_observations": {
                 provider_name: {
                     "registers": {
-                        reg: f"0x{value:x}"
+                        reg: _format_register_hex(reg, value)
                         for reg, value in result.registers.items()
                     },
                     "flags": result.flags,
