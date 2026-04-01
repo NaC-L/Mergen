@@ -155,6 +155,57 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movdqa() {
   SetIndexValue(0, sourceValue);
 }
 
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movq() {
+  LLVMContext& context = builder->getContext();
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  auto sourceRegister = instruction.regs[1];
+
+  auto isXmmRegister = [&](Register reg) {
+    return reg >= Register::XMM0 && reg <= Register::XMM31;
+  };
+  auto isSupportedGpRegister = [&](Register reg) {
+    auto widened = getBiggestEncoding(reg);
+    return widened != Register::None && !isXmmRegister(reg);
+  };
+  bool sourceIsXmmRegister = isXmmRegister(sourceRegister);
+  bool sourceIsSupportedGpRegister = isSupportedGpRegister(sourceRegister);
+
+  bool xmmDestinationForm =
+      destinationType == OperandType::Register128 &&
+      (sourceType == OperandType::Register128 ||
+       sourceType == OperandType::Memory64 ||
+       (sourceType == OperandType::Register64 &&
+        (sourceIsXmmRegister || sourceIsSupportedGpRegister)));
+  bool lowQuadwordDestinationForm =
+      (destinationType == OperandType::Register64 ||
+       destinationType == OperandType::Memory64) &&
+      (sourceType == OperandType::Register128 ||
+       (sourceType == OperandType::Register64 && sourceIsXmmRegister));
+  if (!xmmDestinationForm && !lowQuadwordDestinationForm) {
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
+
+  auto sourceValue = GetIndexValue(1);
+  auto lowQuadword =
+      createZExtOrTruncFolder(sourceValue, Type::getInt64Ty(context));
+
+  if (xmmDestinationForm) {
+    auto result = createZExtFolder(lowQuadword, Type::getInt128Ty(context));
+    SetIndexValue(0, result);
+    return;
+  }
+
+  SetIndexValue(0, lowQuadword);
+}
+
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pand() {
   auto destinationType = instruction.types[0];
   auto sourceType = instruction.types[1];
