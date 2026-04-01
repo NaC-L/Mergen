@@ -41,11 +41,12 @@ Practical conclusion:
 - Treat `simple/research/vmp36/vmp36_dispatch_log.txt` as stronger evidence of intended protected flow than naive CPU fallthrough after `INT 2`.
 
 ## Implementation status from this session
-- Implemented SCAS family support:
+- Implemented non-prefixed SCAS family support:
   - `SCASB`
   - `SCASW`
   - `SCASD`
   - `SCASQ`
+- `REP`/`REPE`/`REPNE`-prefixed SCAS forms are still rejected as `not_implemented` until the lifter can model repeated scan termination correctly.
 - After that change, the older protected direct path gets past `SCASD` and then stops at `INT`.
 - That does **not** mean plain `INT` semantics will recover the real protected flow.
 

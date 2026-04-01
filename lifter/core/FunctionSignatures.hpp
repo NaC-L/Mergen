@@ -185,11 +185,11 @@ private:
        kSwprintfArgs.data(), kSwprintfArgs.size()},
   }};
 
-  static functioninfo buildFunctionInfo(const SignatureSpec& spec) {
-    if (spec.argCount == 0) {
+  static functioninfo buildFunctionInfo(
+      const SignatureSpec& spec, bool preserveDefaultArgsWhenUnspecified = false) {
+    if (spec.argCount == 0 && preserveDefaultArgsWhenUnspecified) {
       return functioninfo(spec.name);
     }
-
     funcArgInfos args;
     args.reserve(spec.argCount);
     for (size_t i = 0; i < spec.argCount; ++i) {
@@ -337,9 +337,12 @@ public:
   static std::unordered_map<std::string, functioninfo>& getNamedFunctionsByName() {
     static std::unordered_map<std::string, functioninfo> functionsByName = []() {
       std::unordered_map<std::string, functioninfo> map;
-      map.reserve(kNamedFunctionSpecs.size());
+      map.reserve(kNamedFunctionSpecs.size() + kBinarySignatureSpecs.size());
       for (const auto& spec : kNamedFunctionSpecs) {
         map.emplace(spec.name, buildFunctionInfo(spec));
+      }
+      for (const auto& spec : kBinarySignatureSpecs) {
+        map.emplace(spec.name, buildFunctionInfo(spec, true));
       }
       return map;
     }();
@@ -368,7 +371,7 @@ public:
       if (it == signatureOffsets.end())
         continue;
 
-      functioninfo info = buildFunctionInfo(spec);
+      functioninfo info = buildFunctionInfo(spec, true);
       for (const auto offset : it->second) {
         functions[offset] = info;
       }
