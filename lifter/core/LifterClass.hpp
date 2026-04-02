@@ -371,6 +371,9 @@ public:
   SpeculativeCallInfo speculativeCall;
   uint32_t speculativeCallBudget    = 0;   // instructions remaining (0 = inactive)
   uint32_t maxCallInlineBudget      = 0;   // 0 = disabled (no speculative limit)
+  bool liftBudgetExceeded          = false;
+  uint32_t maxBasicBlockBudget     = 1024;  // 0 = disabled
+  llvm::BasicBlock* liftAbortBlock = nullptr;
 
   void runDisassembler(const void* buffer, size_t size = 15) {
 
@@ -505,6 +508,16 @@ public:
       ++liftStats.blocks_completed;
   }
 
+  void sealIncompleteBlocks() {
+    for (auto& BB : *fnc) {
+      if (BB.getTerminator())
+        continue;
+      llvm::IRBuilder<> fallbackBuilder(&BB);
+      fallbackBuilder.CreateRet(llvm::UndefValue::get(fnc->getReturnType()));
+    }
+  }
+
+
   bool addUnvisitedAddr(BBInfo& bb) {
     printvalue2(bb.block_address);
     printvalue2("added");
@@ -516,6 +529,11 @@ public:
   filter : filter for empty blocks
   */
   bool getUnvisitedAddr(BBInfo& out, bool filter = 0) {
+    if (liftBudgetExceeded) {
+      unvisitedBlocks.clear();
+      sealIncompleteBlocks();
+      return false;
+    }
     while (!unvisitedBlocks.empty()) {
       out = std::move(unvisitedBlocks.back());
       unvisitedBlocks.pop_back();
@@ -630,6 +648,27 @@ public:
 
   // creates an edge to created bb
   // TODO: wrapper for createbr, condbr, switch and update it there.
+  BasicBlock* createBudgetedBasicBlock(const std::string& name, uint64_t diagAddr) {
+    if (maxBasicBlockBudget > 0 && fnc->size() >= maxBasicBlockBudget) {
+      if (!liftBudgetExceeded) {
+        diagnostics.error(
+            DiagCode::LiftBlockBudgetExceeded, diagAddr,
+            "Basic-block budget exceeded during lifting; aborting to avoid loop/state explosion");
+        liftBudgetExceeded = true;
+      }
+      if (!liftAbortBlock) {
+        liftAbortBlock =
+            BasicBlock::Create(context, "bb_lift_budget_exceeded", fnc);
+        llvm::IRBuilder<> abortBuilder(liftAbortBlock);
+        abortBuilder.CreateRet(llvm::UndefValue::get(fnc->getReturnType()));
+      }
+      return liftAbortBlock;
+    }
+
+    return BasicBlock::Create(context, name, fnc);
+  }
+
+
   BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
     if (getControlFlow() == ControlFlow::Basic) {
       auto it = addrToBB.find(addr);
@@ -638,7 +677,10 @@ public:
         return it->second;
       }
     }
-    auto bb = BasicBlock::Create(context, name, fnc);
+    auto bb = createBudgetedBasicBlock(name, addr);
+    if (bb == liftAbortBlock) {
+      return bb;
+    }
     addrToBB[addr] = bb;
     DTU->applyUpdates({{DominatorTree::Insert, this->blockInfo.block, bb}});
 
@@ -674,6 +716,7 @@ protected:
   }
 
 public:
+  void finalizeIncompleteBlocks() { sealIncompleteBlocks(); }
   AliasAnalysis* AA;
   DominatorTree* DT;
   PostDominatorTree* PDT;
