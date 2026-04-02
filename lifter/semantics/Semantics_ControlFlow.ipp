@@ -762,3 +762,47 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jnp() {
 
   branchnumber++;
 }
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_loopx() {
+  if (instruction.length != 2 || instruction.attributes != InstructionPrefix::None) {
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
+
+
+  const auto counterRegister =
+      getRegOfSize(Register::RCX, file.getMode() == arch_mode::X64 ? 64 : 32);
+  auto counterValue = GetRegisterValue(counterRegister);
+  auto one = ConstantInt::get(counterValue->getType(), 1);
+  auto decrementedCount =
+      createSubFolder(counterValue, one, "loop-count-" + std::to_string(current_address));
+  SetRegisterValue(counterRegister, decrementedCount);
+
+  auto countNonZero = createICMPFolder(
+      CmpInst::ICMP_NE, decrementedCount, ConstantInt::get(counterValue->getType(), 0),
+      "loop-count-nonzero");
+
+  Value* branchCondition = nullptr;
+  switch (instruction.mnemonic) {
+  case Mnemonic::LOOP:
+    branchCondition = countNonZero;
+    break;
+  case Mnemonic::LOOPE:
+    branchCondition = createAndFolder(countNonZero, getFlag(FLAG_ZF), "loope-cond");
+    break;
+  case Mnemonic::LOOPNE:
+    branchCondition = createAndFolder(
+        countNonZero, createNotFolder(getFlag(FLAG_ZF)), "loopne-cond");
+    break;
+  default:
+    UNREACHABLE("unreachable mnemonic in lift_loopx");
+  }
+
+  branchHelper(branchCondition, "loop", branchnumber);
+  branchnumber++;
+}

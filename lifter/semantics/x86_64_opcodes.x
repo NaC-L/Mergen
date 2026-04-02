@@ -51,6 +51,7 @@ OPCODE(jo, JO)
 OPCODE(jno, JNO)
 OPCODE(jp, JP)
 OPCODE(jnp, JNP)
+OPCODE(loopx, LOOP, LOOPE, LOOPNE)
 //
 OPCODE(sbb, SBB)
 OPCODE(rcl, RCL)
