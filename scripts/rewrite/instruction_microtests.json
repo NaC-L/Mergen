@@ -199,6 +199,19 @@
       ]
     },
     {
+      "name": "calc_sum_to_n",
+      "symbol": "calc_sum_to_n",
+      "patterns": ["phi i32", "icmp slt i32", "add i32", "br i1"],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0,   "label": "n=0" },
+        { "inputs": { "RCX": 1 },   "expected": 0,   "label": "n=1" },
+        { "inputs": { "RCX": 5 },   "expected": 10,  "label": "0+1+2+3+4" },
+        { "inputs": { "RCX": 10 },  "expected": 45,  "label": "0..9" },
+        { "inputs": { "RCX": 32 },  "expected": 496, "label": "0..31" },
+        { "inputs": { "RCX": 100 }, "expected": 496, "label": "clamped to 32" }
+      ]
+    },
+    {
       "name": "switch_3way",
       "symbol": "switch_3way_target",
       "patterns": ["switch i32 %", "i32 1, label", "i32 2, label", "i32 3, label", "phi i64", "[ 100,", "[ 200,", "[ 300,", "[ 999,"],

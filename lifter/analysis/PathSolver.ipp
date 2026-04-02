@@ -209,8 +209,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     // Default must stay unresolved because computePossibleValues() is heuristic.
     unsigned bitWidth = simplifyValue->getType()->getIntegerBitWidth();
 
-    auto* bb_default_unresolved = BasicBlock::Create(
-        function->getContext(), "bb_switch_default_unresolved", function);
+    auto* bb_default_unresolved =
+        createBudgetedBasicBlock("bb_switch_default_unresolved", current_address);
+    if (bb_default_unresolved == liftAbortBlock) {
+      builder->CreateRet(UndefValue::get(function->getReturnType()));
+      return PATH_unsolved;
+    }
     DTU->applyUpdates(
         {{DominatorTree::Insert, this->blockInfo.block, bb_default_unresolved}});
 

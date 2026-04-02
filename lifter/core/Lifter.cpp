@@ -48,7 +48,7 @@ bool InitFunction_and_LiftInstructions(const uint64_t runtime_address,
 
   runLifterPipeline(stageContext->lifter.get(), stageContext->runtimeContext,
                     fileData.data(), fileData);
-  return true;
+  return !stageContext->lifter->diagnostics.hasErrors();
 }
 
 // #define TEST
