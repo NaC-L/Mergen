@@ -12,6 +12,7 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Transforms/IPO/DeadArgumentElimination.h>
 
 using namespace llvm;
 
@@ -60,7 +61,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
     }
 
     modulePassManager.addPass(
-        GEPLoadPass(memoryArg, this->fileBase, memoryPolicy));
+        GEPLoadPass(memoryArg, this->fileBase, memoryPolicy, this->stackReserve));
     modulePassManager.addPass(ReplaceTruncWithLoadPass());
     modulePassManager.addPass(PromotePseudoStackPass(memoryArg, this->stackReserve));
     modulePassManager.addPass(PromotePseudoMemory(memoryArg));
@@ -72,15 +73,32 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
     changed = beforeSize != afterSize;
   } while (changed);
 
+  // Rebuild analysis state before the final O2 pipeline. The fixpoint loop above
+  // mutates the module repeatedly with custom passes; fresh managers keep the
+  // final optimization run aligned with standalone `opt -O2` on output_no_opts.ll.
+  llvm::LoopAnalysisManager finalLoopAnalysisManager;
+  llvm::FunctionAnalysisManager finalFunctionAnalysisManager;
+  llvm::CGSCCAnalysisManager finalCGSCCAnalysisManager;
+  llvm::ModuleAnalysisManager finalModuleAnalysisManager;
+
+  passBuilder.registerModuleAnalyses(finalModuleAnalysisManager);
+  passBuilder.registerCGSCCAnalyses(finalCGSCCAnalysisManager);
+  passBuilder.registerFunctionAnalyses(finalFunctionAnalysisManager);
+  passBuilder.registerLoopAnalyses(finalLoopAnalysisManager);
+  passBuilder.crossRegisterProxies(finalLoopAnalysisManager,
+                                   finalFunctionAnalysisManager,
+                                   finalCGSCCAnalysisManager,
+                                   finalModuleAnalysisManager);
+
   modulePassManager =
       passBuilder.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
 
-  modulePassManager.run(*module, moduleAnalysisManager);
+  modulePassManager.run(*module, finalModuleAnalysisManager);
 
-  // Post-optimization passes: normalize IR, strip unused params, canonicalize names.
+  // Post-optimization passes: normalize IR, drop dead parameters, canonicalize names.
   llvm::ModulePassManager postPassManager;
   postPassManager.addPass(SwitchNormalizationPass());
-  postPassManager.addPass(PrototypeMinimizationPass());
+  postPassManager.addPass(llvm::DeadArgumentEliminationPass());
   postPassManager.addPass(CanonicalNamingPass());
-  postPassManager.run(*module, moduleAnalysisManager);
+  postPassManager.run(*module, finalModuleAnalysisManager);
 }

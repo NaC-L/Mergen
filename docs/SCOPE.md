@@ -1,42 +1,44 @@
 # Scope
 
-## Purpose
+This file owns the support matrix and quality contract. For pipeline order and invariants, use `ARCHITECTURE.md`. For build/test workflow, use `docs/BUILDING.md` and `docs/REWRITE_BASELINE.md`.
 
-Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtualization of x64 protected functions. It translates obfuscated native code into LLVM IR, enabling standard compiler optimizations to recover readable control flow and semantics from virtualized or mutated instruction streams.
+## Purpose
+Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtualization of x64 protected functions. It lifts one target function from a PE binary into LLVM IR so downstream optimization and analysis can recover readable control flow and semantics.
 
 ## Supported
-
 | Area | Details |
-|------|---------|
-| Architecture | x86-64 (PE binaries) |
-| Instruction set | 115 handlers covering general-purpose integer, BMI1/BMI2, bit manipulation, string ops, conditional moves, flag manipulation, and SSE2 integer XMM ops (`MOVDQA`, `PAND`, `POR`, `PXOR`) |
-| Control flow | Linear, conditional branches (2-way), direct jumps, call/ret, multi-target jump tables (absolute qword, RIP-relative dword offset, base-shifted, shared targets) |
-| Output | LLVM IR (text), optimizable via LLVM pass pipeline |
-| Calling convention awareness | x64 Microsoft ABI (cross-ABI framework: x64 MSVC, x86 cdecl/stdcall/fastcall). Dual-mode: `compat` (default, preserves exploration stability) and `strict` (ABI-enforced clobber/memory effects, opt-in). |
-| Optimization profiles | safe, aggressive, debug (planned — Phase 2) |
+|---|---|
+| Architecture | x86-64 PE binaries |
+| Instruction set | 115 handlers covering general-purpose integer ops, BMI1/BMI2, bit manipulation, string ops, conditional moves, flag manipulation, and SSE2 integer XMM ops (`MOVDQA`, `PAND`, `POR`, `PXOR`) |
+| Control flow | Linear flow, 2-way branches, direct jumps, call/ret, and tested multi-target jump-table shapes (absolute qword, RIP-relative dword offset, shifted-base, shared-target) |
+| Output | LLVM IR text suitable for LLVM optimization passes |
+| Call-boundary model | Cross-ABI framework for x64 MSVC and x86 cdecl/stdcall/fastcall; `strict` is the operational default, `compat` remains available as a diagnostic fallback |
+| Determinism | Canonical naming and golden-hash verification are part of the current contract |
 
 ## Unsupported / Known Limitations
-
 | Limitation | Status |
-|------------|--------|
-| Indirect jumps with >2 targets (jump tables) | Tested: absolute qword tables, rel32 offset tables, shifted-base tables, shared-target tables, symbolic computation in case bodies. IR quality note: switch dispatches on concrete target addresses, not logical case indices. |
-| Floating-point / wider SSE / AVX instructions (outside `MOVDQA`, `PAND`, `POR`, `PXOR`) | Not lifted |
+|---|---|
+| Floating-point / wider SSE / AVX outside the listed SSE2 integer ops | Not lifted |
 | Self-modifying code | Not supported |
-| Multi-function / whole-binary lifting | Single function scope only |
-| ELF / Mach-O / non-PE formats | Not supported |
-| 32-bit x86 | Not supported |
+| Whole-binary lifting | Out of scope; Mergen is function-level |
+| Non-PE formats | Not supported |
+| 32-bit x86 lifting | Not supported |
 | ARM / RISC-V / other architectures | Not supported |
-| Automatic ABI/prototype normalization | Stage 2 complete: prototype minimization strips unused parameters post-optimization. Call-boundary ABI contract with dual-mode (strict/compat). |
-| Deterministic output | Implemented: CanonicalNamingPass strips address-derived suffixes from block/value names. Same input produces identical IR across rebuilds. Golden hash verification in CI. |
+| Jump-table IR quality | Supported shapes still dispatch on concrete target addresses, not logical case indices |
+| Loop-header generalization | Temporarily disabled while the team keeps required VMP 3.8.x targets on the safe high-budget path |
 
 ## Tested Protectors
-
-- **VMProtect** — examples exist; reliability varies by protection level.
-- **Themida** — examples exist; reliability varies by protection level.
+- VMProtect — examples exist; reliability varies by protection level
+- Themida — examples exist; reliability varies by protection level
 
 ## Quality Contract
+- Handler coverage: 112/115 handlers with oracle-backed verification
+- Active regression corpus: 30 semantic samples / 165 runtime semantic cases; `stack_vm_loop` and `calc_sum_to_n` are tracked known limitations, and `calc_cout` remains CI-skipped because its C++ codegen is toolchain-dependent
+- Determinism: golden IR hashes are enforced for tracked outputs
+- CI gates: register/flag correctness, rewrite baseline, semantic regression, and Windows build lanes
+- Targeted VMP gate: `python test.py vmp` must keep required 3.8.x targets at `blocks_completed > 0`; VMP 3.6 remains best-effort only
 
-- Handler test coverage: 97.4% (112/115 with oracle verification against Unicorn).
-- Regression corpus: 28 active samples, 146 semantic test cases, 42 golden IR hashes (asm-only; C-compiled excluded as address-dependent).
-- Jump table coverage: 7 samples across 6 patterns (absolute, rel32, shifted, shared, computation, C-compiled /O2).
-- CI gates enforce register and flag correctness.
+## Non-goals
+- General-purpose decompilation
+- Multi-function whole-program recovery
+- Broad architecture expansion before x64 protected-function reliability improves
