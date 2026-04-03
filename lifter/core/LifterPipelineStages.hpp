@@ -62,6 +62,7 @@ inline void reportLiftCompletionTiming(double elapsedMilliseconds) {
   });
 }
 inline void emitLiftOutputs(lifterConcolic<>* lifter, double elapsedMilliseconds) {
+  lifter->finalizeIncompleteBlocks();
   lifter->profiler.begin("write_unopt_ir");
   lifter->writeFunctionToFile("output_no_opts.ll");
   lifter->profiler.end();

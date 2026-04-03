@@ -230,10 +230,13 @@ concept lifterConcept = Registers<R> && requires(T t) {
     t.SetRegisterValue_impl(std::declval<R>(), std::declval<llvm::Value*>())
   } -> std::same_as<void>;
   {
-    t.branch_backup_impl(std::declval<llvm::BasicBlock*>())
+    t.branch_backup_impl(std::declval<llvm::BasicBlock*>(), false)
   } -> std::same_as<void>;
   {
-    t.branch_backup_impl(std::declval<llvm::BasicBlock*>())
+    t.load_backup_impl(std::declval<llvm::BasicBlock*>())
+  } -> std::same_as<void>;
+  {
+    t.load_generalized_backup_impl(std::declval<llvm::BasicBlock*>())
   } -> std::same_as<void>;
 };
 
@@ -281,6 +284,27 @@ public:
   Disassembler dis;
   MemoryPolicy memoryPolicy;
   uint64_t stackReserve = 0x1000; // clamped reserve, set by configureDefaultMemoryPolicy
+  bool isTrackedStackAddress(uint64_t address) const {
+    const uint64_t stackLower =
+        stackReserve <= STACKP_VALUE ? STACKP_VALUE - stackReserve : 0;
+    const uint64_t stackUpper = STACKP_VALUE + stackReserve;
+    return address >= stackLower && address <= stackUpper;
+  }
+  bool isTrackedLocalStackAddress(uint64_t address) const {
+    return isTrackedStackAddress(address) && address < STACKP_VALUE;
+  }
+
+  enum class BlockRestoreMode {
+    Normal,
+    GeneralizedLoop,
+  };
+  enum class PathSolveContext {
+    Unknown,
+    ConditionalBranch,
+    DirectJump,
+    IndirectJump,
+    Ret,
+  };
   FunctionInlinePolicy inlinePolicy;
 
   // ABI call-boundary configuration.
@@ -371,6 +395,27 @@ public:
   SpeculativeCallInfo speculativeCall;
   uint32_t speculativeCallBudget    = 0;   // instructions remaining (0 = inactive)
   uint32_t maxCallInlineBudget      = 0;   // 0 = disabled (no speculative limit)
+  bool liftBudgetExceeded          = false;
+  uint32_t maxBasicBlockBudget     = 4096;  // 0 = disabled
+  llvm::BasicBlock* liftAbortBlock = nullptr;
+  bool bypassStackConcolicTracking = false;
+  BlockRestoreMode currentBlockRestoreMode = BlockRestoreMode::Normal;
+  PathSolveContext currentPathSolveContext = PathSolveContext::Unknown;
+  
+  class ScopedPathSolveContext {
+    lifterClassBase<Derived, Mnemonic, Register, DisassemblerBase>* lifter;
+    PathSolveContext previous;
+  
+  public:
+    ScopedPathSolveContext(
+        lifterClassBase<Derived, Mnemonic, Register, DisassemblerBase>* lifter,
+        PathSolveContext next)
+        : lifter(lifter), previous(lifter->currentPathSolveContext) {
+      lifter->currentPathSolveContext = next;
+    }
+  
+    ~ScopedPathSolveContext() { lifter->currentPathSolveContext = previous; }
+  };
 
   void runDisassembler(const void* buffer, size_t size = 15) {
 
@@ -445,12 +490,23 @@ public:
   }
 
   // useless in symbolic?
-  void branch_backup(BasicBlock* bb) {
-    static_cast<Derived*>(this)->branch_backup_impl(bb);
+  void branch_backup(BasicBlock* bb, bool generalized = false) {
+    static_cast<Derived*>(this)->branch_backup_impl(bb, generalized);
   }
   // useless in symbolic?
   void load_backup(BasicBlock* bb) {
     static_cast<Derived*>(this)->load_backup_impl(bb);
+  }
+  void load_generalized_backup(BasicBlock* bb) {
+    static_cast<Derived*>(this)->load_generalized_backup_impl(bb);
+  }
+  bool currentBlockUsesGeneralizedLoopState() const {
+    return currentBlockRestoreMode == BlockRestoreMode::GeneralizedLoop;
+  }
+  bool currentPathSolveAllowsLoopGeneralization() const {
+    // Disabled until the generalized loop heuristics can preserve real VMP exit
+    // paths without collapsing required 3.8.x targets into non-terminating IR.
+    return false;
   }
 
   void liftBasicBlockFromAddress(uint64_t addr) {
@@ -505,6 +561,16 @@ public:
       ++liftStats.blocks_completed;
   }
 
+  void sealIncompleteBlocks() {
+    for (auto& BB : *fnc) {
+      if (BB.getTerminator())
+        continue;
+      llvm::IRBuilder<> fallbackBuilder(&BB);
+      fallbackBuilder.CreateRet(llvm::UndefValue::get(fnc->getReturnType()));
+    }
+  }
+
+
   bool addUnvisitedAddr(BBInfo& bb) {
     printvalue2(bb.block_address);
     printvalue2("added");
@@ -516,6 +582,11 @@ public:
   filter : filter for empty blocks
   */
   bool getUnvisitedAddr(BBInfo& out, bool filter = 0) {
+    if (liftBudgetExceeded) {
+      unvisitedBlocks.clear();
+      sealIncompleteBlocks();
+      return false;
+    }
     while (!unvisitedBlocks.empty()) {
       out = std::move(unvisitedBlocks.back());
       unvisitedBlocks.pop_back();
@@ -530,6 +601,20 @@ public:
 
       printvalue2("adding :" + std::to_string(out.block_address) +
                   out.block->getName());
+      const bool usesGeneralizedLoopState =
+          pendingLoopGeneralizationAddresses.contains(out.block_address) ||
+          generalizedLoopAddresses.contains(out.block_address);
+      const bool bypassesStackTracking =
+          usesGeneralizedLoopState &&
+          stackBypassGeneralizedLoopAddresses.contains(out.block_address);
+      bypassStackConcolicTracking = bypassesStackTracking;
+      currentBlockRestoreMode = bypassesStackTracking
+                                   ? BlockRestoreMode::GeneralizedLoop
+                                   : BlockRestoreMode::Normal;
+      if (pendingLoopGeneralizationAddresses.contains(out.block_address)) {
+        pendingLoopGeneralizationAddresses.erase(out.block_address);
+        generalizedLoopAddresses.insert(out.block_address);
+      }
       visitedAddresses.insert(out.block_address);
       blockInfo = out;
       return true;
@@ -626,10 +711,67 @@ public:
   // todo : std::set
   std::vector<BBInfo> unvisitedBlocks;
   std::set<uint64_t> visitedAddresses;
+  std::set<uint64_t> generalizedLoopAddresses;
+  std::set<uint64_t> pendingLoopGeneralizationAddresses;
+  std::set<uint64_t> stackBypassGeneralizedLoopAddresses;
   llvm::DenseMap<uint64_t, llvm::BasicBlock*> addrToBB;
 
   // creates an edge to created bb
   // TODO: wrapper for createbr, condbr, switch and update it there.
+  BasicBlock* createBudgetedBasicBlock(const std::string& name, uint64_t diagAddr) {
+    if (maxBasicBlockBudget > 0 && fnc->size() >= maxBasicBlockBudget) {
+      if (!liftBudgetExceeded) {
+        diagnostics.error(
+            DiagCode::LiftBlockBudgetExceeded, diagAddr,
+            "Basic-block budget exceeded during lifting; aborting to avoid loop/state explosion");
+        liftBudgetExceeded = true;
+      }
+      if (!liftAbortBlock) {
+        liftAbortBlock =
+            BasicBlock::Create(context, "bb_lift_budget_exceeded", fnc);
+        llvm::IRBuilder<> abortBuilder(liftAbortBlock);
+        abortBuilder.CreateRet(llvm::UndefValue::get(fnc->getReturnType()));
+      }
+      return liftAbortBlock;
+    }
+
+    return BasicBlock::Create(context, name, fnc);
+  }
+
+
+  BasicBlock* replaceWithGeneralizedLoopBlock(uint64_t addr, const std::string& name) {
+    auto* newBlock = createBudgetedBasicBlock(name, addr);
+    if (newBlock == liftAbortBlock) {
+      return newBlock;
+    }
+
+    auto it = addrToBB.find(addr);
+    if (it != addrToBB.end() && it->second && it->second != newBlock) {
+      it->second->replaceAllUsesWith(newBlock);
+    }
+
+    addrToBB[addr] = newBlock;
+    return newBlock;
+  }
+
+
+  BasicBlock* getLiftedBackedgeBB(uint64_t addr) {
+    if (getControlFlow() != ControlFlow::Unflatten ||
+        !currentPathSolveAllowsLoopGeneralization()) {
+      return nullptr;
+    }
+    if (addr > blockInfo.block_address ||
+        !generalizedLoopAddresses.contains(addr)) {
+      return nullptr;
+    }
+    auto it = addrToBB.find(addr);
+    if (it == addrToBB.end() || it->second->empty()) {
+      return nullptr;
+    }
+    return it->second;
+  }
+
+
   BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
     if (getControlFlow() == ControlFlow::Basic) {
       auto it = addrToBB.find(addr);
@@ -638,7 +780,10 @@ public:
         return it->second;
       }
     }
-    auto bb = BasicBlock::Create(context, name, fnc);
+    auto bb = createBudgetedBasicBlock(name, addr);
+    if (bb == liftAbortBlock) {
+      return bb;
+    }
     addrToBB[addr] = bb;
     DTU->applyUpdates({{DominatorTree::Insert, this->blockInfo.block, bb}});
 
@@ -674,6 +819,7 @@ protected:
   }
 
 public:
+  void finalizeIncompleteBlocks() { sealIncompleteBlocks(); }
   AliasAnalysis* AA;
   DominatorTree* DT;
   PostDominatorTree* PDT;

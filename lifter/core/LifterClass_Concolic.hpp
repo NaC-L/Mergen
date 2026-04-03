@@ -192,26 +192,55 @@ public:
   };
 
   llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
-  void branch_backup_impl(BasicBlock* bb) {
-    //
 
+  backup_point make_generalized_loop_backup(const backup_point& source) {
+    backup_point generalized = source;
+    llvm::DenseMap<uint64_t, ValueByteReference> filteredBuffer;
+    filteredBuffer.reserve(source.buffer.size());
+    for (const auto& entry : source.buffer) {
+      if (!this->isTrackedLocalStackAddress(entry.first)) {
+        filteredBuffer[entry.first] = entry.second;
+      }
+    }
+    generalized.buffer = std::move(filteredBuffer);
+    generalized.cache = InstructionCache();
+    generalized.assumptions.clear();
+    return generalized;
+  }
+
+  void restore_backup_point(const backup_point& snapshot) {
+    vec = snapshot.vec;
+    vecflag = snapshot.vecflag;
+    this->buffer = snapshot.buffer;
+    this->cache = snapshot.cache;
+    this->assumptions = snapshot.assumptions;
+    this->counter = snapshot.ct;
+  }
+
+  void branch_backup_impl(BasicBlock* bb, bool generalized) {
     printvalue2("backing up");
     printvalue2(this->counter);
-    BBbackup[bb] = backup_point(vec, vecflag, this->buffer, this->cache,
-                                this->assumptions, this->counter);
+
+    auto snapshot = backup_point(vec, vecflag, this->buffer, this->cache,
+                                 this->assumptions, this->counter);
+    if (generalized) {
+      snapshot = make_generalized_loop_backup(snapshot);
+    }
+    BBbackup[bb] = std::move(snapshot);
   }
 
   void load_backup_impl(BasicBlock* bb) {
     if (BBbackup.contains(bb)) {
-
       printvalue2("loading backup");
-      backup_point bbinfo = BBbackup[bb];
-      vec = bbinfo.vec;
-      vecflag = bbinfo.vecflag;
-      this->buffer = bbinfo.buffer;
-      this->cache = bbinfo.cache;
-      this->assumptions = bbinfo.assumptions;
-      this->counter = bbinfo.ct;
+      restore_backup_point(BBbackup[bb]);
+    }
+  }
+
+  void load_generalized_backup_impl(BasicBlock* bb) {
+    if (BBbackup.contains(bb)) {
+      printvalue2("loading generalized backup");
+      auto snapshot = make_generalized_loop_backup(BBbackup[bb]);
+      restore_backup_point(snapshot);
     }
   }
 

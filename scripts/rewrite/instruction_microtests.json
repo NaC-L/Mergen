@@ -95,6 +95,70 @@
       ]
     },
     {
+      "name": "dummy_vm_loop",
+      "symbol": "dummy_vm_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 1"] },
+        { "line_all": ["and i32", ", 7"] },
+        "phi i64",
+        "select i1",
+        "icmp ugt i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 }, "expected": 40, "label": "even opcode takes constant handler" },
+        { "inputs": { "RCX": 1 }, "expected": 0,  "label": "odd opcode loop with limit 1 returns 0" },
+        { "inputs": { "RCX": 3 }, "expected": 3,  "label": "odd opcode loop: 0+1+2" },
+        { "inputs": { "RCX": 5 }, "expected": 10, "label": "odd opcode loop: 0+1+2+3+4" },
+        { "inputs": { "RCX": 7 }, "expected": 21, "label": "odd opcode loop: 0..6" },
+        { "inputs": { "RCX": 8 }, "expected": 40, "label": "even opcode ignores masked loop handler" }
+      ]
+    },
+    {
+      "name": "bytecode_vm_loop",
+      "symbol": "bytecode_vm_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 1"] },
+        { "line_all": ["and i32", ", 7"] },
+        "select i1",
+        "phi i64",
+        "icmp ugt i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 }, "expected": 40, "label": "even program returns constant handler" },
+        { "inputs": { "RCX": 1 }, "expected": 0,  "label": "odd bytecode loop limit 1 returns 0" },
+        { "inputs": { "RCX": 3 }, "expected": 3,  "label": "odd bytecode loop: 0+1+2" },
+        { "inputs": { "RCX": 5 }, "expected": 10, "label": "odd bytecode loop: 0+1+2+3+4" },
+        { "inputs": { "RCX": 7 }, "expected": 21, "label": "odd bytecode loop: 0..6" },
+        { "inputs": { "RCX": 8 }, "expected": 40, "label": "even program ignores odd loop body" }
+      ]
+    },
+    {
+      "name": "stack_vm_loop",
+      "symbol": "stack_vm_loop_target",
+      "skip": true,
+      "skip_reason": "Safe VMP-mode lifting currently disables loop-header generalization; this stack-based VM loop still exceeds the block budget without it.",
+      "patterns": [
+        { "line_all": ["and i32", ", 1"] },
+        { "line_all": ["and i32", ", 7"] },
+        "switch i32",
+        "phi i32",
+        "sub i32",
+        "select i1",
+        "add i32",
+        "ret i64"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 }, "expected": 40, "label": "even program returns constant handler" },
+        { "inputs": { "RCX": 1 }, "expected": 0,  "label": "odd stack loop limit 1 returns 0" },
+        { "inputs": { "RCX": 3 }, "expected": 3,  "label": "odd stack loop: 0+1+2" },
+        { "inputs": { "RCX": 5 }, "expected": 10, "label": "odd stack loop: 0+1+2+3+4" },
+        { "inputs": { "RCX": 7 }, "expected": 21, "label": "odd stack loop: 0..6" },
+        { "inputs": { "RCX": 8 }, "expected": 40, "label": "even program ignores odd loop body" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
@@ -196,6 +260,21 @@
       "patterns": ["ret i64 150"],
       "semantic": [
         { "expected": 150, "label": "constant: 10+20+30+40+50" }
+      ]
+    },
+    {
+      "name": "calc_sum_to_n",
+      "symbol": "calc_sum_to_n",
+      "skip": true,
+      "skip_reason": "Safe VMP-mode lifting currently disables loop-header generalization; this counted-loop sample still explodes the block budget without it.",
+      "patterns": ["phi i32", "icmp slt i32", "add i32", "br i1"],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0,   "label": "n=0" },
+        { "inputs": { "RCX": 1 },   "expected": 0,   "label": "n=1" },
+        { "inputs": { "RCX": 5 },   "expected": 10,  "label": "0+1+2+3+4" },
+        { "inputs": { "RCX": 10 },  "expected": 45,  "label": "0..9" },
+        { "inputs": { "RCX": 32 },  "expected": 496, "label": "0..31" },
+        { "inputs": { "RCX": 100 }, "expected": 496, "label": "clamped to 32" }
       ]
     },
     {
