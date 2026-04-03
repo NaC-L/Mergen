@@ -59,24 +59,24 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
         visitedAddresses.contains(target) &&
         target <= blockInfo.block_address;
     auto it = addrToBB.find(target);
-    const bool generalizedHeaderLooksSimple =
-        it == addrToBB.end() || !it->second || llvm::pred_size(it->second) <= 1;
+    const bool pendingGeneralization =
+        pendingLoopGeneralizationAddresses.contains(target);
     const bool wantsGeneralization =
-        currentPathSolveAllowsLoopGeneralization() &&
-        generalizedHeaderLooksSimple &&
-        !generalizedLoopAddresses.contains(target) &&
-        backwardVisitedTarget;
+        pendingGeneralization ||
+        (backwardVisitedTarget && canGeneralizeStructuredLoopHeader(target));
     if (wantsGeneralization) {
       if (currentPathSolveContext == PathSolveContext::DirectJump) {
         stackBypassGeneralizedLoopAddresses.insert(target);
       }
       const bool generalizedBackup =
           stackBypassGeneralizedLoopAddresses.contains(target);
-      if (pendingLoopGeneralizationAddresses.contains(target) &&
-          it != addrToBB.end() && it->second && it->second->empty()) {
+      if (pendingGeneralization && it != addrToBB.end() && it->second &&
+          it->second->empty()) {
         return {it->second, false, generalizedBackup};
       }
-      pendingLoopGeneralizationAddresses.insert(target);
+      if (!pendingGeneralization) {
+        pendingLoopGeneralizationAddresses.insert(target);
+      }
       if (it != addrToBB.end() && it->second && !it->second->empty()) {
         return {replaceWithGeneralizedLoopBlock(target, name), false,
                 generalizedBackup};

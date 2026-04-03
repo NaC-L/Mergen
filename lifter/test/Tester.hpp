@@ -412,11 +412,24 @@ private:
   }
 
 
-  bool runLoopGeneralizationDirectJumpBlocked(std::string& details) {
+  bool runLoopGeneralizationConditionalBranchAllowed(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::ConditionalBranch;
+    if (!lifter.currentPathSolveAllowsStructuredLoopGeneralization()) {
+      details =
+          "  conditional-branch loop context should allow structured loop-header reuse\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runLoopGeneralizationDirectJumpAllowed(std::string& details) {
     LifterUnderTest lifter;
     lifter.currentPathSolveContext = LifterUnderTest::PathSolveContext::DirectJump;
-    if (lifter.currentPathSolveAllowsLoopGeneralization()) {
-      details = "  direct-jump loop context must stay disabled until VMP-safe generalization exists\n";
+    if (!lifter.currentPathSolveAllowsStructuredLoopGeneralization()) {
+      details =
+          "  direct-jump latch context should allow structured loop-header reuse\n";
       return false;
     }
     return true;
@@ -424,9 +437,170 @@ private:
 
   bool runLoopGeneralizationIndirectJumpBlocked(std::string& details) {
     LifterUnderTest lifter;
-    lifter.currentPathSolveContext = LifterUnderTest::PathSolveContext::IndirectJump;
-    if (lifter.currentPathSolveAllowsLoopGeneralization()) {
-      details = "  indirect-jump dispatcher context must not generalize loop state\n";
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::IndirectJump;
+    if (lifter.currentPathSolveAllowsStructuredLoopGeneralization()) {
+      details =
+          "  indirect-jump dispatcher context must not generalize loop state\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runLoopGeneralizationRetBlocked(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext = LifterUnderTest::PathSolveContext::Ret;
+    if (lifter.currentPathSolveAllowsStructuredLoopGeneralization()) {
+      details = "  return-path loop context must not generalize loop state\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runStructuredLoopHeaderAllowsConditionalBackedge(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    auto* body = llvm::BasicBlock::Create(lifter.context, "loop_body", lifter.fnc);
+    auto* exit = llvm::BasicBlock::Create(lifter.context, "loop_exit", lifter.fnc);
+
+    llvm::IRBuilder<> currentBuilder(current);
+    currentBuilder.CreateBr(header);
+
+    llvm::IRBuilder<> headerBuilder(header);
+    headerBuilder.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+
+    llvm::IRBuilder<> bodyBuilder(body);
+    bodyBuilder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+
+    llvm::IRBuilder<> exitBuilder(exit);
+    exitBuilder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+    lifter.blockInfo = BBInfo(0x2000, current);
+    lifter.visitedAddresses.insert(0x1000);
+    lifter.addrToBB[0x1000] = header;
+
+    if (!lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+      details = "  visited conditional loop header should be eligible for structured reuse\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runStructuredLoopHeaderAllowsJumpChain(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::DirectJump;
+
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    auto* trampoline =
+        llvm::BasicBlock::Create(lifter.context, "loop_trampoline", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    auto* body = llvm::BasicBlock::Create(lifter.context, "loop_body", lifter.fnc);
+    auto* exit = llvm::BasicBlock::Create(lifter.context, "loop_exit", lifter.fnc);
+
+    llvm::IRBuilder<> currentBuilder(current);
+    currentBuilder.CreateBr(trampoline);
+
+    llvm::IRBuilder<> trampolineBuilder(trampoline);
+    trampolineBuilder.CreateBr(header);
+
+    llvm::IRBuilder<> headerBuilder(header);
+    headerBuilder.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+
+    llvm::IRBuilder<> bodyBuilder(body);
+    bodyBuilder.CreateRet(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+
+    llvm::IRBuilder<> exitBuilder(exit);
+    exitBuilder.CreateRet(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+    lifter.blockInfo = BBInfo(0x2000, current);
+    lifter.visitedAddresses.insert(0x1000);
+    lifter.addrToBB[0x1000] = trampoline;
+
+    if (!lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+      details =
+          "  direct-jump trampoline chain into a conditional header should be eligible for structured reuse\n";
+      return false;
+    }
+    return true;
+  }
+
+
+  bool runStructuredLoopHeaderRejectsNonConditionalTerminator(
+      std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    auto* exit = llvm::BasicBlock::Create(lifter.context, "loop_exit", lifter.fnc);
+
+    llvm::IRBuilder<> currentBuilder(current);
+    currentBuilder.CreateBr(header);
+
+    llvm::IRBuilder<> headerBuilder(header);
+    headerBuilder.CreateBr(exit);
+
+    llvm::IRBuilder<> exitBuilder(exit);
+    exitBuilder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+
+    lifter.blockInfo = BBInfo(0x2000, current);
+    lifter.visitedAddresses.insert(0x1000);
+    lifter.addrToBB[0x1000] = header;
+
+    if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+      details = "  non-conditional header must not be treated as a structured loop header\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runStructuredLoopHeaderRejectsMultiplePredecessors(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    auto* alternate = llvm::BasicBlock::Create(lifter.context, "alternate", lifter.fnc);
+    auto* third = llvm::BasicBlock::Create(lifter.context, "third", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    auto* body = llvm::BasicBlock::Create(lifter.context, "loop_body", lifter.fnc);
+    auto* exit = llvm::BasicBlock::Create(lifter.context, "loop_exit", lifter.fnc);
+
+    llvm::IRBuilder<> currentBuilder(current);
+    currentBuilder.CreateBr(header);
+
+    llvm::IRBuilder<> alternateBuilder(alternate);
+    alternateBuilder.CreateBr(header);
+
+    llvm::IRBuilder<> thirdBuilder(third);
+    thirdBuilder.CreateBr(header);
+
+    llvm::IRBuilder<> headerBuilder(header);
+    headerBuilder.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+
+    llvm::IRBuilder<> bodyBuilder(body);
+    bodyBuilder.CreateRet(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+
+    llvm::IRBuilder<> exitBuilder(exit);
+    exitBuilder.CreateRet(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+    lifter.blockInfo = BBInfo(0x2000, current);
+    lifter.visitedAddresses.insert(0x1000);
+    lifter.addrToBB[0x1000] = header;
+
+    if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+      details =
+          "  header with more than two predecessors must not be generalized as a structured loop\n";
       return false;
     }
     return true;
@@ -537,10 +711,23 @@ private:
              &InstructionTester::runScasRepeatPrefixesRejected);
     runCustom("loop_addrsize_override_rejected",
              &InstructionTester::runLoopAddressSizeOverrideRejected);
-    runCustom("loop_generalization_direct_jump_blocked",
-             &InstructionTester::runLoopGeneralizationDirectJumpBlocked);
+    runCustom("loop_generalization_conditional_branch_allowed",
+             &InstructionTester::runLoopGeneralizationConditionalBranchAllowed);
+    runCustom("loop_generalization_direct_jump_allowed",
+             &InstructionTester::runLoopGeneralizationDirectJumpAllowed);
     runCustom("loop_generalization_indirect_jump_blocked",
              &InstructionTester::runLoopGeneralizationIndirectJumpBlocked);
+    runCustom("loop_generalization_ret_blocked",
+             &InstructionTester::runLoopGeneralizationRetBlocked);
+    runCustom("structured_loop_header_allows_conditional_backedge",
+             &InstructionTester::runStructuredLoopHeaderAllowsConditionalBackedge);
+    runCustom("structured_loop_header_allows_jump_chain",
+             &InstructionTester::runStructuredLoopHeaderAllowsJumpChain);
+
+    runCustom("structured_loop_header_rejects_non_conditional_terminator",
+             &InstructionTester::runStructuredLoopHeaderRejectsNonConditionalTerminator);
+    runCustom("structured_loop_header_rejects_multiple_predecessors",
+             &InstructionTester::runStructuredLoopHeaderRejectsMultiplePredecessors);
     runCustom("generalized_loop_without_bypass_tag_keeps_normal_restore",
              &InstructionTester::runGeneralizedLoopWithoutBypassTagKeepsNormalRestore);
     runCustom("generalized_loop_with_bypass_tag_uses_generalized_restore",

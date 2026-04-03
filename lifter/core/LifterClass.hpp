@@ -503,10 +503,48 @@ public:
   bool currentBlockUsesGeneralizedLoopState() const {
     return currentBlockRestoreMode == BlockRestoreMode::GeneralizedLoop;
   }
-  bool currentPathSolveAllowsLoopGeneralization() const {
-    // Disabled until the generalized loop heuristics can preserve real VMP exit
-    // paths without collapsing required 3.8.x targets into non-terminating IR.
+  bool currentPathSolveAllowsStructuredLoopGeneralization() const {
+    return currentPathSolveContext == PathSolveContext::ConditionalBranch ||
+           currentPathSolveContext == PathSolveContext::DirectJump;
+  }
+  bool isStructuredLoopHeaderShape(BasicBlock* block) const {
+    std::set<BasicBlock*> seenBlocks;
+    auto* current = block;
+    for (unsigned depth = 0; current && depth < 8; ++depth) {
+      if (!seenBlocks.insert(current).second || current->empty()) {
+        return false;
+      }
+      const size_t maxPreds = depth == 0 ? 2 : 1;
+      if (llvm::pred_size(current) > maxPreds) {
+        return false;
+      }
+      auto* branch = llvm::dyn_cast<llvm::BranchInst>(current->getTerminator());
+      if (!branch) {
+        return false;
+      }
+      if (branch->isConditional()) {
+        return true;
+      }
+      if (branch->getNumSuccessors() != 1) {
+        return false;
+      }
+      current = branch->getSuccessor(0);
+    }
     return false;
+  }
+  bool canGeneralizeStructuredLoopHeader(uint64_t addr) {
+    if (getControlFlow() != ControlFlow::Unflatten ||
+        !currentPathSolveAllowsStructuredLoopGeneralization() ||
+        addr > blockInfo.block_address || !visitedAddresses.contains(addr) ||
+        pendingLoopGeneralizationAddresses.contains(addr) ||
+        generalizedLoopAddresses.contains(addr)) {
+      return false;
+    }
+    auto it = addrToBB.find(addr);
+    if (it == addrToBB.end() || !it->second || it->second->empty()) {
+      return false;
+    }
+    return isStructuredLoopHeaderShape(it->second);
   }
 
   void liftBasicBlockFromAddress(uint64_t addr) {
@@ -757,7 +795,7 @@ public:
 
   BasicBlock* getLiftedBackedgeBB(uint64_t addr) {
     if (getControlFlow() != ControlFlow::Unflatten ||
-        !currentPathSolveAllowsLoopGeneralization()) {
+        !currentPathSolveAllowsStructuredLoopGeneralization()) {
       return nullptr;
     }
     if (addr > blockInfo.block_address ||
