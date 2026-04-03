@@ -427,7 +427,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   }
 
   SetRegisterValue(Register::RSP, rsp_result);
-
+  
+  ScopedPathSolveContext pathSolveContext(this, PathSolveContext::Ret);
   auto pathResult = solvePath(function, destination, realval);
   if (pathResult == PATH_unsolved) {
     ++liftStats.blocks_unreachable;
@@ -465,6 +466,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   printvalue(trunc);
   uint64_t destination = 0;
   auto function = builder->GetInsertBlock()->getParent();
+  const bool isDirectJump = instruction.types[0] == OperandType::Immediate8 ||
+                            instruction.types[0] == OperandType::Immediate16 ||
+                            instruction.types[0] == OperandType::Immediate32 ||
+                            instruction.types[0] == OperandType::Immediate64;
   switch (instruction.types[0]) {
   case OperandType::Immediate8:
   case OperandType::Immediate16: // todo: test 8 and 16
@@ -476,6 +481,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   default:
     break;
   }
+  ScopedPathSolveContext pathSolveContext(
+      this, isDirectJump ? PathSolveContext::DirectJump
+                         : PathSolveContext::IndirectJump);
   auto pathResult = solvePath(function, destination, trunc);
   if (pathResult == PATH_unsolved) {
     ++liftStats.blocks_unreachable;

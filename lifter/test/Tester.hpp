@@ -412,6 +412,77 @@ private:
   }
 
 
+  bool runLoopGeneralizationDirectJumpBlocked(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext = LifterUnderTest::PathSolveContext::DirectJump;
+    if (lifter.currentPathSolveAllowsLoopGeneralization()) {
+      details = "  direct-jump loop context must stay disabled until VMP-safe generalization exists\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runLoopGeneralizationIndirectJumpBlocked(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext = LifterUnderTest::PathSolveContext::IndirectJump;
+    if (lifter.currentPathSolveAllowsLoopGeneralization()) {
+      details = "  indirect-jump dispatcher context must not generalize loop state\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runGeneralizedLoopWithoutBypassTagKeepsNormalRestore(std::string& details) {
+    LifterUnderTest lifter;
+    auto* bb = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    BBInfo queued(0x1000, bb);
+    lifter.pendingLoopGeneralizationAddresses.insert(0x1000);
+    lifter.addUnvisitedAddr(queued);
+
+    BBInfo out;
+    if (!lifter.getUnvisitedAddr(out)) {
+      details = "  failed to dequeue pending generalized loop header\n";
+      return false;
+    }
+    if (lifter.bypassStackConcolicTracking) {
+      details = "  generalized loop without bypass tag unexpectedly disabled concrete stack tracking\n";
+      return false;
+    }
+    if (lifter.currentBlockRestoreMode != LifterUnderTest::BlockRestoreMode::Normal) {
+      details = "  generalized loop without bypass tag should keep normal restore mode\n";
+      return false;
+    }
+    if (!lifter.generalizedLoopAddresses.contains(0x1000)) {
+      details = "  pending generalized loop header was not promoted after dequeue\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runGeneralizedLoopWithBypassTagUsesGeneralizedRestore(std::string& details) {
+    LifterUnderTest lifter;
+    auto* bb = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    BBInfo queued(0x1000, bb);
+    lifter.pendingLoopGeneralizationAddresses.insert(0x1000);
+    lifter.stackBypassGeneralizedLoopAddresses.insert(0x1000);
+    lifter.addUnvisitedAddr(queued);
+
+    BBInfo out;
+    if (!lifter.getUnvisitedAddr(out)) {
+      details = "  failed to dequeue pending generalized loop header with bypass tag\n";
+      return false;
+    }
+    if (!lifter.bypassStackConcolicTracking) {
+      details = "  direct-jump generalized loop should enable stack-bypass restore mode\n";
+      return false;
+    }
+    if (lifter.currentBlockRestoreMode != LifterUnderTest::BlockRestoreMode::GeneralizedLoop) {
+      details = "  direct-jump generalized loop should use generalized restore mode\n";
+      return false;
+    }
+    return true;
+  }
+
   int runCustomKnownBitsTests(const std::string& suiteFilter) {
     int failures = 0;
 
@@ -466,6 +537,14 @@ private:
              &InstructionTester::runScasRepeatPrefixesRejected);
     runCustom("loop_addrsize_override_rejected",
              &InstructionTester::runLoopAddressSizeOverrideRejected);
+    runCustom("loop_generalization_direct_jump_blocked",
+             &InstructionTester::runLoopGeneralizationDirectJumpBlocked);
+    runCustom("loop_generalization_indirect_jump_blocked",
+             &InstructionTester::runLoopGeneralizationIndirectJumpBlocked);
+    runCustom("generalized_loop_without_bypass_tag_keeps_normal_restore",
+             &InstructionTester::runGeneralizedLoopWithoutBypassTagKeepsNormalRestore);
+    runCustom("generalized_loop_with_bypass_tag_uses_generalized_restore",
+             &InstructionTester::runGeneralizedLoopWithBypassTagUsesGeneralizedRestore);
 
     return failures;
   }

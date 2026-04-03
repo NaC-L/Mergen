@@ -90,6 +90,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     return extractBytes(orgLoad.get(), 0, byteCount);
   }
 
+
   LLVMContext& context = builder->getContext();
   if (byteCount == 0) {
     return nullptr;
@@ -367,6 +368,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::insertMemoryOp(StoreInst* inst) {
   }
 
   auto gepOffsetCI = cast<ConstantInt>(gepOffset);
+
+  if (bypassStackConcolicTracking &&
+      isTrackedLocalStackAddress(gepOffsetCI->getZExtValue())) {
+    return;
+  }
 
   addValueReference(inst->getValueOperand(), gepOffsetCI->getZExtValue());
   // BinaryOperations::WriteTo(gepOffsetCI->getZExtValue());
@@ -770,6 +776,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
     auto loadOffsetCI = cast<ConstantInt>(loadOffset);
 
     auto loadOffsetCIval = loadOffsetCI->getZExtValue();
+
+    if (bypassStackConcolicTracking &&
+        isTrackedLocalStackAddress(loadOffsetCIval)) {
+      return load.get();
+    }
 
     auto valueExtractedFromVirtualStack =
         retrieveCombinedValue(loadOffsetCIval, cloadsize, load);

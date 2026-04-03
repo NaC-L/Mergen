@@ -127,6 +127,28 @@ public:
       uint64_t min_offset = UINT64_MAX;
       uint64_t max_offset = 0;
       bool found_any = false;
+      auto getMaxAccessBytes = [&](llvm::GetElementPtrInst* GEP) -> uint64_t {
+        uint64_t maxBytes = 1;
+        for (auto* User : GEP->users()) {
+          if (auto* LI = llvm::dyn_cast<llvm::LoadInst>(User)) {
+            maxBytes = std::max(
+                maxBytes,
+                static_cast<uint64_t>(
+                    M.getDataLayout().getTypeStoreSize(LI->getType()).getFixedValue()));
+            continue;
+          }
+          if (auto* SI = llvm::dyn_cast<llvm::StoreInst>(User)) {
+            if (SI->getPointerOperand() == GEP) {
+              maxBytes = std::max(
+                  maxBytes,
+                  static_cast<uint64_t>(M.getDataLayout()
+                                           .getTypeStoreSize(SI->getValueOperand()->getType())
+                                           .getFixedValue()));
+            }
+          }
+        }
+        return maxBytes;
+      };
       struct PendingGEP {
         llvm::GetElementPtrInst* gep;
         bool constant_offset;
@@ -144,8 +166,10 @@ public:
           if (auto* CI = dyn_cast<ConstantInt>(OffOp)) {
             uint64_t val = CI->getZExtValue();
             if (isStackAddress(val)) {
+              const uint64_t accessBytes = getMaxAccessBytes(GEP);
               min_offset = std::min(min_offset, val);
-              max_offset = std::max(max_offset, val);
+              max_offset =
+                  std::max(max_offset, val + std::max<uint64_t>(1, accessBytes) - 1);
               found_any = true;
               pending.push_back({GEP, true, val});
             }
@@ -155,10 +179,12 @@ public:
           auto offsetKB = computeKnownBits(OffOp, M.getDataLayout());
           uint64_t kb_min = offsetKB.getMinValue().getZExtValue();
           uint64_t kb_max = offsetKB.getMaxValue().getZExtValue();
+          const uint64_t accessBytes = getMaxAccessBytes(GEP);
           // Accept if the entire KnownBits range falls within stack bounds.
           if (isStackAddress(kb_min) && isStackAddress(kb_max)) {
             min_offset = std::min(min_offset, kb_min);
-            max_offset = std::max(max_offset, kb_max);
+            max_offset =
+                std::max(max_offset, kb_max + std::max<uint64_t>(1, accessBytes) - 1);
             found_any = true;
             pending.push_back({GEP, false, 0});
           } else if (auto* SI = dyn_cast<SelectInst>(OffOp)) {
@@ -169,7 +195,10 @@ public:
               uint64_t fv = cast<ConstantInt>(SI->getFalseValue())->getZExtValue();
               if (isStackAddress(tv) && isStackAddress(fv)) {
                 min_offset = std::min({min_offset, tv, fv});
-                max_offset = std::max({max_offset, tv, fv});
+                max_offset = std::max(
+                    {max_offset,
+                     tv + std::max<uint64_t>(1, accessBytes) - 1,
+                     fv + std::max<uint64_t>(1, accessBytes) - 1});
                 found_any = true;
                 pending.push_back({GEP, false, 0});
               }
@@ -219,8 +248,21 @@ public:
   Value* mem = nullptr;
   x86_64FileReader file;
   MemoryPolicy mempolicy;
-  GEPLoadPass(Value* val, uint8_t* filebase, MemoryPolicy mempolicy)
-      : mem(val), file(filebase), mempolicy(mempolicy){};
+  uint64_t stackLower;
+  uint64_t stackUpper;
+  GEPLoadPass(Value* val, uint8_t* filebase, MemoryPolicy mempolicy,
+              uint64_t reserve)
+      : mem(val),
+        file(filebase),
+        mempolicy(mempolicy),
+        stackLower(reserve <= STACKP_VALUE ? STACKP_VALUE - reserve : 0),
+        stackUpper(STACKP_VALUE + reserve) {
+    assert(reserve <= STACKP_VALUE &&
+           "reserve exceeds STACKP_VALUE; stackLower would underflow");
+  }
+  bool isTrackedStackAddress(uint64_t val) const {
+    return val >= stackLower && val <= stackUpper;
+  }
 
   llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
     bool hasChanged = false;
@@ -241,6 +283,7 @@ public:
           if (!ConstInt) continue;
 
           uint64_t constintvalue = ConstInt->getZExtValue();
+          if (isTrackedStackAddress(constintvalue)) continue;
           if (mempolicy.isSymbolic(constintvalue)) continue;
 
           if (!file.address_to_mapped_address(constintvalue)) continue;
@@ -397,115 +440,6 @@ public:
   }
 };
 
-// Removes unused function arguments from lifted function signatures.
-// Runs after all optimization passes so that dead arguments are truly unused.
-// Creates a new function with only live parameters, remaps the body, and
-// replaces all call sites.
-class PrototypeMinimizationPass
-    : public llvm::PassInfoMixin<PrototypeMinimizationPass> {
-public:
-  llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
-    bool changed = false;
-
-    // Collect functions first to avoid mutating the module while iterating.
-    llvm::SmallVector<llvm::Function*, 4> funcs;
-    for (auto& F : M) {
-      if (F.isDeclaration()) continue;
-      funcs.push_back(&F);
-    }
-
-    for (auto* F : funcs) {
-      // Identify which arguments are live (have at least one use).
-      llvm::SmallVector<unsigned, 16> liveArgIndices;
-      for (auto& Arg : F->args()) {
-        if (!Arg.use_empty())
-          liveArgIndices.push_back(Arg.getArgNo());
-      }
-
-      // Nothing to do if all args are used.
-      if (liveArgIndices.size() == F->arg_size()) continue;
-
-      // Skip functions that have non-call users (bitcasts, constant exprs,
-      // aliases, function pointer stores). We can only safely rewrite plain
-      // CallInst users; anything else would be left pointing at an empty shell.
-      bool hasUnsupportedUsers = false;
-      for (auto* U : F->users()) {
-        if (!llvm::isa<llvm::CallInst>(U)) {
-          hasUnsupportedUsers = true;
-          break;
-        }
-      }
-      if (hasUnsupportedUsers) continue;
-
-      // Build the new function type with only live parameters.
-      llvm::SmallVector<llvm::Type*, 8> newParamTypes;
-      for (unsigned idx : liveArgIndices)
-        newParamTypes.push_back(F->getFunctionType()->getParamType(idx));
-
-      auto* newFnTy = llvm::FunctionType::get(
-          F->getReturnType(), newParamTypes, false);
-
-      // Save the name before we create the new function.
-      std::string origName = F->getName().str();
-
-      // Rename old function to make room for the new one.
-      F->setName(origName + ".old");
-
-      auto* newFn = llvm::Function::Create(
-          newFnTy, F->getLinkage(), origName, &M);
-
-      // Name the new function's arguments after the originals.
-      for (unsigned i = 0; i < liveArgIndices.size(); ++i) {
-        llvm::Argument* oldArg = F->getArg(liveArgIndices[i]);
-        newFn->getArg(i)->setName(oldArg->getName());
-      }
-
-      // Move the function body: splice all basic blocks into newFn.
-      newFn->splice(newFn->begin(), F);
-
-      // Remap old live args to new args.
-      for (unsigned i = 0; i < liveArgIndices.size(); ++i) {
-        llvm::Argument* oldArg = F->getArg(liveArgIndices[i]);
-        llvm::Argument* newArg = newFn->getArg(i);
-        oldArg->replaceAllUsesWith(newArg);
-      }
-
-      // Dead args have no uses (that's why they're dead), but defensively
-      // replace with undef to satisfy the verifier before erasure.
-      for (auto& Arg : F->args()) {
-        if (!Arg.use_empty())
-          Arg.replaceAllUsesWith(llvm::UndefValue::get(Arg.getType()));
-      }
-
-      // Update call sites that directly call the old function.
-      // Only handle plain CallInst; InvokeInst/CallBrInst would need
-      // successor edge preservation which the lifter never emits.
-      llvm::SmallVector<llvm::CallInst*, 4> callsToRewrite;
-      for (auto* U : F->users()) {
-        if (auto* CI = llvm::dyn_cast<llvm::CallInst>(U))
-          callsToRewrite.push_back(CI);
-      }
-      for (auto* CI : callsToRewrite) {
-        llvm::SmallVector<llvm::Value*, 8> newCallArgs;
-        for (unsigned idx : liveArgIndices)
-          newCallArgs.push_back(CI->getArgOperand(idx));
-
-        llvm::IRBuilder<> B(CI);
-        auto* newCall = B.CreateCall(newFn, newCallArgs);
-        newCall->setCallingConv(CI->getCallingConv());
-        if (!CI->getType()->isVoidTy())
-          CI->replaceAllUsesWith(newCall);
-        CI->eraseFromParent();
-      }
-
-      F->eraseFromParent();
-      changed = true;
-    }
-
-    return changed ? llvm::PreservedAnalyses::none()
-                   : llvm::PreservedAnalyses::all();
-  }
-};
 
 // Normalizes switch instructions that dispatch on concrete addresses back to
 // logical case indices. The lifter's GEPLoadPass folds memory reads from jump

@@ -15,7 +15,13 @@ inline void runLiftWorklist(lifterConcolic<>* lifter) {
     }
 
     filter = true;
-    lifter->load_backup(bbinfo.block);
+    if (lifter->currentBlockUsesGeneralizedLoopState()) {
+      lifter->load_generalized_backup(bbinfo.block);
+    } else {
+      lifter->load_backup(bbinfo.block);
+    }
+    lifter->currentBlockRestoreMode =
+        lifterConcolic<>::BlockRestoreMode::Normal;
     lifter->finished = 0;
 
     // Speculative call bail-out: the callee exceeded the inline budget.
