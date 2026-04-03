@@ -114,6 +114,7 @@ This gate asserts explicit failure behavior for malformed manifests/vectors, vec
 - every expected pattern declared in `instruction_microtests.json` is present in that IR output
 A rewrite change is not acceptable if this baseline fails.
 `python test.py quick` and `python test.py all` additionally run runtime semantic validation for **all** samples after baseline lifting, executing each lifted IR module via LLVM `lli` and asserting correct return values across all declared input vectors. This prevents regressions where lifted IR looks structurally correct (passes pattern checks) but computes wrong results.
+For larger control-flow, semantics, or inlining changes, also run `python test.py vmp` to make sure the stable local VMProtect targets still lift without hard regression.
 
 
 ## Runtime semantic regression
@@ -130,22 +131,19 @@ Samples without a `semantic` field are not tested. The `semantic` field is optio
 
 ### Coverage summary
 
-| Category | Samples | Total cases |
-|---|---|---|
-| Constant-return (no inputs) | 8 | 8 |
-| Single-input branching | 12 | 87 |
-| Multi-input | 1 | 5 |
-| Jump-table dispatch (absolute qword) | 2 | 16 |
-| Jump-table dispatch (rel32 / shifted / shared / computation) | 4 | 31 |
-| Jump-table dispatch (C-compiled /O2, 16-case) | 1 | 10 |
-| **Total** | **28** | **146** (+ 1 skipped: calc_cout) |
+Current active quick-gate semantic coverage is **30 samples / 165 cases**.
+
+Notable current state:
+- `dummy_vm_loop` and `bytecode_vm_loop` remain active VM-shaped control-flow samples.
+- `stack_vm_loop` and `calc_sum_to_n` are currently marked `skip` because the safe VMP configuration disables loop-header generalization and these samples still exceed the block budget without it.
+- `calc_cout` remains `ci_skip` because its C++ codegen is toolchain-dependent on CI.
 
 ## Call-boundary ABI framework
 
 The lifter includes a cross-ABI call-boundary contract (`AbiCallContract.hpp`) that models:
 
 - **ABI kind**: x64 MSVC, x86 cdecl/stdcall/fastcall, unknown
-- **Call model mode**: `compat` (default) or `strict` (opt-in)
+- **Call model mode**: `strict` (default) or `compat` (diagnostic fallback)
 - **Call effects**: argument registers, return registers, volatile clobber set, stack cleanup convention, memory effect assumption
 
 ### Dual-mode behavior

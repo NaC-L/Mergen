@@ -132,12 +132,16 @@ public:
 
   constexpr ControlFlow getControlFlow_impl() { return ControlFlow::Basic; }
 
-  void branch_backup_impl(BasicBlock* bb) {
+  void branch_backup_impl(BasicBlock* bb, bool generalized) {
     //
     return;
   }
 
   void load_backup_impl(BasicBlock* bb) {
+    //
+    return;
+  }
+  void load_generalized_backup_impl(BasicBlock* bb) {
     //
     return;
   }

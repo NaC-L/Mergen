@@ -45,7 +45,9 @@ enum class DiagCode : uint16_t {
   // Pipeline (5xx)
   LiftComplete              = 500,
   OptimizationComplete      = 501,
-  SignatureSearchComplete    = 502,
+  SignatureSearchComplete   = 502,
+  LiftBlockBudgetExceeded   = 503,
+
 };
 
 struct DiagnosticEntry {
@@ -90,6 +92,7 @@ public:
   const std::vector<DiagnosticEntry>& getEntries() const { return entries; }
   size_t size() const { return entries.size(); }
   bool empty() const { return entries.empty(); }
+  bool hasErrors() const { return countBySeverity(DiagSeverity::Error) != 0; }
 
   size_t countBySeverity(DiagSeverity sev) const {
     size_t n = 0;

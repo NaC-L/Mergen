@@ -239,6 +239,21 @@ def run_semantic(filters: List[str] | None = None, input_ir: Path | None = None)
     _run(args)
 
 
+def run_vmp(filter_tokens: List[str]) -> None:
+    args = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(ROOT / "scripts" / "dev" / "profile_simple_vmp.ps1"),
+        "-Validate",
+    ]
+    if filter_tokens:
+        args.extend(["-Filter", *filter_tokens])
+    _run(args)
+
+
 def run_negative_checks() -> None:
     lifter_path = ROOT / "build_iced" / "lifter.exe"
     if not lifter_path.exists():
@@ -403,6 +418,11 @@ def parse_args() -> argparse.Namespace:
     semantic = sub.add_parser("semantic", help="run runtime semantic regression for all samples")
     semantic.add_argument("--input-ir", type=Path, default=None, help="override IR file (single sample)")
     semantic.add_argument("filter", nargs="*", help="optional sample name filter tokens")
+    vmp = sub.add_parser(
+        "vmp",
+        help="attempt local VMP target lifts (recommended for big control-flow/semantics changes)",
+    )
+    vmp.add_argument("filter", nargs="*", help="optional VMP target name filter tokens")
     return parser.parse_args()
 
 
@@ -459,6 +479,9 @@ def main() -> None:
         run_semantic(args.filter, args.input_ir)
         return
 
+    if command == "vmp":
+        run_vmp(args.filter)
+        return
 
     if command == "flags":
         run_flagstress(args.filter)

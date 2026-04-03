@@ -306,6 +306,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::branchHelper(
     next_jump = createSelectFolder(condition, false_jump, true_jump);
 
   uint64_t destination = 0;
+  ScopedPathSolveContext pathSolveContext(this,
+                                        PathSolveContext::ConditionalBranch);
   PATH_info pathInfo = solvePath(function, destination, next_jump);
   this->hadConditionalBranch = true;
   this->lastConditionalBranchResolved = (pathInfo != PATH_unsolved);
