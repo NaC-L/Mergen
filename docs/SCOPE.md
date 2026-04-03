@@ -33,7 +33,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 
 ## Quality Contract
 - Handler coverage: 112/115 handlers with oracle-backed verification
-- Active regression corpus: 30 semantic samples / 165 runtime semantic cases; `stack_vm_loop` and `calc_sum_to_n` are tracked known limitations, and `calc_cout` remains CI-skipped because its C++ codegen is toolchain-dependent
+- Active regression corpus: 33 semantic samples / 177 runtime semantic cases; structured loop recovery now keeps `calc_sum_to_n` and `stack_vm_loop` active, and `calc_cout` remains CI-skipped because its C++ codegen is toolchain-dependent
 - Determinism: golden IR hashes are enforced for tracked outputs
 - CI gates: register/flag correctness, rewrite baseline, semantic regression, and Windows build lanes
 - Targeted VMP gate: `python test.py vmp` must keep required 3.8.x targets at `blocks_completed > 0`; VMP 3.6 remains best-effort only
