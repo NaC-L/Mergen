@@ -71,7 +71,9 @@ jobs:
           $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmDir))
           $llvmBin = Join-Path $llvmRoot "bin"
           "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          if (Test-Path (Join-Path $llvmBin "clang-cl.exe")) {
+          $clangCl = Join-Path $llvmBin "clang-cl.exe"
+          if (Test-Path $clangCl) {
+            "CLANG_CL_EXE=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           }
           Write-Host "Resolved LLVM_DIR=$llvmDir"
