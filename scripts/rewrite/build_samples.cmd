@@ -61,6 +61,10 @@ if defined CLANG_CL_EXE (
     for %%I in ("%LLVM_DIR%\..\..\..\bin\clang-cl.exe") do if exist "%%~fI" set "CLANG_CL_BIN=%%~fI"
     if not defined CLANG_CL_BIN echo INFO: LLVM_DIR is set but does not bundle clang-cl; falling back to compiler discovery
  )
+if not defined CLANG_CL_BIN if defined CI (
+    echo ERROR: CI requires pinned clang-cl via CLANG_CL_EXE, CMAKE_C_COMPILER, or LLVM_DIR. Refusing host fallback.
+    exit /b 1
+)
 if not defined CLANG_CL_BIN if exist "%~dp0..\..\..\llvm18-install\bin\clang-cl.exe" set "CLANG_CL_BIN=%~dp0..\..\..\llvm18-install\bin\clang-cl.exe"
 if not defined CLANG_CL_BIN (
     for /f "usebackq delims=" %%I in (`where clang-cl 2^>nul`) do (
