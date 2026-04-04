@@ -54,10 +54,11 @@ jobs:
         shell: pwsh
         run: |
           $expectedVersion = "18.1.8"
-          $clangCl = "C:\Program Files\LLVM\bin\clang-cl.exe"
-          $llvmConfig = "C:\Program Files\LLVM\lib\cmake\llvm\LLVMConfig.cmake"
+          $llvmRoot = "C:\Program Files\LLVM"
+          $clangCl = Join-Path $llvmRoot "bin\clang-cl.exe"
           if (!(Test-Path $clangCl)) { throw "clang-cl.exe not found at $clangCl" }
-          if (!(Test-Path $llvmConfig)) { throw "LLVMConfig.cmake not found at $llvmConfig" }
+          $llvmConfig = (Get-ChildItem -Path $llvmRoot -Filter LLVMConfig.cmake -Recurse -File | Select-Object -First 1).FullName
+          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found under $llvmRoot" }
           $clangVersion = (& $clangCl --version | Select-Object -First 1)
           if ($clangVersion -notmatch "\b$([regex]::Escape($expectedVersion))\b") {
             throw "Expected clang-cl $expectedVersion but found: $clangVersion"
