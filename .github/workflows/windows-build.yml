@@ -43,31 +43,26 @@ jobs:
         shell: pwsh
         run: |
           choco install ninja --no-progress -y
+          choco install llvm --version=18.1.8 --allow-downgrade --no-progress -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "choco install failed for 'llvm' 18.1.8 with exit code $LASTEXITCODE"
+          }
+
 
       - name: Resolve LLVM 18 toolchain
         id: resolve_llvm
         shell: pwsh
         run: |
-          $llvmVersion = "18.1.8"
-          $llvmArchiveName = "llvm-$llvmVersion-windows-amd64-msvc17-msvcrt.7z"
-          $llvmUrl = "https://github.com/vovkos/llvm-package-windows/releases/download/llvm-$llvmVersion/$llvmArchiveName"
-          $llvmWork = Join-Path $env:RUNNER_TEMP "llvm-package"
-
-          if (Test-Path $llvmWork) { Remove-Item -Recurse -Force $llvmWork }
-          New-Item -ItemType Directory -Path $llvmWork | Out-Null
-
-          Write-Host "Downloading LLVM $llvmVersion..."
-          Invoke-WebRequest -Uri $llvmUrl -OutFile (Join-Path $llvmWork $llvmArchiveName)
-
-          Write-Host "Extracting..."
-          7z x -y (Join-Path $llvmWork $llvmArchiveName) "-o$llvmWork" | Out-Null
-
-          $llvmConfig = (Get-ChildItem -Path $llvmWork -Filter LLVMConfig.cmake -Recurse -File | Select-Object -First 1).FullName
-          if (-not $llvmConfig) { throw "LLVMConfig.cmake not found after extraction" }
-
+          $expectedVersion = "18.1.8"
+          $clangCl = "C:\Program Files\LLVM\bin\clang-cl.exe"
+          $llvmConfig = "C:\Program Files\LLVM\lib\cmake\llvm\LLVMConfig.cmake"
+          if (!(Test-Path $clangCl)) { throw "clang-cl.exe not found at $clangCl" }
+          if (!(Test-Path $llvmConfig)) { throw "LLVMConfig.cmake not found at $llvmConfig" }
+          $clangVersion = (& $clangCl --version | Select-Object -First 1)
+          if ($clangVersion -notmatch "\b$([regex]::Escape($expectedVersion))\b") {
+            throw "Expected clang-cl $expectedVersion but found: $clangVersion"
+          }
           $llvmDir = Split-Path -Parent $llvmConfig
-          $clangCl = (Get-ChildItem -Path $llvmWork -Filter clang-cl.exe -Recurse -File | Select-Object -First 1).FullName
-          if (-not $clangCl) { throw "clang-cl.exe not found after extraction" }
           $llvmBin = Split-Path -Parent $clangCl
 
           "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -77,7 +72,7 @@ jobs:
           "llvm_bin=$llvmBin" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "clang_cl=$clangCl" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           Write-Host "LLVM_DIR=$llvmDir"
-          Write-Host "clang-cl=$clangCl"
+          Write-Host "clang-cl=$clangCl ($clangVersion)"
 
       - name: Resolve Rust toolchain contract
         if: ${{ matrix.needs_rust }}
