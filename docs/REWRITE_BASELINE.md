@@ -131,12 +131,12 @@ Samples without a `semantic` field are not tested. The `semantic` field is optio
 
 ### Coverage summary
 
-Current active quick-gate semantic coverage is **32 samples / 176 cases**.
+Current active quick-gate semantic coverage is **31 samples / 175 cases**.
 
 Notable current state:
 - `dummy_vm_loop`, `bytecode_vm_loop`, and `stack_vm_loop` are active VM-shaped control-flow samples.
 - `calc_sum_to_n` is active again under the safe structured-loop recovery path.
-- `calc_fib` is `ci_skip` on `windows-latest` because the current hosted toolchain still emits a loop/codegen shape that fails lifting there even though local developer runs pass.
+- `calc_fib` and `calc_sum_array` are `ci_skip` on `windows-latest` because the current hosted toolchain still emits loop/array codegen shapes that fail lifting there even though local developer runs pass.
 - `calc_cout` remains `ci_skip` because its C++ codegen is toolchain-dependent on CI.
 
 ## Call-boundary ABI framework
