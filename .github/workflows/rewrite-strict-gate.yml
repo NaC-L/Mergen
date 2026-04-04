@@ -77,24 +77,7 @@ jobs:
       - name: Build lifter
         run: cmd /c scripts\dev\build_iced.cmd
 
-      - name: Resolve sample clang-cl 18
-        id: resolve_sample_clang
-        shell: pwsh
-        run: |
-          choco install llvm --version=18.1.8 --allow-downgrade --no-progress -y
-          if ($LASTEXITCODE -ne 0) {
-            throw "choco install failed for 'llvm' 18.1.8 with exit code $LASTEXITCODE"
-          }
-          $clangCl = "C:\Program Files\LLVM\bin\clang-cl.exe"
-          if (!(Test-Path $clangCl)) { throw "clang-cl.exe not found at $clangCl" }
-          $clangVersion = (& $clangCl --version | Select-Object -First 1)
-          if ($clangVersion -notmatch "\b18\.1\.8\b") {
-            throw "Expected clang-cl 18.1.8 but found: $clangVersion"
-          }
-          "clang_cl=$clangCl" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Host "Resolved sample clang-cl=$clangCl ($clangVersion)"
-
       - name: Run rewrite gate
         env:
-          CLANG_CL_EXE: ${{ steps.resolve_sample_clang.outputs.clang_cl }}
+          CLANG_CL_EXE: C:\Program Files\LLVM\bin\clang-cl.exe
         run: ${{ matrix.gate.test_command }}
