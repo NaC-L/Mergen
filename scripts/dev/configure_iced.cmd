@@ -44,12 +44,18 @@ if not defined LLVM_CMAKE_DIR (
     exit /b 1
 )
 
-:resolve_compiler
-for %%I in ("%~dp0..\.." ) do set "REPO_ROOT=%%~fI"
+::resolve_compiler
+for %%I in ("%~dp0..\..") do set "REPO_ROOT=%%~fI"
+set "LLVM_CLANG_CL="
+for %%I in ("%LLVM_CMAKE_DIR%\..\..\..\bin\clang-cl.exe") do if exist "%%~fI" set "LLVM_CLANG_CL=%%~fI"
 
 set "MERGEN_C_COMPILER=%CMAKE_C_COMPILER%"
+if not defined MERGEN_C_COMPILER if defined CLANG_CL_EXE set "MERGEN_C_COMPILER=%CLANG_CL_EXE%"
+if not defined MERGEN_C_COMPILER if defined LLVM_CLANG_CL set "MERGEN_C_COMPILER=%LLVM_CLANG_CL%"
 if not defined MERGEN_C_COMPILER set "MERGEN_C_COMPILER=clang-cl"
 set "MERGEN_CXX_COMPILER=%CMAKE_CXX_COMPILER%"
+if not defined MERGEN_CXX_COMPILER if defined CLANG_CL_EXE set "MERGEN_CXX_COMPILER=%CLANG_CL_EXE%"
+if not defined MERGEN_CXX_COMPILER if defined LLVM_CLANG_CL set "MERGEN_CXX_COMPILER=%LLVM_CLANG_CL%"
 if not defined MERGEN_CXX_COMPILER set "MERGEN_CXX_COMPILER=%MERGEN_C_COMPILER%"
 
 ::configure
