@@ -474,10 +474,11 @@ private:
     headerBuilder.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
 
     llvm::IRBuilder<> bodyBuilder(body);
-    bodyBuilder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+    bodyBuilder.CreateBr(current);
 
     llvm::IRBuilder<> exitBuilder(exit);
-    exitBuilder.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+    exitBuilder.CreateRet(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
 
     lifter.blockInfo = BBInfo(0x2000, current);
     lifter.visitedAddresses.insert(0x1000);
@@ -512,8 +513,7 @@ private:
     headerBuilder.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
 
     llvm::IRBuilder<> bodyBuilder(body);
-    bodyBuilder.CreateRet(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+    bodyBuilder.CreateBr(current);
 
     llvm::IRBuilder<> exitBuilder(exit);
     exitBuilder.CreateRet(
@@ -606,6 +606,44 @@ private:
     return true;
   }
 
+  bool runStructuredLoopHeaderRejectsAcyclicBackwardBranch(
+      std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    auto* body = llvm::BasicBlock::Create(lifter.context, "loop_body", lifter.fnc);
+    auto* exit = llvm::BasicBlock::Create(lifter.context, "loop_exit", lifter.fnc);
+
+    llvm::IRBuilder<> currentBuilder(current);
+    currentBuilder.CreateBr(header);
+
+    llvm::IRBuilder<> headerBuilder(header);
+    headerBuilder.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+
+    llvm::IRBuilder<> bodyBuilder(body);
+    bodyBuilder.CreateRet(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+
+    llvm::IRBuilder<> exitBuilder(exit);
+    exitBuilder.CreateRet(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+    lifter.blockInfo = BBInfo(0x2000, current);
+    lifter.visitedAddresses.insert(0x1000);
+    lifter.addrToBB[0x1000] = header;
+
+    if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+      details =
+          "  acyclic backward branch into an earlier conditional must not be generalized as a loop\n";
+      return false;
+    }
+    return true;
+  }
+
+
   bool runGeneralizedLoopWithoutBypassTagKeepsNormalRestore(std::string& details) {
     LifterUnderTest lifter;
     auto* bb = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
@@ -656,6 +694,48 @@ private:
     }
     return true;
   }
+
+  bool runGeneralizedLoopBypassTagClearsAfterPromotion(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto* bb = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    lifter.pendingLoopGeneralizationAddresses.insert(0x1000);
+    lifter.stackBypassGeneralizedLoopAddresses.insert(0x1000);
+    lifter.addUnvisitedAddr(BBInfo(0x1000, bb));
+
+    BBInfo out;
+    if (!lifter.getUnvisitedAddr(out)) {
+      details = "  failed to dequeue pending generalized loop header\n";
+      return false;
+    }
+    if (!lifter.bypassStackConcolicTracking ||
+        lifter.currentBlockRestoreMode !=
+            LifterUnderTest::BlockRestoreMode::GeneralizedLoop) {
+      details =
+          "  pending direct-jump generalized loop should start in generalized restore mode\n";
+      return false;
+    }
+    if (lifter.stackBypassGeneralizedLoopAddresses.contains(0x1000)) {
+      details =
+          "  pending bypass tag should be cleared once the generalized loop header is promoted\n";
+      return false;
+    }
+
+    lifter.addUnvisitedAddr(BBInfo(0x1000, bb));
+    if (!lifter.getUnvisitedAddr(out)) {
+      details = "  failed to dequeue promoted generalized loop header\n";
+      return false;
+    }
+    if (lifter.bypassStackConcolicTracking ||
+        lifter.currentBlockRestoreMode !=
+            LifterUnderTest::BlockRestoreMode::Normal) {
+      details =
+          "  promoted generalized loop should not keep the pending direct-jump bypass tag\n";
+      return false;
+    }
+    return true;
+  }
+
 
   int runCustomKnownBitsTests(const std::string& suiteFilter) {
     int failures = 0;
@@ -724,6 +804,8 @@ private:
     runCustom("structured_loop_header_allows_jump_chain",
              &InstructionTester::runStructuredLoopHeaderAllowsJumpChain);
 
+    runCustom("structured_loop_header_rejects_acyclic_backward_branch",
+             &InstructionTester::runStructuredLoopHeaderRejectsAcyclicBackwardBranch);
     runCustom("structured_loop_header_rejects_non_conditional_terminator",
              &InstructionTester::runStructuredLoopHeaderRejectsNonConditionalTerminator);
     runCustom("structured_loop_header_rejects_multiple_predecessors",
@@ -732,6 +814,8 @@ private:
              &InstructionTester::runGeneralizedLoopWithoutBypassTagKeepsNormalRestore);
     runCustom("generalized_loop_with_bypass_tag_uses_generalized_restore",
              &InstructionTester::runGeneralizedLoopWithBypassTagUsesGeneralizedRestore);
+    runCustom("generalized_loop_bypass_tag_clears_after_promotion",
+             &InstructionTester::runGeneralizedLoopBypassTagClearsAfterPromotion);
 
     return failures;
   }
