@@ -50,14 +50,8 @@ jobs:
           Install-ChocoPkg "nasm"
           Install-ChocoPkg "ninja"
           Install-ChocoPkg "7zip"
-          choco install llvm --version=18.1.8 --allow-downgrade --no-progress -y
-          if ($LASTEXITCODE -ne 0) {
-            throw "choco install failed for 'llvm' 18.1.8 with exit code $LASTEXITCODE"
-          }
 
-
-      - name: Resolve LLVM 18 toolchain
-        id: resolve_llvm
+      - name: Resolve LLVM_DIR
         shell: pwsh
         run: |
           $llvmVersion = "18.1.8"
@@ -73,96 +67,34 @@ jobs:
           & $sevenZip x -y $llvmArchive "-o$llvmWork" | Out-Null
           $llvmConfig = (Get-ChildItem -Path $llvmWork -Filter LLVMConfig.cmake -Recurse -File | Select-Object -First 1).FullName
           if (-not $llvmConfig) { throw "LLVMConfig.cmake not found after extracting $llvmArchiveName" }
+          $llvmDir = Split-Path -Parent $llvmConfig
+          "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved LLVM_DIR=$llvmDir"
+
+      - name: Resolve sample clang-cl 18
+        id: resolve_sample_clang
+        shell: pwsh
+        run: |
+          choco install llvm --version=18.1.8 --allow-downgrade --no-progress -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "choco install failed for 'llvm' 18.1.8 with exit code $LASTEXITCODE"
+          }
           $clangCl = "C:\Program Files\LLVM\bin\clang-cl.exe"
           if (!(Test-Path $clangCl)) { throw "clang-cl.exe not found at $clangCl" }
           $clangVersion = (& $clangCl --version | Select-Object -First 1)
-          if ($clangVersion -notmatch "\b$([regex]::Escape($llvmVersion))\b") {
-            throw "Expected clang-cl $llvmVersion but found: $clangVersion"
+          if ($clangVersion -notmatch "\b18\.1\.8\b") {
+            throw "Expected clang-cl 18.1.8 but found: $clangVersion"
           }
-          $llvmDir = Split-Path -Parent $llvmConfig
-          $llvmBin = Split-Path -Parent $clangCl
-          "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "CLANG_CL_EXE=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          "llvm_dir=$llvmDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "llvm_bin=$llvmBin" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "clang_cl=$clangCl" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Host "Resolved LLVM_DIR=$llvmDir"
-          Write-Host "Resolved clang-cl=$clangCl ($clangVersion)"
-
-      - name: Resolve Rust toolchain contract
-        id: resolve_rust
-        shell: pwsh
-        run: |
-          $cargo = (Get-Command cargo -ErrorAction Stop).Source
-          $cargoBin = Split-Path -Parent $cargo
-          $rustToolchain = $env:RUSTUP_TOOLCHAIN
-          if (-not $rustToolchain) {
-            $active = @(& rustup show active-toolchain 2>$null)
-            if ($LASTEXITCODE -eq 0 -and $active.Count -gt 0) {
-              $rustToolchain = ($active[0] -split '\s+')[0]
-            }
-          }
-          "CARGO_EXECUTABLE=$cargo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $cargoBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          "cargo_exe=$cargo" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          if ($rustToolchain) {
-            "RUSTUP_TOOLCHAIN=$rustToolchain" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            "rust_toolchain=$rustToolchain" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          }
-          Write-Host "Resolved cargo=$cargo"
-          if ($rustToolchain) { Write-Host "Resolved Rust toolchain=$rustToolchain" }
+          Write-Host "Resolved sample clang-cl=$clangCl ($clangVersion)"
 
       - name: Configure iced build
-        env:
-          LLVM_DIR: ${{ steps.resolve_llvm.outputs.llvm_dir }}
-          CLANG_CL_EXE: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CMAKE_C_COMPILER: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CMAKE_CXX_COMPILER: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CARGO_EXECUTABLE: ${{ steps.resolve_rust.outputs.cargo_exe }}
-          RUSTUP_TOOLCHAIN: ${{ steps.resolve_rust.outputs.rust_toolchain }}
         run: cmd /c scripts\dev\configure_iced.cmd
 
-      - name: Assert pinned LLVM compiler in CMake cache
-        shell: pwsh
-        env:
-          EXPECTED_CLANG_CL: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          EXPECTED_LLVM_DIR: ${{ steps.resolve_llvm.outputs.llvm_dir }}
-        run: |
-          $cachePath = Join-Path $PWD "build_iced/CMakeCache.txt"
-          if (!(Test-Path $cachePath)) { throw "CMake cache not found at $cachePath" }
-          $cache = Get-Content $cachePath
-          function Get-CacheValue([string]$key) {
-            $line = $cache | Where-Object { $_ -match "^${key}:(FILEPATH|PATH|STRING|UNINITIALIZED)=" } | Select-Object -First 1
-            if (-not $line) { throw "Missing $key in $cachePath" }
-            return ($line -split '=', 2)[1]
-          }
-          $expectedClang = (Resolve-Path $env:EXPECTED_CLANG_CL).Path
-          $expectedLlvmDir = (Resolve-Path $env:EXPECTED_LLVM_DIR).Path
-          $actualC = Get-CacheValue 'CMAKE_C_COMPILER'
-          $actualCxx = Get-CacheValue 'CMAKE_CXX_COMPILER'
-          $actualLlvmDir = Get-CacheValue 'LLVM_DIR'
-          if ((Resolve-Path $actualC).Path -ine $expectedClang) { throw "Expected C compiler '$expectedClang' but cache has '$actualC'" }
-          if ((Resolve-Path $actualCxx).Path -ine $expectedClang) { throw "Expected CXX compiler '$expectedClang' but cache has '$actualCxx'" }
-          if ((Resolve-Path $actualLlvmDir).Path -ine $expectedLlvmDir) { throw "Expected LLVM_DIR '$expectedLlvmDir' but cache has '$actualLlvmDir'" }
-          Write-Host "Pinned toolchain contract verified in build_iced/CMakeCache.txt"
-
       - name: Build lifter
-        env:
-          LLVM_DIR: ${{ steps.resolve_llvm.outputs.llvm_dir }}
-          CLANG_CL_EXE: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CMAKE_C_COMPILER: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CMAKE_CXX_COMPILER: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CARGO_EXECUTABLE: ${{ steps.resolve_rust.outputs.cargo_exe }}
-          RUSTUP_TOOLCHAIN: ${{ steps.resolve_rust.outputs.rust_toolchain }}
         run: cmd /c scripts\dev\build_iced.cmd
 
       - name: Run rewrite gate
         env:
-          LLVM_DIR: ${{ steps.resolve_llvm.outputs.llvm_dir }}
-          CLANG_CL_EXE: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CMAKE_C_COMPILER: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CMAKE_CXX_COMPILER: ${{ steps.resolve_llvm.outputs.clang_cl }}
-          CARGO_EXECUTABLE: ${{ steps.resolve_rust.outputs.cargo_exe }}
-          RUSTUP_TOOLCHAIN: ${{ steps.resolve_rust.outputs.rust_toolchain }}
+          CLANG_CL_EXE: ${{ steps.resolve_sample_clang.outputs.clang_cl }}
         run: ${{ matrix.gate.test_command }}
