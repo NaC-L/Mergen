@@ -31,17 +31,20 @@ if not defined NASM_BIN (
     exit /b 1
  )
 
-:resolve_clang
+::resolve_clang
 set "CLANG_CL_BIN="
 if defined CLANG_CL_EXE (
     set "CLANG_CL_BIN=%CLANG_CL_EXE%"
- ) else (
+ ) else if defined LLVM_DIR (
+    for %%I in ("%LLVM_DIR%\..\..\..\bin\clang-cl.exe") do if exist "%%~fI" set "CLANG_CL_BIN=%%~fI"
+ )
+if not defined CLANG_CL_BIN (
     for /f "usebackq delims=" %%I in (`where clang-cl 2^>nul`) do (
         set "CLANG_CL_BIN=%%I"
         goto found_clang
     )
  )
-if exist "%~dp0..\..\..\llvm18-install\bin\clang-cl.exe" set "CLANG_CL_BIN=%~dp0..\..\..\llvm18-install\bin\clang-cl.exe"
+if not defined CLANG_CL_BIN if exist "%~dp0..\..\..\llvm18-install\bin\clang-cl.exe" set "CLANG_CL_BIN=%~dp0..\..\..\llvm18-install\bin\clang-cl.exe"
 if not defined CLANG_CL_BIN if exist "C:\Program Files\LLVM\bin\clang-cl.exe" set "CLANG_CL_BIN=C:\Program Files\LLVM\bin\clang-cl.exe"
 
 :found_clang
