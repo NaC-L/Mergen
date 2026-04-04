@@ -131,7 +131,7 @@ Samples without a `semantic` field are not tested. The `semantic` field is optio
 
 ### Coverage summary
 
-Current active quick-gate semantic coverage is **31 samples / 175 cases**.
+Current active quick-gate semantic coverage is **30 samples / 171 cases** on CI.
 
 Notable current state:
 - `dummy_vm_loop`, `bytecode_vm_loop`, and `stack_vm_loop` are active VM-shaped control-flow samples.
