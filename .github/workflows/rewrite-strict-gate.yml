@@ -78,6 +78,28 @@ jobs:
         run: cmd /c scripts\dev\build_iced.cmd
 
       - name: Run rewrite gate
-        env:
-          CLANG_CL_EXE: C:\Program Files\LLVM\bin\clang-cl.exe
         run: ${{ matrix.gate.test_command }}
+
+      - name: Collect full-handler coverage summary
+        if: ${{ matrix.gate.job_name == 'rewrite-strict-gate' }}
+        shell: pwsh
+        run: |
+          $coverageJson = "rewrite-full-handler-coverage.json"
+          $json = python test.py report --full --json
+          $json | Out-File -FilePath $coverageJson -Encoding utf8
+          $coverage = $json | ConvertFrom-Json
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Full-handler coverage"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Vector kind: $($coverage.summary.vector_kind)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Vectors file: $($coverage.summary.vectors_file)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Total handlers: $($coverage.summary.total_handlers)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Covered handlers: $($coverage.summary.covered_handlers)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Skipped handlers: $($coverage.summary.skipped_handlers)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Missing handlers: $($coverage.summary.missing_handlers)"
+
+      - name: Upload full-handler coverage artifact
+        if: ${{ matrix.gate.job_name == 'rewrite-strict-gate' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rewrite-full-handler-coverage
+          path: rewrite-full-handler-coverage.json
