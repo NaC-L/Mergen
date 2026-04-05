@@ -68,13 +68,16 @@ jobs:
           $llvmConfig = (Get-ChildItem -Path $llvmWork -Filter LLVMConfig.cmake -Recurse -File | Select-Object -First 1).FullName
           if (-not $llvmConfig) { throw "LLVMConfig.cmake not found after extracting $llvmArchiveName" }
           $llvmDir = Split-Path -Parent $llvmConfig
-          $llvmRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $llvmDir))
-          $llvmBin = Join-Path $llvmRoot "bin"
           "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          if (Test-Path (Join-Path $llvmBin "clang-cl.exe")) {
-            $llvmBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          }
           Write-Host "Resolved LLVM_DIR=$llvmDir"
+
+      - name: Resolve clang-cl
+        shell: pwsh
+        run: |
+          $clangCl = (Get-Command clang-cl -ErrorAction Stop).Source
+          "CMAKE_C_COMPILER=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CMAKE_CXX_COMPILER=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved clang-cl=$clangCl"
 
       - name: Configure iced build
         run: cmd /c scripts\dev\configure_iced.cmd
@@ -84,3 +87,27 @@ jobs:
 
       - name: Run rewrite gate
         run: ${{ matrix.gate.test_command }}
+
+      - name: Collect full-handler coverage summary
+        if: ${{ matrix.gate.job_name == 'rewrite-strict-gate' }}
+        shell: pwsh
+        run: |
+          $coverageJson = "rewrite-full-handler-coverage.json"
+          $json = python scripts/rewrite/collect_instruction_tests.py --vectors-file lifter/test/test_vectors/oracle_vectors_full_handlers.json --json
+          $json | Out-File -FilePath $coverageJson -Encoding utf8
+          $coverage = $json | ConvertFrom-Json
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Full-handler coverage"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Vector kind: $($coverage.summary.vector_kind)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Vectors file: $($coverage.summary.vectors_file)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Total handlers: $($coverage.summary.total_handlers)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Covered handlers: $($coverage.summary.covered_handlers)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Skipped handlers: $($coverage.summary.skipped_handlers)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Missing handlers: $($coverage.summary.missing_handlers)"
+
+      - name: Upload full-handler coverage artifact
+        if: ${{ matrix.gate.job_name == 'rewrite-strict-gate' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rewrite-full-handler-coverage
+          path: rewrite-full-handler-coverage.json

@@ -59,24 +59,29 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
         visitedAddresses.contains(target) &&
         target <= blockInfo.block_address;
     auto it = addrToBB.find(target);
-    const bool generalizedHeaderLooksSimple =
-        it == addrToBB.end() || !it->second || llvm::pred_size(it->second) <= 1;
+    const bool hasPendingGeneralization =
+        pendingLoopGeneralizationAddresses.contains(target);
+    const bool canUseStructuredLoopGeneralization =
+        currentPathSolveAllowsStructuredLoopGeneralization();
+    const bool canReusePendingGeneralization =
+        hasPendingGeneralization && canUseStructuredLoopGeneralization;
     const bool wantsGeneralization =
-        currentPathSolveAllowsLoopGeneralization() &&
-        generalizedHeaderLooksSimple &&
-        !generalizedLoopAddresses.contains(target) &&
-        backwardVisitedTarget;
+        canReusePendingGeneralization ||
+        (backwardVisitedTarget && canGeneralizeStructuredLoopHeader(target));
     if (wantsGeneralization) {
       if (currentPathSolveContext == PathSolveContext::DirectJump) {
         stackBypassGeneralizedLoopAddresses.insert(target);
       }
       const bool generalizedBackup =
+          canUseStructuredLoopGeneralization &&
           stackBypassGeneralizedLoopAddresses.contains(target);
-      if (pendingLoopGeneralizationAddresses.contains(target) &&
-          it != addrToBB.end() && it->second && it->second->empty()) {
+      if (canReusePendingGeneralization && it != addrToBB.end() && it->second &&
+          it->second->empty()) {
         return {it->second, false, generalizedBackup};
       }
-      pendingLoopGeneralizationAddresses.insert(target);
+      if (!hasPendingGeneralization) {
+        pendingLoopGeneralizationAddresses.insert(target);
+      }
       if (it != addrToBB.end() && it->second && !it->second->empty()) {
         return {replaceWithGeneralizedLoopBlock(target, name), false,
                 generalizedBackup};
@@ -109,8 +114,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     if (!resolved.reusedBackedge) {
       blockInfo = BBInfo(dest, resolved.block);
       printvalue2("pushing block");
-      unvisitedBlocks.push_back(blockInfo);
       backupQueuedTarget(blockInfo.block, resolved.generalizedBackup);
+      unvisitedBlocks.push_back(blockInfo);
     }
 
     return result;
@@ -129,8 +134,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       if (!resolved.reusedBackedge) {
         blockInfo = BBInfo(dest, resolved.block);
         printvalue2("pushing block");
-        unvisitedBlocks.push_back(blockInfo);
         backupQueuedTarget(blockInfo.block, resolved.generalizedBackup);
+        unvisitedBlocks.push_back(blockInfo);
       }
 
       return solved;
@@ -152,8 +157,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     if (!resolved.reusedBackedge) {
       blockInfo = BBInfo(dest, resolved.block);
       printvalue2("pushing block");
-      unvisitedBlocks.push_back(blockInfo);
       backupQueuedTarget(blockInfo.block, resolved.generalizedBackup);
+      unvisitedBlocks.push_back(blockInfo);
     }
     return result;
   }
@@ -239,34 +244,30 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
     // lifters.push_back(newlifter);
 
-    // store mem&reg info for BB
-    if (!falseTarget.reusedBackedge && blockInfo.block != liftAbortBlock) {
-      addUnvisitedAddr(blockInfo);
-    }
-    if (!trueTarget.reusedBackedge && newblock.block != liftAbortBlock) {
-      addUnvisitedAddr(newblock);
-    }
-
     // Constant conditions are already resolved — only track assumptions
     // for instruction-produced conditions that need runtime disambiguation.
     if (auto* condInst = dyn_cast<Instruction>(condition)) {
       if (!falseTarget.reusedBackedge && blockInfo.block != liftAbortBlock) {
         assumptions[condInst] = 0;
         backupQueuedTarget(blockInfo.block, falseTarget.generalizedBackup);
+        addUnvisitedAddr(blockInfo);
       }
 
       if (!trueTarget.reusedBackedge && newblock.block != liftAbortBlock) {
         this->assumptions[condInst] = 1;
         backupQueuedTarget(newblock.block, trueTarget.generalizedBackup);
+        addUnvisitedAddr(newblock);
       }
     } else {
       // Condition is a constant (e.g., from folded ICMP). Both branches
       // are statically determined — back them up without assumption state.
       if (!falseTarget.reusedBackedge && blockInfo.block != liftAbortBlock) {
         backupQueuedTarget(blockInfo.block, falseTarget.generalizedBackup);
+        addUnvisitedAddr(blockInfo);
       }
       if (!trueTarget.reusedBackedge && newblock.block != liftAbortBlock) {
         backupQueuedTarget(newblock.block, trueTarget.generalizedBackup);
+        addUnvisitedAddr(newblock);
       }
     }
 
