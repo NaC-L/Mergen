@@ -93,7 +93,7 @@ jobs:
         shell: pwsh
         run: |
           $coverageJson = "rewrite-full-handler-coverage.json"
-          $json = python test.py report --full --json
+          $json = python test.py report --json
           $json | Out-File -FilePath $coverageJson -Encoding utf8
           $coverage = $json | ConvertFrom-Json
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Full-handler coverage"
