@@ -71,6 +71,14 @@ jobs:
           "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Resolved LLVM_DIR=$llvmDir"
 
+      - name: Resolve clang-cl
+        shell: pwsh
+        run: |
+          $clangCl = (Get-Command clang-cl -ErrorAction Stop).Source
+          "CMAKE_C_COMPILER=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CMAKE_CXX_COMPILER=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved clang-cl=$clangCl"
+
       - name: Configure iced build
         run: cmd /c scripts\dev\configure_iced.cmd
 
