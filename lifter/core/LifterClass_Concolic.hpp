@@ -217,15 +217,14 @@ public:
     this->counter = snapshot.ct;
   }
 
-  void branch_backup_impl(BasicBlock* bb, bool generalized) {
+  void branch_backup_impl(BasicBlock* bb, bool /*generalized*/) {
     printvalue2("backing up");
     printvalue2(this->counter);
 
     auto snapshot = backup_point(vec, vecflag, this->buffer, this->cache,
                                  this->assumptions, this->counter);
-    if (generalized) {
-      snapshot = make_generalized_loop_backup(snapshot);
-    }
+    // Persist the canonical state. Generalized loop restore filters stack-local
+    // state only at load time while the temporary bypass mode is active.
     BBbackup[bb] = std::move(snapshot);
   }
 

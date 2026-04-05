@@ -457,6 +457,65 @@ private:
     return true;
   }
 
+  bool runPendingGeneralizedLoopBlockedByContext(
+      LifterUnderTest::PathSolveContext context, const char* contextName,
+      std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext = context;
+
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    auto* pending =
+        llvm::BasicBlock::Create(lifter.context, "pending_loop_header", lifter.fnc);
+    lifter.builder->SetInsertPoint(current);
+    lifter.blockInfo = BBInfo(0x2000, current);
+    lifter.addrToBB[0x1000] = pending;
+    lifter.pendingLoopGeneralizationAddresses.insert(0x1000);
+
+    uint64_t destination = 0;
+    auto pathResult =
+        lifter.solvePath(lifter.fnc, destination, makeI64(lifter.context, 0x1000));
+    if (pathResult != PATH_solved || destination != 0x1000) {
+      details = std::string("  ") + contextName +
+                " context failed to solve the pending loop-header target\n";
+      return false;
+    }
+
+    auto* branch = llvm::dyn_cast<llvm::BranchInst>(current->getTerminator());
+    if (!branch || branch->getNumSuccessors() != 1) {
+      details = std::string("  ") + contextName +
+                " context did not emit the expected direct branch\n";
+      return false;
+    }
+    if (branch->getSuccessor(0) == pending) {
+      details = std::string("  ") + contextName +
+                " context must not reuse a pending generalized loop header\n";
+      return false;
+    }
+    if (lifter.unvisitedBlocks.empty() ||
+        lifter.unvisitedBlocks.back().block == pending) {
+      details = std::string("  ") + contextName +
+                " context queued the pending generalized loop header instead of a fresh block\n";
+      return false;
+    }
+    if (!lifter.pendingLoopGeneralizationAddresses.contains(0x1000)) {
+      details = std::string("  ") + contextName +
+                " context unexpectedly consumed the pending generalization state\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runPendingGeneralizedLoopIndirectJumpBlocked(std::string& details) {
+    return runPendingGeneralizedLoopBlockedByContext(
+        LifterUnderTest::PathSolveContext::IndirectJump, "indirect-jump", details);
+  }
+
+  bool runPendingGeneralizedLoopRetBlocked(std::string& details) {
+    return runPendingGeneralizedLoopBlockedByContext(
+        LifterUnderTest::PathSolveContext::Ret, "return-path", details);
+  }
+
+
   bool runStructuredLoopHeaderAllowsConditionalBackedge(std::string& details) {
     LifterUnderTest lifter;
     lifter.currentPathSolveContext =
@@ -736,6 +795,88 @@ private:
     return true;
   }
 
+  bool runPromotedGeneralizedLoopRestoresCanonicalBackup(
+      std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext = LifterUnderTest::PathSolveContext::DirectJump;
+
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    auto* bb = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    lifter.builder->SetInsertPoint(current);
+    lifter.blockInfo = BBInfo(0x2000, current);
+    lifter.addrToBB[0x1000] = bb;
+    lifter.pendingLoopGeneralizationAddresses.insert(0x1000);
+    lifter.stackBypassGeneralizedLoopAddresses.insert(0x1000);
+
+    const uint64_t localStackAddr = STACKP_VALUE - 0x20;
+    const uint64_t nonLocalAddr = 0x500000;
+    auto* localValue = llvm::ConstantInt::get(llvm::Type::getInt8Ty(lifter.context), 0xAA);
+    auto* nonLocalValue =
+        llvm::ConstantInt::get(llvm::Type::getInt8Ty(lifter.context), 0x55);
+    lifter.buffer[localStackAddr] = ValueByteReference(localValue, 0);
+    lifter.buffer[nonLocalAddr] = ValueByteReference(nonLocalValue, 0);
+
+    uint64_t destination = 0;
+    auto pathResult =
+        lifter.solvePath(lifter.fnc, destination, makeI64(lifter.context, 0x1000));
+    if (pathResult != PATH_solved || destination != 0x1000) {
+      details =
+          "  failed to queue the pending generalized loop header for backup-restore testing\n";
+      return false;
+    }
+
+    BBInfo out;
+    if (!lifter.getUnvisitedAddr(out) || out.block != bb) {
+      details = "  failed to dequeue the pending generalized loop header\n";
+      return false;
+    }
+    if (lifter.currentBlockRestoreMode !=
+        LifterUnderTest::BlockRestoreMode::GeneralizedLoop) {
+      details =
+          "  pending direct-jump generalized loop should restore through generalized mode first\n";
+      return false;
+    }
+
+    lifter.buffer.clear();
+    lifter.load_generalized_backup(bb);
+    if (lifter.buffer.contains(localStackAddr)) {
+      details =
+          "  generalized restore should drop stack-local backup entries while the pending bypass is active\n";
+      return false;
+    }
+    if (!lifter.buffer.contains(nonLocalAddr)) {
+      details =
+          "  generalized restore should keep non-local backup entries while the pending bypass is active\n";
+      return false;
+    }
+
+    lifter.addUnvisitedAddr(BBInfo(0x1000, bb));
+    if (!lifter.getUnvisitedAddr(out) || out.block != bb) {
+      details = "  failed to dequeue the promoted generalized loop header\n";
+      return false;
+    }
+    if (lifter.currentBlockRestoreMode != LifterUnderTest::BlockRestoreMode::Normal) {
+      details =
+          "  promoted generalized loop should revert to normal restore mode before reloading the backup\n";
+      return false;
+    }
+
+    lifter.buffer.clear();
+    lifter.load_backup(bb);
+    if (!lifter.buffer.contains(localStackAddr)) {
+      details =
+          "  promoted generalized loop did not restore the canonical stack-local backup contents\n";
+      return false;
+    }
+    if (!lifter.buffer.contains(nonLocalAddr)) {
+      details =
+          "  promoted generalized loop lost non-local backup contents after restoring the canonical snapshot\n";
+      return false;
+    }
+    return true;
+  }
+
+
 
   int runCustomKnownBitsTests(const std::string& suiteFilter) {
     int failures = 0;
@@ -799,6 +940,10 @@ private:
              &InstructionTester::runLoopGeneralizationIndirectJumpBlocked);
     runCustom("loop_generalization_ret_blocked",
              &InstructionTester::runLoopGeneralizationRetBlocked);
+    runCustom("pending_generalized_loop_indirect_jump_blocked",
+             &InstructionTester::runPendingGeneralizedLoopIndirectJumpBlocked);
+    runCustom("pending_generalized_loop_ret_blocked",
+             &InstructionTester::runPendingGeneralizedLoopRetBlocked);
     runCustom("structured_loop_header_allows_conditional_backedge",
              &InstructionTester::runStructuredLoopHeaderAllowsConditionalBackedge);
     runCustom("structured_loop_header_allows_jump_chain",
@@ -816,6 +961,8 @@ private:
              &InstructionTester::runGeneralizedLoopWithBypassTagUsesGeneralizedRestore);
     runCustom("generalized_loop_bypass_tag_clears_after_promotion",
              &InstructionTester::runGeneralizedLoopBypassTagClearsAfterPromotion);
+    runCustom("promoted_generalized_loop_restores_canonical_backup",
+             &InstructionTester::runPromotedGeneralizedLoopRestoresCanonicalBackup);
 
     return failures;
   }
