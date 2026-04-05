@@ -84,6 +84,7 @@ set(lifter_SOURCES
 	"lifter/core/CommandLineHelpers.hpp"
 	"lifter/core/FunctionSignatures.hpp"
 	"lifter/core/InlinePolicy.hpp"
+	"lifter/core/LiftDiagnostics.hpp"
 	"lifter/core/LiftDriver.hpp"
 	"lifter/core/LifterApplication.hpp"
 	"lifter/core/LifterClass.hpp"
@@ -95,31 +96,31 @@ set(lifter_SOURCES
 	"lifter/core/MergenPB.hpp"
 	"lifter/core/RegisterManager.hpp"
 	"lifter/core/RuntimeImageContext.hpp"
-	"lifter/disasm/CommonDisassembler.hpp"
-	"lifter/disasm/CommonMnemonics.h"
-	"lifter/disasm/CommonRegisters.h"
-	"lifter/disasm/IcedDisassembler.hpp"
-	"lifter/disasm/IcedDisassemblerMnemonics.h"
-	"lifter/disasm/IcedDisassemblerRegisters.h"
-	"lifter/disasm/ZydisDisassembler.hpp"
-	"lifter/disasm/ZydisDisassemblerMnemonics.h"
-	"lifter/disasm/ZydisDisassemblerRegisters.h"
-	"lifter/memory/FileReader.hpp"
-	"lifter/memory/GEPTracker.h"
-	"lifter/memory/GEPTracker.ipp"
-	"lifter/memory/MemoryPolicy.hpp"
-	"lifter/memory/MemoryPolicySetup.hpp"
-	"lifter/analysis/CustomPasses.hpp"
-	"lifter/analysis/PathSolver.h"
-	"lifter/analysis/PathSolver.ipp"
-	"lifter/semantics/OperandUtils.ipp"
 	"lifter/semantics/PPMacros.hpp"
+	"lifter/semantics/OperandUtils.ipp"
 	"lifter/semantics/Semantics.ipp"
 	"lifter/semantics/Semantics_Arithmetic.ipp"
 	"lifter/semantics/Semantics_Bitwise.ipp"
 	"lifter/semantics/Semantics_ControlFlow.ipp"
 	"lifter/semantics/Semantics_Helpers.ipp"
 	"lifter/semantics/Semantics_Misc.ipp"
+	"lifter/disasm/CommonMnemonics.h"
+	"lifter/disasm/CommonRegisters.h"
+	"lifter/disasm/IcedDisassemblerMnemonics.h"
+	"lifter/disasm/IcedDisassemblerRegisters.h"
+	"lifter/disasm/ZydisDisassemblerMnemonics.h"
+	"lifter/disasm/ZydisDisassemblerRegisters.h"
+	"lifter/disasm/CommonDisassembler.hpp"
+	"lifter/disasm/IcedDisassembler.hpp"
+	"lifter/disasm/ZydisDisassembler.hpp"
+	"lifter/memory/GEPTracker.h"
+	"lifter/memory/FileReader.hpp"
+	"lifter/memory/MemoryPolicy.hpp"
+	"lifter/memory/MemoryPolicySetup.hpp"
+	"lifter/memory/GEPTracker.ipp"
+	"lifter/analysis/PathSolver.h"
+	"lifter/analysis/CustomPasses.hpp"
+	"lifter/analysis/PathSolver.ipp"
 	"lifter/test/TestInstructions.h"
 	"lifter/test/Tester.hpp"
 	cmake.toml
@@ -129,15 +130,6 @@ add_executable(lifter)
 
 target_sources(lifter PRIVATE ${lifter_SOURCES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${lifter_SOURCES})
-
-target_include_directories(lifter PRIVATE
-	"lifter/core"
-	"lifter/semantics"
-	"lifter/disasm"
-	"lifter/memory"
-	"lifter/analysis"
-	"lifter/test"
-)
 
 if(DEFINED MERGEN_TEST) # testmode
 	target_compile_definitions(lifter PRIVATE
@@ -149,8 +141,20 @@ target_compile_features(lifter PRIVATE
 	cxx_std_20
 )
 
-target_compile_options(lifter PRIVATE
-	"$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CXX_COMPILER_ID:Clang>>>:/Zc:preprocessor>"
+if(WIN32) # windows
+	target_compile_options(lifter PRIVATE
+		"$<$<BOOL:${MSVC}>:/EHsc>"
+		"$<$<AND:$<BOOL:${MSVC}>,$<NOT:$<CXX_COMPILER_ID:Clang>>>:/Zc:preprocessor>"
+	)
+endif()
+
+target_include_directories(lifter PRIVATE
+	"lifter/core"
+	"lifter/semantics"
+	"lifter/disasm"
+	"lifter/memory"
+	"lifter/analysis"
+	"lifter/test"
 )
 
 target_link_libraries(lifter PRIVATE
@@ -196,6 +200,7 @@ set(rewrite_microtests_SOURCES
 	"lifter/core/CommandLineHelpers.hpp"
 	"lifter/core/FunctionSignatures.hpp"
 	"lifter/core/InlinePolicy.hpp"
+	"lifter/core/LiftDiagnostics.hpp"
 	"lifter/core/LiftDriver.hpp"
 	"lifter/core/LifterApplication.hpp"
 	"lifter/core/LifterClass.hpp"
@@ -207,31 +212,31 @@ set(rewrite_microtests_SOURCES
 	"lifter/core/MergenPB.hpp"
 	"lifter/core/RegisterManager.hpp"
 	"lifter/core/RuntimeImageContext.hpp"
-	"lifter/disasm/CommonDisassembler.hpp"
-	"lifter/disasm/CommonMnemonics.h"
-	"lifter/disasm/CommonRegisters.h"
-	"lifter/disasm/IcedDisassembler.hpp"
-	"lifter/disasm/IcedDisassemblerMnemonics.h"
-	"lifter/disasm/IcedDisassemblerRegisters.h"
-	"lifter/disasm/ZydisDisassembler.hpp"
-	"lifter/disasm/ZydisDisassemblerMnemonics.h"
-	"lifter/disasm/ZydisDisassemblerRegisters.h"
-	"lifter/memory/FileReader.hpp"
-	"lifter/memory/GEPTracker.h"
-	"lifter/memory/GEPTracker.ipp"
-	"lifter/memory/MemoryPolicy.hpp"
-	"lifter/memory/MemoryPolicySetup.hpp"
-	"lifter/analysis/CustomPasses.hpp"
-	"lifter/analysis/PathSolver.h"
-	"lifter/analysis/PathSolver.ipp"
-	"lifter/semantics/OperandUtils.ipp"
 	"lifter/semantics/PPMacros.hpp"
+	"lifter/semantics/OperandUtils.ipp"
 	"lifter/semantics/Semantics.ipp"
 	"lifter/semantics/Semantics_Arithmetic.ipp"
 	"lifter/semantics/Semantics_Bitwise.ipp"
 	"lifter/semantics/Semantics_ControlFlow.ipp"
 	"lifter/semantics/Semantics_Helpers.ipp"
 	"lifter/semantics/Semantics_Misc.ipp"
+	"lifter/disasm/CommonMnemonics.h"
+	"lifter/disasm/CommonRegisters.h"
+	"lifter/disasm/IcedDisassemblerMnemonics.h"
+	"lifter/disasm/IcedDisassemblerRegisters.h"
+	"lifter/disasm/ZydisDisassemblerMnemonics.h"
+	"lifter/disasm/ZydisDisassemblerRegisters.h"
+	"lifter/disasm/CommonDisassembler.hpp"
+	"lifter/disasm/IcedDisassembler.hpp"
+	"lifter/disasm/ZydisDisassembler.hpp"
+	"lifter/memory/GEPTracker.h"
+	"lifter/memory/FileReader.hpp"
+	"lifter/memory/MemoryPolicy.hpp"
+	"lifter/memory/MemoryPolicySetup.hpp"
+	"lifter/memory/GEPTracker.ipp"
+	"lifter/analysis/PathSolver.h"
+	"lifter/analysis/CustomPasses.hpp"
+	"lifter/analysis/PathSolver.ipp"
 	"lifter/test/TestInstructions.h"
 	"lifter/test/Tester.hpp"
 	cmake.toml
@@ -242,15 +247,6 @@ add_executable(rewrite_microtests)
 target_sources(rewrite_microtests PRIVATE ${rewrite_microtests_SOURCES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${rewrite_microtests_SOURCES})
 
-target_include_directories(rewrite_microtests PRIVATE
-	"lifter/core"
-	"lifter/semantics"
-	"lifter/disasm"
-	"lifter/memory"
-	"lifter/analysis"
-	"lifter/test"
-)
-
 target_compile_definitions(rewrite_microtests PRIVATE
 	MERGEN_TEST
 )
@@ -259,8 +255,20 @@ target_compile_features(rewrite_microtests PRIVATE
 	cxx_std_20
 )
 
-target_compile_options(rewrite_microtests PRIVATE
-	"$<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CXX_COMPILER_ID:Clang>>>:/Zc:preprocessor>"
+if(WIN32) # windows
+	target_compile_options(rewrite_microtests PRIVATE
+		"$<$<BOOL:${MSVC}>:/EHsc>"
+		"$<$<AND:$<BOOL:${MSVC}>,$<NOT:$<CXX_COMPILER_ID:Clang>>>:/Zc:preprocessor>"
+	)
+endif()
+
+target_include_directories(rewrite_microtests PRIVATE
+	"lifter/core"
+	"lifter/semantics"
+	"lifter/disasm"
+	"lifter/memory"
+	"lifter/analysis"
+	"lifter/test"
 )
 
 target_link_libraries(rewrite_microtests PRIVATE
@@ -285,4 +293,9 @@ if(WIN32) # windows
 	target_link_libraries(rewrite_microtests PRIVATE
 		Ws2_32
 	)
+endif()
+
+get_directory_property(CMKR_VS_STARTUP_PROJECT DIRECTORY ${PROJECT_SOURCE_DIR} DEFINITION VS_STARTUP_PROJECT)
+if(NOT CMKR_VS_STARTUP_PROJECT)
+	set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT rewrite_microtests)
 endif()

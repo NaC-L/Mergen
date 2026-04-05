@@ -65,7 +65,7 @@ Use `simple/protected381/*`.
 - These are the best local VMP-style performance targets.
 - Continue profiling semantics/memory/folder helpers there.
 - For large control-flow/semantics/inlining changes, run `python test.py vmp` from repo root. That command now fails required targets on diagnostics errors **or** `blocks_completed == 0`, while still reporting the older VMP 3.6 sample as best-effort only.
-- The current safe configuration keeps loop-header generalization disabled and relies on a higher basic-block budget for the stable 3.8.x samples.
+- The current safe configuration allows structured loop-header reuse only for reducible conditional/direct-jump headers (including short trampoline chains into a conditional header); indirect-jump and `ret` dispatcher-style loops remain blocked, and required 3.8.x samples must still validate via `python test.py vmp`.
 
 ### If the goal is older protected/VMP 3.6 support
 Use `simple/protected/simple_target_protected.vmp.exe`, but do not treat it as a normal instruction-semantics-only problem.

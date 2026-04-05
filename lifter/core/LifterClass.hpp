@@ -153,10 +153,10 @@ public:
 
 
 struct BBInfo {
-  uint64_t block_address;
-  llvm::BasicBlock* block;
+  uint64_t block_address = 0;
+  llvm::BasicBlock* block = nullptr;
 
-  BBInfo(){};
+  BBInfo() = default;
 
   BBInfo(uint64_t runtime_address, llvm::BasicBlock* block)
       : block_address(runtime_address), block(block) {}
@@ -503,10 +503,77 @@ public:
   bool currentBlockUsesGeneralizedLoopState() const {
     return currentBlockRestoreMode == BlockRestoreMode::GeneralizedLoop;
   }
-  bool currentPathSolveAllowsLoopGeneralization() const {
-    // Disabled until the generalized loop heuristics can preserve real VMP exit
-    // paths without collapsing required 3.8.x targets into non-terminating IR.
+  bool currentPathSolveAllowsStructuredLoopGeneralization() const {
+    return currentPathSolveContext == PathSolveContext::ConditionalBranch ||
+           currentPathSolveContext == PathSolveContext::DirectJump;
+  }
+  bool isStructuredLoopHeaderShape(BasicBlock* block) const {
+    std::set<BasicBlock*> seenBlocks;
+    auto* current = block;
+    for (unsigned depth = 0; current && depth < 8; ++depth) {
+      if (!seenBlocks.insert(current).second || current->empty()) {
+        return false;
+      }
+      const size_t maxPreds = depth == 0 ? 2 : 1;
+      if (llvm::pred_size(current) > maxPreds) {
+        return false;
+      }
+      auto* branch = llvm::dyn_cast<llvm::BranchInst>(current->getTerminator());
+      if (!branch) {
+        return false;
+      }
+      if (branch->isConditional()) {
+        return true;
+      }
+      if (branch->getNumSuccessors() != 1) {
+        return false;
+      }
+      current = branch->getSuccessor(0);
+    }
     return false;
+  }
+  bool blockCanReach(BasicBlock* source, BasicBlock* target) const {
+    if (!source || !target) {
+      return false;
+    }
+    std::vector<BasicBlock*> worklist{source};
+    std::set<BasicBlock*> seenBlocks;
+    while (!worklist.empty()) {
+      auto* current = worklist.back();
+      worklist.pop_back();
+      if (!seenBlocks.insert(current).second) {
+        continue;
+      }
+      if (current == target) {
+        return true;
+      }
+      auto* terminator = current->getTerminator();
+      if (!terminator) {
+        continue;
+      }
+      for (unsigned i = 0; i < terminator->getNumSuccessors(); ++i) {
+        worklist.push_back(terminator->getSuccessor(i));
+      }
+    }
+    return false;
+  }
+
+  bool canGeneralizeStructuredLoopHeader(uint64_t addr) {
+    if (getControlFlow() != ControlFlow::Unflatten ||
+        !currentPathSolveAllowsStructuredLoopGeneralization() ||
+        addr > blockInfo.block_address || !visitedAddresses.contains(addr) ||
+        pendingLoopGeneralizationAddresses.contains(addr) ||
+        generalizedLoopAddresses.contains(addr)) {
+      return false;
+    }
+    auto it = addrToBB.find(addr);
+    if (it == addrToBB.end() || !it->second || it->second->empty()) {
+      return false;
+    }
+    // Only treat a visited header as reusable when it already reaches the
+    // current block; acyclic backward jumps into earlier diamonds are not loops.
+    return isStructuredLoopHeaderShape(it->second) &&
+           blockInfo.block && blockCanReach(it->second, blockInfo.block);
   }
 
   void liftBasicBlockFromAddress(uint64_t addr) {
@@ -571,10 +638,10 @@ public:
   }
 
 
-  bool addUnvisitedAddr(BBInfo& bb) {
+  bool addUnvisitedAddr(BBInfo bb) {
     printvalue2(bb.block_address);
     printvalue2("added");
-    unvisitedBlocks.push_back(bb);
+    unvisitedBlocks.push_back(std::move(bb));
     return true;
   }
 
@@ -601,18 +668,16 @@ public:
 
       printvalue2("adding :" + std::to_string(out.block_address) +
                   out.block->getName());
-      const bool usesGeneralizedLoopState =
-          pendingLoopGeneralizationAddresses.contains(out.block_address) ||
-          generalizedLoopAddresses.contains(out.block_address);
       const bool bypassesStackTracking =
-          usesGeneralizedLoopState &&
+          pendingLoopGeneralizationAddresses.contains(out.block_address) &&
           stackBypassGeneralizedLoopAddresses.contains(out.block_address);
       bypassStackConcolicTracking = bypassesStackTracking;
       currentBlockRestoreMode = bypassesStackTracking
-                                   ? BlockRestoreMode::GeneralizedLoop
-                                   : BlockRestoreMode::Normal;
+                                    ? BlockRestoreMode::GeneralizedLoop
+                                    : BlockRestoreMode::Normal;
       if (pendingLoopGeneralizationAddresses.contains(out.block_address)) {
         pendingLoopGeneralizationAddresses.erase(out.block_address);
+        stackBypassGeneralizedLoopAddresses.erase(out.block_address);
         generalizedLoopAddresses.insert(out.block_address);
       }
       visitedAddresses.insert(out.block_address);
@@ -757,7 +822,7 @@ public:
 
   BasicBlock* getLiftedBackedgeBB(uint64_t addr) {
     if (getControlFlow() != ControlFlow::Unflatten ||
-        !currentPathSolveAllowsLoopGeneralization()) {
+        !currentPathSolveAllowsStructuredLoopGeneralization()) {
       return nullptr;
     }
     if (addr > blockInfo.block_address ||
