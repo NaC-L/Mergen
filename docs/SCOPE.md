@@ -37,7 +37,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 
 ## Quality Contract
 - Handler coverage: 115/119 handlers covered by the full-handler oracle suite, with 4 intentional skips (`cpuid`, `rdtsc`, `ret`, `scasx`)
-- Active regression corpus: 33 semantic samples / 177 runtime semantic cases in CI; `calc_sum_to_n`, `calc_fib`, `calc_sum_array`, `stack_vm_loop`, and `calc_cout` are all active under the current safe path
+- Active regression corpus: 31 semantic samples / 175 runtime semantic cases in CI; `calc_cout`, `calc_sum_to_n`, and `stack_vm_loop` are active under the current safe path; `calc_fib` and `calc_sum_array` remain `ci_skip` because windows-latest clang-cl emits a codegen shape the lifter cannot yet handle (tracked as a follow-up; local clean Release builds lift them correctly)
 - Determinism: golden IR hashes are enforced for tracked outputs
 - CI gates: register/flag correctness, rewrite baseline, semantic regression, and Windows build lanes
 - Targeted VMP gate: `python test.py vmp` must keep required 3.8.x targets at `blocks_completed > 0`; VMP 3.6 remains best-effort only
