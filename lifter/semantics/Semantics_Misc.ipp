@@ -206,6 +206,39 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_movq() {
   SetIndexValue(0, lowQuadword);
 }
 
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_punpcklqdq() {
+  LLVMContext& context = builder->getContext();
+  auto destinationType = instruction.types[0];
+  auto sourceType = instruction.types[1];
+  bool destinationIsXmm = destinationType == OperandType::Register128;
+  bool sourceIsXmm = sourceType == OperandType::Register128 ||
+                     sourceType == OperandType::Memory128;
+  if (!destinationIsXmm || !sourceIsXmm) {
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    return;
+  }
+
+  auto destinationValue = GetIndexValue(0);
+  auto sourceValue = GetIndexValue(1);
+  auto lowDestination =
+      createZExtOrTruncFolder(destinationValue, Type::getInt64Ty(context));
+  auto lowSource =
+      createZExtOrTruncFolder(sourceValue, Type::getInt64Ty(context));
+
+  auto result = createOrFolder(
+      createZExtFolder(lowDestination, Type::getInt128Ty(context)),
+      createShlFolder(
+          createZExtFolder(lowSource, Type::getInt128Ty(context)),
+          ConstantInt::get(Type::getInt128Ty(context), 64)));
+  SetIndexValue(0, result);
+}
+
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pand() {
   auto destinationType = instruction.types[0];
   auto sourceType = instruction.types[1];
