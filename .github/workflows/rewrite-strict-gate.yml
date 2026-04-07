@@ -51,9 +51,29 @@ jobs:
           Install-ChocoPkg "ninja"
           Install-ChocoPkg "7zip"
 
+      - name: Upgrade clang-cl to 21.1.8
+        shell: pwsh
+        run: |
+          # The windows-latest preinstalled clang-cl (currently 20.1.8) produces
+          # a lifter binary that segfaults on calc_fib before emitting any IR.
+          # Clang 21.1.8 has been verified locally to compile the lifter into a
+          # binary that lifts both calc_fib and calc_sum_array to their expected
+          # constant returns. Clang 18 cannot be used because the runner image's
+          # MSVC STL (14.44+) hard-requires clang 19.0.0 or newer.
+          choco upgrade llvm --version=21.1.8 --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw "choco upgrade llvm failed with $LASTEXITCODE" }
+          $clangCl = "C:\Program Files\LLVM\bin\clang-cl.exe"
+          if (!(Test-Path $clangCl)) { throw "clang-cl.exe not found at $clangCl after upgrade" }
+          "CMAKE_C_COMPILER=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CMAKE_CXX_COMPILER=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved clang-cl=$clangCl"
+          & $clangCl --version
+
       - name: Resolve LLVM_DIR
         shell: pwsh
         run: |
+          # The LLVM link-time libraries come from the vovkos package because
+          # the Windows LLVM installer does not ship the cmake config files.
           $llvmVersion = "18.1.8"
           $llvmArchiveName = "llvm-$llvmVersion-windows-amd64-msvc17-msvcrt.7z"
           $llvmUrl = "https://github.com/vovkos/llvm-package-windows/releases/download/llvm-$llvmVersion/$llvmArchiveName"
@@ -71,13 +91,10 @@ jobs:
           "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Resolved LLVM_DIR=$llvmDir"
 
-      - name: Resolve clang-cl
+      - name: Print clang-cl version
         shell: pwsh
         run: |
-          $clangCl = (Get-Command clang-cl -ErrorAction Stop).Source
-          "CMAKE_C_COMPILER=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "CMAKE_CXX_COMPILER=$clangCl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Resolved clang-cl=$clangCl"
+          & "$env:CMAKE_CXX_COMPILER" --version
 
       - name: Configure iced build
         run: cmd /c scripts\dev\configure_iced.cmd
