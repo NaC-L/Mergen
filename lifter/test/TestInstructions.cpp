@@ -89,6 +89,14 @@ const std::unordered_map<std::string, ManualCaseSpec> kManualHandlerCases = {
                                          makeRegisterState(RegisterUnderTest::RDX, 0),
                                          makeRegisterState(RegisterUnderTest::RCX, 2)},
                     .initialFlags = {}}},
+    {"punpcklqdq",
+     ManualCaseSpec{.mnemonic = "punpcklqdq",
+                    .instructionBytes = {0x66, 0x0F, 0x6C, 0xC1},
+                    .initialRegisters = {makeRegisterState(RegisterUnderTest::XMM0,
+                                                         0x1122334455667788ULL),
+                                         makeRegisterState(RegisterUnderTest::XMM1,
+                                                         0x8877665544332211ULL)},
+                    .initialFlags = {}}},
 };
 
 const std::vector<RegisterState> kDefaultInitialRegisters = {

@@ -9,7 +9,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 | Area | Details |
 |---|---|
 | Architecture | x86-64 PE binaries |
-| Instruction set | 115 handlers covering general-purpose integer ops, BMI1/BMI2, bit manipulation, string ops, conditional moves, flag manipulation, and SSE2 integer XMM ops (`MOVDQA`, `PAND`, `POR`, `PXOR`) |
+| Instruction set | 119 handlers covering general-purpose integer ops, BMI1/BMI2, bit manipulation, string ops, conditional moves, flag manipulation, and SSE2 integer XMM ops (`MOVDQA`, `MOVQ`, `PUNPCKLQDQ`, `PAND`, `POR`, `PXOR`) |
 | Control flow | Linear flow, 2-way branches, direct jumps, call/ret, and tested multi-target jump-table shapes (absolute qword, RIP-relative dword offset, shifted-base, shared-target) |
 | Output | LLVM IR text suitable for LLVM optimization passes |
 | Call-boundary model | Cross-ABI framework for x64 MSVC and x86 cdecl/stdcall/fastcall; `strict` is the operational default, `compat` remains available as a diagnostic fallback |
@@ -27,13 +27,17 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 | Jump-table IR quality | Supported shapes still dispatch on concrete target addresses, not logical case indices |
 | Loop-header generalization | Temporarily disabled while the team keeps required VMP 3.8.x targets on the safe high-budget path |
 
+## Current Development Focus
+- Near term: broaden control-flow recovery and IR quality for loops, jump tables, indirect branches, and VM-style dispatcher shapes.
+- Later: expand 128-bit register/instruction coverage beyond the current SSE2 integer XMM subset once the control-flow path is stable enough to carry the added surface area.
+
 ## Tested Protectors
 - VMProtect — examples exist; reliability varies by protection level
 - Themida — examples exist; reliability varies by protection level
 
 ## Quality Contract
-- Handler coverage: 112/115 handlers with oracle-backed verification
-- Active regression corpus: 30 semantic samples / 171 runtime semantic cases in CI; structured loop recovery now keeps `calc_sum_to_n` and `stack_vm_loop` active, `calc_fib` and `calc_sum_array` are CI-skipped on `windows-latest` because the current hosted toolchain still emits failing loop/array codegen shapes there, and `calc_cout` remains CI-skipped because its C++ codegen is toolchain-dependent
+- Handler coverage: 115/119 handlers covered by the full-handler oracle suite, with 4 intentional skips (`cpuid`, `rdtsc`, `ret`, `scasx`)
+- Active regression corpus: 31 semantic samples / 175 runtime semantic cases in CI; `calc_cout` is active again now that `PUNPCKLQDQ` is implemented; `calc_fib` and `calc_sum_array` remain `ci_skip` because they currently trip a separate lifter assertion (tracked as a follow-up)
 - Determinism: golden IR hashes are enforced for tracked outputs
 - CI gates: register/flag correctness, rewrite baseline, semantic regression, and Windows build lanes
 - Targeted VMP gate: `python test.py vmp` must keep required 3.8.x targets at `blocks_completed > 0`; VMP 3.6 remains best-effort only
@@ -42,3 +46,4 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 - General-purpose decompilation
 - Multi-function whole-program recovery
 - Broad architecture expansion before x64 protected-function reliability improves
+- Broad 128-bit register/instruction expansion before control-flow reliability improves
