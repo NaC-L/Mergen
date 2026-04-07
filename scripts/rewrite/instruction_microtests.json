@@ -391,7 +391,10 @@
       "symbol": "calc_jumptable",
       "patterns": [
         { "line_all": ["icmp ult i32", ", 10"] },
-        "select i1",
+        "trunc i64 %RCX to i32",
+        "switch i32 %0",
+        "i32 0, label",
+        "i32 9, label",
         "phi i64"
       ],
       "semantic": [
@@ -508,9 +511,16 @@
       "name": "calc_jumptable_large",
       "symbol": "calc_jumptable_large",
       "patterns": [
-        "icmp eq",
-        "select i1",
+        "and i64 %RCX, 15",
+        "switch i64 %sw_input",
+        "i64 0, label",
+        "i64 1, label",
+        "i64 15, label",
         "phi i64",
+        "[ 7,",
+        "[ 42,",
+        "[ 21,",
+        "unreachable",
         "ret i64"
       ],
       "semantic": [

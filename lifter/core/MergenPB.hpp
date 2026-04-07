@@ -97,6 +97,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::run_opts() {
 
   // Post-optimization passes: normalize IR, drop dead parameters, canonicalize names.
   llvm::ModulePassManager postPassManager;
+  postPassManager.addPass(SelectChainToSwitchPass());
   postPassManager.addPass(SwitchNormalizationPass());
   postPassManager.addPass(llvm::DeadArgumentEliminationPass());
   postPassManager.addPass(CanonicalNamingPass());
