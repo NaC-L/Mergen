@@ -246,8 +246,6 @@
     {
       "name": "calc_fib",
       "symbol": "calc_fib",
-      "ci_skip": true,
-      "ci_skip_reason": "windows-latest clang-cl produces a calc_fib codegen shape that the lifter still cannot handle (lifter exits non-zero before emitting IR). Local clean Release builds pass; CI does not. Tracked as a follow-up to land a real fix instead of toggling the skip.",
       "patterns": ["ret i64 13"],
       "semantic": [
         { "expected": 13, "label": "constant: fib(7)" }
@@ -256,8 +254,6 @@
     {
       "name": "calc_sum_array",
       "symbol": "calc_sum_array",
-      "ci_skip": true,
-      "ci_skip_reason": "Same windows-latest clang-cl codegen mismatch as calc_fib; tracked as a follow-up.",
       "patterns": ["ret i64 150"],
       "semantic": [
         { "expected": 150, "label": "constant: 10+20+30+40+50" }
