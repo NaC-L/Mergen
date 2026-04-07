@@ -247,7 +247,7 @@
       "name": "calc_fib",
       "symbol": "calc_fib",
       "ci_skip": true,
-      "ci_skip_reason": "windows-latest currently emits a loop/codegen shape for calc_fib that still fails lifting under CI even though local developer runs pass.",
+      "ci_skip_reason": "Lifter dyn_cast assertion on calc_fib codegen — separate from PUNPCKLQDQ work; tracked for follow-up.",
       "patterns": ["ret i64 13"],
       "semantic": [
         { "expected": 13, "label": "constant: fib(7)" }
@@ -257,7 +257,7 @@
       "name": "calc_sum_array",
       "symbol": "calc_sum_array",
       "ci_skip": true,
-      "ci_skip_reason": "windows-latest currently emits an array/stack codegen shape for calc_sum_array that still fails lifting under CI even though local developer runs pass.",
+      "ci_skip_reason": "Lifter dyn_cast assertion on calc_sum_array codegen — separate from PUNPCKLQDQ work; tracked for follow-up.",
       "patterns": ["ret i64 150"],
       "semantic": [
         { "expected": 150, "label": "constant: 10+20+30+40+50" }
@@ -321,8 +321,6 @@
     {
       "name": "calc_cout",
       "symbol": "?calc_cout@@YAHH@Z",
-      "ci_skip": true,
-      "ci_skip_reason": "Depends on STL code layout which still reaches unimplemented PUNPCKLQDQ on CI toolchains.",
       "patterns": ["mul i32", "add i32", "ret i64"],
       "semantic": [
         { "inputs": { "RCX": 10 },  "expected": 37,  "label": "10*3+7" },
