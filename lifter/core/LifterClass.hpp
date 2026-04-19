@@ -493,6 +493,14 @@ public:
   void branch_backup(BasicBlock* bb, bool generalized = false) {
     static_cast<Derived*>(this)->branch_backup_impl(bb, generalized);
   }
+  void migrate_generalized_loop_block(BasicBlock* oldBlock, BasicBlock* newBlock) {
+    static_cast<Derived*>(this)->migrate_generalized_loop_block_impl(oldBlock, newBlock);
+  }
+
+  void record_generalized_loop_backedge(BasicBlock* bb) {
+    static_cast<Derived*>(this)->record_generalized_loop_backedge_impl(bb);
+  }
+
   // useless in symbolic?
   void load_backup(BasicBlock* bb) {
     static_cast<Derived*>(this)->load_backup_impl(bb);
@@ -971,6 +979,8 @@ public:
 
     auto it = addrToBB.find(addr);
     if (it != addrToBB.end() && it->second && it->second != newBlock) {
+      static_cast<Derived*>(this)->migrate_generalized_loop_block_impl(it->second,
+                                                                      newBlock);
       it->second->replaceAllUsesWith(newBlock);
     }
 
