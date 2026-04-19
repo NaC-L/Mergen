@@ -66,6 +66,38 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
     finished = 1;
     return;
   }
+  case Mnemonic::INT: {
+    if (instruction.immediate == 0x29) {
+      auto* fastFailType = llvm::FunctionType::get(
+          llvm::Type::getVoidTy(context),
+          {llvm::Type::getInt64Ty(context)}, false);
+      auto* fastFail = llvm::cast<llvm::Function>(
+          fnc->getParent()
+              ->getOrInsertFunction("fastfail", fastFailType)
+              .getCallee());
+      auto* code = createZExtOrTruncFolder(
+          GetRegisterValue(Register::RCX), llvm::Type::getInt64Ty(context));
+      builder->CreateCall(fastFail, {code});
+      builder->CreateUnreachable();
+      run = 0;
+      finished = 1;
+      return;
+    }
+    {
+      std::string mnem(magic_enum::enum_name(instruction.mnemonic));
+      uint64_t instrAddr = current_address - instruction.length;
+      diagnostics.error(DiagCode::InstructionNotImplemented, instrAddr,
+                        "Instruction not implemented: " + mnem, mnem);
+    }
+    Function* externFunc = cast<Function>(
+        fnc->getParent()
+            ->getOrInsertFunction("not_implemented", fnc->getReturnType())
+            .getCallee());
+    builder->CreateRet(builder->CreateCall(externFunc));
+    run = 0;
+    finished = 1;
+    break;
+  }
   case Mnemonic::FXRSTOR:
   case Mnemonic::FXSAVE:
   case Mnemonic::PAUSE:
