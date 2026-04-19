@@ -521,6 +521,19 @@ public:
     const bool trace = liftProgressDiagEnabled &&
                        (block == addrToBB.lookup(0x1401BAE0FULL) ||
                         block == addrToBB.lookup(0x1401BAE18ULL));
+    // Detect the trampoline pattern at the header: a single unconditional br
+    // (no other instructions). When the header is a trampoline, its successor
+    // is the real per-instruction lift block; if that successor is mid-lift
+    // (no proper terminator yet) we still want to recognise the loop. Without
+    // a trampoline header we keep the original strict shape semantics so
+    // ordinary linear lifts (VMP-style) don't get mis-classified as loops.
+    auto isTrampoline = [](BasicBlock* bb) {
+      if (!bb || bb->size() != 1) return false;
+      auto* term = bb->getTerminator();
+      auto* br = llvm::dyn_cast<llvm::BranchInst>(term);
+      return br && !br->isConditional();
+    };
+    const bool entryIsTrampoline = isTrampoline(block);
     std::set<BasicBlock*> seenBlocks;
     auto* current = block;
     for (unsigned depth = 0; current && depth < 8; ++depth) {
@@ -537,11 +550,28 @@ public:
                              << " max=" << maxPreds << "\n";
         return false;
       }
-      auto* branch = llvm::dyn_cast<llvm::BranchInst>(current->getTerminator());
+      auto* term = current->getTerminator();
+      auto* branch = llvm::dyn_cast<llvm::BranchInst>(term);
       if (!branch) {
+        // Trampoline-header relaxation: when the original header was a single
+        // unconditional-br trampoline and we walked into a successor that is
+        // currently being lifted (no proper terminator yet, but already has
+        // instructions), accept the chain so loop generalization can latch
+        // onto the header. The rest of canGeneralizeStructuredLoopHeader
+        // (backwardVisitedTarget and blockCanReach) still filters out chains
+        // that aren't actually loops.
+        const bool hasProperTerminator = term && term->isTerminator();
+        if (entryIsTrampoline && !hasProperTerminator && depth > 0 &&
+            !current->empty()) {
+          if (trace) std::cout << "[diag] shape depth=" << depth
+                               << " ACCEPT partial-chain-after-trampoline\n";
+          return true;
+        }
         if (trace) std::cout << "[diag] shape depth=" << depth
                              << " reject=not-branch term="
-                             << (current->getTerminator() ? current->getTerminator()->getOpcodeName() : "none")
+                             << (term ? term->getOpcodeName() : "none")
+                             << " isTerm=" << (hasProperTerminator ? 1 : 0)
+                             << " entryTrampoline=" << (entryIsTrampoline ? 1 : 0)
                              << "\n";
         return false;
       }
