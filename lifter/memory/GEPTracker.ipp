@@ -958,6 +958,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
         return true;
       };
 
+
       if (!collectAddTerms(collectAddTerms, offsetExpr, addTerms)) {
         return inferredOffsets;
       }
@@ -1031,6 +1032,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
         return inferredOffsets;
       }
 
+
       uint64_t upperInclusive = 0;
       bool foundUpper = false;
       for (const auto& assumption : assumptions) {
@@ -1038,17 +1040,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
           continue;
         }
 
+
         uint64_t candidateUpper = 0;
         if (!matchIndexUpperBound(matchIndexUpperBound, assumption.first,
                                   indexValue, candidateUpper)) {
           continue;
         }
 
+
         if (!foundUpper || candidateUpper < upperInclusive) {
           upperInclusive = candidateUpper;
           foundUpper = true;
         }
       }
+
 
       constexpr uint64_t kMaxJumpTableTargets = 64;
       if (!foundUpper || upperInclusive >= kMaxJumpTableTargets) {
@@ -1065,6 +1070,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
 
       return inferredOffsets;
     };
+
 
     if (getControlFlow() == ControlFlow::Unflatten) {
       auto possibleValues = computePossibleValues(loadOffset, 0);

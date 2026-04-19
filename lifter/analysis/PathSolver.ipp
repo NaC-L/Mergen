@@ -52,6 +52,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   auto resolveTargetBlock = [&](uint64_t target, const std::string& name)
       -> ResolvedTargetBlock {
     if (auto* reused = getLiftedBackedgeBB(target)) {
+      record_generalized_loop_backedge(reused);
       return {reused, true, false};
     }
 
