@@ -412,6 +412,23 @@ private:
   }
 
 
+  bool runInt29FastfailLoweredToNoReturnCall(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.SetRegisterValue(RegisterUnderTest::RCX,
+                            makeI64(lifter.builder->getContext(), 0x42));
+    static constexpr uint8_t kInt29[] = {0xCD, 0x29};
+    lifter.liftBytes(kInt29, sizeof(kInt29));
+    if (!functionHasDirectCallTo(lifter.fnc, "fastfail")) {
+      details = "  int 29h should lower to a direct fastfail call\n";
+      return false;
+    }
+    if (!llvm::isa<llvm::UnreachableInst>(lifter.bb->getTerminator())) {
+      details = "  int 29h should terminate the block with unreachable\n";
+      return false;
+    }
+    return true;
+  }
+
   bool runLoopGeneralizationConditionalBranchAllowed(std::string& details) {
     LifterUnderTest lifter;
     lifter.currentPathSolveContext =
@@ -1229,6 +1246,8 @@ private:
              &InstructionTester::runLoopGeneralizationDirectJumpAllowed);
     runCustom("loop_generalization_indirect_jump_blocked_when_unresolved",
              &InstructionTester::runLoopGeneralizationIndirectJumpBlockedWhenUnresolved);
+    runCustom("int29_fastfail_lowered_to_noreturn_call",
+             &InstructionTester::runInt29FastfailLoweredToNoReturnCall);
     runCustom("loop_generalization_indirect_jump_allowed_when_resolved",
              &InstructionTester::runLoopGeneralizationIndirectJumpAllowedWhenResolved);
     runCustom("loop_generalization_ret_blocked",
