@@ -156,12 +156,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
         return;
       }
       auto RIP_value = cast<ConstantInt>(next_jump);
-      auto jump_address = RIP_value->getZExtValue();
+      auto jump_address =
+          normalizeRuntimeTargetAddress(RIP_value->getZExtValue());
 
       auto bb = getOrCreateBB(jump_address, "bb_call");
       builder->CreateBr(bb);
 
       blockInfo = BBInfo(jump_address, bb);
+      addUnvisitedAddr(blockInfo);
       run = 0;
       return;
     }
@@ -181,10 +183,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
             STACKP_VALUE) {
       printvalueforce2(jump_address);
 
-      // TODO: ideally remove this part
-      auto bb = getOrCreateBB(jump_address, "bb_indirectly_called");
       // actually call the function first
-
       auto functionName = file.getName(jump_address);
       debugging::doIfDebug([&]() {
         outs() << "calling : " << functionName
@@ -198,11 +197,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstruction() {
 
       // get [rsp], jump there
       auto RIP_value = cast<ConstantInt>(next_jump);
-      jump_address = RIP_value->getZExtValue();
+      jump_address = normalizeRuntimeTargetAddress(RIP_value->getZExtValue());
+      auto bb = getOrCreateBB(jump_address, "bb_indirectly_called");
 
       builder->CreateBr(bb);
 
       blockInfo = BBInfo(jump_address, bb);
+      addUnvisitedAddr(blockInfo);
       run = 0;
       return;
     }

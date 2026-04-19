@@ -1070,6 +1070,24 @@ private:
   }
 
 
+  bool runNormalizeRuntimeTargetWidensMappedRvaTarget(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.file.imageBase = 0x140000000ULL;
+    lifter.markMemPaged(0x140052532ULL, 0x140052540ULL);
+    const uint64_t normalized = lifter.normalizeRuntimeTargetAddress(0x52532ULL);
+    if (normalized != 0x140052532ULL) {
+      std::ostringstream os;
+      os << "  normalizeRuntimeTargetAddress widened to 0x" << std::hex
+         << normalized << " instead of mapped RVA target 0x140052532\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
+
+
+
   bool runGeneralizedLoopRestoreMergesBackedgeRegisterState(
       std::string& details) {
     LifterUnderTest lifter;
@@ -1244,6 +1262,8 @@ private:
              &InstructionTester::runSolveLoadInfersConcreteBaseFromTrackedLoad);
     runCustom("solve_path_widens_mapped_rva_target",
              &InstructionTester::runSolvePathWidensMappedRvaTarget);
+    runCustom("normalize_runtime_target_widens_mapped_rva_target",
+             &InstructionTester::runNormalizeRuntimeTargetWidensMappedRvaTarget);
 
     return failures;
   }
