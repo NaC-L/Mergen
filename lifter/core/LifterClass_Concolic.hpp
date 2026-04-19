@@ -160,40 +160,51 @@ public:
     InstructionCache cache;
     llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions;
     uint64_t ct;
+    llvm::BasicBlock* sourceBlock;
 
     bool operator==(const backup_point& other) const {
       if (buffer != other.buffer)
         return false;
-      return vec == other.vec && vecflag == other.vecflag;
+      return vec == other.vec && vecflag == other.vecflag &&
+             sourceBlock == other.sourceBlock;
     }
 
     backup_point(backup_point& other)
         : vec(other.vec), vecflag(other.vecflag), buffer(other.buffer),
-          cache(other.cache), assumptions(other.assumptions), ct(other.ct){};
+          cache(other.cache), assumptions(other.assumptions), ct(other.ct),
+          sourceBlock(other.sourceBlock){};
 
     backup_point(backup_point&& other) noexcept
         : vec(std::move(other.vec)), vecflag(std::move(other.vecflag)),
           buffer(std::move(other.buffer)), cache(std::move(other.cache)),
-          assumptions(other.assumptions), ct(other.ct) {}
+          assumptions(other.assumptions), ct(other.ct),
+          sourceBlock(other.sourceBlock) {}
 
     backup_point(std::array<llvm::Value*, REGISTER_COUNT> vec,
                  std::array<llvm::Value*, FLAGS_END> vecflag,
                  llvm::DenseMap<uint64_t, ValueByteReference> buffer,
                  InstructionCache cc,
                  llvm::DenseMap<llvm::Instruction*, llvm::APInt> assumptions,
-                 uint64_t ct)
+                 uint64_t ct, llvm::BasicBlock* sourceBlock)
         : vec(vec), vecflag(vecflag), buffer(buffer), cache(cc),
-          assumptions(assumptions), ct(ct){};
+          assumptions(assumptions), ct(ct), sourceBlock(sourceBlock){};
     backup_point() = default;
     backup_point(const backup_point&) = default;
-    // backup_point(const backup_point&&) = default;
     backup_point& operator=(const backup_point&) = default;
     backup_point& operator=(backup_point&&) noexcept = default;
   };
 
   llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
+  llvm::DenseMap<BasicBlock*, backup_point> generalizedLoopBackedgeBackup;
 
-  backup_point make_generalized_loop_backup(const backup_point& source) {
+  llvm::DenseMap<BasicBlock*, std::array<llvm::PHINode*, REGISTER_COUNT>>
+      generalizedLoopRegisterPhis;
+  llvm::DenseMap<BasicBlock*, std::array<llvm::PHINode*, FLAGS_END>>
+      generalizedLoopFlagPhis;
+
+  backup_point make_generalized_loop_backup(BasicBlock* bb,
+                                            const backup_point& canonical,
+                                            const backup_point& source) {
     backup_point generalized = source;
     llvm::DenseMap<uint64_t, ValueByteReference> filteredBuffer;
     filteredBuffer.reserve(source.buffer.size());
@@ -205,6 +216,48 @@ public:
     generalized.buffer = std::move(filteredBuffer);
     generalized.cache = InstructionCache();
     generalized.assumptions.clear();
+
+    auto* canonicalSource = canonical.sourceBlock;
+    auto* backedgeSource = source.sourceBlock;
+    if (!bb || !canonicalSource || !backedgeSource ||
+        canonicalSource == backedgeSource) {
+      return generalized;
+    }
+    std::array<llvm::PHINode*, REGISTER_COUNT> registerPhis{};
+    std::array<llvm::PHINode*, FLAGS_END> flagPhis{};
+
+
+    llvm::IRBuilder<> phiBuilder(bb, bb->begin());
+    auto mergeValue = [&](llvm::Value* canonicalValue, llvm::Value* backedgeValue,
+                          const char* name, llvm::PHINode*& phiOut)
+        -> llvm::Value* {
+      if (!canonicalValue || !backedgeValue ||
+          canonicalValue->getType() != backedgeValue->getType() ||
+          canonicalValue == backedgeValue) {
+        return backedgeValue;
+      }
+      auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(), 2, name);
+      phi->addIncoming(canonicalValue, canonicalSource);
+      // Seed the backedge with undef until the real generalized self-edge is
+      // recorded. Using the concrete first-iteration value here over-constrains
+      // the loop header and folds exits like `test reg, reg; je exit` away.
+      phi->addIncoming(llvm::UndefValue::get(backedgeValue->getType()),
+                       backedgeSource);
+      phiOut = phi;
+      return phi;
+    };
+
+    for (size_t i = 0; i < REGISTER_COUNT; ++i) {
+      generalized.vec[i] = mergeValue(canonical.vec[i], source.vec[i],
+                                      "loop_reg_phi", registerPhis[i]);
+    }
+    for (size_t i = 0; i < FLAGS_END; ++i) {
+      generalized.vecflag[i] =
+          mergeValue(canonical.vecflag[i], source.vecflag[i], "loop_flag_phi",
+                     flagPhis[i]);
+    }
+    generalizedLoopRegisterPhis[bb] = registerPhis;
+    generalizedLoopFlagPhis[bb] = flagPhis;
     return generalized;
   }
 
@@ -217,14 +270,21 @@ public:
     this->counter = snapshot.ct;
   }
 
-  void branch_backup_impl(BasicBlock* bb, bool /*generalized*/) {
+  void branch_backup_impl(BasicBlock* bb, bool generalized) {
     printvalue2("backing up");
     printvalue2(this->counter);
 
     auto snapshot = backup_point(vec, vecflag, this->buffer, this->cache,
-                                 this->assumptions, this->counter);
-    // Persist the canonical state. Generalized loop restore filters stack-local
-    // state only at load time while the temporary bypass mode is active.
+                                 this->assumptions, this->counter,
+                                 this->builder->GetInsertBlock());
+    if (generalized) {
+      if (!BBbackup.contains(bb)) {
+        BBbackup[bb] = snapshot;
+      }
+      generalizedLoopBackedgeBackup[bb] = std::move(snapshot);
+      return;
+    }
+
     BBbackup[bb] = std::move(snapshot);
   }
 
@@ -236,10 +296,73 @@ public:
   }
 
   void load_generalized_backup_impl(BasicBlock* bb) {
+    if (generalizedLoopBackedgeBackup.contains(bb) && BBbackup.contains(bb)) {
+      printvalue2("loading generalized backup");
+      auto snapshot =
+          make_generalized_loop_backup(bb, BBbackup[bb],
+                                       generalizedLoopBackedgeBackup[bb]);
+      restore_backup_point(snapshot);
+      return;
+    }
     if (BBbackup.contains(bb)) {
       printvalue2("loading generalized backup");
-      auto snapshot = make_generalized_loop_backup(BBbackup[bb]);
+      auto snapshot = make_generalized_loop_backup(bb, BBbackup[bb], BBbackup[bb]);
       restore_backup_point(snapshot);
+    }
+  }
+  void migrate_generalized_loop_block_impl(BasicBlock* oldBlock,
+                                           BasicBlock* newBlock) {
+    if (oldBlock == newBlock) {
+      return;
+    }
+    if (generalizedLoopRegisterPhis.contains(oldBlock) &&
+        !generalizedLoopRegisterPhis.contains(newBlock)) {
+      generalizedLoopRegisterPhis[newBlock] = generalizedLoopRegisterPhis[oldBlock];
+    }
+    if (generalizedLoopFlagPhis.contains(oldBlock) &&
+        !generalizedLoopFlagPhis.contains(newBlock)) {
+      generalizedLoopFlagPhis[newBlock] = generalizedLoopFlagPhis[oldBlock];
+    }
+    if (BBbackup.contains(oldBlock) && !BBbackup.contains(newBlock)) {
+      BBbackup[newBlock] = BBbackup[oldBlock];
+    }
+    if (generalizedLoopBackedgeBackup.contains(oldBlock) &&
+        !generalizedLoopBackedgeBackup.contains(newBlock)) {
+      generalizedLoopBackedgeBackup[newBlock] =
+          generalizedLoopBackedgeBackup[oldBlock];
+    }
+  }
+
+  void record_generalized_loop_backedge_impl(BasicBlock* bb) {
+    auto* sourceBlock = this->builder->GetInsertBlock();
+    if (!bb || !sourceBlock) {
+      return;
+    }
+
+    auto regIt = generalizedLoopRegisterPhis.find(bb);
+    if (regIt != generalizedLoopRegisterPhis.end()) {
+      for (size_t i = 0; i < REGISTER_COUNT; ++i) {
+        auto* phi = regIt->second[i];
+        if (!phi || !vec[i] || phi->getType() != vec[i]->getType() ||
+            phi->getParent() != bb ||
+            phi->getBasicBlockIndex(sourceBlock) >= 0) {
+          continue;
+        }
+        phi->addIncoming(vec[i], sourceBlock);
+      }
+    }
+
+    auto flagIt = generalizedLoopFlagPhis.find(bb);
+    if (flagIt != generalizedLoopFlagPhis.end()) {
+      for (size_t i = 0; i < FLAGS_END; ++i) {
+        auto* phi = flagIt->second[i];
+        if (!phi || !vecflag[i] || phi->getType() != vecflag[i]->getType() ||
+            phi->getParent() != bb ||
+            phi->getBasicBlockIndex(sourceBlock) >= 0) {
+          continue;
+        }
+        phi->addIncoming(vecflag[i], sourceBlock);
+      }
     }
   }
 

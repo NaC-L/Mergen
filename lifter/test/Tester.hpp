@@ -916,6 +916,87 @@ private:
 
 
 
+  bool runGeneralizedLoopRestoreMergesBackedgeRegisterState(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto* preheader =
+        llvm::BasicBlock::Create(lifter.context, "preheader", lifter.fnc);
+    auto* firstBackedge =
+        llvm::BasicBlock::Create(lifter.context, "first_backedge", lifter.fnc);
+    auto* loopBody =
+        llvm::BasicBlock::Create(lifter.context, "loop_body", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+
+    lifter.builder->SetInsertPoint(preheader);
+    auto* canonicalRbx = makeI64(lifter.context, 37);
+    lifter.SetRegisterValue(RegisterUnderTest::RBX, canonicalRbx);
+    lifter.branch_backup(loopHeader);
+
+    lifter.builder->SetInsertPoint(firstBackedge);
+    auto* firstBackedgeRbx = lifter.builder->CreateSub(
+        makeI64(lifter.context, 37), makeI64(lifter.context, 1), "rbx_dec_init");
+    lifter.SetRegisterValue(RegisterUnderTest::RBX, firstBackedgeRbx);
+    lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+    lifter.load_generalized_backup(loopHeader);
+    auto* mergedRbx = lifter.GetRegisterValue(RegisterUnderTest::RBX);
+    auto* phi = llvm::dyn_cast<llvm::PHINode>(mergedRbx);
+    if (!phi) {
+      details =
+          "  generalized loop restore should merge canonical and widened backedge RBX through a phi\n";
+      return false;
+    }
+
+    bool sawCanonical = false;
+    bool sawWidenedBackedge = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      auto* incomingBlock = phi->getIncomingBlock(i);
+      auto* incomingValue = phi->getIncomingValue(i);
+      if (incomingBlock == preheader && incomingValue == canonicalRbx) {
+        sawCanonical = true;
+      }
+      if (incomingBlock == firstBackedge &&
+          llvm::isa<llvm::UndefValue>(incomingValue)) {
+        sawWidenedBackedge = true;
+      }
+    }
+
+    if (!sawCanonical || !sawWidenedBackedge) {
+      details =
+          "  generalized loop RBX phi should keep the canonical incoming value and widen the first concrete backedge\n";
+      return false;
+    }
+
+    lifter.builder->SetInsertPoint(loopBody);
+    auto* recurrentRbx = lifter.builder->CreateSub(
+        phi, llvm::ConstantInt::get(phi->getType(), 1), "rbx_dec_loop");
+    lifter.SetRegisterValue(RegisterUnderTest::RBX, recurrentRbx);
+    lifter.record_generalized_loop_backedge(loopHeader);
+
+    bool sawRecurrentIncoming = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      if (phi->getIncomingBlock(i) == loopBody &&
+          phi->getIncomingValue(i) == recurrentRbx) {
+        sawRecurrentIncoming = true;
+      }
+    }
+    if (!sawRecurrentIncoming) {
+      details =
+          "  generalized loop backedge should add the live recurrent RBX value to the header phi\n";
+      return false;
+    }
+
+    lifter.load_backup(loopHeader);
+    if (lifter.GetRegisterValue(RegisterUnderTest::RBX) != canonicalRbx) {
+      details =
+          "  canonical loop-header backup should remain available after generalized restore\n";
+      return false;
+    }
+    return true;
+  }
+
+
   int runCustomKnownBitsTests(const std::string& suiteFilter) {
     int failures = 0;
 
@@ -1003,6 +1084,8 @@ private:
              &InstructionTester::runGeneralizedLoopBypassTagClearsAfterPromotion);
     runCustom("promoted_generalized_loop_restores_canonical_backup",
              &InstructionTester::runPromotedGeneralizedLoopRestoresCanonicalBackup);
+    runCustom("generalized_loop_restore_merges_backedge_register_state",
+             &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeRegisterState);
 
     return failures;
   }

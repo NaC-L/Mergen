@@ -145,6 +145,16 @@ public:
     //
     return;
   }
+  void migrate_generalized_loop_block_impl(BasicBlock* oldBlock,
+                                           BasicBlock* newBlock) {
+    (void)oldBlock;
+    (void)newBlock;
+  }
+
+  void record_generalized_loop_backedge_impl(BasicBlock* bb) {
+    (void)bb;
+  }
+
   void createFunction_impl() {
     std::vector<llvm::Type*> argTypes;
 
