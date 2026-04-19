@@ -79,10 +79,48 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     uint64_t startAddress, uint8_t byteCount, LazyValue orgLoad) {
   printvalue2(startAddress);
 
+  auto bufferFullyCoversRange = [&](uint64_t rangeStart, uint8_t rangeSize) {
+    for (uint8_t i = 0; i < rangeSize; ++i) {
+      if (!buffer.contains(rangeStart + i)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  auto trackedBufferConstant = [&](uint64_t rangeStart, uint8_t rangeSize)
+      -> Value* {
+    if (!bufferFullyCoversRange(rangeStart, rangeSize)) {
+      return nullptr;
+    }
+
+    llvm::APInt combined(rangeSize * 8, 0);
+    for (uint8_t i = 0; i < rangeSize; ++i) {
+      auto it = buffer.find(rangeStart + i);
+      if (it == buffer.end()) {
+        return nullptr;
+      }
+      auto* ci = dyn_cast<ConstantInt>(it->second.value);
+      if (!ci) {
+        return nullptr;
+      }
+      auto byteValue = ci->getValue().lshr(it->second.byteOffset * 8).trunc(8);
+      combined |= byteValue.zext(combined.getBitWidth()).shl(i * 8);
+    }
+    return ConstantInt::get(builder->getContext(), combined);
+  };
+
+  if (auto* tracked = trackedBufferConstant(startAddress, byteCount)) {
+    return tracked;
+  }
+
   if (memoryPolicy.isRangeFullyCovered(startAddress, startAddress + byteCount,
-                                       MemoryAccessMode::SYMBOLIC)) {
-    // Fully symbolic range: use concrete bytes only when mapping is proven;
-    // otherwise preserve symbolic fallback from the original load.
+                                       MemoryAccessMode::SYMBOLIC) &&
+      !bufferFullyCoversRange(startAddress, byteCount)) {
+    // Fully symbolic range with no tracked-byte coverage: use concrete bytes
+    // only when mapping is proven; otherwise preserve the symbolic fallback.
+    // When the concolic buffer covers the whole range, rebuild from tracked
+    // bytes below even though the address is symbolic.
     uint64_t sym_value;
     if (file.readMemory(startAddress, byteCount, sym_value)) {
       return builder->getIntN(byteCount * 8, sym_value);
@@ -126,10 +164,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
         (isLastReference && isDifferentReferenceOrDiscontinuousOffset(
                                 values.back(), currentAddress)) ||
         currentAccessMode != lastAccessMode) {
-      if (buffer.contains(currentAddress) &&
-          currentAccessMode != MemoryAccessMode::SYMBOLIC) {
+      if (buffer.contains(currentAddress)) {
         values.push_back(
-            ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
+          ValueByteReferenceRange(buffer[currentAddress], i, i + 1));
       } else {
         printvalue2(currentAddress);
         values.push_back(ValueByteReferenceRange(currentAddress, i, i + 1));
@@ -655,6 +692,30 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
     if (v_inst->getOpcode() == Instruction::Alloca) {
       return {};
     }
+    if (auto* loadInst = dyn_cast<LoadInst>(v_inst)) {
+      if (loadInst->getType()->isIntegerTy()) {
+        auto* gep = dyn_cast<GetElementPtrInst>(loadInst->getPointerOperand());
+        if (gep && gep->getPointerOperand() == memoryAlloc) {
+          if (auto* offsetCI = dyn_cast<ConstantInt>(gep->getOperand(1))) {
+            unsigned loadBits = loadInst->getType()->getIntegerBitWidth();
+            if (loadBits % 8 == 0) {
+              LazyValue nestedLoad(
+                  [loadInst]() -> Value* { return loadInst; });
+              if (auto* resolved = retrieveCombinedValue(
+                      offsetCI->getZExtValue(),
+                      static_cast<uint8_t>(loadBits / 8), nestedLoad)) {
+                if (auto* resolvedCI = dyn_cast<ConstantInt>(resolved)) {
+                  res.insert(resolvedCI->getValue());
+                  pv_cache[V] = res;
+                  return res;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     if (v_inst->getNumOperands() == 1) {
       auto result = computePossibleValues(v_inst->getOperand(0), Depth + 1);
       pv_cache[V] = result;
@@ -782,11 +843,30 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
       return load.get();
     }
 
+    if (isTrackedLocalStackAddress(loadOffsetCIval)) {
+      bool currentBufferCoversRange = true;
+      for (uint8_t i = 0; i < cloadsize; ++i) {
+        auto currentIt = buffer.find(loadOffsetCIval + i);
+        if (currentIt == buffer.end() || !currentIt->second.value) {
+          currentBufferCoversRange = false;
+          break;
+        }
+      }
+      if (!currentBufferCoversRange) {
+        if (auto* generalizedLocalValue =
+                retrieve_generalized_loop_local_value(loadOffsetCIval, cloadsize)) {
+          addValueReference(generalizedLocalValue, loadOffsetCIval);
+          return generalizedLocalValue;
+        }
+      }
+    }
+
     auto valueExtractedFromVirtualStack =
         retrieveCombinedValue(loadOffsetCIval, cloadsize, load);
     if (valueExtractedFromVirtualStack) {
       return valueExtractedFromVirtualStack;
     }
+
   } else {
     auto stripIntegerCasts = [](Value* candidate) -> Value* {
       while (auto* castInst = dyn_cast<CastInst>(candidate)) {
@@ -942,6 +1022,55 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
       return false;
     };
 
+    auto resolveSingleConcreteTerm = [&](Value* term)
+        -> std::optional<APInt> {
+      auto* stripped = stripIntegerCasts(term);
+      if (auto* ci = dyn_cast<ConstantInt>(stripped)) {
+        return ci->getValue();
+      }
+
+      if (auto* loadInst = dyn_cast<LoadInst>(stripped)) {
+        if (loadInst->getType()->isIntegerTy()) {
+          auto* gep = dyn_cast<GetElementPtrInst>(loadInst->getPointerOperand());
+          if (gep && gep->getPointerOperand() == memoryAlloc) {
+            if (auto* offsetCI = dyn_cast<ConstantInt>(gep->getOperand(1))) {
+              unsigned loadBits = loadInst->getType()->getIntegerBitWidth();
+              if (loadBits % 8 == 0) {
+                LazyValue nestedLoad(
+                    [loadInst]() -> Value* { return loadInst; });
+                if (auto* resolved = retrieveCombinedValue(
+                        offsetCI->getZExtValue(),
+                        static_cast<uint8_t>(loadBits / 8), nestedLoad)) {
+                  if (auto* resolvedCI = dyn_cast<ConstantInt>(resolved)) {
+                    return resolvedCI->getValue();
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      auto values = computePossibleValues(stripped, 0);
+      if (values.size() == 1) {
+        return *values.begin();
+      }
+      return std::nullopt;
+    };
+
+    auto canUseConcreteLoadAddress = [&](uint64_t address) {
+      if (isMemPaged(address)) {
+        return true;
+      }
+      for (uint8_t i = 0; i < cloadsize; ++i) {
+        if (!buffer.contains(address + i)) {
+          uint64_t ignored = 0;
+          return file.readMemory(address, cloadsize, ignored);
+        }
+      }
+      return true;
+    };
+
     auto inferIndexedOffsetsFromAssumptions =
         [&](Value* offsetExpr) -> std::set<APInt, APIntComparator> {
       std::set<APInt, APIntComparator> inferredOffsets;
@@ -953,6 +1082,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
             addInst && addInst->getOpcode() == Instruction::Add) {
           return self(self, addInst->getOperand(0), terms) &&
                  self(self, addInst->getOperand(1), terms);
+        }
+        if (auto* subInst = dyn_cast<BinaryOperator>(expr);
+            subInst && subInst->getOpcode() == Instruction::Sub) {
+          if (!self(self, subInst->getOperand(0), terms)) {
+            return false;
+          }
+          auto* rhs = stripIntegerCasts(subInst->getOperand(1));
+          if (auto* rhsCI = dyn_cast<ConstantInt>(rhs)) {
+            auto negated = rhsCI->getValue().zextOrTrunc(
+                subInst->getType()->getIntegerBitWidth());
+            negated = -negated;
+            terms.push_back(ConstantInt::get(subInst->getType(), negated));
+            return true;
+          }
         }
         terms.push_back(expr);
         return true;
@@ -1005,11 +1148,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
       };
 
       for (Value* term : addTerms) {
-        if (auto* ci = dyn_cast<ConstantInt>(term)) {
-          baseOffset += ci->getZExtValue();
+        if (auto resolved = resolveSingleConcreteTerm(term)) {
+          baseOffset += resolved->getZExtValue();
           continue;
         }
-
         Value* candidateIndex = nullptr;
         uint64_t candidateScale = 0;
         if (!matchScaledIndexTerm(term, candidateIndex, candidateScale)) {
@@ -1029,6 +1171,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
       }
 
       if (!indexValue || indexScale == 0) {
+        if (canUseConcreteLoadAddress(baseOffset)) {
+          inferredOffsets.insert(APInt(64, baseOffset));
+        }
         return inferredOffsets;
       }
 
@@ -1062,7 +1207,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
 
       for (uint64_t idx = 0; idx <= upperInclusive; ++idx) {
         uint64_t possibleOffset = baseOffset + idx * indexScale;
-        if (!isMemPaged(possibleOffset)) {
+        if (!canUseConcreteLoadAddress(possibleOffset)) {
           continue;
         }
         inferredOffsets.insert(APInt(64, possibleOffset));
@@ -1079,16 +1224,17 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
       }
 
       Value* selectedValue = nullptr;
-
       for (auto possibleValue : possibleValues) {
-        auto isPaged = isMemPaged(possibleValue.getZExtValue());
-        if (!isPaged)
+        if (!canUseConcreteLoadAddress(possibleValue.getZExtValue()))
           continue;
         printvalue2(possibleValue);
         auto possible_values_from_mem = retrieveCombinedValue(
             possibleValue.getZExtValue(), cloadsize, load);
         printvalue2((uint64_t)cloadsize);
         printvalue(possible_values_from_mem);
+        if (!possible_values_from_mem) {
+          continue;
+        }
         if (!possible_values_from_mem) {
           continue;
         }

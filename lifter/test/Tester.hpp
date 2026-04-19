@@ -916,6 +916,134 @@ private:
 
 
 
+  bool runSolveLoadInfersConcreteBaseFromTrackedLoad(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i8Ty = llvm::Type::getInt8Ty(context);
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+    constexpr uint64_t baseSlot = STACKP_VALUE - 0x20;
+    constexpr uint64_t indexSlot = STACKP_VALUE - 0x28;
+    constexpr uint64_t tableBase = 0x14004DBECULL;
+    constexpr uint64_t tableIndex = 4;
+    constexpr uint64_t tableEntry = tableBase + tableIndex * 8;
+    constexpr uint64_t tableTarget = 0x1401BAF04ULL;
+
+    lifter.SetMemoryValue(makeI64(context, baseSlot), makeI64(context, tableBase));
+    lifter.SetMemoryValue(makeI64(context, indexSlot), makeI64(context, tableIndex));
+    lifter.SetMemoryValue(makeI64(context, tableEntry), makeI64(context, tableTarget));
+
+    auto directBase =
+        readConstantAPInt(lifter.GetMemoryValue(makeI64(context, baseSlot), 64));
+    auto directIndex =
+        readConstantAPInt(lifter.GetMemoryValue(makeI64(context, indexSlot), 64));
+    if (!directBase.has_value() || !directIndex.has_value()) {
+      std::ostringstream os;
+      os << "  direct tracked loads did not resolve: base="
+         << (directBase.has_value() ? std::to_string(directBase->getZExtValue())
+                                    : std::string("<non-const>"))
+         << " index="
+         << (directIndex.has_value() ? std::to_string(directIndex->getZExtValue())
+                                     : std::string("<non-const>")) << "\n";
+      details = os.str();
+      return false;
+    }
+
+
+
+    auto directTarget =
+        readConstantAPInt(lifter.GetMemoryValue(makeI64(context, tableEntry), 64));
+    if (!directTarget.has_value() || directTarget->getZExtValue() != tableTarget) {
+      std::ostringstream os;
+      os << "  direct table-entry load resolved to ";
+      if (directTarget.has_value()) {
+        os << "0x" << std::hex << directTarget->getZExtValue();
+      } else {
+        os << "<non-const>";
+      }
+      os << " instead of 0x" << std::hex << tableTarget << "\n";
+      details = os.str();
+      return false;
+    }
+
+    auto* basePtr = lifter.builder->CreateGEP(
+        i8Ty, lifter.memoryAlloc, makeI64(context, baseSlot), "base_slot_ptr");
+    auto* indexPtr = lifter.builder->CreateGEP(
+        i8Ty, lifter.memoryAlloc, makeI64(context, indexSlot), "index_slot_ptr");
+
+    auto* baseLoad = lifter.builder->CreateLoad(i64Ty, basePtr, "base_term");
+    auto* indexLoad = lifter.builder->CreateLoad(i64Ty, indexPtr, "index_term");
+    auto rawBaseValues = lifter.computePossibleValues(baseLoad, 0);
+    auto rawIndexValues = lifter.computePossibleValues(indexLoad, 0);
+    if (rawBaseValues.size() != 1 || rawIndexValues.size() != 1) {
+      std::ostringstream os;
+      os << "  computePossibleValues raw base/index sizes: "
+         << rawBaseValues.size() << "/" << rawIndexValues.size() << "\n";
+      details = os.str();
+      return false;
+    }
+
+    auto* indexScaled =
+        lifter.builder->CreateShl(indexLoad, makeI64(context, 3), "index_scaled");
+    auto* tableAddr = lifter.builder->CreateAdd(baseLoad, indexScaled, "table_addr");
+    auto tableAddrValues = lifter.computePossibleValues(tableAddr, 0);
+    if (tableAddrValues.size() != 1 ||
+        tableAddrValues.begin()->getZExtValue() != tableEntry) {
+      std::ostringstream os;
+      os << "  computePossibleValues tableAddr size/value: "
+         << tableAddrValues.size();
+      if (!tableAddrValues.empty()) {
+        os << " / 0x" << std::hex << tableAddrValues.begin()->getZExtValue();
+      }
+      os << "\n";
+      details = os.str();
+      return false;
+    }
+
+    auto* probePtr = lifter.getPointer(tableAddr);
+    LazyValue probeLoad([&]() -> llvm::Value* {
+      return lifter.builder->CreateLoad(i64Ty, probePtr, "probe_load");
+    });
+    auto* directProbe = lifter.retrieveCombinedValue(tableEntry, 8, probeLoad);
+    auto probeActual = readConstantAPInt(directProbe);
+    if (!probeActual.has_value() || probeActual->getZExtValue() != tableTarget) {
+      std::ostringstream os;
+      os << "  direct retrieveCombinedValue probe resolved to ";
+      if (probeActual.has_value()) {
+        os << "0x" << std::hex << probeActual->getZExtValue();
+      } else {
+        std::string valueText;
+        llvm::raw_string_ostream valueOs(valueText);
+        directProbe->print(valueOs);
+        os << valueOs.str();
+      }
+      os << " instead of 0x" << std::hex << tableTarget << "\n";
+      details = os.str();
+      return false;
+    }
+
+    auto* resolved = lifter.GetMemoryValue(tableAddr, 64);
+    auto actual = readConstantAPInt(resolved);
+    if (!actual.has_value()) {
+      std::string valueText;
+      llvm::raw_string_ostream os(valueText);
+      resolved->print(os);
+      details =
+          "  solveLoad should resolve a jump-table address built from tracked base/index loads; got `" +
+          os.str() + "`\n";
+      return false;
+    }
+    if (actual->getZExtValue() != tableTarget) {
+      std::ostringstream os;
+      os << "  solveLoad resolved 0x" << std::hex << actual->getZExtValue()
+         << " instead of expected jump-table target 0x" << tableTarget << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
+
   bool runGeneralizedLoopRestoreMergesBackedgeRegisterState(
       std::string& details) {
     LifterUnderTest lifter;
@@ -1086,6 +1214,8 @@ private:
              &InstructionTester::runPromotedGeneralizedLoopRestoresCanonicalBackup);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeRegisterState);
+    runCustom("solve_load_infers_concrete_base_from_tracked_load",
+             &InstructionTester::runSolveLoadInfersConcreteBaseFromTrackedLoad);
 
     return failures;
   }

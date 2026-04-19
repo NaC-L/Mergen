@@ -508,6 +508,11 @@ public:
   void load_generalized_backup(BasicBlock* bb) {
     static_cast<Derived*>(this)->load_generalized_backup_impl(bb);
   }
+  llvm::Value* retrieve_generalized_loop_local_value(uint64_t startAddress,
+                                                     uint8_t byteCount) {
+    return static_cast<Derived*>(this)->retrieve_generalized_loop_local_value_impl(
+        startAddress, byteCount);
+  }
   bool currentBlockUsesGeneralizedLoopState() const {
     return currentBlockRestoreMode == BlockRestoreMode::GeneralizedLoop;
   }
