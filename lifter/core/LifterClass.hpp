@@ -823,6 +823,13 @@ public:
       out = std::move(unvisitedBlocks.back());
       unvisitedBlocks.pop_back();
 
+      const uint64_t normalizedAddr =
+          normalizeFileBackedRuntimeTargetAddress(out.block_address);
+      if (normalizedAddr != out.block_address) {
+        addrToBB[normalizedAddr] = out.block;
+        out.block_address = normalizedAddr;
+      }
+
       // In Basic mode, skip blocks that already have instructions
       // (they were processed in a previous iteration).
       if (getControlFlow() == ControlFlow::Basic && !out.block->empty() &&
@@ -1017,11 +1024,20 @@ public:
 
 
   BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
+    addr = normalizeFileBackedRuntimeTargetAddress(addr);
     if (getControlFlow() == ControlFlow::Basic) {
       auto it = addrToBB.find(addr);
       if (it != addrToBB.end()) {
         // also might have to update here,
         return it->second;
+      }
+    }
+    if (getControlFlow() == ControlFlow::Unflatten) {
+      auto it = addrToBB.find(addr);
+      if (it != addrToBB.end() && it->second && !it->second->empty() &&
+          liftProgressDiagEnabled) {
+        std::cout << "[diag] overwriting existing bb for 0x" << std::hex << addr
+                  << std::dec << " old=" << it->second->getName().str() << "\n";
       }
     }
     auto bb = createBudgetedBasicBlock(name, addr);
@@ -1333,6 +1349,54 @@ public:
 
     --it;
     return address >= it->first && address < it->second;
+
+  }
+
+  bool isFileBackedRuntimeAddress(uint64_t address) {
+    uint64_t ignored = 0;
+    return file.readMemory(address, 1, ignored);
+  }
+
+  uint64_t normalizeRuntimeTargetAddress(uint64_t target) {
+    if (isMemPaged(target)) {
+      return target;
+    }
+
+    if (target <= std::numeric_limits<uint32_t>::max() &&
+        file.imageBase > std::numeric_limits<uint32_t>::max()) {
+      const uint64_t highBits = file.imageBase & 0xFFFFFFFF00000000ULL;
+      const uint64_t widenedLow32 = highBits | target;
+      const uint64_t widenedRva = file.imageBase + target;
+      if (isMemPaged(widenedLow32)) {
+        return widenedLow32;
+      }
+      if (isMemPaged(widenedRva)) {
+        return widenedRva;
+      }
+    }
+
+    return target;
+  }
+
+  uint64_t normalizeFileBackedRuntimeTargetAddress(uint64_t target) {
+    if (isFileBackedRuntimeAddress(target)) {
+      return target;
+    }
+
+    if (target <= std::numeric_limits<uint32_t>::max() &&
+        file.imageBase > std::numeric_limits<uint32_t>::max()) {
+      const uint64_t highBits = file.imageBase & 0xFFFFFFFF00000000ULL;
+      const uint64_t widenedLow32 = highBits | target;
+      const uint64_t widenedRva = file.imageBase + target;
+      if (isFileBackedRuntimeAddress(widenedLow32)) {
+        return widenedLow32;
+      }
+      if (isFileBackedRuntimeAddress(widenedRva)) {
+        return widenedRva;
+      }
+    }
+
+    return target;
   }
 
   std::set<llvm::APInt, APIntComparator>

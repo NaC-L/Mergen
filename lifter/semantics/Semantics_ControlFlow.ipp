@@ -219,12 +219,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
       break;
     }
     auto registerCValue = cast<ConstantInt>(registerValue);
-    if (inlinePolicy.isOutline(registerCValue->getZExtValue()) ||
-        shouldOutlineCall(registerCValue->getZExtValue())) {
+    uint64_t rawTargetAddr = registerCValue->getZExtValue();
+    uint64_t normalizedTargetAddr = normalizeRuntimeTargetAddress(rawTargetAddr);
+    auto* normalizedTargetValue =
+        builder->getIntN(registerCValue->getBitWidth(), normalizedTargetAddr);
+    if (inlinePolicy.isOutline(normalizedTargetAddr) ||
+        shouldOutlineCall(normalizedTargetAddr)) {
 
       // --- Emit external call (outlined known-address target) ---
-      uint64_t targetAddr = registerCValue->getZExtValue();
-      auto importName = resolveImportName(targetAddr);
+      auto importName = resolveImportName(normalizedTargetAddr);
 
       if (!importName.empty()) {
         // Named import: emit a proper LLVM function declaration.
@@ -242,7 +245,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
         fx.target = CallTargetClass::UnknownDirect;
 
         auto idltvm = builder->CreateIntToPtr(
-            registerValue, PointerType::get(context, 0));
+            normalizedTargetValue, PointerType::get(context, 0));
         auto callResult = builder->CreateCall(
             parseArgsType(nullptr, context), idltvm, parseArgs(nullptr));
 
@@ -255,7 +258,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
       emittedExternalCall = true;
       break;
     }
-    jump_address = registerCValue->getZExtValue();
+    jump_address = normalizedTargetAddr;
     break;
   }
   default:
