@@ -1044,6 +1044,32 @@ private:
   }
 
 
+  bool runSolvePathWidensMappedRvaTarget(std::string& details) {
+    LifterUnderTest lifter;
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    lifter.builder->SetInsertPoint(current);
+    lifter.blockInfo = BBInfo(0x1401BAF5DULL, current);
+    lifter.file.imageBase = 0x140000000ULL;
+    lifter.markMemPaged(0x1400118C8ULL, 0x1400118D0ULL);
+
+    uint64_t destination = 0;
+    auto pathResult =
+        lifter.solvePath(lifter.fnc, destination, makeI64(lifter.context, 0x118C8));
+    if (pathResult != PATH_solved) {
+      details = "  solvePath did not resolve the mapped RVA-style target\n";
+      return false;
+    }
+    if (destination != 0x1400118C8ULL) {
+      std::ostringstream os;
+      os << "  solvePath widened to 0x" << std::hex << destination
+         << " instead of mapped RVA target 0x1400118c8\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
+
   bool runGeneralizedLoopRestoreMergesBackedgeRegisterState(
       std::string& details) {
     LifterUnderTest lifter;
@@ -1216,6 +1242,8 @@ private:
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeRegisterState);
     runCustom("solve_load_infers_concrete_base_from_tracked_load",
              &InstructionTester::runSolveLoadInfersConcreteBaseFromTrackedLoad);
+    runCustom("solve_path_widens_mapped_rva_target",
+             &InstructionTester::runSolvePathWidensMappedRvaTarget);
 
     return failures;
   }
