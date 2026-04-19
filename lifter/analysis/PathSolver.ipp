@@ -34,9 +34,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     if (target <= std::numeric_limits<uint32_t>::max() &&
         file.imageBase > std::numeric_limits<uint32_t>::max()) {
       const uint64_t highBits = file.imageBase & 0xFFFFFFFF00000000ULL;
-      const uint64_t widened = highBits | target;
-      if (isMemPaged(widened)) {
-        return widened;
+      const uint64_t widenedLow32 = highBits | target;
+      if (isMemPaged(widenedLow32)) {
+        return widenedLow32;
+      }
+
+      const uint64_t widenedRva = file.imageBase + target;
+      if (isMemPaged(widenedRva)) {
+        return widenedRva;
       }
     }
 
