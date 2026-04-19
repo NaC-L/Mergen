@@ -85,4 +85,5 @@ inline void runLiftWorklist(lifterConcolic<>* lifter) {
        << lifter->liftStats.instructions_unsupported << " unsupported)";
     lifter->diagnostics.info(DiagCode::LiftComplete, 0, ss.str());
   }
+  lifter->dumpLiftProgressReport(std::cout);
 }

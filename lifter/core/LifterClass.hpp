@@ -592,6 +592,9 @@ public:
 
   void liftBasicBlockFromAddress(uint64_t addr) {
     ++liftStats.blocks_attempted;
+    if (liftProgressDiagEnabled) {
+      ++liftAttemptCounts[addr];
+    }
     printvalue2(this->finished);
     printvalue2(this->run);
     this->run = 1;
@@ -651,6 +654,54 @@ public:
     }
   }
 
+  // Prints a compact summary of which addresses the lift attempted and how
+  // often. Useful for diagnosing whether progress through a VM's handler graph
+  // is genuine (many distinct addresses, low revisit count) or the dispatcher
+  // is spinning (few distinct addresses, high revisit counts).
+  void dumpLiftProgressReport(std::ostream& os) const {
+    if (!liftProgressDiagEnabled || liftAttemptCounts.empty()) {
+      return;
+    }
+    // Sort addresses by revisit count, descending.
+    std::vector<std::pair<uint64_t, uint32_t>> entries;
+    entries.reserve(liftAttemptCounts.size());
+    for (const auto& kv : liftAttemptCounts) {
+      entries.emplace_back(kv.first, kv.second);
+    }
+    std::sort(entries.begin(), entries.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+    uint64_t totalAttempts = 0;
+    uint32_t maxCount = 0;
+    // Histogram buckets: 1, 2, 3-4, 5-8, 9-16, 17-32, 33+
+    std::array<uint32_t, 7> histogram{};
+    auto bucket = [](uint32_t count) -> size_t {
+      if (count <= 1) return 0;
+      if (count == 2) return 1;
+      if (count <= 4) return 2;
+      if (count <= 8) return 3;
+      if (count <= 16) return 4;
+      if (count <= 32) return 5;
+      return 6;
+    };
+    for (const auto& [addr, count] : entries) {
+      totalAttempts += count;
+      if (count > maxCount) maxCount = count;
+      ++histogram[bucket(count)];
+    }
+    os << "[diag] lift-progress unique_addresses=" << entries.size()
+       << " total_attempts=" << totalAttempts
+       << " max_revisits=" << maxCount << "\n";
+    os << "[diag] lift-progress histogram 1/2/3-4/5-8/9-16/17-32/33+:";
+    for (uint32_t count : histogram) os << " " << count;
+    os << "\n";
+    const size_t top = std::min<size_t>(entries.size(), 16);
+    os << "[diag] lift-progress top-" << top << " revisited addresses:\n";
+    for (size_t i = 0; i < top; ++i) {
+      os << "  0x" << std::hex << entries[i].first << std::dec
+         << " x" << entries[i].second << "\n";
+    }
+    os << std::flush;
+  }
 
   bool addUnvisitedAddr(BBInfo bb) {
     printvalue2(bb.block_address);
@@ -723,6 +774,13 @@ public:
 
   unsigned int instct = 0;
   LiftStats liftStats;
+  // Per-address lift attempt counts. Only populated when the lift-progress diag
+  // is requested (MERGEN_DIAG_LIFT_PROGRESS=1); otherwise stays empty and the
+  // increment below is a no-op on a DenseMap miss because we gate it behind the
+  // same flag. Used by dumpLiftProgressReport to show whether the dispatcher
+  // is genuinely advancing through distinct VM handlers or churning on a few.
+  llvm::DenseMap<uint64_t, uint32_t> liftAttemptCounts;
+  bool liftProgressDiagEnabled = false;
   LiftDiagnostics diagnostics;
   PipelineProfiler profiler;
   llvm::SimplifyQuery* cachedquery;
