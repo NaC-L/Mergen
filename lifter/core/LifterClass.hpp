@@ -518,28 +518,46 @@ public:
            currentPathSolveContext == PathSolveContext::IndirectJump;
   }
   bool isStructuredLoopHeaderShape(BasicBlock* block) const {
+    const bool trace = liftProgressDiagEnabled &&
+                       (block == addrToBB.lookup(0x1401BAE0FULL) ||
+                        block == addrToBB.lookup(0x1401BAE18ULL));
     std::set<BasicBlock*> seenBlocks;
     auto* current = block;
     for (unsigned depth = 0; current && depth < 8; ++depth) {
       if (!seenBlocks.insert(current).second || current->empty()) {
+        if (trace) std::cout << "[diag] shape depth=" << depth << " reject="
+                             << (current->empty() ? "empty" : "cycle") << "\n";
         return false;
       }
       const size_t maxPreds = depth == 0 ? 2 : 1;
-      if (llvm::pred_size(current) > maxPreds) {
+      const size_t preds = llvm::pred_size(current);
+      if (preds > maxPreds) {
+        if (trace) std::cout << "[diag] shape depth=" << depth
+                             << " reject=pred-count preds=" << preds
+                             << " max=" << maxPreds << "\n";
         return false;
       }
       auto* branch = llvm::dyn_cast<llvm::BranchInst>(current->getTerminator());
       if (!branch) {
+        if (trace) std::cout << "[diag] shape depth=" << depth
+                             << " reject=not-branch term="
+                             << (current->getTerminator() ? current->getTerminator()->getOpcodeName() : "none")
+                             << "\n";
         return false;
       }
       if (branch->isConditional()) {
+        if (trace) std::cout << "[diag] shape depth=" << depth << " ACCEPT cond-br\n";
         return true;
       }
       if (branch->getNumSuccessors() != 1) {
+        if (trace) std::cout << "[diag] shape depth=" << depth
+                             << " reject=multi-succ count="
+                             << branch->getNumSuccessors() << "\n";
         return false;
       }
       current = branch->getSuccessor(0);
     }
+    if (trace) std::cout << "[diag] shape reject=depth-exceeded\n";
     return false;
   }
   bool blockCanReach(BasicBlock* source, BasicBlock* target) const {
@@ -574,20 +592,59 @@ public:
         targetResolvedConcretely
             ? currentPathSolveAllowsStructuredLoopGeneralizationForResolvedTarget()
             : currentPathSolveAllowsStructuredLoopGeneralization();
-    if (getControlFlow() != ControlFlow::Unflatten || !contextAllows ||
-        addr > blockInfo.block_address || !visitedAddresses.contains(addr) ||
-        pendingLoopGeneralizationAddresses.contains(addr) ||
-        generalizedLoopAddresses.contains(addr)) {
+    const bool traceHere = liftProgressDiagEnabled &&
+                           (addr == 0x1401BAE0FULL || addr == 0x1401BAE18ULL);
+    auto reject = [&](const char* reason) {
+      if (traceHere) {
+        std::cout << "[diag] canGeneralize addr=0x" << std::hex << addr
+                  << " current=0x" << blockInfo.block_address << std::dec
+                  << " ctx=" << static_cast<int>(currentPathSolveContext)
+                  << " resolved=" << (targetResolvedConcretely ? 1 : 0)
+                  << " reject=" << reason << "\n";
+      }
       return false;
-    }
+    };
+    if (getControlFlow() != ControlFlow::Unflatten) return reject("not-unflatten");
+    if (!contextAllows) return reject("context-not-allowed");
+    if (addr > blockInfo.block_address) return reject("forward-target");
+    if (!visitedAddresses.contains(addr)) return reject("not-visited");
+    if (pendingLoopGeneralizationAddresses.contains(addr)) return reject("already-pending");
+    if (generalizedLoopAddresses.contains(addr)) return reject("already-generalized");
     auto it = addrToBB.find(addr);
-    if (it == addrToBB.end() || !it->second || it->second->empty()) {
-      return false;
-    }
+    if (it == addrToBB.end() || !it->second || it->second->empty())
+      return reject("empty-or-missing-bb");
     // Only treat a visited header as reusable when it already reaches the
     // current block; acyclic backward jumps into earlier diamonds are not loops.
-    return isStructuredLoopHeaderShape(it->second) &&
-           blockInfo.block && blockCanReach(it->second, blockInfo.block);
+    if (traceHere) {
+      auto* bb = it->second;
+      std::string termName = bb->getTerminator()
+                                 ? bb->getTerminator()->getOpcodeName()
+                                 : std::string("NO-TERM");
+      std::cout << "[diag] canGeneralize addr=0x" << std::hex << addr << std::dec
+                << " bb-size=" << bb->size()
+                << " term=" << termName
+                << " succs=" << (bb->getTerminator() ? bb->getTerminator()->getNumSuccessors() : 0)
+                << " preds=" << llvm::pred_size(bb)
+                << "\n" << std::flush;
+    }
+    if (traceHere) {
+      auto* bb = it->second;
+      std::string bbText;
+      llvm::raw_string_ostream os(bbText);
+      bb->print(os);
+      if (bbText.size() > 500) bbText = bbText.substr(0, 500) + " ...";
+      std::cout << "[diag] canGeneralize addr=0x" << std::hex << addr << std::dec
+                << " bb-ir: " << bbText << "\n" << std::flush;
+    }
+    if (!isStructuredLoopHeaderShape(it->second)) return reject("bad-shape");
+    if (!blockInfo.block) return reject("no-current-block");
+    if (!blockCanReach(it->second, blockInfo.block)) return reject("no-reach");
+    if (traceHere) {
+      std::cout << "[diag] canGeneralize addr=0x" << std::hex << addr
+                << " current=0x" << blockInfo.block_address << std::dec
+                << " ACCEPT\n";
+    }
+    return true;
   }
 
   void liftBasicBlockFromAddress(uint64_t addr) {
