@@ -435,13 +435,37 @@ private:
     return true;
   }
 
-  bool runLoopGeneralizationIndirectJumpBlocked(std::string& details) {
+  bool runLoopGeneralizationIndirectJumpBlockedWhenUnresolved(std::string& details) {
+    // The unresolved-indirect-jump predicate must still exclude indirect
+    // dispatchers from speculative loop generalization. Without a concrete
+    // target, we have no proof the jump forms a backward loop edge.
     LifterUnderTest lifter;
     lifter.currentPathSolveContext =
         LifterUnderTest::PathSolveContext::IndirectJump;
     if (lifter.currentPathSolveAllowsStructuredLoopGeneralization()) {
       details =
-          "  indirect-jump dispatcher context must not generalize loop state\n";
+          "  unresolved indirect-jump context must not generalize loop state\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runLoopGeneralizationIndirectJumpAllowedWhenResolved(std::string& details) {
+    // Once `solvePath` has pinned an indirect jump to a concrete destination,
+    // the resolved-target predicate widens to admit it. Ret-path contexts
+    // still have their own lifecycle and stay excluded.
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::IndirectJump;
+    if (!lifter.currentPathSolveAllowsStructuredLoopGeneralizationForResolvedTarget()) {
+      details =
+          "  resolved indirect-jump context must allow structured loop generalization\n";
+      return false;
+    }
+    lifter.currentPathSolveContext = LifterUnderTest::PathSolveContext::Ret;
+    if (lifter.currentPathSolveAllowsStructuredLoopGeneralizationForResolvedTarget()) {
+      details =
+          "  ret context must never participate in structured loop generalization\n";
       return false;
     }
     return true;
@@ -457,9 +481,9 @@ private:
     return true;
   }
 
-  bool runPendingGeneralizedLoopBlockedByContext(
+  bool runPendingGeneralizedLoopByContext(
       LifterUnderTest::PathSolveContext context, const char* contextName,
-      std::string& details) {
+      bool expectReuse, std::string& details) {
     LifterUnderTest lifter;
     lifter.currentPathSolveContext = context;
 
@@ -486,13 +510,19 @@ private:
                 " context did not emit the expected direct branch\n";
       return false;
     }
-    if (branch->getSuccessor(0) == pending) {
+    const bool reused = branch->getSuccessor(0) == pending;
+    if (expectReuse && !reused) {
+      details = std::string("  ") + contextName +
+                " context must reuse the pending generalized loop header when the target resolved concretely\n";
+      return false;
+    }
+    if (!expectReuse && reused) {
       details = std::string("  ") + contextName +
                 " context must not reuse a pending generalized loop header\n";
       return false;
     }
-    if (lifter.unvisitedBlocks.empty() ||
-        lifter.unvisitedBlocks.back().block == pending) {
+    if (!expectReuse && (lifter.unvisitedBlocks.empty() ||
+                          lifter.unvisitedBlocks.back().block == pending)) {
       details = std::string("  ") + contextName +
                 " context queued the pending generalized loop header instead of a fresh block\n";
       return false;
@@ -505,14 +535,22 @@ private:
     return true;
   }
 
-  bool runPendingGeneralizedLoopIndirectJumpBlocked(std::string& details) {
-    return runPendingGeneralizedLoopBlockedByContext(
-        LifterUnderTest::PathSolveContext::IndirectJump, "indirect-jump", details);
+  bool runPendingGeneralizedLoopIndirectJumpAllowedWhenResolved(std::string& details) {
+    // After the resolved-target relaxation, a constant-folded indirect-jump
+    // target that matches a pending generalized loop header is reused just
+    // like a direct-jump target would be.
+    return runPendingGeneralizedLoopByContext(
+        LifterUnderTest::PathSolveContext::IndirectJump, "indirect-jump",
+        /*expectReuse=*/true, details);
   }
 
   bool runPendingGeneralizedLoopRetBlocked(std::string& details) {
-    return runPendingGeneralizedLoopBlockedByContext(
-        LifterUnderTest::PathSolveContext::Ret, "return-path", details);
+    // Return-path contexts keep their own lifecycle — they must not reuse
+    // pending generalized loop headers, even now that the resolved-target
+    // relaxation admits indirect jumps.
+    return runPendingGeneralizedLoopByContext(
+        LifterUnderTest::PathSolveContext::Ret, "return-path",
+        /*expectReuse=*/false, details);
   }
 
 
@@ -936,12 +974,14 @@ private:
              &InstructionTester::runLoopGeneralizationConditionalBranchAllowed);
     runCustom("loop_generalization_direct_jump_allowed",
              &InstructionTester::runLoopGeneralizationDirectJumpAllowed);
-    runCustom("loop_generalization_indirect_jump_blocked",
-             &InstructionTester::runLoopGeneralizationIndirectJumpBlocked);
+    runCustom("loop_generalization_indirect_jump_blocked_when_unresolved",
+             &InstructionTester::runLoopGeneralizationIndirectJumpBlockedWhenUnresolved);
+    runCustom("loop_generalization_indirect_jump_allowed_when_resolved",
+             &InstructionTester::runLoopGeneralizationIndirectJumpAllowedWhenResolved);
     runCustom("loop_generalization_ret_blocked",
              &InstructionTester::runLoopGeneralizationRetBlocked);
-    runCustom("pending_generalized_loop_indirect_jump_blocked",
-             &InstructionTester::runPendingGeneralizedLoopIndirectJumpBlocked);
+    runCustom("pending_generalized_loop_indirect_jump_allowed_when_resolved",
+             &InstructionTester::runPendingGeneralizedLoopIndirectJumpAllowedWhenResolved);
     runCustom("pending_generalized_loop_ret_blocked",
              &InstructionTester::runPendingGeneralizedLoopRetBlocked);
     runCustom("structured_loop_header_allows_conditional_backedge",

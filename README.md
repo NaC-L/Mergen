@@ -119,7 +119,7 @@ jump next_handler;
 ```
 
 We try to always analyze values and keep track of them. This allows us to understand control flow. 
-[For jumptable-like branches](https://github.com/NaC-L/Mergen/blob/experimental-pattern-matching/testcases/test_branches.asm)
+[For jumptable-like branches](https://github.com/NaC-L/Mergen/blob/main/testcases/test_branches.asm)
 Optimized output would be a simple
 ```llvm
 define i64 @main(i64 %rax, i64 %rcx, i64 %rdx, i64 %rbx, i64 %rsp, i64 %rbp, i64 %rsi, i64 %rdi, i64 %r8, i64 %r9, i64 %r10, i64 %r11, i64 %r12, i64 %r13, i64 %r14, i64 %r15, ptr nocapture readnone %TEB, ptr nocapture readnone %memory) local_unnamed_addr #0 {

@@ -47,6 +47,8 @@ Important invariants:
 - `.editorconfig` and `.clang-format` — formatting contract (2 spaces, LF, UTF-8, 100-column LLVM-based style).
 
 ## Development Commands
+Before running any command in this section, confirm the exact repo root and cwd. Prefer these repo-provided scripts over ad hoc shell commands.
+
 Preferred Windows build flow:
 ```bat
 cmd /c scripts\dev\configure_iced.cmd
@@ -108,6 +110,24 @@ scripts\rewrite\run_microtests.cmd --check-flags xor
   - Rewrite script/manifest changes: `python test.py baseline` and `python test.py negative`
   - Coverage/vector plumbing: `python test.py coverage --full` and `python test.py report --json`
   - Build script/CMake changes: rerun the affected `scripts\dev\configure_*.cmd` + `build_*.cmd` lane
+
+## Operator workflow defaults
+
+> Use these with the repo-specific architecture/test rules above.
+
+- Confirm the real repo root, source-of-truth file, and owning subsystem before searching or editing.
+- Narrow search scope before using broad repo scans.
+- Prefer `read`, `find`, `grep`, `ast_grep`, `edit`, `ast_edit`, and `lsp` before bash for discovery or structural edits.
+- Before build/test/git/bash commands, confirm the exact cwd and lane you intend to run.
+- If you edit the same file twice, re-read it first.
+- Default to one main line of work; split into subtasks only when file boundaries are real and outputs are independent.
+- Do not finish non-trivial work without focused verification that matches the changed subsystem.
+
+## What not to do
+- Do not start with repo-root scans when a narrower directory or entry document can answer the question.
+- Do not run configure/build/test commands from an assumed cwd.
+- Do not use bash-first discovery when a specialized tool can answer it.
+- Do not spawn reviewer/subtask branches just to spread a single code path across multiple agents.
 
 ## Process Notes For AI Assistants
 - Prefer `docs/REWRITE_BASELINE.md` and CI workflows over older generic build docs when commands disagree.
