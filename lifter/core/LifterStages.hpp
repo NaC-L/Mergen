@@ -21,6 +21,11 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
                                 uint64_t runtimeAddress) {
   auto lifter = std::make_unique<lifterConcolic<>>();
   lifter->loadFile(fileBase);
+  if (const char* env = std::getenv("MERGEN_DIAG_LIFT_PROGRESS")) {
+    const std::string_view value(env);
+    lifter->liftProgressDiagEnabled =
+        value == "1" || value == "true" || value == "TRUE";
+  }
   // Memory policy configured later in prepareLifterStageContext
   // when RuntimeImageContext (with PE stack reserve) is available.
 
