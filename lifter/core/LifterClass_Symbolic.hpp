@@ -154,6 +154,13 @@ public:
   void record_generalized_loop_backedge_impl(BasicBlock* bb) {
     (void)bb;
   }
+  llvm::Value* retrieve_generalized_loop_local_value_impl(uint64_t startAddress,
+                                                          uint8_t byteCount) {
+    (void)startAddress;
+    (void)byteCount;
+    return nullptr;
+  }
+
 
   void createFunction_impl() {
     std::vector<llvm::Type*> argTypes;

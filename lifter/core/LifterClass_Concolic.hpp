@@ -201,6 +201,18 @@ public:
       generalizedLoopRegisterPhis;
   llvm::DenseMap<BasicBlock*, std::array<llvm::PHINode*, FLAGS_END>>
       generalizedLoopFlagPhis;
+  llvm::DenseMap<uint64_t, ValueByteReference> activeGeneralizedLoopLocalBuffer;
+
+  llvm::DenseMap<uint64_t, ValueByteReference> extractLocalStackBuffer(
+      const llvm::DenseMap<uint64_t, ValueByteReference>& sourceBuffer) {
+    llvm::DenseMap<uint64_t, ValueByteReference> localBuffer;
+    for (const auto& entry : sourceBuffer) {
+      if (this->isTrackedLocalStackAddress(entry.first)) {
+        localBuffer[entry.first] = entry.second;
+      }
+    }
+    return localBuffer;
+  }
 
   backup_point make_generalized_loop_backup(BasicBlock* bb,
                                             const backup_point& canonical,
@@ -223,10 +235,9 @@ public:
         canonicalSource == backedgeSource) {
       return generalized;
     }
+
     std::array<llvm::PHINode*, REGISTER_COUNT> registerPhis{};
     std::array<llvm::PHINode*, FLAGS_END> flagPhis{};
-
-
     llvm::IRBuilder<> phiBuilder(bb, bb->begin());
     auto mergeValue = [&](llvm::Value* canonicalValue, llvm::Value* backedgeValue,
                           const char* name, llvm::PHINode*& phiOut)
@@ -238,9 +249,6 @@ public:
       }
       auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(), 2, name);
       phi->addIncoming(canonicalValue, canonicalSource);
-      // Seed the backedge with undef until the real generalized self-edge is
-      // recorded. Using the concrete first-iteration value here over-constrains
-      // the loop header and folds exits like `test reg, reg; je exit` away.
       phi->addIncoming(llvm::UndefValue::get(backedgeValue->getType()),
                        backedgeSource);
       phiOut = phi;
@@ -289,6 +297,7 @@ public:
   }
 
   void load_backup_impl(BasicBlock* bb) {
+    activeGeneralizedLoopLocalBuffer.clear();
     if (BBbackup.contains(bb)) {
       printvalue2("loading backup");
       restore_backup_point(BBbackup[bb]);
@@ -296,12 +305,60 @@ public:
   }
 
   void load_generalized_backup_impl(BasicBlock* bb) {
+    activeGeneralizedLoopLocalBuffer.clear();
     if (generalizedLoopBackedgeBackup.contains(bb) && BBbackup.contains(bb)) {
       printvalue2("loading generalized backup");
       auto snapshot =
           make_generalized_loop_backup(bb, BBbackup[bb],
                                        generalizedLoopBackedgeBackup[bb]);
       restore_backup_point(snapshot);
+      activeGeneralizedLoopLocalBuffer =
+          extractLocalStackBuffer(generalizedLoopBackedgeBackup[bb].buffer);
+      auto seedInvariantLocalQwords = [&](const backup_point& canonicalSnapshot,
+                                          const backup_point& backedgeSnapshot) {
+        std::set<uint64_t> seededQwordStarts;
+        auto readConstantQword = [&](const llvm::DenseMap<uint64_t, ValueByteReference>& src,
+                                     uint64_t qwordStart, uint64_t& out) {
+          llvm::APInt combined(64, 0);
+          for (uint8_t i = 0; i < 8; ++i) {
+            auto it = src.find(qwordStart + i);
+            if (it == src.end() || !it->second.value) {
+              return false;
+            }
+            auto* ci = llvm::dyn_cast<llvm::ConstantInt>(it->second.value);
+            if (!ci) {
+              return false;
+            }
+            auto byteValue =
+                ci->getValue().lshr(it->second.byteOffset * 8).trunc(8);
+            combined |= byteValue.zext(64).shl(i * 8);
+          }
+          out = combined.getZExtValue();
+          return true;
+        };
+
+        for (const auto& entry : activeGeneralizedLoopLocalBuffer) {
+          uint64_t qwordStart = entry.first & ~0x7ULL;
+          if (qwordStart > STACKP_VALUE - 0x100) {
+            continue;
+          }
+          if (!seededQwordStarts.insert(qwordStart).second) {
+            continue;
+          }
+          uint64_t canonicalValue = 0;
+          uint64_t backedgeValue = 0;
+          if (!readConstantQword(canonicalSnapshot.buffer, qwordStart, canonicalValue) ||
+              !readConstantQword(backedgeSnapshot.buffer, qwordStart, backedgeValue) ||
+              canonicalValue != backedgeValue) {
+            continue;
+          }
+          for (uint8_t i = 0; i < 8; ++i) {
+            this->buffer[qwordStart + i] =
+                activeGeneralizedLoopLocalBuffer[qwordStart + i];
+          }
+        }
+      };
+      seedInvariantLocalQwords(BBbackup[bb], generalizedLoopBackedgeBackup[bb]);
       return;
     }
     if (BBbackup.contains(bb)) {
@@ -309,6 +366,53 @@ public:
       auto snapshot = make_generalized_loop_backup(bb, BBbackup[bb], BBbackup[bb]);
       restore_backup_point(snapshot);
     }
+  }
+
+  llvm::Value* retrieve_generalized_loop_local_value_impl(uint64_t startAddress,
+                                                          uint8_t byteCount) {
+    if (activeGeneralizedLoopLocalBuffer.empty()) {
+      return nullptr;
+    }
+    auto firstIt = activeGeneralizedLoopLocalBuffer.find(startAddress);
+    if (firstIt == activeGeneralizedLoopLocalBuffer.end() || !firstIt->second.value) {
+      return nullptr;
+    }
+
+    bool contiguousSingleValue = true;
+    auto* sharedValue = firstIt->second.value;
+    uint8_t firstByteOffset = firstIt->second.byteOffset;
+    for (uint8_t i = 0; i < byteCount; ++i) {
+      auto it = activeGeneralizedLoopLocalBuffer.find(startAddress + i);
+      if (it == activeGeneralizedLoopLocalBuffer.end() || !it->second.value) {
+        return nullptr;
+      }
+      if (it->second.value != sharedValue ||
+          it->second.byteOffset != firstByteOffset + i) {
+        contiguousSingleValue = false;
+      }
+    }
+    if (contiguousSingleValue) {
+      return this->extractBytes(sharedValue, firstByteOffset,
+                                firstByteOffset + byteCount);
+    }
+
+    llvm::Value* result = llvm::ConstantInt::get(
+        llvm::Type::getIntNTy(this->context, byteCount * 8), 0);
+    for (uint8_t i = 0; i < byteCount; ++i) {
+      auto it = activeGeneralizedLoopLocalBuffer.find(startAddress + i);
+      auto* byteValue = this->extractBytes(it->second.value, it->second.byteOffset,
+                                           it->second.byteOffset + 1);
+      if (!byteValue) {
+        return nullptr;
+      }
+      auto* shiftedByteValue = this->createShlFolder(
+          this->createZExtOrTruncFolder(
+              byteValue, llvm::Type::getIntNTy(this->context, byteCount * 8)),
+          llvm::APInt(byteCount * 8, i * 8));
+      result = this->createOrFolder(result, shiftedByteValue,
+                                    "generalized-local-byte");
+    }
+    return result;
   }
   void migrate_generalized_loop_block_impl(BasicBlock* oldBlock,
                                            BasicBlock* newBlock) {
@@ -351,6 +455,7 @@ public:
         phi->addIncoming(vec[i], sourceBlock);
       }
     }
+
 
     auto flagIt = generalizedLoopFlagPhis.find(bb);
     if (flagIt != generalizedLoopFlagPhis.end()) {
