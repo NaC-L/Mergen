@@ -33,6 +33,8 @@ cmd /c scripts\dev\build_zydis.cmd
 ## Verify After Building
 Primary checks:
 
+The rewrite gate's sample-build lane is stricter than the core CMake build. CI requires a pinned `clang-cl` via `CLANG_CL_EXE`, `CMAKE_C_COMPILER`, or `LLVM_DIR`; for local `python test.py quick` / `all` runs, set `CLANG_CL_EXE=C:\Program Files\LLVM\bin\clang-cl.exe` when you want the same sample-build compiler resolution as CI instead of relying on local fallback discovery.
+
 ```bat
 python test.py quick
 python test.py all
@@ -53,12 +55,15 @@ Use `python test.py vmp` for larger control-flow/semantics/inlining changes when
 - `LLVM_DIR` — points CMake at `LLVMConfig.cmake`
 - `MERGEN_BUILD_JOBS` — overrides build parallelism (default `4`)
 - `CMAKE_C_COMPILER` / `CMAKE_CXX_COMPILER` — optional compiler override for the configure scripts
+- `CLANG_CL_EXE` — optional local override for the rewrite gate's sample-build path; set it to the pinned `clang-cl` when you want local `python test.py quick` / `all` runs to match CI compiler resolution
 
 Example:
 
 ```bat
+set CLANG_CL_EXE=C:\Program Files\LLVM\bin\clang-cl.exe
 set MERGEN_BUILD_JOBS=8
 cmd /c scripts\dev\build_iced.cmd
+python test.py quick
 ```
 
 ## Secondary Flows

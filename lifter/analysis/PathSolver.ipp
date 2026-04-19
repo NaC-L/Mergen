@@ -61,15 +61,25 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     auto it = addrToBB.find(target);
     const bool hasPendingGeneralization =
         pendingLoopGeneralizationAddresses.contains(target);
+    // `resolveTargetBlock` is only reached with a concrete destination, so an
+    // indirect jump whose target has just resolved participates in the same
+    // structured-loop generalization path that direct and conditional jumps
+    // already take.
     const bool canUseStructuredLoopGeneralization =
-        currentPathSolveAllowsStructuredLoopGeneralization();
+        currentPathSolveAllowsStructuredLoopGeneralizationForResolvedTarget();
     const bool canReusePendingGeneralization =
         hasPendingGeneralization && canUseStructuredLoopGeneralization;
     const bool wantsGeneralization =
         canReusePendingGeneralization ||
-        (backwardVisitedTarget && canGeneralizeStructuredLoopHeader(target));
+        (backwardVisitedTarget &&
+         canGeneralizeStructuredLoopHeader(target,
+                                           /*targetResolvedConcretely=*/true));
     if (wantsGeneralization) {
-      if (currentPathSolveContext == PathSolveContext::DirectJump) {
+      // A resolved backward target participates in the same stack-concolic
+      // bypass regime regardless of whether the source jump is direct or
+      // indirect — both represent a confirmed loop back-edge.
+      if (currentPathSolveContext == PathSolveContext::DirectJump ||
+          currentPathSolveContext == PathSolveContext::IndirectJump) {
         stackBypassGeneralizedLoopAddresses.insert(target);
       }
       const bool generalizedBackup =

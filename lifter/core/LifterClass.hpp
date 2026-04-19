@@ -507,6 +507,16 @@ public:
     return currentPathSolveContext == PathSolveContext::ConditionalBranch ||
            currentPathSolveContext == PathSolveContext::DirectJump;
   }
+  // Widened variant: when the path solver has already resolved the branch
+  // target to a concrete address, an indirect jump is no longer speculative.
+  // If its target also points backward at a visited block it is legitimately
+  // a loop back-edge and should enter structured loop generalization alongside
+  // direct and conditional jumps. Ret-path contexts have their own lifecycle
+  // and stay excluded here.
+  bool currentPathSolveAllowsStructuredLoopGeneralizationForResolvedTarget() const {
+    return currentPathSolveAllowsStructuredLoopGeneralization() ||
+           currentPathSolveContext == PathSolveContext::IndirectJump;
+  }
   bool isStructuredLoopHeaderShape(BasicBlock* block) const {
     std::set<BasicBlock*> seenBlocks;
     auto* current = block;
@@ -558,9 +568,13 @@ public:
     return false;
   }
 
-  bool canGeneralizeStructuredLoopHeader(uint64_t addr) {
-    if (getControlFlow() != ControlFlow::Unflatten ||
-        !currentPathSolveAllowsStructuredLoopGeneralization() ||
+  bool canGeneralizeStructuredLoopHeader(uint64_t addr,
+                                         bool targetResolvedConcretely = false) {
+    const bool contextAllows =
+        targetResolvedConcretely
+            ? currentPathSolveAllowsStructuredLoopGeneralizationForResolvedTarget()
+            : currentPathSolveAllowsStructuredLoopGeneralization();
+    if (getControlFlow() != ControlFlow::Unflatten || !contextAllows ||
         addr > blockInfo.block_address || !visitedAddresses.contains(addr) ||
         pendingLoopGeneralizationAddresses.contains(addr) ||
         generalizedLoopAddresses.contains(addr)) {
@@ -821,8 +835,13 @@ public:
 
 
   BasicBlock* getLiftedBackedgeBB(uint64_t addr) {
+    // A resolved backward target is eligible for reuse regardless of whether
+    // the branching source was direct, conditional, or indirect. Once we have
+    // a non-empty generalized block for the address, re-entering it on a
+    // subsequent iteration should branch into that block rather than cutting a
+    // fresh empty one through `getOrCreateBB` (which would orphan the body).
     if (getControlFlow() != ControlFlow::Unflatten ||
-        !currentPathSolveAllowsStructuredLoopGeneralization()) {
+        !currentPathSolveAllowsStructuredLoopGeneralizationForResolvedTarget()) {
       return nullptr;
     }
     if (addr > blockInfo.block_address ||

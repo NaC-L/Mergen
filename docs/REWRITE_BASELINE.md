@@ -22,17 +22,17 @@ Sample sources live in:
 - `scripts/rewrite/manifest_validation.ps1` — shared strict manifest validator used by both `run.ps1` and `verify.ps1`
 - `scripts/rewrite/run.cmd` — one-command Windows entrypoint
 - `scripts/rewrite/run_microtests.cmd` — runs `rewrite_microtests.exe` (in-process instruction-byte tests from `lifter/test/TestInstructions.cpp`); builds lazily only when the executable is missing, supports `--build` to force rebuild and `--no-build` to require prebuilt binaries
-- `scripts/rewrite/collect_instruction_tests.cmd` — reports handler coverage against `lifter/x86_64_opcodes.x` using oracle vector metadata (`handler` field) to track missing instruction tests
-- `scripts/rewrite/generate_oracle_vectors.cmd` — regenerates `lifter/test_vectors/oracle_vectors.json` from seed vectors using oracle providers (currently Unicorn)
+- `scripts/rewrite/collect_instruction_tests.cmd` — reports handler coverage against `lifter/semantics/x86_64_opcodes.x` using oracle vector metadata (`handler` field) to track missing instruction tests
+- `scripts/rewrite/generate_oracle_vectors.cmd` — regenerates `lifter/test/test_vectors/oracle_vectors.json` from seed vectors using oracle providers (currently Unicorn)
 - `scripts/rewrite/oracle_seed_vectors.json` — seed cases with instruction bytes, initial state, and tracked outputs for oracle generation
 - `scripts/rewrite/build_full_handler_seed.cmd` — builds `oracle_seed_full_handlers.json` (base semantic vectors + auto-discovered smoke vectors for missing handlers)
 - `scripts/rewrite/build_full_handler_seed.py` — Capstone-based opcode discovery that fills missing handlers and marks known-crashing handlers as `skip`
 - `scripts/rewrite/run_all_handlers.cmd` — generates full-handler seed/vectors and executes `rewrite_microtests.exe` across the full suite
-- `scripts/rewrite/generate_flag_stress_vectors.cmd` — builds `lifter/test_vectors/oracle_vectors_flagstress.json` with multiple strict flag-oracle cases per flag-writing handler
-- `scripts/rewrite/generate_flag_stress_vectors.py` — derives flag-writing handlers from `lifter/Semantics.ipp`, generates deterministic initial states, and computes expected flags via Unicorn
+- `scripts/rewrite/generate_flag_stress_vectors.cmd` — builds `lifter/test/test_vectors/oracle_vectors_flagstress.json` with multiple strict flag-oracle cases per flag-writing handler
+- `scripts/rewrite/generate_flag_stress_vectors.py` — derives flag-writing handlers from `lifter/semantics/Semantics.ipp`, generates deterministic initial states, and computes expected flags via Unicorn
 - `scripts/rewrite/run_flagstress.cmd` — one-command strict flag suite runner (auto-generates flag-stress vectors and executes microtests with strict flag assertions)
 - `run.ps1` validates that `instruction_microtests.json` covers every `testcases/rewrite_smoke/*` source file
-- `scripts/rewrite/check_semantic.py` — runtime semantic regression for all lifted samples; reads `semantic` cases from the manifest, generates lli-executable wrappers, and verifies return values across all declared inputs (23 samples, 107 test cases)
+- `scripts/rewrite/check_semantic.py` — runtime semantic regression for all lifted samples; reads `semantic` cases from the manifest, generates lli-executable wrappers, and verifies return values across all declared inputs (33 samples, 177 test cases)
 
 Helper build scripts for local development are in:
 
@@ -56,7 +56,7 @@ set MERGEN_BUILD_JOBS=8    &rem fast builds on large machines
 Use `run_microtests.cmd --check-flags <filter>` to enforce oracle flag comparisons (strict mode, expected to fail until flag semantics are fixed).
 Use `run_microtests.cmd --build <filter>` to force rebuilding `rewrite_microtests.exe`, or `run_microtests.cmd --no-build <filter>` to skip any build step.
 Set `SKIP_ORACLE_GENERATION=1` to reuse a pre-generated oracle file. Set `MERGEN_TEST_VECTORS=<path>` to point tests at a custom oracle JSON file.
-Use `run_all_handlers.cmd` to exercise full handler coverage smoke tests. It writes `lifter/test_vectors/oracle_vectors_full_handlers.json` and then runs microtests against it through `run_microtests.cmd` (which now builds lazily).
+Use `run_all_handlers.cmd` to exercise full handler coverage smoke tests. It writes `lifter/test/test_vectors/oracle_vectors_full_handlers.json` and then runs microtests against it through `run_microtests.cmd` (which now builds lazily).
 Oracle vector JSON fixtures are deterministic by design; regenerating them should only change tracked files when the underlying cases change, not because of wall-clock metadata.
 Full-handler vectors are expected to execute end-to-end (no default `skip: true` crash exclusions).
 Use `run_flagstress.cmd` (or `python test.py flags`) for broad strict-flag validation across all handlers that explicitly write flags.
@@ -69,13 +69,13 @@ By default, regression artifacts are written to a sibling folder outside the rep
 - `../rewrite-regression-work/`
 
 Artifacts include:
-- `lifter/test_vectors/oracle_vectors_flagstress.json` (generated strict-flag stress suite)
+- `lifter/test/test_vectors/oracle_vectors_flagstress.json` (generated strict-flag stress suite)
 
 - compiled sample binaries/maps/objects for every manifest entry
 - `ir_outputs/*.ll` and `ir_outputs/*_no_opts.ll` (replaced on each run after stale `.ll` cleanup)
 - `ir_outputs/*_semantic.ll` (generated by `check_semantic.py` for lli execution)
 
-- `lifter/test_vectors/oracle_vectors_full_handlers.json` (generated by `run_all_handlers.cmd`)
+- `lifter/test/test_vectors/oracle_vectors_full_handlers.json` (generated by `run_all_handlers.cmd`)
 ## Running the baseline gate
 
 From repository root:
@@ -83,6 +83,8 @@ From repository root:
 ```bat
 scripts\rewrite\run.cmd
 ```
+
+CI requires a pinned sample-build compiler via `CLANG_CL_EXE`, `CMAKE_C_COMPILER`, or `LLVM_DIR`. For local runs, set `CLANG_CL_EXE=C:\Program Files\LLVM\bin\clang-cl.exe` when you want `scripts\rewrite\run.cmd` or `python test.py quick` to use the same sample-build compiler resolution as CI instead of relying on fallback discovery.
 
 Optional custom output directory:
 
@@ -131,13 +133,12 @@ Samples without a `semantic` field are not tested. The `semantic` field is optio
 
 ### Coverage summary
 
-Current active quick-gate semantic coverage is **30 samples / 171 cases** on CI.
+Current active quick-gate semantic coverage is **33 samples / 177 cases** on CI and local pinned-toolchain runs.
 
 Notable current state:
 - `dummy_vm_loop`, `bytecode_vm_loop`, and `stack_vm_loop` are active VM-shaped control-flow samples.
-- `calc_sum_to_n` is active again under the safe structured-loop recovery path.
-- `calc_fib` and `calc_sum_array` are `ci_skip` on `windows-latest` because the current hosted toolchain still emits loop/array codegen shapes that fail lifting there even though local developer runs pass.
-- `calc_cout` remains `ci_skip` because its C++ codegen is toolchain-dependent on CI.
+- `calc_sum_to_n`, `calc_fib`, and `calc_sum_array` are active again under the current safe path.
+- `calc_cout` is active again after SSE2 `PUNPCKLQDQ` support landed; the manifest currently has zero `ci_skip` entries.
 
 ## Call-boundary ABI framework
 
