@@ -162,6 +162,14 @@ MANUAL_HANDLER_CASES = {
             "flags": {},
         },
     },
+    "xgetbv": {
+        "mnemonic": "xgetbv",
+        "instruction_bytes": [0x0F, 0x01, 0xD0],
+        "initial": {
+            "registers": {"RCX": "0x0"},
+            "flags": {},
+        },
+    },
     # ---- Control flow ----
     "call": {
         "mnemonic": "call",
