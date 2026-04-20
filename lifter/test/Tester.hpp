@@ -429,6 +429,28 @@ private:
     return true;
   }
 
+  bool runXgetbvReturnsDeterministicXcr0(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.SetRegisterValue(RegisterUnderTest::RCX,
+                            makeI64(lifter.builder->getContext(), 0));
+    static constexpr uint8_t kXgetbv[] = {0x0F, 0x01, 0xD0};
+    lifter.liftBytes(kXgetbv, sizeof(kXgetbv));
+
+    auto eaxAfter = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::EAX));
+    auto edxAfter = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::EDX));
+    if (!eaxAfter.has_value() || eaxAfter->getZExtValue() != 0x7) {
+      details = "  xgetbv should set EAX to modeled XCR0 low bits (0x7)\n";
+      return false;
+    }
+    if (!edxAfter.has_value() || edxAfter->getZExtValue() != 0) {
+      details = "  xgetbv should clear EDX for the modeled XCR0 high bits\n";
+      return false;
+    }
+    return true;
+  }
+
   bool runLoopGeneralizationConditionalBranchAllowed(std::string& details) {
     LifterUnderTest lifter;
     lifter.currentPathSolveContext =
@@ -1248,6 +1270,8 @@ private:
              &InstructionTester::runLoopGeneralizationIndirectJumpBlockedWhenUnresolved);
     runCustom("int29_fastfail_lowered_to_noreturn_call",
              &InstructionTester::runInt29FastfailLoweredToNoReturnCall);
+    runCustom("xgetbv_returns_deterministic_xcr0",
+             &InstructionTester::runXgetbvReturnsDeterministicXcr0);
     runCustom("loop_generalization_indirect_jump_allowed_when_resolved",
              &InstructionTester::runLoopGeneralizationIndirectJumpAllowedWhenResolved);
     runCustom("loop_generalization_ret_blocked",
