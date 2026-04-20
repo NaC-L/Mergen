@@ -1108,6 +1108,25 @@ private:
     return true;
   }
 
+  bool runTinyOutlinedCallBypassesOutlinePolicy(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.markMemPaged(0x140001518ULL, 0x140001608ULL);
+    lifter.inlinePolicy.addAddress(0x140001518ULL);
+    lifter.inlinePolicy.addAddress(0x140001554ULL);
+    lifter.inlinePolicy.addAddress(0x140001600ULL);
+    if (!lifter.shouldInlineTinyOutlinedCall(0x140001518ULL)) {
+      details =
+          "  tiny outlined helper should bypass outline policy\n";
+      return false;
+    }
+    if (lifter.shouldInlineTinyOutlinedCall(0x140001554ULL)) {
+      details =
+          "  outlined helper with next entry beyond the tiny threshold must not bypass outline policy\n";
+      return false;
+    }
+    return true;
+  }
+
 
   bool runNormalizeRuntimeTargetWidensMappedRvaTarget(std::string& details) {
     LifterUnderTest lifter;
@@ -1280,6 +1299,8 @@ private:
              &InstructionTester::runPendingGeneralizedLoopIndirectJumpAllowedWhenResolved);
     runCustom("pending_generalized_loop_ret_blocked",
              &InstructionTester::runPendingGeneralizedLoopRetBlocked);
+    runCustom("tiny_outlined_call_bypasses_outline_policy",
+             &InstructionTester::runTinyOutlinedCallBypassesOutlinePolicy);
     runCustom("structured_loop_header_allows_conditional_backedge",
              &InstructionTester::runStructuredLoopHeaderAllowsConditionalBackedge);
     runCustom("structured_loop_header_allows_jump_chain",
