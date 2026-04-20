@@ -392,6 +392,22 @@ public:
     size_t   worklistFloor  = 0;      // worklist size before inlining
     bool     bailedOut      = false;   // set when budget exhausted
   };
+  bool shouldInlineTinyOutlinedCall(uint64_t targetVA) {
+    if (!isMemPaged(targetVA) || !inlinePolicy.isOutline(targetVA)) {
+      return false;
+    }
+    auto it = inlinePolicy.range.find(targetVA);
+    if (it == inlinePolicy.range.end()) {
+      return false;
+    }
+    auto next = std::next(it);
+    if (next == inlinePolicy.range.end()) {
+      return false;
+    }
+    const uint64_t span = *next - targetVA;
+    return span <= 0x40;
+  }
+
   SpeculativeCallInfo speculativeCall;
   uint32_t speculativeCallBudget    = 0;   // instructions remaining (0 = inactive)
   uint32_t maxCallInlineBudget      = 0;   // 0 = disabled (no speculative limit)
@@ -1025,20 +1041,17 @@ public:
 
   BasicBlock* getOrCreateBB(uint64_t addr, std::string name) {
     addr = normalizeFileBackedRuntimeTargetAddress(addr);
+    auto it = addrToBB.find(addr);
     if (getControlFlow() == ControlFlow::Basic) {
-      auto it = addrToBB.find(addr);
       if (it != addrToBB.end()) {
-        // also might have to update here,
         return it->second;
       }
     }
-    if (getControlFlow() == ControlFlow::Unflatten) {
-      auto it = addrToBB.find(addr);
-      if (it != addrToBB.end() && it->second && !it->second->empty() &&
-          liftProgressDiagEnabled) {
-        std::cout << "[diag] overwriting existing bb for 0x" << std::hex << addr
-                  << std::dec << " old=" << it->second->getName().str() << "\n";
-      }
+    if (getControlFlow() == ControlFlow::Unflatten &&
+        it != addrToBB.end() && it->second && inlinePolicy.isOutline(addr)) {
+      // Real function entry points are not path-sensitive jump-table states:
+      // reuse their lifted block instead of replacing it on every call site.
+      return it->second;
     }
     auto bb = createBudgetedBasicBlock(name, addr);
     if (bb == liftAbortBlock) {

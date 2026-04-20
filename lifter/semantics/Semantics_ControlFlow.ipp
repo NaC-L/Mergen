@@ -223,8 +223,9 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
     uint64_t normalizedTargetAddr = normalizeRuntimeTargetAddress(rawTargetAddr);
     auto* normalizedTargetValue =
         builder->getIntN(registerCValue->getBitWidth(), normalizedTargetAddr);
-    if (inlinePolicy.isOutline(normalizedTargetAddr) ||
-        shouldOutlineCall(normalizedTargetAddr)) {
+    if ((inlinePolicy.isOutline(normalizedTargetAddr) ||
+         shouldOutlineCall(normalizedTargetAddr)) &&
+        !shouldInlineTinyOutlinedCall(normalizedTargetAddr)) {
 
       // --- Emit external call (outlined known-address target) ---
       auto importName = resolveImportName(normalizedTargetAddr);
@@ -293,6 +294,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
 
     auto bb = getOrCreateBB(jump_address, "bb_call");
 
+    branch_backup(bb);
     builder->CreateBr(bb);
 
     blockInfo = BBInfo(jump_address, bb);
