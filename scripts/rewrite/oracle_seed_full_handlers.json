@@ -4656,6 +4656,39 @@
       },
       "oracle": "none",
       "source": "capstone-auto-discovery"
+    },
+    {
+      "name": "smoke_xgetbv_xgetbv",
+      "handler": "xgetbv",
+      "instruction_bytes": [
+        15,
+        1,
+        208
+      ],
+      "initial": {
+        "registers": {
+          "RAX": "0x1122334455667788",
+          "RBX": "0x8877665544332211",
+          "RCX": "0x0",
+          "RDX": "0x2"
+        },
+        "flags": {
+          "FLAG_CF": 0,
+          "FLAG_PF": 0,
+          "FLAG_AF": 0,
+          "FLAG_ZF": 0,
+          "FLAG_SF": 0,
+          "FLAG_OF": 0,
+          "FLAG_DF": 0,
+          "FLAG_IF": 1
+        }
+      },
+      "expected": {
+        "registers": {},
+        "flags": {}
+      },
+      "oracle": "none",
+      "source": "capstone-auto-discovery"
     }
   ]
 }

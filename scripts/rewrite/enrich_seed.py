@@ -184,6 +184,12 @@ def _compute_stosx(initial):
 def _compute_cli(_initial):
     return {"registers": {}, "flags": {"FLAG_IF": 0}}
 
+def _compute_xgetbv(initial):
+    rcx = _get_initial_register(initial, "RCX", 0) & 0xFFFFFFFF
+    eax = 0x7 if rcx == 0 else 0
+    return {"registers": {"RAX": hex(eax), "RDX": hex(0)}, "flags": {}}
+
+
 
 COMPUTED_HANDLERS = {
     "push":   _compute_push,
@@ -197,6 +203,7 @@ COMPUTED_HANDLERS = {
     "movs_x": _compute_movs_x,
     "stosx":  _compute_stosx,
     "cli":    _compute_cli,
+    "xgetbv": _compute_xgetbv,
 }
 
 # Non-deterministic system instructions — truly untestable

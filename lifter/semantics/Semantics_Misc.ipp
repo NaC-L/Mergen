@@ -535,6 +535,25 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cpuid() {
                    ConstantInt::get(Type::getInt32Ty(context), 0xBFEBFBFF));
 }
 
+MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_xgetbv() {
+  LLVMContext& context = builder->getContext();
+  auto* selector = createZExtOrTruncFolder(
+      GetRegisterValue(Register::ECX), Type::getInt32Ty(context));
+
+  // Deterministic XCR0 model for static lifting. The startup path only queries
+  // selector 0 and checks bits 1:2 (SSE/AVX state enabled). Return XCR0=0x7
+  // so x87 (bit 0, architecturally always enabled) is also modeled correctly.
+  auto* selectorIsZero = createICMPFolder(
+      CmpInst::ICMP_EQ, selector, ConstantInt::get(Type::getInt32Ty(context), 0));
+  auto* eaxValue = createSelectFolder(
+      selectorIsZero, ConstantInt::get(Type::getInt32Ty(context), 0x7),
+      ConstantInt::get(Type::getInt32Ty(context), 0), "xgetbv.eax");
+  auto* edxValue = ConstantInt::get(Type::getInt32Ty(context), 0);
+
+  SetRegisterValue(Register::EAX, eaxValue);
+  SetRegisterValue(Register::EDX, edxValue);
+}
+
 uint64_t alternative_pext(uint64_t source, uint64_t mask) {
   uint64_t result = 0;
   int bit_position = 0;

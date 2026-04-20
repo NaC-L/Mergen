@@ -97,6 +97,7 @@ OPCODE(test, TEST)
 OPCODE(cmp, CMP)
 OPCODE(rdtsc, RDTSC)
 OPCODE(cpuid, CPUID)
+OPCODE(xgetbv, XGETBV)
 OPCODE(pext, PEXT)
 //
 OPCODE(setnz, SETNZ)
