@@ -299,8 +299,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     std::set<uint64_t> emittedTargets;
     size_t switchCaseIndex = 0;
     for (const auto& caseVal : pv) {
-      const uint64_t normalizedTarget =
-          normalizeTargetAddress(caseVal.getZExtValue());
+      // computePossibleValues can emit a raw zero when it cross-products a
+      // select whose unreachable branch defaults to 0.  That zero has no
+      // relationship to any real control-flow target; passing it through
+      // normalizeTargetAddress would re-emit `file.imageBase` as a bogus
+      // switch case.  Drop the raw zero before we normalize.
+      const uint64_t rawTarget = caseVal.getZExtValue();
+      if (rawTarget == 0) {
+        continue;
+      }
+      const uint64_t normalizedTarget = normalizeTargetAddress(rawTarget);
       if (!emittedTargets.insert(normalizedTarget).second) {
         continue;
       }
