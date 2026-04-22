@@ -139,72 +139,7 @@ public:
     }
   }
 
-  llvm::Value* resolveTargetedThemidaR9(llvm::Value* value) {
-    auto* state = getMostRecentGeneralizedLoopState();
-    if (this->liftProgressDiagEnabled && this->current_address >= 0x140023500ULL &&
-        this->current_address <= 0x140023800ULL) {
-      std::cout << "[diag] targeted_r9_state current=0x" << std::hex
-                << this->current_address << std::dec
-                << " hasState=" << (state ? 1 : 0) << "\n";
-    }
-    if (!value || !state || !this->builder) {
-      return value;
-    }
-    uint64_t offset = 0;
-    switch (this->current_address) {
-    case 0x140023671ULL:
-      offset = 0;
-      break;
-    case 0x14002368DULL:
-      offset = 0xA;
-      break;
-    case 0x140023741ULL:
-      offset = 0xC;
-      break;
-    default:
-      return value;
-    }
-    auto* canonicalValue = this->builder->getInt64(state->canonicalControl + offset);
-    auto* backedgeValue = this->builder->getInt64(state->backedgeControl + offset);
-    if (this->liftProgressDiagEnabled) {
-      std::cout << "[diag] targeted_r9 current=0x" << std::hex
-                << this->current_address << " canonical=0x"
-                << state->canonicalControl + offset << " backedge=0x"
-                << state->backedgeControl + offset << std::dec << "\n";
-    }
-    if (canonicalValue == backedgeValue) {
-      return canonicalValue;
-    }
-    llvm::IRBuilder<> phiBuilder(state->headerBlock, state->headerBlock->begin());
-    auto* phi =
-        phiBuilder.CreatePHI(canonicalValue->getType(), 2, "targeted_r9_phi");
-    phi->addIncoming(canonicalValue, state->canonicalSource);
-    phi->addIncoming(backedgeValue, state->backedgeSource);
-    return phi;
-  }
-
-  llvm::Value* GetRegisterValue_impl(Register key) {
-    auto* value = get_impl(key);
-    if (key == Register::R9 && this->liftProgressDiagEnabled &&
-        this->current_address >= 0x140023500ULL &&
-        this->current_address <= 0x140023800ULL) {
-      std::cout << "[diag] r9_read current=0x" << std::hex << this->current_address
-                << std::dec << " value=";
-      if (value) {
-        std::string text;
-        llvm::raw_string_ostream os(text);
-        value->print(os);
-        std::cout << os.str();
-      } else {
-        std::cout << "<null>";
-      }
-      std::cout << "\n";
-    }
-    if (key == Register::R9) {
-      return resolveTargetedThemidaR9(value);
-    }
-    return value;
-  }
+  llvm::Value* GetRegisterValue_impl(Register key) { return get_impl(key); }
   void SetRegisterValue_impl(Register key, llvm::Value* val) {
 
     set_impl(key, val);

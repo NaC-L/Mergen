@@ -2040,156 +2040,6 @@ bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
   }
 
 
-  bool runTargetedThemidaR9OverrideProducesPhi(std::string& details) {
-    // resolveTargetedThemidaR9 hardcodes three instruction addresses where a
-    // Themida cursor-derived R9 value must be rematerialized as a phi over
-    // canonical/backedge control bases with a per-address offset.  Verify
-    // all three cases, not just one, so a regression that silently drops or
-    // re-offsets a single entry is caught.
-    constexpr uint64_t controlSlot = 0x14004DD19ULL;
-    constexpr uint64_t canonicalControl = 0x1401AF740ULL;
-    constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
-    struct Case {
-      uint64_t address;
-      uint64_t offset;
-    };
-    constexpr std::array<Case, 3> cases = {
-        {{0x140023671ULL, 0x0},
-         {0x14002368DULL, 0xA},
-         {0x140023741ULL, 0xC}}};
-
-    for (const auto& c : cases) {
-      LifterUnderTest lifter;
-      auto& context = lifter.context;
-      auto* preheader =
-          llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
-      auto* firstBackedge =
-          llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
-      auto* loopHeader =
-          llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
-
-      lifter.builder->SetInsertPoint(preheader);
-      lifter.SetMemoryValue(makeI64(context, controlSlot),
-                            makeI64(context, canonicalControl));
-      lifter.branch_backup(loopHeader);
-
-      lifter.builder->SetInsertPoint(firstBackedge);
-      lifter.SetMemoryValue(makeI64(context, controlSlot),
-                            makeI64(context, backedgeControl));
-      lifter.branch_backup(loopHeader, /*generalized=*/true);
-
-      lifter.load_generalized_backup(loopHeader);
-      lifter.builder->SetInsertPoint(loopHeader);
-      lifter.current_address = c.address;
-      auto* value = lifter.GetRegisterValue(RegisterUnderTest::R9);
-      auto* phi = llvm::dyn_cast<llvm::PHINode>(value);
-      if (!phi) {
-        std::ostringstream os;
-        os << "  targeted Themida R9 override should return a phi at 0x"
-           << std::hex << c.address << "\n";
-        details = os.str();
-        return false;
-      }
-      bool sawCanonical = false;
-      bool sawBackedge = false;
-      for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
-        auto* incomingBlock = phi->getIncomingBlock(i);
-        auto actual = readConstantAPInt(phi->getIncomingValue(i));
-        if (!actual.has_value()) {
-          std::ostringstream os;
-          os << "  targeted R9 phi incoming values should be concrete at 0x"
-             << std::hex << c.address << "\n";
-          details = os.str();
-          return false;
-        }
-        if (incomingBlock == preheader &&
-            actual->getZExtValue() == canonicalControl + c.offset) {
-          sawCanonical = true;
-        }
-        if (incomingBlock == firstBackedge &&
-            actual->getZExtValue() == backedgeControl + c.offset) {
-          sawBackedge = true;
-        }
-      }
-      if (!sawCanonical || !sawBackedge) {
-        std::ostringstream os;
-        os << "  targeted R9 phi at 0x" << std::hex << c.address
-           << " should carry control+0x" << c.offset
-           << " on both preheader and backedge incomings\n";
-        details = os.str();
-        return false;
-      }
-    }
-    return true;
-  }
-
-
-  bool runTargetedThemidaR9OverrideDoesNotFireAtAdjacentAddress(std::string& details) {
-    // The switch in resolveTargetedThemidaR9 is exact-address.  A regression
-    // that accidentally broadened it to a range (e.g. `addr >= 0x140023500 &&
-    // addr <= 0x140023800`) would silently produce a phi at every R9 read in
-    // that window, corrupting samples that rely on exact-match behavior.
-    // Pick an address one byte off every known hot address; the override must
-    // return the original value unchanged.
-    LifterUnderTest lifter;
-    auto& context = lifter.context;
-    constexpr uint64_t controlSlot = 0x14004DD19ULL;
-    constexpr uint64_t canonicalControl = 0x1401AF740ULL;
-    constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
-    auto* preheader =
-        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
-    auto* firstBackedge =
-        llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
-    auto* loopHeader =
-        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
-
-    lifter.builder->SetInsertPoint(preheader);
-    lifter.SetMemoryValue(makeI64(context, controlSlot),
-                          makeI64(context, canonicalControl));
-    lifter.branch_backup(loopHeader);
-
-    lifter.builder->SetInsertPoint(firstBackedge);
-    lifter.SetMemoryValue(makeI64(context, controlSlot),
-                          makeI64(context, backedgeControl));
-    lifter.branch_backup(loopHeader, /*generalized=*/true);
-
-    lifter.load_generalized_backup(loopHeader);
-    lifter.builder->SetInsertPoint(loopHeader);
-    constexpr std::array<uint64_t, 3> adjacent = {
-        0x140023672ULL, 0x14002368EULL, 0x140023742ULL};
-    for (uint64_t addr : adjacent) {
-      lifter.current_address = addr;
-      auto* r9 = lifter.GetRegisterValue(RegisterUnderTest::R9);
-      if (llvm::isa<llvm::PHINode>(r9)) {
-        std::ostringstream os;
-        os << "  targeted R9 override fired at non-hot address 0x"
-           << std::hex << addr << " (exact-match contract broken)\n";
-        details = os.str();
-        return false;
-      }
-    }
-    return true;
-  }
-
-  bool runTargetedThemidaR9OverrideFallsThroughWithoutLoopState(std::string& details) {
-    // Before any generalized-loop backup has been created,
-    // getMostRecentGeneralizedLoopState() returns null and the override must
-    // fall through to the ordinary R9 value instead of attempting to build a
-    // phi from uninitialized state.
-    LifterUnderTest lifter;
-    auto& context = lifter.context;
-    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
-    lifter.builder->SetInsertPoint(entry);
-    lifter.current_address = 0x140023741ULL;   // a hot address, on purpose
-    auto* r9 = lifter.GetRegisterValue(RegisterUnderTest::R9);
-    if (llvm::isa<llvm::PHINode>(r9)) {
-      details =
-          "  targeted R9 override should not fire without an active generalized loop state\n";
-      return false;
-    }
-    return true;
-  }
-
   bool runGeneralizedLoopControlSlotCreatesPhi(std::string& details) {
     LifterUnderTest lifter;
     auto& context = lifter.context;
@@ -2457,7 +2307,6 @@ bool runRolledGeneralizedPhiAddressUsesAdvancedPair(std::string& details) {
 
   lifter.load_generalized_backup(loopHeader);
   lifter.builder->SetInsertPoint(loopHeader);
-  lifter.current_address = 0x140023741ULL;
   llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
   auto* controlPhi = phiBuilder.CreatePHI(llvm::Type::getInt64Ty(context), 2,
                                           "rolled_control_phi");
@@ -2613,9 +2462,11 @@ bool runComputePossibleValuesOnGeneralizedPhiLoad(std::string& details) {
 
   lifter.load_generalized_backup(loopHeader);
   lifter.builder->SetInsertPoint(loopHeader);
-  lifter.current_address = 0x140023671ULL;
-  auto* r9Phi = lifter.GetRegisterValue(RegisterUnderTest::R9);
-  auto* pointer = lifter.getPointer(r9Phi);
+  // Obtain a phi-of-concrete-addresses by loading the control slot in
+  // generalized loop mode; retrieve_generalized_loop_control_slot_value
+  // synthesizes a phi(canonicalControl, backedgeControl) for this load.
+  auto* phiAddress = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* pointer = lifter.getPointer(phiAddress);
   auto* load = lifter.builder->CreateLoad(llvm::Type::getInt64Ty(context), pointer,
                                           "generalized_phi_load_probe");
   auto values = lifter.computePossibleValues(load, 0);
@@ -2705,7 +2556,6 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
 
   lifter.load_generalized_backup(loopHeader);
   lifter.builder->SetInsertPoint(loopHeader);
-  lifter.current_address = 0x140023741ULL;
   llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
   auto* controlPhi = phiBuilder.CreatePHI(llvm::Type::getInt64Ty(context), 2,
                                           "rolled_control_phi_for_arith");
@@ -3076,8 +2926,6 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runPromotedGeneralizedLoopRestoresCanonicalBackup);
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
-    runCustom("targeted_themida_r9_override_produces_phi",
-             &InstructionTester::runTargetedThemidaR9OverrideProducesPhi);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeRegisterState);
     runCustom("set_register_value_zero_extends_32bit_writes",
@@ -3104,10 +2952,6 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesCircularPhiBailsViaDepthGuard);
     runCustom("compute_possible_values_trunc_to_i1_preserves_width",
              &InstructionTester::runComputePossibleValuesTruncToI1PreservesWidth);
-    runCustom("targeted_themida_r9_override_does_not_fire_at_adjacent_address",
-             &InstructionTester::runTargetedThemidaR9OverrideDoesNotFireAtAdjacentAddress);
-    runCustom("targeted_themida_r9_override_falls_through_without_loop_state",
-             &InstructionTester::runTargetedThemidaR9OverrideFallsThroughWithoutLoopState);
     runCustom("generalized_loop_control_field_load_creates_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadCreatesPhi);
     runCustom("solve_path_prefers_mapped_target_over_null_for_indirect_jump",

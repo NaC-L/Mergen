@@ -133,7 +133,6 @@ When the lifter is in loop mode (`currentBlockUsesGeneralizedLoopState() == true
 | `retrieve_generalized_loop_target_slot_value(addr, bytes)` | Phi of canonical/backedge values for a recognized target slot. |
 | `retrieve_generalized_loop_phi_address_value(load, bytes, orgLoad)` | Phi of loaded values when the load's address is a phi of two concrete addresses derived from canonical/backedge. |
 | `retrieve_generalized_loop_local_phi_address_value(load, bytes, orgLoad)` | Same as above for loop-local stack-buffer addresses. |
-| `resolveTargetedThemidaR9(value)` | At three hardcoded Themida instruction addresses, replaces R9 with `(canonicalControl + offset, backedgeControl + offset)` phi. See [Hardcoded reference-sample addresses](#hardcoded-reference-sample-addresses). |
 
 `computePossibleValues` (in `lifter/memory/GEPTracker.ipp`) also has a `PHINode` case that unions every incoming's value set, so callers downstream of these phis get the full possible-value enumeration instead of an empty fallback.
 
@@ -148,18 +147,6 @@ static constexpr std::array<uint64_t, 3> kSupportedGeneralizedControlFieldOffset
     0x6ULL, 0xAULL, 0xCULL};
 ```
 
-`resolveTargetedThemidaR9` adds three hardcoded `(instruction-address, control-offset)` pairs:
-
-| Instruction address | Control offset | Verified hit count on reference sample |
-|---|---|---|
-| `0x140023671` | `0x0` | 3 |
-| `0x14002368D` | `0xA` | 6 |
-| `0x140023741` | `0xC` | 12 |
-
-These pairs are load-bearing for the 2544-instruction Themida benchmark — removing them regresses the lifted output. They exist because the lifter's symbolic R9 value at those points has lost the controlCursor identity; the override re-injects the canonical/backedge phi directly.
-
-Generalizing this away requires either (a) preserving the controlCursor identity through the upstream symbolic computation, (b) adding a tagging layer that marks values as "derived from controlCursor + const," or (c) a static-analysis pass that scans the function once and auto-derives the `(address, offset)` pairs. This is documented as known follow-up work, not a quick refactor.
-
 The diagnostic prints scattered across `PathSolver.ipp`, `LifterClass.hpp`, `LifterClass_Concolic.hpp`, and `GEPTracker.ipp` that gate on specific Themida addresses (`0x1400237F9ULL`, `0x140023582-0x1400237FFULL`, etc.) only fire under `MERGEN_DIAG_LIFT_PROGRESS=1` and are session scaffolding for that sample. They produce no output for any other binary.
 
 ## Tests
@@ -173,7 +160,6 @@ Loop handling has roughly thirty microtests in `lifter/test/Tester.hpp`. The mos
 | `pending_generalized_loop_*` | Same guards in the `pendingLoopGeneralizationAddresses` lifecycle. |
 | `generalized_loop_restore_*` | Backedge flag-state and register-state merging across `load_generalized_backup`. |
 | `generalized_loop_*_creates_phi` | Each `retrieve_generalized_loop_*` helper produces the expected phi shape (control slot, control slot displacement, target slot, control field load, local phi address). |
-| `targeted_themida_r9_override_produces_phi` | All three hardcoded `(address, offset)` pairs in `resolveTargetedThemidaR9`. |
 | `compute_possible_values_*` | The PHI handler unions incomings (also covers cast-width preservation and rolled-arithmetic-chain enumeration). |
 
 When changing loop handling, run at minimum:
@@ -197,6 +183,5 @@ and inspect `output_diagnostics.json` for `lift_stats.instructions_lifted == 254
 |---|---|
 | `REP`/`REPE`/`REPNE`-prefixed `SCAS` | Rejected as `not_implemented`; needs a model for repeated-scan termination. |
 | `INT 2` continuation under VMP 3.6 | Naive architectural fallthrough is wrong; recovery requires modeling the dispatcher / exception-mediated control flow. See `VMP_TESTING_NOTES.md`. |
-| Hardcoded `(address, offset)` pairs in `resolveTargetedThemidaR9` | Only fire on the reference Themida sample. See [Hardcoded reference-sample addresses](#hardcoded-reference-sample-addresses). |
 | Loop unrolling / loop-invariant code motion | Not implemented. The lifter relies on LLVM's downstream optimization passes for this once the IR is in shape. |
 | Multi-way backedges (≥3 paths to the same header) | Not exercised by the current generalized-loop machinery; the canonical/backedge model assumes exactly two incoming paths. |
