@@ -26,6 +26,54 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   // Each solvePath invocation may have different assumptions
   // (from different branch paths), so cached results don't carry over.
   pv_cache.clear();
+  const uint64_t pathSolveSite = current_address - instruction.length;
+  if (auto* loadInst = dyn_cast<LoadInst>(simplifyValue)) {
+    if (loadInst->getType()->isIntegerTy()) {
+      auto* gep = dyn_cast<GetElementPtrInst>(loadInst->getPointerOperand());
+      if (gep && gep->getPointerOperand() == memoryAlloc) {
+        unsigned loadBits = loadInst->getType()->getIntegerBitWidth();
+        if (loadBits % 8 == 0) {
+          LazyValue nestedLoad([loadInst]() -> Value* { return loadInst; });
+          if (auto* resolved = solveLoad(
+                  nestedLoad, gep, static_cast<uint8_t>(loadBits / 8))) {
+            if (liftProgressDiagEnabled && pathSolveSite == 0x1400237F9ULL) {
+              std::string resolvedText;
+              llvm::raw_string_ostream os(resolvedText);
+              resolved->print(os);
+              std::cout << "[diag] solvePath eager load current=0x1400237f9 resolved="
+                        << os.str() << "\n";
+            }
+            if (currentPathSolveContext == PathSolveContext::IndirectJump) {
+              if (auto* resolvedCI = dyn_cast<ConstantInt>(resolved)) {
+                uint64_t normalizedResolved =
+                    normalizeRuntimeTargetAddress(resolvedCI->getZExtValue());
+                if (!isMemPaged(normalizedResolved)) {
+                  if (liftProgressDiagEnabled && pathSolveSite == 0x1400237F9ULL) {
+                    std::cout << "[diag] solvePath eager load skipping unmapped constant=0x"
+                              << std::hex << resolvedCI->getZExtValue()
+                              << " normalized=0x" << normalizedResolved << std::dec
+                              << "\n";
+                  }
+                } else {
+                  simplifyValue = resolved;
+                }
+              } else {
+                simplifyValue = resolved;
+              }
+            } else {
+              simplifyValue = resolved;
+            }
+          } else if (liftProgressDiagEnabled && pathSolveSite == 0x1400237F9ULL) {
+            std::string offsetText;
+            llvm::raw_string_ostream os(offsetText);
+            gep->getOperand(1)->print(os);
+            std::cout << "[diag] solvePath eager load current=0x1400237f9 returned-null offset="
+                      << os.str() << "\n";
+          }
+        }
+      }
+    }
+  }
   auto normalizeTargetAddress = [&](uint64_t target) -> uint64_t {
     return normalizeRuntimeTargetAddress(target);
   };
@@ -99,7 +147,25 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
 
   // do static polymorphism here
 
+  auto shouldTraceHotPathSolve = [&]() {
+    return liftProgressDiagEnabled && pathSolveSite >= 0x140023582ULL &&
+           pathSolveSite <= 0x140023FFFULL;
+  };
+  auto formatPathValue = [](llvm::Value* value) {
+    if (!value) {
+      return std::string("<null>");
+    }
+    std::string text;
+    llvm::raw_string_ostream os(text);
+    value->print(os);
+    return os.str();
+  };
+
   PATH_info result = PATH_unsolved;
+  if (shouldTraceHotPathSolve()) {
+    std::cout << "[diag] solvePath site=0x" << std::hex << pathSolveSite
+              << std::dec << " value=" << formatPathValue(simplifyValue) << "\n";
+  }
   if (llvm::ConstantInt* constInt =
           dyn_cast<llvm::ConstantInt>(simplifyValue)) {
     dest = normalizeTargetAddress(constInt->getZExtValue());
@@ -145,6 +211,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   run = 0;
   auto pvset = computePossibleValues(simplifyValue);
   std::vector<APInt> pv(pvset.begin(), pvset.end());
+  if (shouldTraceHotPathSolve()) {
+    std::cout << "[diag] solvePath site=0x" << std::hex << pathSolveSite
+              << std::dec << " pv_count=" << pvset.size();
+    size_t shown = 0;
+    for (const auto& candidate : pvset) {
+      if (shown++ >= 4) {
+        std::cout << " ...";
+        break;
+      }
+      std::cout << " candidate=0x" << std::hex << candidate.getZExtValue()
+                << std::dec;
+    }
+    std::cout << "\n";
+  }
   if (pv.size() == 1) {
     printvalue2(pv[0]);
     dest = normalizeTargetAddress(pv[0].getZExtValue());
@@ -161,6 +241,67 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     return result;
   }
   if (pv.size() == 2) {
+    uint64_t rawFirstTarget = pv[0].getZExtValue();
+    uint64_t rawSecondTarget = pv[1].getZExtValue();
+    uint64_t filteredFirstTarget = normalizeTargetAddress(rawFirstTarget);
+    uint64_t filteredSecondTarget = normalizeTargetAddress(rawSecondTarget);
+    auto isViableIndirectTarget = [&](uint64_t rawTarget, uint64_t normalizedTarget) {
+      return rawTarget != 0 && normalizedTarget != 0 &&
+             isMemPaged(normalizedTarget);
+    };
+    if (currentPathSolveContext == PathSolveContext::IndirectJump) {
+      const bool firstViable =
+          isViableIndirectTarget(rawFirstTarget, filteredFirstTarget);
+      const bool secondViable =
+          isViableIndirectTarget(rawSecondTarget, filteredSecondTarget);
+      if (liftProgressDiagEnabled && pathSolveSite == 0x1400237F9ULL) {
+        std::cout << "[diag] solvePath filter current=0x1400237f9 rawFirst=0x"
+                  << std::hex << rawFirstTarget << " rawSecond=0x"
+                  << rawSecondTarget << " first=0x" << filteredFirstTarget
+                  << " second=0x" << filteredSecondTarget << std::dec
+                  << " firstViable=" << firstViable
+                  << " secondViable=" << secondViable << "\n";
+      }
+      if (firstViable != secondViable) {
+        auto* selectInst = dyn_cast<SelectInst>(simplifyValue);
+        if (selectInst) {
+          llvm::Value* branchCondition = selectInst->getCondition();
+          bool trueGoesToViable =
+              firstViable
+                  ? (selectInst->getTrueValue() == builder->getIntN(
+                        simplifyValue->getType()->getIntegerBitWidth(),
+                        pv[0].getZExtValue()))
+                  : (selectInst->getTrueValue() == builder->getIntN(
+                        simplifyValue->getType()->getIntegerBitWidth(),
+                        pv[1].getZExtValue()));
+          dest = firstViable ? filteredFirstTarget : filteredSecondTarget;
+          result = PATH_solved;
+          auto resolved = resolveTargetBlock(dest, "bb_filtered");
+          auto* trueBlock = trueGoesToViable ? resolved.block : liftAbortBlock;
+          auto* falseBlock = trueGoesToViable ? liftAbortBlock : resolved.block;
+          auto* br = builder->CreateCondBr(branchCondition, trueBlock, falseBlock);
+          RegisterBranch(br);
+          if (!resolved.reusedBackedge) {
+            blockInfo = BBInfo(dest, resolved.block);
+            printvalue2("pushing block");
+            backupQueuedTarget(blockInfo.block, resolved.generalizedBackup);
+            unvisitedBlocks.push_back(blockInfo);
+          }
+          return result;
+        }
+        dest = firstViable ? filteredFirstTarget : filteredSecondTarget;
+        result = PATH_solved;
+        auto resolved = resolveTargetBlock(dest, "bb_filtered");
+        builder->CreateBr(resolved.block);
+        if (!resolved.reusedBackedge) {
+          blockInfo = BBInfo(dest, resolved.block);
+          printvalue2("pushing block");
+          backupQueuedTarget(blockInfo.block, resolved.generalizedBackup);
+          unvisitedBlocks.push_back(blockInfo);
+        }
+        return result;
+      }
+    }
 
     // auto bb_false = BasicBlock::Create(function->getContext(), "bb_false",
     //                                    builder->GetInsertBlock()->getParent());

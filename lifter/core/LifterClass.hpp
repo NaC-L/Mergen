@@ -492,6 +492,77 @@ public:
 #ifndef _NODEV
       debugging::doIfDebug([&]() { printvalue2(this->instruction.text); });
 #endif
+      if (liftProgressDiagEnabled && this->current_address >= 0x140023582ULL &&
+          this->current_address <= 0x1400237FFULL) {
+        std::cout << "[diag] hot-instr addr=0x" << std::hex << this->current_address
+                  << std::dec << " text=" << this->instruction.text;
+        if ((this->current_address >= 0x1400234C8ULL &&
+             this->current_address <= 0x140023552ULL) ||
+            (this->current_address >= 0x140023500ULL &&
+             this->current_address <= 0x140023620ULL) ||
+            this->current_address == 0x14002366EULL ||
+            this->current_address == 0x140023689ULL ||
+            this->current_address == 0x14002368DULL ||
+            this->current_address == 0x140023690ULL ||
+            this->current_address == 0x140023693ULL ||
+            this->current_address == 0x14002373DULL ||
+            this->current_address == 0x140023741ULL ||
+            this->current_address == 0x140023744ULL ||
+            this->current_address == 0x14002374AULL ||
+            this->current_address == 0x140023751ULL ||
+            this->current_address == 0x140023754ULL ||
+            this->current_address == 0x14002375BULL ||
+            this->current_address == 0x140023762ULL ||
+            this->current_address == 0x140023765ULL ||
+            this->current_address == 0x14002376CULL ||
+            this->current_address == 0x14002376FULL ||
+            this->current_address == 0x140023776ULL ||
+            this->current_address == 0x14002377DULL ||
+            this->current_address == 0x140023784ULL ||
+            this->current_address == 0x14002378BULL ||
+            this->current_address == 0x14002378EULL ||
+            this->current_address == 0x140023795ULL ||
+            this->current_address == 0x140023799ULL ||
+            this->current_address == 0x1400237AAULL ||
+            this->current_address == 0x1400237CFULL ||
+            this->current_address == 0x1400237DCULL ||
+            this->current_address == 0x1400237EFULL ||
+            this->current_address == 0x1400237F6ULL ||
+            this->current_address == 0x1400237F9ULL) {
+          auto valueText = [&](llvm::Value* value) {
+            if (!value) return std::string("<null>");
+            std::string text;
+            llvm::raw_string_ostream os(text);
+            value->print(os);
+            return text;
+          };
+          std::cout << " mnemonic="
+                    << magic_enum::enum_name(this->instruction.mnemonic)
+                    << " srcType="
+                    << magic_enum::enum_name(this->instruction.types[1])
+                    << " dstType="
+                    << magic_enum::enum_name(this->instruction.types[0])
+                    << " reg0=" << magic_enum::enum_name(this->instruction.regs[0])
+                    << " reg1=" << magic_enum::enum_name(this->instruction.regs[1])
+                    << " mem_base="
+                    << magic_enum::enum_name(this->instruction.mem_base)
+                    << " mem_index="
+                    << magic_enum::enum_name(this->instruction.mem_index)
+                    << " mem_disp=" << this->instruction.mem_disp
+                    << " RAX=" << valueText(this->GetRegisterValue(Register::RAX))
+                    << " RBX=" << valueText(this->GetRegisterValue(Register::RBX))
+                    << " RCX=" << valueText(this->GetRegisterValue(Register::RCX))
+                    << " RDX=" << valueText(this->GetRegisterValue(Register::RDX))
+                    << " RSI=" << valueText(this->GetRegisterValue(Register::RSI))
+                    << " R8=" << valueText(this->GetRegisterValue(Register::R8))
+                    << " R9=" << valueText(this->GetRegisterValue(Register::R9))
+                    << " R10=" << valueText(this->GetRegisterValue(Register::R10))
+                    << " R14=" << valueText(this->GetRegisterValue(Register::R14))
+                    << " R15=" << valueText(this->GetRegisterValue(Register::R15))
+                    << " ZF=" << valueText(this->getFlag(FLAG_ZF));
+        }
+        std::cout << "\n";
+      }
 
       // also pass the file to address_to_mapped_address?
       this->current_address += instruction.length;
@@ -528,6 +599,35 @@ public:
                                                      uint8_t byteCount) {
     return static_cast<Derived*>(this)->retrieve_generalized_loop_local_value_impl(
         startAddress, byteCount);
+  }
+  llvm::Value* retrieve_generalized_loop_control_slot_value(uint64_t startAddress,
+                                                            uint8_t byteCount) {
+    return static_cast<Derived*>(this)
+        ->retrieve_generalized_loop_control_slot_value_impl(startAddress,
+                                                            byteCount);
+  }
+  llvm::Value* retrieve_generalized_loop_control_field_value(llvm::Value* loadOffset,
+                                                             uint8_t byteCount,
+                                                             LazyValue orgLoad) {
+    return static_cast<Derived*>(this)
+        ->retrieve_generalized_loop_control_field_value_impl(loadOffset,
+                                                             byteCount, orgLoad);
+  }
+  llvm::Value* retrieve_generalized_loop_local_phi_address_value(
+      llvm::Value* loadOffset, uint8_t byteCount, LazyValue orgLoad) {
+    return static_cast<Derived*>(this)
+        ->retrieve_generalized_loop_local_phi_address_value_impl(loadOffset,
+                                                                 byteCount, orgLoad);
+  }
+  llvm::Value* retrieve_generalized_loop_target_slot_value(uint64_t startAddress,
+                                                           uint8_t byteCount) {
+    return static_cast<Derived*>(this)->retrieve_generalized_loop_target_slot_value_impl(
+        startAddress, byteCount);
+  }
+  llvm::Value* retrieve_generalized_loop_phi_address_value(
+      llvm::Value* loadOffset, uint8_t byteCount, LazyValue orgLoad) {
+    return static_cast<Derived*>(this)->retrieve_generalized_loop_phi_address_value_impl(
+        loadOffset, byteCount, orgLoad);
   }
   bool currentBlockUsesGeneralizedLoopState() const {
     return currentBlockRestoreMode == BlockRestoreMode::GeneralizedLoop;
@@ -816,7 +916,29 @@ public:
       os << "  0x" << std::hex << entries[i].first << std::dec
          << " x" << entries[i].second << "\n";
     }
-    os << std::flush;
+    std::vector<uint64_t> reachedAddresses;
+    reachedAddresses.reserve(entries.size());
+    for (const auto& [addr, _count] : entries) {
+      reachedAddresses.push_back(addr);
+    }
+    std::sort(reachedAddresses.begin(), reachedAddresses.end());
+    os << "[diag] lift-progress reached addresses:";
+    for (uint64_t addr : reachedAddresses) {
+      os << " 0x" << std::hex << addr << std::dec;
+    }
+    os << "\n";
+    constexpr std::array<uint64_t, 12> kExpectedSecondFeedbackWindow = {
+        0x140023582ULL, 0x1400235B4ULL, 0x14002360DULL, 0x140023627ULL,
+        0x14002366EULL, 0x140023689ULL, 0x140023693ULL, 0x1400236B3ULL,
+        0x140023799ULL, 0x1400237AAULL, 0x1400237CFULL, 0x1400237DCULL,
+    };
+    os << "[diag] lift-progress expected second-feedback window:";
+    for (uint64_t addr : kExpectedSecondFeedbackWindow) {
+      const bool reached =
+          std::binary_search(reachedAddresses.begin(), reachedAddresses.end(), addr);
+      os << " 0x" << std::hex << addr << (reached ? ":hit" : ":miss") << std::dec;
+    }
+    os << "\n" << std::flush;
   }
 
   bool addUnvisitedAddr(BBInfo bb) {

@@ -1228,6 +1228,517 @@ private:
     return true;
   }
 
+  bool runSolveLoadNormalizesMappedRvaCandidate(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+
+    lifter.file.imageBase = 0x140000000ULL;
+    constexpr uint64_t candidateRva = 0x8111ULL;
+    constexpr uint64_t normalizedTarget = 0x140008111ULL;
+    constexpr uint64_t loadedValue = 0x140188111ULL;
+
+    lifter.markMemPaged(normalizedTarget, normalizedTarget + 8);
+    lifter.SetMemoryValue(makeI64(context, normalizedTarget),
+                          makeI64(context, loadedValue));
+
+    auto* block = llvm::BasicBlock::Create(context, "current", lifter.fnc);
+    lifter.builder->SetInsertPoint(block);
+    lifter.blockInfo = BBInfo(0x1400237F9ULL, block);
+
+    auto* candidateExpr = lifter.builder->CreateAdd(
+        makeI64(context, candidateRva), makeI64(context, 0), "candidate_rva_expr");
+    auto* resolved = lifter.GetMemoryValue(candidateExpr, 64);
+    auto actual = readConstantAPInt(resolved);
+    if (!actual.has_value() || actual->getZExtValue() != loadedValue) {
+      std::ostringstream os;
+      os << "  solveLoad should normalize mapped RVA candidate 0x" << std::hex
+         << candidateRva << " to load 0x" << loadedValue << ", got ";
+      if (actual.has_value()) {
+        os << "0x" << actual->getZExtValue();
+      } else {
+        std::string valueText;
+        llvm::raw_string_ostream valueOs(valueText);
+        resolved->print(valueOs);
+        os << '`' << valueOs.str() << '`';
+      }
+      os << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
+  bool runSolveLoadPhiAddressCreatesPhiOfLoadedValues(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+    auto* preheader =
+        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+    auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+    constexpr uint64_t stackSlotA = STACKP_VALUE;
+    constexpr uint64_t stackSlotB = STACKP_VALUE + 8;
+    constexpr uint64_t valueA = 0x1111111111111111ULL;
+    constexpr uint64_t valueB = 0x2222222222222222ULL;
+
+    lifter.builder->SetInsertPoint(preheader);
+    lifter.SetMemoryValue(makeI64(context, stackSlotA), makeI64(context, valueA));
+
+    lifter.builder->SetInsertPoint(backedge);
+    lifter.SetMemoryValue(makeI64(context, stackSlotB), makeI64(context, valueB));
+
+    lifter.builder->SetInsertPoint(loopHeader);
+    auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "stack_slot_addr_phi");
+    addressPhi->addIncoming(makeI64(context, stackSlotA), preheader);
+    addressPhi->addIncoming(makeI64(context, stackSlotB), backedge);
+
+    auto* resolved = lifter.GetMemoryValue(addressPhi, 64);
+    auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+    if (!phi) {
+      std::string valueText;
+      llvm::raw_string_ostream os(valueText);
+      resolved->print(os);
+      details =
+          "  solveLoad should turn a PHI of concrete addresses into a PHI of the loaded values; got `" +
+          os.str() + "`\n";
+      return false;
+    }
+    if (phi->getParent() != loopHeader) {
+      details =
+          "  solveLoad PHI-address result should live in the same header block as the address PHI\n";
+      return false;
+    }
+
+    bool sawA = false;
+    bool sawB = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      auto* incomingBlock = phi->getIncomingBlock(i);
+      auto actual = readConstantAPInt(phi->getIncomingValue(i));
+      if (!actual.has_value()) {
+        details =
+            "  solveLoad PHI-address incoming loads should stay concrete for this test\n";
+        return false;
+      }
+      if (incomingBlock == preheader && actual->getZExtValue() == valueA) {
+        sawA = true;
+      }
+      if (incomingBlock == backedge && actual->getZExtValue() == valueB) {
+        sawB = true;
+      }
+    }
+
+    if (!sawA || !sawB) {
+      details =
+          "  solveLoad PHI-address result should preserve both incoming concrete stack-slot values\n";
+      return false;
+    }
+    return true;
+  }
+
+
+bool runSolveLoadPhiAddressWithDisplacementCreatesPhiOfLoadedValues(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t stackSlotA = STACKP_VALUE;
+  constexpr uint64_t stackSlotB = STACKP_VALUE + 8;
+  constexpr uint64_t valueA = 0x1111111111111111ULL;
+  constexpr uint64_t valueB = 0x2222222222222222ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, stackSlotA + 6), makeI64(context, valueA));
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, stackSlotB + 6), makeI64(context, valueB));
+
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "stack_slot_addr_phi");
+  addressPhi->addIncoming(makeI64(context, stackSlotA), preheader);
+  addressPhi->addIncoming(makeI64(context, stackSlotB), backedge);
+  auto* displacedAddress = lifter.builder->CreateAdd(
+      addressPhi, llvm::ConstantInt::get(i64Ty, 6),
+      "stack_slot_addr_phi_plus_6");
+
+  auto* resolved = lifter.GetMemoryValue(displacedAddress, 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi) {
+    std::string valueText;
+    llvm::raw_string_ostream os(valueText);
+    resolved->print(os);
+    details =
+        "  solveLoad should turn a displaced PHI of concrete addresses into a PHI of the loaded values; got `" +
+        os.str() + "`\n";
+    return false;
+  }
+  if (phi->getParent() != loopHeader) {
+    details =
+        "  solveLoad displaced PHI-address result should live in the same header block as the address PHI\n";
+    return false;
+  }
+
+  bool sawA = false;
+  bool sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto* incomingBlock = phi->getIncomingBlock(i);
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) {
+      details =
+          "  solveLoad displaced PHI-address incoming loads should stay concrete for this test\n";
+      return false;
+    }
+    if (incomingBlock == preheader && actual->getZExtValue() == valueA) {
+      sawA = true;
+    }
+    if (incomingBlock == backedge && actual->getZExtValue() == valueB) {
+      sawB = true;
+    }
+  }
+
+  if (!sawA || !sawB) {
+    details =
+        "  solveLoad displaced PHI-address result should preserve both incoming concrete stack-slot values\n";
+    return false;
+  }
+  return true;
+}
+
+
+bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* loopBody =
+      llvm::BasicBlock::Create(context, "loop_body", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint16_t backedgeField = 0xB174U;
+  constexpr uint16_t secondField = 0x812FU;
+  constexpr int32_t backedgeDisp = -1459;
+  constexpr int32_t secondDisp = -1337;
+  constexpr uint32_t seed32 = 0x5F514EADU;
+  constexpr uint32_t add32 = 165327398U;
+  constexpr uint64_t tableBase = 5370313337ULL;
+  constexpr uint64_t resolvedTarget = 0x140020EADULL;
+
+  auto computeExpectedTableAddress = [&](uint16_t field) -> uint64_t {
+    const uint32_t mixed = seed32 ^ static_cast<uint32_t>(field);
+    const uint32_t biased = mixed + add32;
+    const uint64_t masked = static_cast<uint64_t>(biased) & 0xFFFFULL;
+    return tableBase + (masked << 3);
+  };
+  const uint64_t tableAddrA = computeExpectedTableAddress(backedgeField);
+  const uint64_t tableAddrB = computeExpectedTableAddress(secondField);
+
+  lifter.markMemPaged(resolvedTarget, resolvedTarget + 8);
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + 0x6),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                               backedgeDisp));
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + 0xC),
+                        llvm::ConstantInt::get(llvm::Type::getInt16Ty(context),
+                                               backedgeField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlValue = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* displacedAddress = lifter.builder->CreateAdd(
+      controlValue, llvm::ConstantInt::get(controlValue->getType(), 6),
+      "generalized_control_slot_plus_6_solvepath");
+  auto* dispValue = lifter.GetMemoryValue(displacedAddress, 32);
+
+  lifter.builder->SetInsertPoint(loopBody);
+  auto* recurrentControl = lifter.builder->CreateAdd(
+      controlValue,
+      lifter.builder->CreateSExtOrTrunc(dispValue, llvm::Type::getInt64Ty(context)),
+      "rolled_control_state_solvepath");
+  lifter.SetMemoryValue(makeI64(context, controlSlot), recurrentControl);
+  lifter.SetMemoryValue(makeI64(context, secondControl + 0x6),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                               secondDisp));
+  lifter.SetMemoryValue(makeI64(context, secondControl + 0xC),
+                        llvm::ConstantInt::get(llvm::Type::getInt16Ty(context),
+                                               secondField));
+  lifter.record_generalized_loop_backedge(loopHeader);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  lifter.blockInfo = BBInfo(0x1400237F9ULL, loopHeader);
+  lifter.current_address = 0x1400237F9ULL;
+  llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+  auto* controlPhi = phiBuilder.CreatePHI(llvm::Type::getInt64Ty(context), 2,
+                                          "rolled_control_phi_for_solvepath");
+  controlPhi->addIncoming(makeI64(context, backedgeControl), firstBackedge);
+  controlPhi->addIncoming(makeI64(context, secondControl), loopBody);
+  auto* displacedControl = lifter.builder->CreateAdd(
+      controlPhi, llvm::ConstantInt::get(controlPhi->getType(), 0xC),
+      "rolled_generalized_phi_address_plus_12_solvepath");
+  auto* fieldValue = lifter.GetMemoryValue(displacedControl, 16);
+  auto* field32 = lifter.builder->CreateTruncOrBitCast(
+      lifter.builder->CreateZExt(fieldValue, llvm::Type::getInt64Ty(context)),
+      llvm::Type::getInt32Ty(context));
+  auto* mixed = lifter.builder->CreateXor(
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), seed32), field32,
+      "rolled_solvepath_mixed");
+  auto* biased = lifter.builder->CreateAdd(
+      mixed, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), add32),
+      "rolled_solvepath_biased");
+  auto* masked = lifter.builder->CreateAnd(
+      lifter.builder->CreateZExt(biased, llvm::Type::getInt64Ty(context)),
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0xFFFFULL),
+      "rolled_solvepath_masked");
+  auto* scaled = lifter.builder->CreateShl(
+      masked, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 3),
+      "rolled_solvepath_scaled");
+  auto* tableAddr = lifter.builder->CreateAdd(
+      scaled, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), tableBase),
+      "rolled_solvepath_table_addr");
+
+  lifter.SetMemoryValue(makeI64(context, tableAddrA), makeI64(context, resolvedTarget));
+  lifter.SetMemoryValue(makeI64(context, tableAddrB), makeI64(context, resolvedTarget));
+  auto* pointer = lifter.getPointer(tableAddr);
+  auto* load = lifter.builder->CreateLoad(llvm::Type::getInt64Ty(context), pointer,
+                                          "generalized_phi_load_target");
+  auto loadValues = lifter.computePossibleValues(load, 0);
+  if (loadValues.size() != 1 ||
+      !loadValues.contains(llvm::APInt(64, resolvedTarget))) {
+    std::ostringstream os;
+    os << "  generalized phi-address load should enumerate one concrete target before solvePath, got size "
+       << loadValues.size();
+    for (const auto& value : loadValues) {
+      os << " 0x" << std::hex << value.getZExtValue();
+    }
+    os << "\n";
+    details = os.str();
+    return false;
+  }
+
+  LifterUnderTest::ScopedPathSolveContext pathSolveContext(
+      &lifter, LifterUnderTest::PathSolveContext::IndirectJump);
+  uint64_t destination = 0;
+  auto pathResult = lifter.solvePath(lifter.fnc, destination, load);
+  if (pathResult != PATH_solved || destination != resolvedTarget) {
+    std::ostringstream os;
+    os << "  solvePath should resolve the rolled generalized load target to 0x"
+       << std::hex << resolvedTarget << ", got result=" << pathResult
+       << " dest=0x" << destination << "\n";
+    details = os.str();
+    return false;
+  }
+  return true;
+}
+
+  bool runGeneralizedLoopLocalPhiAddressCreatesPhiOfLoadedValues(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+    auto* preheader =
+        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+    auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+    constexpr uint64_t controlSlot = 0x14004DD19ULL;
+    constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+    constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+    constexpr uint64_t localSlotA = STACKP_VALUE;
+    constexpr uint64_t localSlotB = STACKP_VALUE + 8;
+    constexpr uint64_t valueA = 0x1111111111111111ULL;
+    constexpr uint64_t valueB = 0x2222222222222222ULL;
+
+    lifter.builder->SetInsertPoint(preheader);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, canonicalControl));
+    lifter.SetMemoryValue(makeI64(context, localSlotA), makeI64(context, valueA));
+    lifter.branch_backup(loopHeader);
+
+    lifter.builder->SetInsertPoint(backedge);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, backedgeControl));
+    lifter.SetMemoryValue(makeI64(context, localSlotB), makeI64(context, valueB));
+    lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+    lifter.load_generalized_backup(loopHeader);
+    lifter.builder->SetInsertPoint(loopHeader);
+    auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "generalized_stack_slot_phi");
+    addressPhi->addIncoming(makeI64(context, localSlotA), preheader);
+    addressPhi->addIncoming(makeI64(context, localSlotB), backedge);
+
+    auto* resolved = lifter.GetMemoryValue(addressPhi, 64);
+    auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+    if (!phi) {
+      std::string valueText;
+      llvm::raw_string_ostream os(valueText);
+      resolved->print(os);
+      details =
+          "  generalized loop local PHI-address load should produce a phi of the incoming local values; got `" +
+          os.str() + "`\n";
+      return false;
+    }
+
+    bool sawCanonical = false;
+    bool sawBackedge = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      auto* incomingBlock = phi->getIncomingBlock(i);
+      auto actual = readConstantAPInt(phi->getIncomingValue(i));
+      if (!actual.has_value()) {
+        details =
+            "  generalized loop local PHI-address incoming values should stay concrete in the focused test\n";
+        return false;
+      }
+      if (incomingBlock == preheader && actual->getZExtValue() == valueA) {
+        sawCanonical = true;
+      }
+      if (incomingBlock == backedge && actual->getZExtValue() == valueB) {
+        sawBackedge = true;
+      }
+    }
+    if (!sawCanonical || !sawBackedge) {
+      details =
+          "  generalized loop local PHI-address result should preserve both incoming local snapshot values\n";
+      return false;
+    }
+    return true;
+  }
+
+
+  bool runGeneralizedLoopControlFieldLoadCreatesPhi(std::string& details) {
+    constexpr std::array<uint64_t, 3> fieldOffsets = {0x6ULL, 0xAULL, 0xCULL};
+    constexpr std::array<uint16_t, 3> canonicalFields = {0x11, 0x22, 0x33};
+    constexpr std::array<uint16_t, 3> backedgeFields = {0x44, 0x55, 0x66};
+
+    for (size_t caseIndex = 0; caseIndex < fieldOffsets.size(); ++caseIndex) {
+      LifterUnderTest lifter;
+      auto& context = lifter.context;
+      auto* i8Ty = llvm::Type::getInt8Ty(context);
+      auto* i16Ty = llvm::Type::getInt16Ty(context);
+      auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+      auto* preheader =
+          llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+      auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+      auto* loopHeader =
+          llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+      constexpr uint64_t controlSlot = 0x14004DD19ULL;
+      constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+      constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+      const uint64_t fieldOffset = fieldOffsets[caseIndex];
+      const uint16_t canonicalField = canonicalFields[caseIndex];
+      const uint16_t backedgeField = backedgeFields[caseIndex];
+
+      lifter.builder->SetInsertPoint(preheader);
+      lifter.SetMemoryValue(makeI64(context, canonicalControl + fieldOffset),
+                            llvm::ConstantInt::get(i16Ty, canonicalField));
+      lifter.SetMemoryValue(makeI64(context, controlSlot),
+                            makeI64(context, canonicalControl));
+      lifter.branch_backup(loopHeader);
+
+      lifter.builder->SetInsertPoint(backedge);
+      lifter.SetMemoryValue(makeI64(context, backedgeControl + fieldOffset),
+                            llvm::ConstantInt::get(i16Ty, backedgeField));
+      lifter.SetMemoryValue(makeI64(context, controlSlot),
+                            makeI64(context, backedgeControl));
+      lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+      lifter.load_generalized_backup(loopHeader);
+      lifter.builder->SetInsertPoint(loopHeader);
+
+      auto* controlSlotPtr = lifter.builder->CreateGEP(
+          i8Ty, lifter.memoryAlloc, makeI64(context, controlSlot),
+          "control_slot_ptr");
+      auto* controlLoad =
+          lifter.builder->CreateLoad(i64Ty, controlSlotPtr, "control_cursor");
+      auto* fieldAddress = lifter.builder->CreateAdd(
+          controlLoad, makeI64(context, fieldOffset), "control_field_addr");
+      auto* resolved = lifter.GetMemoryValue(fieldAddress, 16);
+      auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+      if (!phi) {
+        std::string valueText;
+        llvm::raw_string_ostream os(valueText);
+        resolved->print(os);
+        std::ostringstream detailsStream;
+        detailsStream
+            << "  generalized loop control-derived field load at offset 0x"
+            << std::hex << fieldOffset << " should produce a phi, got `"
+            << os.str() << "`\n";
+        details = detailsStream.str();
+        return false;
+      }
+      if (phi->getParent() != loopHeader) {
+        std::ostringstream detailsStream;
+        detailsStream
+            << "  generalized loop control-field phi at offset 0x" << std::hex
+            << fieldOffset
+            << " should be anchored in the generalized header block\n";
+        details = detailsStream.str();
+        return false;
+      }
+
+      bool sawCanonical = false;
+      bool sawBackedge = false;
+      for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+        auto* incomingBlock = phi->getIncomingBlock(i);
+        auto actual = readConstantAPInt(phi->getIncomingValue(i));
+        if (!actual.has_value()) {
+          std::ostringstream detailsStream;
+          detailsStream
+              << "  generalized loop control-field phi incoming value at offset 0x"
+              << std::hex << fieldOffset << " should stay concrete\n";
+          details = detailsStream.str();
+          return false;
+        }
+        if (incomingBlock == preheader &&
+            actual->getZExtValue() == canonicalField) {
+          sawCanonical = true;
+        }
+        if (incomingBlock == backedge &&
+            actual->getZExtValue() == backedgeField) {
+          sawBackedge = true;
+        }
+      }
+
+      if (!sawCanonical || !sawBackedge) {
+        std::ostringstream detailsStream;
+        detailsStream
+            << "  generalized loop control-field phi at offset 0x" << std::hex
+            << fieldOffset
+            << " should merge canonical and backedge field bytes\n";
+        details = detailsStream.str();
+        return false;
+      }
+    }
+    return true;
+  }
+
 
   bool runSolvePathWidensMappedRvaTarget(std::string& details) {
     LifterUnderTest lifter;
@@ -1254,6 +1765,33 @@ private:
     return true;
   }
 
+  bool runSolvePathPrefersMappedTargetOverNullForIndirectJump(std::string& details) {
+    LifterUnderTest lifter;
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    lifter.builder->SetInsertPoint(current);
+    lifter.blockInfo = BBInfo(0x1400237F9ULL, current);
+    lifter.markMemPaged(0x140020EADULL, 0x140020EB5ULL);
+
+    LifterUnderTest::ScopedPathSolveContext pathSolveContext(
+        &lifter, LifterUnderTest::PathSolveContext::IndirectJump);
+    uint64_t destination = 0;
+    auto* selectValue = lifter.builder->CreateSelect(
+        lifter.builder->getInt1(true),
+        makeI64(lifter.context, 0x140020EADULL),
+        makeI64(lifter.context, 0),
+        "indirect_target_select");
+    auto pathResult = lifter.solvePath(lifter.fnc, destination, selectValue);
+    if (pathResult != PATH_solved || destination != 0x140020EADULL) {
+      std::ostringstream os;
+      os << "  solvePath should prefer the mapped indirect target 0x140020ead over null, got result="
+         << pathResult << " dest=0x" << std::hex << destination << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
+
   bool runTinyOutlinedCallBypassesOutlinePolicy(std::string& details) {
     LifterUnderTest lifter;
     lifter.markMemPaged(0x140001518ULL, 0x140001608ULL);
@@ -1273,7 +1811,6 @@ private:
     return true;
   }
 
-
   bool runNormalizeRuntimeTargetWidensMappedRvaTarget(std::string& details) {
     LifterUnderTest lifter;
     lifter.file.imageBase = 0x140000000ULL;
@@ -1290,6 +1827,791 @@ private:
   }
 
 
+
+
+
+
+
+
+  bool runSetRegisterValueZeroExtends32BitWrites(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+
+    lifter.SetRegisterValue(RegisterUnderTest::RCX,
+                            makeI64(context, 0xFFFF'FFFF'1234'5678ULL));
+    lifter.SetRegisterValue(RegisterUnderTest::ECX,
+                            llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                                   0x89ABCDEFu));
+
+    auto actual = readConstantAPInt(lifter.GetRegisterValue(RegisterUnderTest::RCX));
+    if (!actual.has_value()) {
+      details =
+          "  writing ECX should leave RCX concrete and zero-extended\n";
+      return false;
+    }
+    if (actual->getZExtValue() != 0x89ABCDEFULL) {
+      std::ostringstream os;
+      os << "  writing ECX should zero-extend RCX to 0x89ABCDEF, got 0x"
+         << std::hex << actual->getZExtValue() << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
+
+  bool runTargetedThemidаR9OverrideProducesPhi(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* preheader =
+        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+    auto* firstBackedge =
+        llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+    constexpr uint64_t controlSlot = 0x14004DD19ULL;
+    constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+    constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+
+    lifter.builder->SetInsertPoint(preheader);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, canonicalControl));
+    lifter.branch_backup(loopHeader);
+
+    lifter.builder->SetInsertPoint(firstBackedge);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, backedgeControl));
+    lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+    lifter.load_generalized_backup(loopHeader);
+    lifter.builder->SetInsertPoint(loopHeader);
+    lifter.current_address = 0x14002368DULL;
+    auto* value = lifter.GetRegisterValue(RegisterUnderTest::R9);
+    auto* phi = llvm::dyn_cast<llvm::PHINode>(value);
+    if (!phi) {
+      details =
+          "  targeted Themida R9 override should return a phi at semantics-time address 0x14002368D\n";
+      return false;
+    }
+    bool sawCanonical = false;
+    bool sawBackedge = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      auto* incomingBlock = phi->getIncomingBlock(i);
+      auto actual = readConstantAPInt(phi->getIncomingValue(i));
+      if (!actual.has_value()) {
+        details = "  targeted R9 phi incoming values should be concrete\n";
+        return false;
+      }
+      if (incomingBlock == preheader &&
+          actual->getZExtValue() == canonicalControl + 0xA) {
+        sawCanonical = true;
+      }
+      if (incomingBlock == firstBackedge &&
+          actual->getZExtValue() == backedgeControl + 0xA) {
+        sawBackedge = true;
+      }
+    }
+    if (!sawCanonical || !sawBackedge) {
+      details =
+          "  targeted R9 phi should preserve canonical/backedge control+0xA values\n";
+      return false;
+    }
+    return true;
+  }
+
+
+  bool runGeneralizedLoopControlSlotCreatesPhi(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* preheader =
+        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+    auto* firstBackedge =
+        llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+    constexpr uint64_t controlSlot = 0x14004DD19ULL;
+    constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+    constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+
+    lifter.builder->SetInsertPoint(preheader);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, canonicalControl));
+    lifter.branch_backup(loopHeader);
+
+    lifter.builder->SetInsertPoint(firstBackedge);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, backedgeControl));
+    lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+    lifter.load_generalized_backup(loopHeader);
+    lifter.builder->SetInsertPoint(loopHeader);
+    auto* resolved = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+    auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+    if (!phi) {
+      details =
+          "  generalized control slot should resolve through a phi when canonical and backedge controls differ\n";
+      return false;
+    }
+
+    bool sawCanonical = false;
+    bool sawBackedge = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      auto* incomingBlock = phi->getIncomingBlock(i);
+      auto actual = readConstantAPInt(phi->getIncomingValue(i));
+      if (!actual.has_value()) {
+        details =
+            "  generalized control slot phi incoming values should stay concrete in the focused test\n";
+        return false;
+      }
+      if (incomingBlock == preheader &&
+          actual->getZExtValue() == canonicalControl) {
+        sawCanonical = true;
+      }
+      if (incomingBlock == firstBackedge &&
+          actual->getZExtValue() == backedgeControl) {
+        sawBackedge = true;
+      }
+    }
+    if (!sawCanonical || !sawBackedge) {
+      details =
+          "  generalized control slot phi should preserve both canonical and backedge controls\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runGeneralizedLoopControlSlotDisplacementCreatesPhiOfLoadedValues(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* preheader =
+        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+    auto* firstBackedge =
+        llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+    constexpr uint64_t controlSlot = 0x14004DD19ULL;
+    constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+    constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+    constexpr int32_t canonicalDisp = -1610;
+    constexpr int32_t backedgeDisp = -1459;
+
+    lifter.builder->SetInsertPoint(preheader);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, canonicalControl));
+    lifter.SetMemoryValue(makeI64(context, canonicalControl + 0x6),
+                          llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                                 canonicalDisp));
+    lifter.branch_backup(loopHeader);
+
+    lifter.builder->SetInsertPoint(firstBackedge);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, backedgeControl));
+    lifter.SetMemoryValue(makeI64(context, backedgeControl + 0x6),
+                          llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                                 backedgeDisp));
+    lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+    lifter.load_generalized_backup(loopHeader);
+    lifter.builder->SetInsertPoint(loopHeader);
+    auto* controlValue = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+    auto* displacedAddress = lifter.builder->CreateAdd(
+        controlValue, llvm::ConstantInt::get(controlValue->getType(), 6),
+        "generalized_control_slot_plus_6");
+    auto* resolved = lifter.GetMemoryValue(displacedAddress, 32);
+    auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+    if (!phi || phi->getNumIncomingValues() != 2) {
+      details =
+          "  generalized control-slot displacement load should resolve through a 2-way phi\n";
+      return false;
+    }
+
+    bool sawCanonical = false;
+    bool sawBackedge = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      auto* incomingBlock = phi->getIncomingBlock(i);
+      auto actual = readConstantAPInt(phi->getIncomingValue(i));
+      if (!actual.has_value()) {
+        details =
+            "  generalized control-slot displacement phi incoming values should stay concrete\n";
+        return false;
+      }
+      if (incomingBlock == preheader &&
+          actual->getSExtValue() == canonicalDisp) {
+        sawCanonical = true;
+      }
+      if (incomingBlock == firstBackedge &&
+          actual->getSExtValue() == backedgeDisp) {
+        sawBackedge = true;
+      }
+    }
+    if (!sawCanonical || !sawBackedge) {
+      details =
+          "  generalized control-slot displacement phi should preserve both canonical and backedge loads\n";
+      return false;
+    }
+    return true;
+  }
+
+
+  bool runGeneralizedLoopTargetSlotCreatesPhi(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* preheader =
+        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+    auto* firstBackedge =
+        llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+    constexpr uint64_t controlSlot = 0x14004DD19ULL;
+    constexpr uint64_t targetSlot = 0x14004DC67ULL;
+    constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+    constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+    constexpr uint64_t canonicalValue = 0x1111222233334444ULL;
+    constexpr uint64_t backedgeValue = 0xAAAABBBBCCCCDDDDULL;
+
+    lifter.builder->SetInsertPoint(preheader);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, canonicalControl));
+    lifter.SetMemoryValue(makeI64(context, targetSlot),
+                          makeI64(context, canonicalValue));
+    lifter.branch_backup(loopHeader);
+
+    lifter.builder->SetInsertPoint(firstBackedge);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, backedgeControl));
+    lifter.SetMemoryValue(makeI64(context, targetSlot),
+                          makeI64(context, backedgeValue));
+    lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+    lifter.load_generalized_backup(loopHeader);
+    lifter.builder->SetInsertPoint(loopHeader);
+    auto* resolved = lifter.GetMemoryValue(makeI64(context, targetSlot), 64);
+    auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+    if (!phi) {
+      details =
+          "  generalized target slot should resolve through a phi when canonical and backedge values differ\n";
+      return false;
+    }
+
+    bool sawCanonical = false;
+    bool sawBackedge = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      auto* incomingBlock = phi->getIncomingBlock(i);
+      auto actual = readConstantAPInt(phi->getIncomingValue(i));
+      if (!actual.has_value()) {
+        details =
+            "  generalized target slot phi incoming values should stay concrete in the focused test\n";
+        return false;
+      }
+      if (incomingBlock == preheader &&
+          actual->getZExtValue() == canonicalValue) {
+        sawCanonical = true;
+      }
+      if (incomingBlock == firstBackedge &&
+          actual->getZExtValue() == backedgeValue) {
+        sawBackedge = true;
+      }
+    }
+    if (!sawCanonical || !sawBackedge) {
+      details =
+          "  generalized target slot phi should preserve both canonical and backedge values\n";
+      return false;
+    }
+    return true;
+  }
+
+
+
+bool runRolledGeneralizedPhiAddressUsesAdvancedPair(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* loopBody =
+      llvm::BasicBlock::Create(context, "loop_body", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint16_t backedgeField = 0xB174U;
+  constexpr uint16_t secondField = 0x812F;
+  constexpr int32_t backedgeDisp = -1459;
+  constexpr int32_t secondDisp = -1337;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + 0x6),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                               backedgeDisp));
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + 0xC),
+                        llvm::ConstantInt::get(llvm::Type::getInt16Ty(context),
+                                               backedgeField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlValue = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* displacedAddress = lifter.builder->CreateAdd(
+      controlValue, llvm::ConstantInt::get(controlValue->getType(), 6),
+      "generalized_control_slot_plus_6_roll_test");
+  auto* dispValue = lifter.GetMemoryValue(displacedAddress, 32);
+
+  lifter.builder->SetInsertPoint(loopBody);
+  auto* recurrentControl = lifter.builder->CreateAdd(
+      controlValue,
+      lifter.builder->CreateSExtOrTrunc(dispValue, llvm::Type::getInt64Ty(context)),
+      "rolled_control_state_phi_address");
+  lifter.SetMemoryValue(makeI64(context, controlSlot), recurrentControl);
+  lifter.SetMemoryValue(makeI64(context, secondControl + 0x6),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                               secondDisp));
+  lifter.SetMemoryValue(makeI64(context, secondControl + 0xC),
+                        llvm::ConstantInt::get(llvm::Type::getInt16Ty(context),
+                                               secondField));
+  lifter.record_generalized_loop_backedge(loopHeader);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  lifter.current_address = 0x140023741ULL;
+  llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+  auto* controlPhi = phiBuilder.CreatePHI(llvm::Type::getInt64Ty(context), 2,
+                                          "rolled_control_phi");
+  controlPhi->addIncoming(makeI64(context, backedgeControl), firstBackedge);
+  controlPhi->addIncoming(makeI64(context, secondControl), loopBody);
+  auto* displacedControl = lifter.builder->CreateAdd(
+      controlPhi, llvm::ConstantInt::get(controlPhi->getType(), 0xC),
+      "rolled_generalized_phi_address_plus_12");
+  auto* resolved = lifter.GetMemoryValue(displacedControl, 16);
+  auto* resolvedPhi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!resolvedPhi || resolvedPhi->getNumIncomingValues() != 2) {
+    details =
+        "  rolled generalized phi-address load should produce a 2-way phi\n";
+    return false;
+  }
+
+  bool sawOldBackedge = false;
+  bool sawNewBackedge = false;
+  for (unsigned i = 0; i < resolvedPhi->getNumIncomingValues(); ++i) {
+    auto* incomingBlock = resolvedPhi->getIncomingBlock(i);
+    auto actual = readConstantAPInt(resolvedPhi->getIncomingValue(i));
+    if (!actual.has_value()) {
+      details =
+          "  rolled generalized phi-address load incoming value is not concrete\n";
+      return false;
+    }
+    if (incomingBlock == firstBackedge && actual->getZExtValue() == backedgeField) {
+      sawOldBackedge = true;
+    }
+    if (incomingBlock == loopBody && actual->getZExtValue() == secondField) {
+      sawNewBackedge = true;
+    }
+  }
+  if (!sawOldBackedge || !sawNewBackedge) {
+    details =
+        "  rolled generalized phi-address load should preserve both the old backedge and the new recurrent control-derived field\n";
+    return false;
+  }
+  return true;
+}
+
+
+
+bool runGeneralizedPhiAddressWithDisplacementCreatesPhiOfLoadedValues(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint32_t canonicalValue = 0x12345678ULL;
+  constexpr uint32_t backedgeValue = 0x9ABCDEF0ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, canonicalControl + 0x6),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                               canonicalValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + 0x6),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                               backedgeValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  lifter.current_address = 0x1400237DCULL;
+  llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+  auto* controlPhi = phiBuilder.CreatePHI(llvm::Type::getInt64Ty(context), 2,
+                                          "generalized_control_phi");
+  controlPhi->addIncoming(makeI64(context, canonicalControl), preheader);
+  controlPhi->addIncoming(makeI64(context, backedgeControl), firstBackedge);
+  auto* displacedAddress = lifter.builder->CreateAdd(
+      controlPhi, llvm::ConstantInt::get(controlPhi->getType(), 6),
+      "generalized_phi_address_plus_6");
+  auto* resolved = lifter.GetMemoryValue(displacedAddress, 32);
+  auto* resolvedPhi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!resolvedPhi || resolvedPhi->getNumIncomingValues() != 2) {
+    details =
+        "  displaced generalized phi-address load should produce a 2-way phi\n";
+    return false;
+  }
+
+  bool sawCanonical = false;
+  bool sawBackedge = false;
+  for (unsigned i = 0; i < resolvedPhi->getNumIncomingValues(); ++i) {
+    auto* incomingBlock = resolvedPhi->getIncomingBlock(i);
+    auto actual = readConstantAPInt(resolvedPhi->getIncomingValue(i));
+    if (!actual.has_value()) {
+      details =
+          "  displaced generalized phi-address load incoming value is not concrete\n";
+      return false;
+    }
+    if (incomingBlock == preheader && actual->getZExtValue() == canonicalValue) {
+      sawCanonical = true;
+    }
+    if (incomingBlock == firstBackedge &&
+        actual->getZExtValue() == backedgeValue) {
+      sawBackedge = true;
+    }
+  }
+
+  if (!sawCanonical || !sawBackedge) {
+    details =
+        "  displaced generalized phi-address load should preserve both incoming concrete values\n";
+    return false;
+  }
+  return true;
+}
+
+
+bool runComputePossibleValuesOnGeneralizedPhiLoad(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t canonicalValue = 0x1111222233334444ULL;
+  constexpr uint64_t backedgeValue = 0xAAAABBBBCCCCDDDDULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, canonicalControl),
+                        makeI64(context, canonicalValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, backedgeControl),
+                        makeI64(context, backedgeValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  lifter.current_address = 0x140023671ULL;
+  auto* r9Phi = lifter.GetRegisterValue(RegisterUnderTest::R9);
+  auto* pointer = lifter.getPointer(r9Phi);
+  auto* load = lifter.builder->CreateLoad(llvm::Type::getInt64Ty(context), pointer,
+                                          "generalized_phi_load_probe");
+  auto values = lifter.computePossibleValues(load, 0);
+  if (values.size() != 2 ||
+      !values.contains(llvm::APInt(64, canonicalValue)) ||
+      !values.contains(llvm::APInt(64, backedgeValue))) {
+    std::ostringstream os;
+    os << "  computePossibleValues should enumerate both generalized phi-address loads, got size "
+       << values.size() << "\n";
+    details = os.str();
+    return false;
+  }
+  return true;
+}
+bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* loopBody =
+      llvm::BasicBlock::Create(context, "loop_body", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint16_t backedgeField = 0xB174U;
+  constexpr uint16_t secondField = 0x812FU;
+  constexpr int32_t backedgeDisp = -1459;
+  constexpr int32_t secondDisp = -1337;
+  constexpr uint32_t seed32 = 0x5F514EADU;
+  constexpr uint32_t add32 = 165327398U;
+  constexpr uint64_t tableBase = 5370313337ULL;
+  constexpr uint64_t targetA = 0x140020EADULL;
+  constexpr uint64_t targetB = 0x140023699ULL;
+
+  auto computeExpectedTableAddress = [&](uint16_t field) -> uint64_t {
+    const uint32_t mixed = seed32 ^ static_cast<uint32_t>(field);
+    const uint32_t biased = mixed + add32;
+    const uint64_t masked = static_cast<uint64_t>(biased) & 0xFFFFULL;
+    return tableBase + (masked << 3);
+  };
+  const uint64_t tableAddrA = computeExpectedTableAddress(backedgeField);
+  const uint64_t tableAddrB = computeExpectedTableAddress(secondField);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + 0x6),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                               backedgeDisp));
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + 0xC),
+                        llvm::ConstantInt::get(llvm::Type::getInt16Ty(context),
+                                               backedgeField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlValue = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* displacedAddress = lifter.builder->CreateAdd(
+      controlValue, llvm::ConstantInt::get(controlValue->getType(), 6),
+      "generalized_control_slot_plus_6_arith");
+  auto* dispValue = lifter.GetMemoryValue(displacedAddress, 32);
+
+  lifter.builder->SetInsertPoint(loopBody);
+  auto* recurrentControl = lifter.builder->CreateAdd(
+      controlValue,
+      lifter.builder->CreateSExtOrTrunc(dispValue, llvm::Type::getInt64Ty(context)),
+      "rolled_control_state_arith");
+  lifter.SetMemoryValue(makeI64(context, controlSlot), recurrentControl);
+  lifter.SetMemoryValue(makeI64(context, secondControl + 0x6),
+                        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+                                               secondDisp));
+  lifter.SetMemoryValue(makeI64(context, secondControl + 0xC),
+                        llvm::ConstantInt::get(llvm::Type::getInt16Ty(context),
+                                               secondField));
+  lifter.record_generalized_loop_backedge(loopHeader);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  lifter.current_address = 0x140023741ULL;
+  llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+  auto* controlPhi = phiBuilder.CreatePHI(llvm::Type::getInt64Ty(context), 2,
+                                          "rolled_control_phi_for_arith");
+  controlPhi->addIncoming(makeI64(context, backedgeControl), firstBackedge);
+  controlPhi->addIncoming(makeI64(context, secondControl), loopBody);
+  auto* displacedControl = lifter.builder->CreateAdd(
+      controlPhi, llvm::ConstantInt::get(controlPhi->getType(), 0xC),
+      "rolled_generalized_phi_address_plus_12_arith");
+  auto* fieldValue = lifter.GetMemoryValue(displacedControl, 16);
+  auto* field32 = lifter.builder->CreateTruncOrBitCast(
+      lifter.builder->CreateZExt(fieldValue, llvm::Type::getInt64Ty(context)),
+      llvm::Type::getInt32Ty(context));
+  auto* mixed = lifter.builder->CreateXor(
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), seed32), field32,
+      "rolled_arith_mixed");
+  auto* biased = lifter.builder->CreateAdd(
+      mixed, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), add32),
+      "rolled_arith_biased");
+  auto* masked = lifter.builder->CreateAnd(
+      lifter.builder->CreateZExt(biased, llvm::Type::getInt64Ty(context)),
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0xFFFFULL),
+      "rolled_arith_masked");
+  auto* scaled = lifter.builder->CreateShl(
+      masked, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 3),
+      "rolled_arith_scaled");
+  auto* tableAddr = lifter.builder->CreateAdd(
+      scaled, llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), tableBase),
+      "rolled_arith_table_addr");
+
+  auto addrValues = lifter.computePossibleValues(tableAddr, 0);
+  if (addrValues.size() != 2 ||
+      !addrValues.contains(llvm::APInt(64, tableAddrA)) ||
+      !addrValues.contains(llvm::APInt(64, tableAddrB))) {
+    std::ostringstream os;
+    os << "  rolled arithmetic chain should enumerate both concrete table addresses, got size "
+       << addrValues.size();
+    for (const auto& value : addrValues) {
+      os << " 0x" << std::hex << value.getZExtValue();
+    }
+    os << " expected 0x" << std::hex << tableAddrA << " and 0x" << tableAddrB << "\n";
+    details = os.str();
+    return false;
+  }
+
+  lifter.SetMemoryValue(makeI64(context, tableAddrA), makeI64(context, targetA));
+  lifter.SetMemoryValue(makeI64(context, tableAddrB), makeI64(context, targetB));
+  auto* pointer = lifter.getPointer(tableAddr);
+  auto* load = lifter.builder->CreateLoad(llvm::Type::getInt64Ty(context), pointer,
+                                          "rolled_arith_target_probe");
+  auto targetValues = lifter.computePossibleValues(load, 0);
+  if (targetValues.size() != 2 ||
+      !targetValues.contains(llvm::APInt(64, targetA)) ||
+      !targetValues.contains(llvm::APInt(64, targetB))) {
+    std::ostringstream os;
+    os << "  rolled arithmetic dispatch load should enumerate both concrete targets, got size "
+       << targetValues.size() << "\n";
+    details = os.str();
+    return false;
+  }
+  return true;
+}
+
+
+  bool runByteTestJoinPreservesBranchValues(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* preheader =
+        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+    auto* firstBackedge =
+        llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+    auto* zeroBlock =
+        llvm::BasicBlock::Create(context, "zero_block", lifter.fnc);
+    auto* nonZeroBlock =
+        llvm::BasicBlock::Create(context, "nonzero_block", lifter.fnc);
+    auto* joinBlock =
+        llvm::BasicBlock::Create(context, "join_block", lifter.fnc);
+
+    llvm::IRBuilder<>(preheader).CreateBr(loopHeader);
+    llvm::IRBuilder<>(firstBackedge).CreateBr(loopHeader);
+
+    lifter.builder->SetInsertPoint(loopHeader);
+    llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+    auto* bytePhi = phiBuilder.CreatePHI(llvm::Type::getInt8Ty(context), 2,
+                                         "byte_test_phi");
+    bytePhi->addIncoming(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0),
+                         preheader);
+    bytePhi->addIncoming(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 1),
+                         firstBackedge);
+    auto* isZero = lifter.builder->CreateICmpEQ(
+        bytePhi, llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0),
+        "byte_zero_cmp");
+    lifter.builder->CreateCondBr(isZero, zeroBlock, nonZeroBlock);
+
+    llvm::IRBuilder<> zeroBuilder(zeroBlock);
+    auto* zeroValue = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0x29);
+    zeroBuilder.CreateBr(joinBlock);
+
+    llvm::IRBuilder<> nonZeroBuilder(nonZeroBlock);
+    auto* nonZeroValue =
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0x6AB);
+    nonZeroBuilder.CreateBr(joinBlock);
+
+    llvm::IRBuilder<> joinBuilder(joinBlock);
+    auto* joined = joinBuilder.CreatePHI(llvm::Type::getInt64Ty(context), 2,
+                                         "byte_test_join_phi");
+    joined->addIncoming(zeroValue, zeroBlock);
+    joined->addIncoming(nonZeroValue, nonZeroBlock);
+
+    auto values = lifter.computePossibleValues(joined, 0);
+    if (values.size() != 2 ||
+        !values.contains(llvm::APInt(64, 0x29)) ||
+        !values.contains(llvm::APInt(64, 0x6AB))) {
+      std::ostringstream os;
+      os << "  byte-test join should preserve both branch values, got size "
+         << values.size();
+      for (const auto& value : values) {
+        os << " 0x" << std::hex << value.getZExtValue();
+      }
+      os << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
+
+  bool runGeneralizedLoopRestoreMergesBackedgeFlagState(std::string& details) {
+    LifterUnderTest lifter;
+    auto* preheader =
+        llvm::BasicBlock::Create(lifter.context, "preheader", lifter.fnc);
+    auto* firstBackedge =
+        llvm::BasicBlock::Create(lifter.context, "first_backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
+    lifter.builder->SetInsertPoint(preheader);
+    auto* canonicalPf = lifter.builder->getInt1(false);
+    lifter.SetFlagValue_impl(FLAG_PF, canonicalPf);
+    lifter.branch_backup(loopHeader);
+
+    lifter.builder->SetInsertPoint(firstBackedge);
+    auto* backedgePf = lifter.builder->getInt1(true);
+    lifter.SetFlagValue_impl(FLAG_PF, backedgePf);
+    lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+    lifter.load_generalized_backup(loopHeader);
+    auto* mergedPf = lifter.getFlag(FLAG_PF);
+    auto* phi = llvm::dyn_cast<llvm::PHINode>(mergedPf);
+    if (!phi) {
+      details =
+          "  generalized loop restore should merge canonical and backedge PF through a phi\n";
+      return false;
+    }
+
+    bool sawCanonical = false;
+    bool sawBackedge = false;
+    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+      auto* incomingBlock = phi->getIncomingBlock(i);
+      auto* incomingValue = phi->getIncomingValue(i);
+      if (incomingBlock == preheader && incomingValue == canonicalPf) {
+        sawCanonical = true;
+      }
+      if (incomingBlock == firstBackedge && incomingValue == backedgePf) {
+        sawBackedge = true;
+      }
+    }
+
+    if (!sawCanonical || !sawBackedge) {
+      details =
+          "  generalized loop flag phi did not preserve both canonical and backedge PF values\n";
+      return false;
+    }
+    return true;
+  }
 
 
   bool runGeneralizedLoopRestoreMergesBackedgeRegisterState(
@@ -1373,6 +2695,7 @@ private:
   }
 
 
+
   int runCustomKnownBitsTests(const std::string& suiteFilter) {
     int failures = 0;
 
@@ -1409,6 +2732,14 @@ private:
       if (!ok && !details.empty()) std::cout << details;
       failures += !ok;
     };
+    runCustom("generalized_loop_control_slot_creates_phi",
+             &InstructionTester::runGeneralizedLoopControlSlotCreatesPhi);
+    runCustom("generalized_loop_control_slot_displacement_creates_phi_of_loaded_values",
+             &InstructionTester::runGeneralizedLoopControlSlotDisplacementCreatesPhiOfLoadedValues);
+    runCustom("solve_path_skips_raw_zero_in_multi_target_switch",
+             &InstructionTester::runSolvePathSkipsRawZeroInMultiTargetSwitch);
+    runCustom("generalized_loop_target_slot_creates_phi",
+             &InstructionTester::runGeneralizedLoopTargetSlotCreatesPhi);
     runCustom("call_abi_compat_preserves_volatile",
              &InstructionTester::runCallAbiCompatPreservesVolatile);
     runCustom("call_abi_strict_clobbers_volatile",
@@ -1427,6 +2758,8 @@ private:
              &InstructionTester::runScasRepeatPrefixesRejected);
     runCustom("loop_addrsize_override_rejected",
              &InstructionTester::runLoopAddressSizeOverrideRejected);
+    runCustom("solve_load_normalizes_mapped_rva_candidate",
+             &InstructionTester::runSolveLoadNormalizesMappedRvaCandidate);
     runCustom("loop_generalization_conditional_branch_allowed",
              &InstructionTester::runLoopGeneralizationConditionalBranchAllowed);
     runCustom("loop_generalization_direct_jump_allowed",
@@ -1449,6 +2782,12 @@ private:
              &InstructionTester::runTinyOutlinedCallBypassesOutlinePolicy);
     runCustom("structured_loop_header_allows_conditional_backedge",
              &InstructionTester::runStructuredLoopHeaderAllowsConditionalBackedge);
+    runCustom("solve_load_phi_address_creates_phi_of_loaded_values",
+             &InstructionTester::runSolveLoadPhiAddressCreatesPhiOfLoadedValues);
+    runCustom("solve_load_phi_address_with_displacement_creates_phi_of_loaded_values",
+             &InstructionTester::runSolveLoadPhiAddressWithDisplacementCreatesPhiOfLoadedValues);
+    runCustom("generalized_loop_local_phi_address_creates_phi_of_loaded_values",
+             &InstructionTester::runGeneralizedLoopLocalPhiAddressCreatesPhiOfLoadedValues);
     runCustom("structured_loop_header_allows_jump_chain",
              &InstructionTester::runStructuredLoopHeaderAllowsJumpChain);
 
@@ -1466,14 +2805,34 @@ private:
              &InstructionTester::runGeneralizedLoopBypassTagClearsAfterPromotion);
     runCustom("promoted_generalized_loop_restores_canonical_backup",
              &InstructionTester::runPromotedGeneralizedLoopRestoresCanonicalBackup);
+    runCustom("generalized_loop_restore_merges_backedge_flag_state",
+             &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
+    runCustom("targeted_themida_r9_override_produces_phi",
+             &InstructionTester::runTargetedThemidаR9OverrideProducesPhi);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeRegisterState);
+    runCustom("set_register_value_zero_extends_32bit_writes",
+             &InstructionTester::runSetRegisterValueZeroExtends32BitWrites);
+    runCustom("compute_possible_values_on_rolled_arithmetic_chain",
+             &InstructionTester::runComputePossibleValuesOnRolledArithmeticChain);
+    runCustom("byte_test_join_preserves_branch_values",
+             &InstructionTester::runByteTestJoinPreservesBranchValues);
+    runCustom("compute_possible_values_on_generalized_phi_load",
+             &InstructionTester::runComputePossibleValuesOnGeneralizedPhiLoad);
+    runCustom("rolled_generalized_phi_address_uses_advanced_pair",
+             &InstructionTester::runRolledGeneralizedPhiAddressUsesAdvancedPair);
+    runCustom("solve_path_resolves_generalized_phi_load_target",
+             &InstructionTester::runSolvePathResolvesGeneralizedPhiLoadTarget);
+    runCustom("generalized_phi_address_with_displacement_creates_phi_of_loaded_values",
+             &InstructionTester::runGeneralizedPhiAddressWithDisplacementCreatesPhiOfLoadedValues);
     runCustom("solve_load_infers_concrete_base_from_tracked_load",
              &InstructionTester::runSolveLoadInfersConcreteBaseFromTrackedLoad);
     runCustom("compute_possible_values_preserves_cast_widths",
              &InstructionTester::runComputePossibleValuesPreservesCastWidths);
-    runCustom("solve_path_skips_raw_zero_in_multi_target_switch",
-             &InstructionTester::runSolvePathSkipsRawZeroInMultiTargetSwitch);
+    runCustom("generalized_loop_control_field_load_creates_phi",
+             &InstructionTester::runGeneralizedLoopControlFieldLoadCreatesPhi);
+    runCustom("solve_path_prefers_mapped_target_over_null_for_indirect_jump",
+             &InstructionTester::runSolvePathPrefersMappedTargetOverNullForIndirectJump);
     runCustom("solve_path_widens_mapped_rva_target",
              &InstructionTester::runSolvePathWidensMappedRvaTarget);
     runCustom("normalize_runtime_target_widens_mapped_rva_target",
