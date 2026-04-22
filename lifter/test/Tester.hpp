@@ -1889,6 +1889,123 @@ bool runGeneralizedLoopNestedInnerOverwritesOuterActiveState(std::string& detail
   return true;
 }
 
+// Multi-way rolled-control: record_generalized_loop_backedge appends or
+// updates per body source when the header has >=2 backedges. 1-backedge
+// loops keep the original rotation semantics (promote backedge into
+// canonical, install new source as backedge); multi-way loops dedup by
+// sourceBlock and grow the backedge list as distinct body paths roll.
+bool runRecordGeneralizedLoopBackedgeMultiwayAppendsNewBodySource(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* bodyBlock =
+      llvm::BasicBlock::Create(context, "body_block", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t bodyRolledControl = 0x1401AEC37ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  if (!lifter.activeGeneralizedLoopControlFieldState.valid) {
+    details = "  multi-way activation failed\n";
+    return false;
+  }
+  if (lifter.activeGeneralizedLoopControlFieldState.backedgeSources.size() != 2) {
+    details = "  setup should have 2 backedges before record\n";
+    return false;
+  }
+
+  // Simulate body lifting: a new body block advances the control cursor.
+  lifter.builder->SetInsertPoint(bodyBlock);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, bodyRolledControl));
+  lifter.record_generalized_loop_backedge(loopHeader);
+
+  auto& backedgeSources =
+      lifter.activeGeneralizedLoopControlFieldState.backedgeSources;
+  auto& backedgeControls =
+      lifter.activeGeneralizedLoopControlFieldState.backedgeControls;
+  if (backedgeSources.size() != 3) {
+    std::ostringstream os;
+    os << "  record_generalized_loop_backedge (multi-way) should append body "
+          "source, got backedge count " << backedgeSources.size()
+       << " expected 3\n";
+    details = os.str();
+    return false;
+  }
+  bool sawBody = false;
+  for (size_t i = 0; i < backedgeSources.size(); ++i) {
+    if (backedgeSources[i] == bodyBlock &&
+        backedgeControls[i] == bodyRolledControl) {
+      sawBody = true;
+      break;
+    }
+  }
+  if (!sawBody) {
+    details = "  appended body backedge missing from multi-way state\n";
+    return false;
+  }
+
+  // Calling record again from the same body with the SAME control must
+  // be a no-op (no progress - size stays at 3).
+  lifter.record_generalized_loop_backedge(loopHeader);
+  if (backedgeSources.size() != 3) {
+    details = "  repeat record (same control) should not grow multi-way state\n";
+    return false;
+  }
+
+  // Calling record with a NEW control from the same body must update
+  // in place - size stays at 3, but the body entry's control advances.
+  constexpr uint64_t bodyRolledControl2 = 0x1401AED41ULL;
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, bodyRolledControl2));
+  lifter.record_generalized_loop_backedge(loopHeader);
+  if (backedgeSources.size() != 3) {
+    details = "  repeat record (new control, same source) should dedup and "
+              "not grow multi-way state\n";
+    return false;
+  }
+  bool sawUpdatedControl = false;
+  for (size_t i = 0; i < backedgeSources.size(); ++i) {
+    if (backedgeSources[i] == bodyBlock &&
+        backedgeControls[i] == bodyRolledControl2) {
+      sawUpdatedControl = true;
+      break;
+    }
+  }
+  if (!sawUpdatedControl) {
+    details = "  multi-way body entry should reflect latest rolled control "
+              "after repeat record\n";
+    return false;
+  }
+  return true;
+}
+
 bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -3227,6 +3344,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopNonThemidaControlSlotProducesNoPhi);
     runCustom("generalized_loop_nested_inner_overwrites_outer_active_state",
              &InstructionTester::runGeneralizedLoopNestedInnerOverwritesOuterActiveState);
+    runCustom("record_generalized_loop_backedge_multiway_appends_new_body_source",
+             &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayAppendsNewBodySource);
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
