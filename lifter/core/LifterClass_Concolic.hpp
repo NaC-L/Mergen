@@ -1302,49 +1302,101 @@ public:
         !stateIt->second.valid) {
       return;
     }
-    // The rolled-control promotion semantics (move current backedge into
-    // canonical, install new source as backedge) are only well-defined for
-    // the 1-backedge case. Multi-way loops do not have a single obvious
-    // "current backedge" to promote, so skip the rotation; the existing
-    // N-way state remains valid.
-    if (stateIt->second.backedgeSources.size() != 1) {
+    auto& sources = stateIt->second.backedgeSources;
+    auto& controls = stateIt->second.backedgeControls;
+    auto& buffers = stateIt->second.backedgeBuffers;
+
+    if (sources.size() == 1) {
+      // 2-way loop: preserve the original rotation semantics - move the
+      // current backedge into canonical and install the new body source
+      // as the single backedge. This matches the reference Themida flow
+      // where body exploration rolls the control cursor forward.
+      auto* existingBackedgeSource = sources.front();
+      if (!existingBackedgeSource || sourceBlock == existingBackedgeSource) {
+        return;
+      }
+      auto* currentControlValue =
+          retrieveContiguousBufferedValue(this->buffer, kThemidaControlCursorSlot, 8);
+      uint64_t rolledBackedgeControl = 0;
+      if (!currentControlValue ||
+          !evaluateConcreteGeneralizedLoopInt(currentControlValue,
+                                              existingBackedgeSource,
+                                              rolledBackedgeControl) ||
+          rolledBackedgeControl == controls.front()) {
+        return;
+      }
+      auto previousBackedgeSource = existingBackedgeSource;
+      auto previousBackedgeControl = controls.front();
+      auto previousBackedgeBuffer = buffers.front();
+      stateIt->second.canonicalSource = previousBackedgeSource;
+      stateIt->second.canonicalControl = previousBackedgeControl;
+      stateIt->second.canonicalBuffer = previousBackedgeBuffer;
+      sources.front() = sourceBlock;
+      controls.front() = rolledBackedgeControl;
+      buffers.front() = this->buffer;
+      if (bb == activeGeneralizedLoopControlFieldState.headerBlock) {
+        activeGeneralizedLoopControlFieldState = stateIt->second;
+        activeGeneralizedLoopEntrySourceBlock = sourceBlock;
+        activeGeneralizedLoopLocalBuffer = extractLocalStackBuffer(
+            activeGeneralizedLoopControlFieldState.backedgeBuffers.front());
+      }
+      if (this->liftProgressDiagEnabled) {
+        std::cout << "[diag] roll_generalized_backedge bb=" << bb->getName().str()
+                  << " canonical=0x" << std::hex
+                  << stateIt->second.canonicalControl << " backedge=0x"
+                  << controls.front() << std::dec
+                  << " source=" << sourceBlock->getName().str() << "\n";
+      }
       return;
     }
-    auto* existingBackedgeSource = stateIt->second.backedgeSources.front();
-    if (!existingBackedgeSource || sourceBlock == existingBackedgeSource) {
+
+    // Multi-way loop (size > 1): append-or-update the body source to the
+    // backedge list. Each distinct body block contributes at most one
+    // entry (dedup by sourceBlock). This preserves the original N
+    // backedges and records the body's rolled state alongside them;
+    // unbounded growth is prevented by the per-sourceBlock dedup.
+    // Rotation (promoting a backedge to canonical) is undefined for
+    // multi-way - no single backedge is "the" one to promote.
+    if (sourceBlock == stateIt->second.canonicalSource) {
       return;
     }
     auto* currentControlValue =
         retrieveContiguousBufferedValue(this->buffer, kThemidaControlCursorSlot, 8);
-    uint64_t rolledBackedgeControl = 0;
+    uint64_t newControl = 0;
     if (!currentControlValue ||
-        !evaluateConcreteGeneralizedLoopInt(currentControlValue,
-                                            existingBackedgeSource,
-                                            rolledBackedgeControl) ||
-        rolledBackedgeControl == stateIt->second.backedgeControls.front()) {
+        !evaluateConcreteGeneralizedLoopInt(currentControlValue, sourceBlock,
+                                            newControl)) {
       return;
     }
-    auto previousBackedgeSource = existingBackedgeSource;
-    auto previousBackedgeControl = stateIt->second.backedgeControls.front();
-    auto previousBackedgeBuffer = stateIt->second.backedgeBuffers.front();
-    stateIt->second.canonicalSource = previousBackedgeSource;
-    stateIt->second.canonicalControl = previousBackedgeControl;
-    stateIt->second.canonicalBuffer = previousBackedgeBuffer;
-    stateIt->second.backedgeSources.front() = sourceBlock;
-    stateIt->second.backedgeControls.front() = rolledBackedgeControl;
-    stateIt->second.backedgeBuffers.front() = this->buffer;
-    if (bb == activeGeneralizedLoopControlFieldState.headerBlock) {
-      activeGeneralizedLoopControlFieldState = stateIt->second;
-      activeGeneralizedLoopEntrySourceBlock = sourceBlock;
-      activeGeneralizedLoopLocalBuffer = extractLocalStackBuffer(
-          activeGeneralizedLoopControlFieldState.backedgeBuffers.front());
+    bool mutated = false;
+    bool isNew = true;
+    for (size_t i = 0; i < sources.size(); ++i) {
+      if (sources[i] == sourceBlock) {
+        isNew = false;
+        if (controls[i] == newControl) {
+          return;  // no progress; nothing to record
+        }
+        controls[i] = newControl;
+        buffers[i] = this->buffer;
+        mutated = true;
+        break;
+      }
     }
-    if (this->liftProgressDiagEnabled) {
-      std::cout << "[diag] roll_generalized_backedge bb=" << bb->getName().str()
-                << " canonical=0x" << std::hex
-                << stateIt->second.canonicalControl << " backedge=0x"
-                << stateIt->second.backedgeControls.front() << std::dec
-                << " source=" << sourceBlock->getName().str() << "\n";
+    if (isNew) {
+      sources.push_back(sourceBlock);
+      controls.push_back(newControl);
+      buffers.push_back(this->buffer);
+      mutated = true;
+    }
+    if (mutated && bb == activeGeneralizedLoopControlFieldState.headerBlock) {
+      activeGeneralizedLoopControlFieldState = stateIt->second;
+    }
+    if (mutated && this->liftProgressDiagEnabled) {
+      std::cout << "[diag] roll_generalized_backedge_multiway bb="
+                << bb->getName().str()
+                << " backedgeCount=" << sources.size()
+                << " source=" << sourceBlock->getName().str() << std::dec
+                << "\n";
     }
   }
 
