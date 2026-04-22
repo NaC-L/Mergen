@@ -1388,6 +1388,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
     value = SetValueToSubRegister_16b(key, value);
   }
 
+  if ((key >= Register::EAX) && (key <= Register::R15D)) {
+    value = createZExtFolder(value, Type::getInt64Ty(this->context),
+                             "zeroextend-32bit-write");
+  }
+
   if (key == Register::RFLAGS) {
     SetRFLAGSValue(value);
     return;
@@ -1396,6 +1401,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
   printvalue(value);
   Register newKey = getBiggestEncoding(key);
   SetRegisterValue_internal(newKey, value);
+
 }
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetEffectiveAddress() {

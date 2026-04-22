@@ -160,6 +160,41 @@ public:
     (void)byteCount;
     return nullptr;
   }
+  llvm::Value* retrieve_generalized_loop_control_slot_value_impl(
+      uint64_t startAddress, uint8_t byteCount) {
+    (void)startAddress;
+    (void)byteCount;
+    return nullptr;
+  }
+  llvm::Value* retrieve_generalized_loop_control_field_value_impl(
+      llvm::Value* loadOffset, uint8_t byteCount, LazyValue orgLoad) {
+    (void)loadOffset;
+    (void)byteCount;
+    (void)orgLoad;
+    return nullptr;
+  }
+  llvm::Value* retrieve_generalized_loop_local_phi_address_value_impl(
+      llvm::Value* loadOffset, uint8_t byteCount, LazyValue orgLoad) {
+    (void)loadOffset;
+    (void)byteCount;
+    (void)orgLoad;
+    return nullptr;
+  }
+  llvm::Value* retrieve_generalized_loop_target_slot_value_impl(
+      uint64_t startAddress, uint8_t byteCount) {
+    (void)startAddress;
+    (void)byteCount;
+    return nullptr;
+  }
+  llvm::Value* retrieve_generalized_loop_phi_address_value_impl(
+      llvm::Value* loadOffset, uint8_t byteCount, LazyValue orgLoad) {
+    (void)loadOffset;
+    (void)byteCount;
+    (void)orgLoad;
+    return nullptr;
+  }
+
+
 
 
   void createFunction_impl() {
