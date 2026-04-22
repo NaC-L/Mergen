@@ -1083,6 +1083,57 @@ private:
   }
 
 
+  bool runSolvePathSkipsRawZeroInMultiTargetSwitch(std::string& details) {
+    LifterUnderTest lifter;
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    lifter.builder->SetInsertPoint(current);
+    lifter.blockInfo = BBInfo(0x1400237F9ULL, current);
+    lifter.file.imageBase = 0x140000000ULL;
+    lifter.markMemPaged(0x140020EADULL, 0x140020EB5ULL);
+    lifter.markMemPaged(0x140023699ULL, 0x1400236A1ULL);
+    // imageBase is intentionally mapped so that, if the raw-zero filter
+    // regresses, the bug would surface as a bogus 0x140000000 switch case.
+    lifter.markMemPaged(0x140000000ULL, 0x140000008ULL);
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::IndirectJump;
+
+    auto* unknownCondA = lifter.builder->CreateICmpEQ(
+        lifter.GetRegisterValue(RegisterUnderTest::RAX),
+        makeI64(lifter.context, 1), "unknown_cond_a");
+    auto* unknownCondB = lifter.builder->CreateICmpEQ(
+        lifter.GetRegisterValue(RegisterUnderTest::RCX),
+        makeI64(lifter.context, 2), "unknown_cond_b");
+    auto* zeroOrMapped = lifter.builder->CreateSelect(
+        unknownCondA, makeI64(lifter.context, 0),
+        makeI64(lifter.context, 0x140020EADULL), "zero_or_mapped_select");
+    auto* multiSelect = lifter.builder->CreateSelect(
+        unknownCondB, zeroOrMapped,
+        makeI64(lifter.context, 0x140023699ULL), "raw_zero_multi_select");
+
+    uint64_t destination = 0;
+    auto pathResult = lifter.solvePath(lifter.fnc, destination, multiSelect);
+    if (pathResult != PATH_multi_solved || destination != 0) {
+      std::ostringstream os;
+      os << "  solvePath should emit a multi-target switch for {0, mapped, mapped}, got result="
+         << pathResult << " dest=0x" << std::hex << destination << "\n";
+      details = os.str();
+      return false;
+    }
+    if (lifter.addrToBB.contains(0x140000000ULL)) {
+      details =
+          "  solvePath widened raw zero into an imageBase switch target\n";
+      return false;
+    }
+    if (!lifter.addrToBB.contains(0x140020EADULL) ||
+        !lifter.addrToBB.contains(0x140023699ULL)) {
+      details =
+          "  solvePath should still queue the mapped switch targets after filtering raw zero\n";
+      return false;
+    }
+    return true;
+  }
+
+
   bool runSolvePathWidensMappedRvaTarget(std::string& details) {
     LifterUnderTest lifter;
     auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
@@ -1324,6 +1375,8 @@ private:
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeRegisterState);
     runCustom("solve_load_infers_concrete_base_from_tracked_load",
              &InstructionTester::runSolveLoadInfersConcreteBaseFromTrackedLoad);
+    runCustom("solve_path_skips_raw_zero_in_multi_target_switch",
+             &InstructionTester::runSolvePathSkipsRawZeroInMultiTargetSwitch);
     runCustom("solve_path_widens_mapped_rva_target",
              &InstructionTester::runSolvePathWidensMappedRvaTarget);
     runCustom("normalize_runtime_target_widens_mapped_rva_target",
