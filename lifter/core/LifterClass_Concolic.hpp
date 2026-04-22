@@ -139,7 +139,7 @@ public:
     }
   }
 
-  llvm::Value* resolveTargetedThemidаR9(llvm::Value* value) {
+  llvm::Value* resolveTargetedThemidaR9(llvm::Value* value) {
     auto* state = getMostRecentGeneralizedLoopState();
     if (this->liftProgressDiagEnabled && this->current_address >= 0x140023500ULL &&
         this->current_address <= 0x140023800ULL) {
@@ -201,7 +201,7 @@ public:
       std::cout << "\n";
     }
     if (key == Register::R9) {
-      return resolveTargetedThemidаR9(value);
+      return resolveTargetedThemidaR9(value);
     }
     return value;
   }
