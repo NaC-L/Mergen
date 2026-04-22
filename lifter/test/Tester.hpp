@@ -1594,6 +1594,189 @@ bool runSolveLoadPhiAddressWithDisplacementCreatesPhiOfLoadedValues(
 }
 
 
+// KNOWN-LIMITATION (multi-way backedges, ≥3 paths into the same header).
+//
+// `branch_backup(bb, /*generalized=*/true)` unconditionally overwrites
+// `generalizedLoopBackedgeBackup[bb]` (see LifterClass_Concolic.hpp,
+// comment `generalizedLoopBackedgeBackup[bb] = std::move(snapshot);`).
+// When a loop header has three or more incoming backedges, the second
+// and any further generalized snapshots silently replace the first -
+// their sourceBlock, buffer, register, and flag state are lost before
+// `load_generalized_backup` builds its canonical/backedge phi.
+//
+// The two tests below pin the CURRENT broken behavior:
+//   1. The raw map after three generalized backups retains only the
+//      third source; the second's buffer markers are gone.
+//   2. The control-slot load at the header yields a two-incoming phi,
+//      not the three-incoming phi a correct multi-way model would emit.
+//
+// When multi-way backedge support lands, both tests MUST fail and be
+// rewritten to assert the new N-way merge contract. That failure is
+// the intended signal to the implementer - do not suppress it.
+bool runGeneralizedLoopThirdBackedgeOverwritesPriorBackedgeSilently(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* thirdBackedge =
+      llvm::BasicBlock::Create(context, "third_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t thirdControl = 0x1401AEC37ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(thirdBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, thirdControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  auto it = lifter.generalizedLoopBackedgeBackup.find(loopHeader);
+  if (it == lifter.generalizedLoopBackedgeBackup.end()) {
+    details = "  generalizedLoopBackedgeBackup[loopHeader] missing after "
+              "three generalized branch_backup calls\n";
+    return false;
+  }
+  if (it->second.sourceBlock != thirdBackedge) {
+    std::ostringstream os;
+    os << "  generalizedLoopBackedgeBackup retained sourceBlock="
+       << (it->second.sourceBlock
+               ? it->second.sourceBlock->getName().str()
+               : std::string("<null>"))
+       << ", expected third_backedge (current silent-overwrite behavior);"
+       << " if multi-way backedges now merge, rewrite this test.\n";
+    details = os.str();
+    return false;
+  }
+  // The map holds one backup_point per header; three generalized backups
+  // still collapse into a single entry. When multi-way merge lands, the
+  // representation will need to change (e.g. vector of backup_points, or
+  // an N-way merge recorded up front), and this size invariant will no
+  // longer hold.
+  if (lifter.generalizedLoopBackedgeBackup.size() != 1) {
+    std::ostringstream os;
+    os << "  generalizedLoopBackedgeBackup size="
+       << lifter.generalizedLoopBackedgeBackup.size()
+       << ", expected 1 (current silent-overwrite behavior); if multi-way"
+       << " merge now records each backedge, rewrite this test.\n";
+    details = os.str();
+    return false;
+  }
+  return true;
+}
+
+bool runGeneralizedLoopLoadBackupWithThreeBackedgesProducesTwoWayPhiOnly(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* thirdBackedge =
+      llvm::BasicBlock::Create(context, "third_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t thirdControl = 0x1401AEC37ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(thirdBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, thirdControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlPhiValue =
+      lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(controlPhiValue);
+  if (!phi) {
+    details = "  control-slot load at header should produce a phi under "
+              "generalized loop mode\n";
+    return false;
+  }
+  // Pins current behavior: only canonical + last-seen backedge survive.
+  // A correct multi-way implementation would yield 4 incomings
+  // (canonical + three backedges). When that lands, flip this assertion.
+  if (phi->getNumIncomingValues() != 2) {
+    std::ostringstream os;
+    os << "  control-slot phi carries " << phi->getNumIncomingValues()
+       << " incomings, expected 2 (current silent-overwrite behavior);"
+       << " if multi-way backedges now produce an N-way phi, rewrite this test.\n";
+    details = os.str();
+    return false;
+  }
+  // Incomings must be exactly canonicalControl and thirdControl - the
+  // first two backedges' control values are silently dropped.
+  bool sawCanonical = false;
+  bool sawThird = false;
+  bool sawDroppedValue = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalControl) sawCanonical = true;
+    else if (v == thirdControl) sawThird = true;
+    else if (v == firstControl || v == secondControl) sawDroppedValue = true;
+  }
+  if (!sawCanonical || !sawThird) {
+    details = "  control-slot phi should carry canonicalControl and "
+              "thirdControl (current silent-overwrite behavior)\n";
+    return false;
+  }
+  if (sawDroppedValue) {
+    details = "  control-slot phi unexpectedly carries a dropped-backedge "
+              "control value - multi-way merge may have landed; rewrite "
+              "this test.\n";
+    return false;
+  }
+  return true;
+}
+
 bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -2924,6 +3107,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopBypassTagClearsAfterPromotion);
     runCustom("promoted_generalized_loop_restores_canonical_backup",
              &InstructionTester::runPromotedGeneralizedLoopRestoresCanonicalBackup);
+    runCustom("generalized_loop_third_backedge_overwrites_prior_backedge_silently",
+             &InstructionTester::runGeneralizedLoopThirdBackedgeOverwritesPriorBackedgeSilently);
+    runCustom("generalized_loop_load_backup_with_three_backedges_produces_two_way_phi_only",
+             &InstructionTester::runGeneralizedLoopLoadBackupWithThreeBackedgesProducesTwoWayPhiOnly);
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
