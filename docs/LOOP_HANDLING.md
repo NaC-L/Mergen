@@ -63,11 +63,13 @@ struct GeneralizedLoopControlFieldState {
   bool valid = false;
   llvm::BasicBlock* headerBlock = nullptr;
   llvm::BasicBlock* canonicalSource = nullptr;
-  llvm::BasicBlock* backedgeSource = nullptr;
+  // Backedge side is variable-width: a loop header may be reached from
+  // multiple backedges (N>=1). Size 1 is the common 2-way loop case.
+  llvm::SmallVector<llvm::BasicBlock*, 2> backedgeSources;
   uint64_t canonicalControl = 0;
-  uint64_t backedgeControl = 0;
+  llvm::SmallVector<uint64_t, 2> backedgeControls;
   llvm::DenseMap<uint64_t, ValueByteReference> canonicalBuffer;
-  llvm::DenseMap<uint64_t, ValueByteReference> backedgeBuffer;
+  llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> backedgeBuffers;
 } activeGeneralizedLoopControlFieldState;
 
 llvm::DenseMap<llvm::BasicBlock*, GeneralizedLoopControlFieldState>
@@ -86,29 +88,32 @@ State transitions:
 | Event | What changes |
 |---|---|
 | `branch_backup(bb, generalized=false)` | Snapshots current registers/flags/buffer/cache/assumptions/counter into `BBbackup[bb]`. |
-| `branch_backup(bb, generalized=true)` | Same snapshot stored into `generalizedLoopBackedgeBackup[bb]`; `BBbackup[bb]` only set if absent. |
+| `branch_backup(bb, generalized=true)` | Appends the snapshot to `generalizedLoopBackedgeBackup[bb]` (a `SmallVector<backup_point, 2>`), deduplicated by `sourceBlock` so a repeat call from the same source replaces its entry in place. `BBbackup[bb]` only set if absent. |
 | `load_backup(bb)` | Restores `BBbackup[bb]`, clears `activeGeneralizedLoopLocalBuffer`. |
 | `load_generalized_backup(bb)` | Builds `make_generalized_loop_backup(bb)` and restores it; populates `activeGeneralizedLoopControlFieldState` from the canonical/backedge snapshots. |
 | `record_generalized_loop_backedge(bb)` | Promotes the loop: copies `activeGeneralizedLoopControlFieldState` into the per-header archive, marks the address generalized. |
 
 ## Phi construction at the header
 
-`make_generalized_loop_backup(bb, canonical, backedge)` calls `mergeValue` for every register and flag slot:
+`make_generalized_loop_backup(bb, canonical, ArrayRef<backup_point> sources)` calls `mergeValue` for every register and flag slot. With one canonical source and N backedge sources, it produces a `(1 + N)`-incoming phi (one incoming per distinct `sources[i].sourceBlock`). Sources duplicating `canonical.sourceBlock` are filtered before phi construction.
 
 ```cpp
-auto mergeValue = [&](Value* canonicalValue, Value* backedgeValue,
+auto mergeValue = [&](Value* canonicalValue,
+                      ArrayRef<Value*> backedgeValues,
                       const char* name, PHINode*& phiOut,
                       bool widenFirstBackedge) -> Value* {
-  if (!canonicalValue || !backedgeValue ||
-      types differ || canonical == backedge) {
-    return backedgeValue;          // no phi needed
-  }
-  auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(), 2, name);
+  // Require canonical + all backedges present and type-matched. Any
+  // mismatch falls back to backedgeValues.front(), preserving the
+  // pre-N-way single-backedge semantics for the 2-way case.
+  auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(),
+                                   1 + backedgeValues.size(), name);
   phi->addIncoming(canonicalValue, canonicalSource);
-  phi->addIncoming(widenFirstBackedge
-                       ? UndefValue::get(backedgeValue->getType())
-                       : backedgeValue,
-                   backedgeSource);
+  for (size_t i = 0; i < backedgeValues.size(); ++i) {
+    phi->addIncoming(widenFirstBackedge
+                         ? UndefValue::get(backedgeValues[i]->getType())
+                         : backedgeValues[i],
+                     sources[i]->sourceBlock);
+  }
   phiOut = phi;
   return phi;
 };
@@ -184,4 +189,3 @@ and inspect `output_diagnostics.json` for `lift_stats.instructions_lifted == 254
 | `REP`/`REPE`/`REPNE`-prefixed `SCAS` | Rejected as `not_implemented`; needs a model for repeated-scan termination. |
 | `INT 2` continuation under VMP 3.6 | Naive architectural fallthrough is wrong; recovery requires modeling the dispatcher / exception-mediated control flow. See `VMP_TESTING_NOTES.md`. |
 | Loop unrolling / loop-invariant code motion | Not implemented. The lifter relies on LLVM's downstream optimization passes for this once the IR is in shape. |
-| Multi-way backedges (≥3 paths to the same header) | Not exercised by the current generalized-loop machinery; the canonical/backedge model assumes exactly two incoming paths. |
