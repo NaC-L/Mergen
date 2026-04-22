@@ -1083,6 +1083,101 @@ private:
   }
 
 
+  bool runComputePossibleValuesEnumeratesPhiIncomings(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+    // Four-way phi: verifies we don't accidentally cap at 2 (the byte-test
+    // join test only exercises 2-way joins).
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    auto* arm0 = llvm::BasicBlock::Create(context, "arm0", lifter.fnc);
+    auto* arm1 = llvm::BasicBlock::Create(context, "arm1", lifter.fnc);
+    auto* arm2 = llvm::BasicBlock::Create(context, "arm2", lifter.fnc);
+    auto* arm3 = llvm::BasicBlock::Create(context, "arm3", lifter.fnc);
+    auto* join = llvm::BasicBlock::Create(context, "join", lifter.fnc);
+
+    llvm::IRBuilder<>(entry).CreateBr(arm0);
+    llvm::IRBuilder<>(arm0).CreateBr(join);
+    llvm::IRBuilder<>(arm1).CreateBr(join);
+    llvm::IRBuilder<>(arm2).CreateBr(join);
+    llvm::IRBuilder<>(arm3).CreateBr(join);
+
+    lifter.builder->SetInsertPoint(join);
+    llvm::IRBuilder<> phiBuilder(join, join->begin());
+    auto* wide = phiBuilder.CreatePHI(i64Ty, 4, "wide_phi");
+    const std::array<uint64_t, 4> widePayload = {
+        0x00000000'DEADBEEFULL, 0x11111111'CAFEBABEULL,
+        0x22222222'12345678ULL, 0x33333333'ABCDEF01ULL};
+    wide->addIncoming(makeI64(context, widePayload[0]), arm0);
+    wide->addIncoming(makeI64(context, widePayload[1]), arm1);
+    wide->addIncoming(makeI64(context, widePayload[2]), arm2);
+    wide->addIncoming(makeI64(context, widePayload[3]), arm3);
+
+    auto wideValues = lifter.computePossibleValues(wide, 0);
+    if (wideValues.size() != widePayload.size()) {
+      std::ostringstream os;
+      os << "  4-way phi should enumerate all four incomings, got size "
+         << wideValues.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    for (uint64_t want : widePayload) {
+      if (!wideValues.contains(llvm::APInt(64, want))) {
+        std::ostringstream os;
+        os << "  4-way phi result missing 0x" << std::hex << want << "\n";
+        details = os.str();
+        return false;
+      }
+    }
+
+    // Phi-of-phi: the outer phi's incoming is itself a phi.  The union must
+    // recurse into the inner phi, not stop at it as a single 'unknown' operand.
+    auto* innerArmA = llvm::BasicBlock::Create(context, "inner_a", lifter.fnc);
+    auto* innerArmB = llvm::BasicBlock::Create(context, "inner_b", lifter.fnc);
+    auto* innerJoin = llvm::BasicBlock::Create(context, "inner_join", lifter.fnc);
+    auto* outerOther = llvm::BasicBlock::Create(context, "outer_other", lifter.fnc);
+    auto* outerJoin = llvm::BasicBlock::Create(context, "outer_join", lifter.fnc);
+
+    llvm::IRBuilder<>(innerArmA).CreateBr(innerJoin);
+    llvm::IRBuilder<>(innerArmB).CreateBr(innerJoin);
+    llvm::IRBuilder<>(innerJoin).CreateBr(outerJoin);
+    llvm::IRBuilder<>(outerOther).CreateBr(outerJoin);
+
+    llvm::IRBuilder<> innerPhiBuilder(innerJoin, innerJoin->begin());
+    auto* innerPhi = innerPhiBuilder.CreatePHI(i64Ty, 2, "inner_phi");
+    const uint64_t innerA = 0x10;
+    const uint64_t innerB = 0x20;
+    innerPhi->addIncoming(makeI64(context, innerA), innerArmA);
+    innerPhi->addIncoming(makeI64(context, innerB), innerArmB);
+
+    llvm::IRBuilder<> outerPhiBuilder(outerJoin, outerJoin->begin());
+    auto* outerPhi = outerPhiBuilder.CreatePHI(i64Ty, 2, "outer_phi");
+    const uint64_t outerOtherValue = 0x30;
+    outerPhi->addIncoming(innerPhi, innerJoin);
+    outerPhi->addIncoming(makeI64(context, outerOtherValue), outerOther);
+
+    auto nestedValues = lifter.computePossibleValues(outerPhi, 0);
+    const std::array<uint64_t, 3> nestedWant = {innerA, innerB, outerOtherValue};
+    if (nestedValues.size() != nestedWant.size()) {
+      std::ostringstream os;
+      os << "  phi-of-phi should flatten to three leaf values, got size "
+         << nestedValues.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    for (uint64_t want : nestedWant) {
+      if (!nestedValues.contains(llvm::APInt(64, want))) {
+        std::ostringstream os;
+        os << "  phi-of-phi result missing 0x" << std::hex << want << "\n";
+        details = os.str();
+        return false;
+      }
+    }
+    return true;
+  }
+
+
   bool runComputePossibleValuesPreservesCastWidths(std::string& details) {
     LifterUnderTest lifter;
     auto& context = lifter.context;
@@ -2829,6 +2924,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runSolveLoadInfersConcreteBaseFromTrackedLoad);
     runCustom("compute_possible_values_preserves_cast_widths",
              &InstructionTester::runComputePossibleValuesPreservesCastWidths);
+    runCustom("compute_possible_values_enumerates_phi_incomings",
+             &InstructionTester::runComputePossibleValuesEnumeratesPhiIncomings);
     runCustom("generalized_loop_control_field_load_creates_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadCreatesPhi);
     runCustom("solve_path_prefers_mapped_target_over_null_for_indirect_jump",
