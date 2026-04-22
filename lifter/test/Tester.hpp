@@ -1777,6 +1777,142 @@ bool runGeneralizedLoopLoadBackupWithThreeBackedgesProducesTwoWayPhiOnly(
   return true;
 }
 
+// KNOWN-LIMITATION (non-Themida control slot is invisible to generalization).
+//
+// retrieve_generalized_loop_control_slot_value_impl explicitly gates on
+// `startAddress != this->kThemidaControlCursorSlot` and returns nullptr for
+// every other address. A loop whose control cursor is stored at any address
+// other than 0x14004DD19 does not get its load re-routed through the
+// canonical/backedge phi; the caller falls back to the normal memory
+// pipeline, which yields a concrete or last-written value - not a phi.
+//
+// When the hardcoded slot is replaced with per-function detection or a
+// tagging layer, this test MUST fail and be rewritten to assert the new
+// discovery mechanism.
+bool runGeneralizedLoopNonThemidaControlSlotProducesNoPhi(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t themidaControlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  // A plausible control-cursor slot for a different protected binary.
+  // Not 0x14004DD19, so the slot-value retrieval must bail.
+  constexpr uint64_t otherControlSlot = 0x140050000ULL;
+  constexpr uint64_t otherCanonicalValue = 0x1100220033004400ULL;
+  constexpr uint64_t otherBackedgeValue = 0x5500660077008800ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  // Themida slot - required to activate the generalized state machinery.
+  lifter.SetMemoryValue(makeI64(context, themidaControlSlot),
+                        makeI64(context, canonicalControl));
+  // The actual slot under test, seeded with distinct canonical value.
+  lifter.SetMemoryValue(makeI64(context, otherControlSlot),
+                        makeI64(context, otherCanonicalValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, themidaControlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, otherControlSlot),
+                        makeI64(context, otherBackedgeValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* loadedAtOtherSlot =
+      lifter.GetMemoryValue(makeI64(context, otherControlSlot), 64);
+  if (llvm::isa<llvm::PHINode>(loadedAtOtherSlot)) {
+    details = "  GetMemoryValue at non-Themida control slot unexpectedly "
+              "produced a PHINode - the hardcoded slot gate has been "
+              "generalized; rewrite this test against the new contract.\n";
+    return false;
+  }
+  return true;
+}
+
+// KNOWN-LIMITATION (nested loops share a single active state slot).
+//
+// activeGeneralizedLoopControlFieldState is a scalar struct, not a stack.
+// load_generalized_backup(bb) calls clearGeneralizedLoopControlFieldState()
+// at entry and then re-populates the scalar from BBbackup[bb] and
+// generalizedLoopBackedgeBackup[bb]. An inner loop that calls
+// load_generalized_backup while an outer loop's state is active
+// overwrites the outer scalar. At any instant, only one header's state
+// is queryable through the retrieve_generalized_loop_* helpers.
+//
+// (The per-header archive in generalizedLoopControlFieldStates is
+// populated on every successful load, not only on
+// record_generalized_loop_backedge, so the archive is a cache - not a
+// nesting stack. Lifting nested loops today requires the caller to
+// manually reload whichever header's state it needs next.)
+//
+// When nested-loop support lands (state stack, or lazy per-header lookup
+// within the retrieve_generalized_loop_* helpers), this test MUST fail
+// and be rewritten against the new nesting contract.
+bool runGeneralizedLoopNestedInnerOverwritesOuterActiveState(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* outerPreheader =
+      llvm::BasicBlock::Create(context, "outer_preheader", lifter.fnc);
+  auto* outerBackedge =
+      llvm::BasicBlock::Create(context, "outer_backedge", lifter.fnc);
+  auto* outerHeader =
+      llvm::BasicBlock::Create(context, "outer_header", lifter.fnc);
+  auto* innerPreheader =
+      llvm::BasicBlock::Create(context, "inner_preheader", lifter.fnc);
+  auto* innerBackedge =
+      llvm::BasicBlock::Create(context, "inner_backedge", lifter.fnc);
+  auto* innerHeader =
+      llvm::BasicBlock::Create(context, "inner_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t outerCanonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t outerBackedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t innerCanonicalControl = 0x1401BA72CULL;
+  constexpr uint64_t innerBackedgeControl = 0x1401BA97FULL;
+
+  // Outer loop setup.
+  lifter.builder->SetInsertPoint(outerPreheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, outerCanonicalControl));
+  lifter.branch_backup(outerHeader);
+  lifter.builder->SetInsertPoint(outerBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, outerBackedgeControl));
+  lifter.branch_backup(outerHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(outerHeader);
+  if (!lifter.activeGeneralizedLoopControlFieldState.valid ||
+      lifter.activeGeneralizedLoopControlFieldState.headerBlock != outerHeader) {
+    details = "  outer load_generalized_backup failed to activate outer state\n";
+    return false;
+  }
+
+  // Inner loop setup (nested inside outer, outer not yet promoted).
+  lifter.builder->SetInsertPoint(innerPreheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, innerCanonicalControl));
+  lifter.branch_backup(innerHeader);
+  lifter.builder->SetInsertPoint(innerBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, innerBackedgeControl));
+  lifter.branch_backup(innerHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(innerHeader);
+
+  // Active state is now inner's; outer's active state was overwritten.
+  if (lifter.activeGeneralizedLoopControlFieldState.headerBlock != innerHeader) {
+    details = "  inner load_generalized_backup failed to activate inner state\n";
+    return false;
+  }
+  return true;
+}
+
 bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -3111,6 +3247,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopThirdBackedgeOverwritesPriorBackedgeSilently);
     runCustom("generalized_loop_load_backup_with_three_backedges_produces_two_way_phi_only",
              &InstructionTester::runGeneralizedLoopLoadBackupWithThreeBackedgesProducesTwoWayPhiOnly);
+    runCustom("generalized_loop_non_themida_control_slot_produces_no_phi",
+             &InstructionTester::runGeneralizedLoopNonThemidaControlSlotProducesNoPhi);
+    runCustom("generalized_loop_nested_inner_overwrites_outer_active_state",
+             &InstructionTester::runGeneralizedLoopNestedInnerOverwritesOuterActiveState);
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
