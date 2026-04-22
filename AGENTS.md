@@ -122,6 +122,7 @@ scripts\rewrite\run_microtests.cmd --check-flags xor
 - If you edit the same file twice, re-read it first.
 - Default to one main line of work; split into subtasks only when file boundaries are real and outputs are independent.
 - Do not finish non-trivial work without focused verification that matches the changed subsystem.
+- Before comparing two branches with `python test.py baseline`/`quick`, wipe `build_iced/` (`rm -rf build_iced && cmd /c scripts\dev\configure_iced.cmd && cmd /c scripts\dev\build_iced.cmd`).  Incremental builds reuse object files across branches and will happily link a stale mix of old and new code, producing a lifter binary whose failure set reflects neither branch.  This has caused at least one false "branch matches main" claim.
 
 ## What not to do
 - Do not start with repo-root scans when a narrower directory or entry document can answer the question.
