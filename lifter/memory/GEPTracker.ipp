@@ -18,6 +18,15 @@ using namespace llvm;
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::addValueReference(Value* value,
                                                             uint64_t address) {
+  if (liftProgressDiagEnabled &&
+      (address == 1375392 || address == 1375400 || address == 1375408)) {
+    std::string vtxt;
+    llvm::raw_string_ostream os(vtxt);
+    value->print(os);
+    std::cout << "[diag] synth-slot write @0x" << std::hex
+              << (current_address - instruction.length) << " slot=0x"
+              << address << std::dec << " value=" << os.str() << "\n";
+  }
   unsigned valueSizeInBytes = value->getType()->getIntegerBitWidth() / 8;
   for (unsigned i = 0; i < valueSizeInBytes; i++) {
     printvalue2(address + i);
@@ -113,6 +122,13 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
   if (auto* tracked = trackedBufferConstant(startAddress, byteCount)) {
     return tracked;
   }
+  uint64_t normalizedStartAddress = normalizeRuntimeTargetAddress(startAddress);
+  if (normalizedStartAddress != startAddress) {
+    if (auto* normalizedTracked =
+            trackedBufferConstant(normalizedStartAddress, byteCount)) {
+      return normalizedTracked;
+    }
+  }
 
   if (memoryPolicy.isRangeFullyCovered(startAddress, startAddress + byteCount,
                                        MemoryAccessMode::SYMBOLIC) &&
@@ -123,6 +139,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::retrieveCombinedValue(
     // bytes below even though the address is symbolic.
     uint64_t sym_value;
     if (file.readMemory(startAddress, byteCount, sym_value)) {
+      return builder->getIntN(byteCount * 8, sym_value);
+    }
+    if (normalizedStartAddress != startAddress &&
+        file.readMemory(normalizedStartAddress, byteCount, sym_value)) {
       return builder->getIntN(byteCount * 8, sym_value);
     }
     return extractBytes(orgLoad.get(), 0, byteCount);
@@ -696,11 +716,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
       if (loadInst->getType()->isIntegerTy()) {
         auto* gep = dyn_cast<GetElementPtrInst>(loadInst->getPointerOperand());
         if (gep && gep->getPointerOperand() == memoryAlloc) {
-          if (auto* offsetCI = dyn_cast<ConstantInt>(gep->getOperand(1))) {
-            unsigned loadBits = loadInst->getType()->getIntegerBitWidth();
-            if (loadBits % 8 == 0) {
-              LazyValue nestedLoad(
-                  [loadInst]() -> Value* { return loadInst; });
+          unsigned loadBits = loadInst->getType()->getIntegerBitWidth();
+          if (loadBits % 8 == 0) {
+            LazyValue nestedLoad(
+                [loadInst]() -> Value* { return loadInst; });
+            if (auto* offsetCI = dyn_cast<ConstantInt>(gep->getOperand(1))) {
               if (auto* resolved = retrieveCombinedValue(
                       offsetCI->getZExtValue(),
                       static_cast<uint8_t>(loadBits / 8), nestedLoad)) {
@@ -710,10 +730,59 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
                   return res;
                 }
               }
+            } else if (auto* resolved = solveLoad(
+                           nestedLoad, gep,
+                           static_cast<uint8_t>(loadBits))) {
+              if (resolved != loadInst) {
+                auto resolvedValues = computePossibleValues(resolved, Depth + 1);
+                if (!resolvedValues.empty()) {
+                  pv_cache[V] = resolvedValues;
+                  return resolvedValues;
+                }
+              }
+              auto possibleOffsets = computePossibleValues(gep->getOperand(1), Depth + 1);
+              if (liftProgressDiagEnabled &&
+                  current_address - instruction.length == 0x1400237F9ULL) {
+                std::cout << "[diag] cpv_load current=0x1400237f9 offset_count="
+                          << possibleOffsets.size() << "\n";
+              }
+              for (const auto& offset : possibleOffsets) {
+                if (liftProgressDiagEnabled &&
+                    current_address - instruction.length == 0x1400237F9ULL) {
+                  std::cout << "[diag] cpv_load candidate_addr=0x" << std::hex
+                            << offset.getZExtValue() << std::dec << "\n";
+                }
+                if (auto* resolvedAtAddress = retrieveCombinedValue(
+                        offset.getZExtValue(),
+                        static_cast<uint8_t>(loadBits / 8), nestedLoad)) {
+                  if (auto* resolvedCI = dyn_cast<ConstantInt>(resolvedAtAddress)) {
+                    res.insert(resolvedCI->getValue());
+                    if (liftProgressDiagEnabled &&
+                        current_address - instruction.length == 0x1400237F9ULL) {
+                      std::cout << "[diag] cpv_load resolved_value=0x" << std::hex
+                                << resolvedCI->getZExtValue() << std::dec << "\n";
+                    }
+                  }
+                }
+              }
+              if (!res.empty()) {
+                pv_cache[V] = res;
+                return res;
+              }
             }
           }
         }
       }
+    }
+
+    if (auto* phi = dyn_cast<PHINode>(v_inst)) {
+      for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+        auto incomingValues =
+            computePossibleValues(phi->getIncomingValue(i), Depth + 1);
+        res.insert(incomingValues.begin(), incomingValues.end());
+      }
+      pv_cache[V] = res;
+      return res;
     }
 
     if (v_inst->getNumOperands() == 1) {
@@ -752,6 +821,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
       pv_cache[V] = result;
       return result;
     }
+
 
     if (v_inst->getOpcode() == Instruction::Select) {
       auto cond = v_inst->getOperand(0);
@@ -873,7 +943,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
         isTrackedLocalStackAddress(loadOffsetCIval)) {
       return load.get();
     }
-
+    if (auto* generalizedControlSlotValue =
+            retrieve_generalized_loop_control_slot_value(loadOffsetCIval, cloadsize)) {
+      addValueReference(generalizedControlSlotValue, loadOffsetCIval);
+      return generalizedControlSlotValue;
+    }
+    if (auto* generalizedTargetSlotValue =
+            retrieve_generalized_loop_target_slot_value(loadOffsetCIval, cloadsize)) {
+      addValueReference(generalizedTargetSlotValue, loadOffsetCIval);
+      return generalizedTargetSlotValue;
+    }
     if (isTrackedLocalStackAddress(loadOffsetCIval)) {
       bool currentBufferCoversRange = true;
       for (uint8_t i = 0; i < cloadsize; ++i) {
@@ -891,7 +970,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
         }
       }
     }
-
     auto valueExtractedFromVirtualStack =
         retrieveCombinedValue(loadOffsetCIval, cloadsize, load);
     if (valueExtractedFromVirtualStack) {
@@ -899,6 +977,35 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
     }
 
   } else {
+    const uint64_t loadSite = current_address - instruction.length;
+    if (liftProgressDiagEnabled && loadSite >= 0x140023582ULL &&
+        loadSite <= 0x1400237FFULL) {
+      std::string loadOffsetText;
+      llvm::raw_string_ostream loadOffsetStream(loadOffsetText);
+      loadOffset->print(loadOffsetStream);
+      std::cout << "[diag] solveLoad nonconst addr=0x" << std::hex << loadSite
+                << std::dec << " bytes=" << static_cast<unsigned>(cloadsize)
+                << " offset=" << loadOffsetStream.str();
+      if (auto* phi = llvm::dyn_cast<llvm::PHINode>(loadOffset)) {
+        std::cout << " phi_parent=" << phi->getParent()->getName().str();
+        for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+          auto* incomingBlock = phi->getIncomingBlock(i);
+          auto* incomingValue = phi->getIncomingValue(i);
+          std::string incomingValueText;
+          llvm::raw_string_ostream incomingValueStream(incomingValueText);
+          incomingValue->print(incomingValueStream);
+          std::cout << " incoming[" << i << "]="
+                    << (incomingBlock ? incomingBlock->getName().str() : "<null>")
+                    << ":" << incomingValueStream.str();
+        }
+      }
+      std::cout << "\n";
+    }
+    if (auto* generalizedControlFieldValue =
+            retrieve_generalized_loop_control_field_value(loadOffset, cloadsize,
+                                                          load)) {
+      return generalizedControlFieldValue;
+    }
     auto stripIntegerCasts = [](Value* candidate) -> Value* {
       while (auto* castInst = dyn_cast<CastInst>(candidate)) {
         auto* srcTy = castInst->getOperand(0)->getType();
@@ -910,6 +1017,84 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
       }
       return candidate;
     };
+
+    if (auto* generalizedPhiAddressLoad =
+            retrieve_generalized_loop_phi_address_value(loadOffset, cloadsize, load)) {
+      return generalizedPhiAddressLoad;
+    }
+    auto tryResolvePhiAddressLoad = [&]() -> Value* {
+      Value* phiCandidate = stripIntegerCasts(loadOffset);
+      int64_t displacement = 0;
+      if (auto* binOp = dyn_cast<BinaryOperator>(phiCandidate)) {
+        auto* lhs = stripIntegerCasts(binOp->getOperand(0));
+        auto* rhs = stripIntegerCasts(binOp->getOperand(1));
+        auto* rhsCI = dyn_cast<ConstantInt>(rhs);
+        auto* lhsCI = dyn_cast<ConstantInt>(lhs);
+        if (rhsCI && (binOp->getOpcode() == Instruction::Add ||
+                      binOp->getOpcode() == Instruction::Sub)) {
+          phiCandidate = lhs;
+          displacement = rhsCI->getSExtValue();
+          if (binOp->getOpcode() == Instruction::Sub) {
+            displacement = -displacement;
+          }
+        } else if (lhsCI && binOp->getOpcode() == Instruction::Add) {
+          phiCandidate = rhs;
+          displacement = lhsCI->getSExtValue();
+        }
+      }
+      auto* phi = dyn_cast<PHINode>(phiCandidate);
+      if (!phi || phi->getParent() != builder->GetInsertBlock()) {
+        return nullptr;
+      }
+
+      SmallVector<std::pair<Value*, BasicBlock*>, 4> incomingLoads;
+      Value* firstValue = nullptr;
+      bool allSameValue = true;
+      for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+        auto* incomingValue = stripIntegerCasts(phi->getIncomingValue(i));
+        auto* incomingCI = dyn_cast<ConstantInt>(incomingValue);
+        if (!incomingCI) {
+          return nullptr;
+        }
+        auto* loadedValue = retrieveCombinedValue(
+            static_cast<uint64_t>(incomingCI->getSExtValue() + displacement),
+            cloadsize, load);
+        if (!loadedValue) {
+          return nullptr;
+        }
+        if (!firstValue) {
+          firstValue = loadedValue;
+        } else if (loadedValue != firstValue) {
+          allSameValue = false;
+        }
+        incomingLoads.push_back({loadedValue, phi->getIncomingBlock(i)});
+      }
+
+      if (incomingLoads.empty()) {
+        return nullptr;
+      }
+      if (allSameValue) {
+        return firstValue;
+      }
+
+      llvm::IRBuilder<> phiBuilder(phi->getParent(), phi->getParent()->begin());
+      auto* phiLoad =
+          phiBuilder.CreatePHI(incomingLoads.front().first->getType(),
+                               phi->getNumIncomingValues(),
+                               "phi_load_value");
+      for (const auto& incoming : incomingLoads) {
+        phiLoad->addIncoming(incoming.first, incoming.second);
+      }
+      return phiLoad;
+    };
+    if (auto* generalizedLocalPhiLoad =
+            retrieve_generalized_loop_local_phi_address_value(loadOffset, cloadsize,
+                                                              load)) {
+      return generalizedLocalPhiLoad;
+    }
+    if (auto* phiAddressLoad = tryResolvePhiAddressLoad()) {
+      return phiAddressLoad;
+    }
 
     auto matchIndexEqualsConst = [&](Value* condValue, Value* expectedIndex,
                                      uint64_t& equalValueOut) -> bool {
@@ -1250,22 +1435,58 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::solveLoad(LazyValue load,
 
     if (getControlFlow() == ControlFlow::Unflatten) {
       auto possibleValues = computePossibleValues(loadOffset, 0);
+      if (liftProgressDiagEnabled &&
+          current_address - instruction.length == 0x1400237F9ULL) {
+        std::cout << "[diag] solveLoad offset current=0x1400237f9 pv_count="
+                  << possibleValues.size();
+        size_t shown = 0;
+        for (const auto& candidate : possibleValues) {
+          if (shown++ >= 6) {
+            std::cout << " ...";
+            break;
+          }
+          std::cout << " candidate=0x" << std::hex << candidate.getZExtValue()
+                    << std::dec;
+        }
+        std::cout << "\n";
+      }
       if (possibleValues.empty()) {
         possibleValues = inferIndexedOffsetsFromAssumptions(loadOffset);
       }
 
       Value* selectedValue = nullptr;
       for (auto possibleValue : possibleValues) {
-        if (!canUseConcreteLoadAddress(possibleValue.getZExtValue()))
-          continue;
+        uint64_t originalCandidate = possibleValue.getZExtValue();
+        uint64_t candidateAddress = originalCandidate;
+        bool normalized = false;
+        if (!canUseConcreteLoadAddress(candidateAddress)) {
+          uint64_t normalizedCandidate = normalizeRuntimeTargetAddress(candidateAddress);
+          if (normalizedCandidate == candidateAddress ||
+              !canUseConcreteLoadAddress(normalizedCandidate)) {
+            if (liftProgressDiagEnabled &&
+                current_address - instruction.length == 0x1400237F9ULL) {
+              std::cout << "[diag] solveLoad candidate original=0x" << std::hex
+                        << originalCandidate << " normalized=na" << std::dec
+                        << " usable=0\n";
+            }
+            continue;
+          }
+          candidateAddress = normalizedCandidate;
+          normalized = true;
+        }
         printvalue2(possibleValue);
-        auto possible_values_from_mem = retrieveCombinedValue(
-            possibleValue.getZExtValue(), cloadsize, load);
+        auto possible_values_from_mem =
+            retrieveCombinedValue(candidateAddress, cloadsize, load);
+        if (liftProgressDiagEnabled &&
+            current_address - instruction.length == 0x1400237F9ULL) {
+          std::cout << "[diag] solveLoad candidate original=0x" << std::hex
+                    << originalCandidate << " normalized=0x" << candidateAddress
+                    << std::dec << " normalizedFlag=" << (normalized ? 1 : 0)
+                    << " hasValue=" << (possible_values_from_mem ? 1 : 0)
+                    << "\n";
+        }
         printvalue2((uint64_t)cloadsize);
         printvalue(possible_values_from_mem);
-        if (!possible_values_from_mem) {
-          continue;
-        }
         if (!possible_values_from_mem) {
           continue;
         }
