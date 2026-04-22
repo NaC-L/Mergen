@@ -25,7 +25,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 | 32-bit x86 lifting | Not supported |
 | ARM / RISC-V / other architectures | Not supported |
 | Jump-table IR quality | Supported shapes still dispatch on concrete target addresses, not logical case indices |
-| Loop-header generalization | Temporarily disabled while the team keeps required VMP 3.8.x targets on the safe high-budget path |
+| Loop-header generalization | Gated by path-solve context: allowed for `ConditionalBranch` and `DirectJump`, and for `IndirectJump` only when the target is already resolved concretely; `Ret` never generalizes. See `docs/LOOP_HANDLING.md`. |
 
 ## Current Development Focus
 - Near term: broaden control-flow recovery and IR quality for loops, jump tables, indirect branches, and VM-style dispatcher shapes.
