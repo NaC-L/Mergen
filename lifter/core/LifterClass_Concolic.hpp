@@ -195,7 +195,13 @@ public:
   };
 
   llvm::DenseMap<BasicBlock*, backup_point> BBbackup;
-  llvm::DenseMap<BasicBlock*, backup_point> generalizedLoopBackedgeBackup;
+  // Backedge-side state is a variable-width vector keyed by header. A loop
+  // header may be reached from multiple backedges - each distinct backedge
+  // sourceBlock contributes its own backup_point. Size 1 is the common
+  // 2-way loop case (canonical + single backedge). Size >=2 is a multi-way
+  // loop (e.g. a VM dispatcher whose body has several handler tails that
+  // all jump back to the same header).
+  llvm::DenseMap<BasicBlock*, llvm::SmallVector<backup_point, 2>> generalizedLoopBackedgeBackup;
 
   llvm::DenseMap<BasicBlock*, std::array<llvm::PHINode*, REGISTER_COUNT>>
       generalizedLoopRegisterPhis;
@@ -206,11 +212,12 @@ public:
     bool valid = false;
     llvm::BasicBlock* headerBlock = nullptr;
     llvm::BasicBlock* canonicalSource = nullptr;
-    llvm::BasicBlock* backedgeSource = nullptr;
+    // Backedge side is variable-width; see generalizedLoopBackedgeBackup.
+    llvm::SmallVector<llvm::BasicBlock*, 2> backedgeSources;
     uint64_t canonicalControl = 0;
-    uint64_t backedgeControl = 0;
+    llvm::SmallVector<uint64_t, 2> backedgeControls;
     llvm::DenseMap<uint64_t, ValueByteReference> canonicalBuffer;
-    llvm::DenseMap<uint64_t, ValueByteReference> backedgeBuffer;
+    llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> backedgeBuffers;
   } activeGeneralizedLoopControlFieldState;
   llvm::DenseMap<llvm::BasicBlock*, GeneralizedLoopControlFieldState>
       generalizedLoopControlFieldStates;
@@ -329,11 +336,11 @@ public:
     activeGeneralizedLoopControlFieldState.valid = false;
     activeGeneralizedLoopControlFieldState.headerBlock = nullptr;
     activeGeneralizedLoopControlFieldState.canonicalSource = nullptr;
-    activeGeneralizedLoopControlFieldState.backedgeSource = nullptr;
+    activeGeneralizedLoopControlFieldState.backedgeSources.clear();
     activeGeneralizedLoopControlFieldState.canonicalControl = 0;
-    activeGeneralizedLoopControlFieldState.backedgeControl = 0;
+    activeGeneralizedLoopControlFieldState.backedgeControls.clear();
     activeGeneralizedLoopControlFieldState.canonicalBuffer.clear();
-    activeGeneralizedLoopControlFieldState.backedgeBuffer.clear();
+    activeGeneralizedLoopControlFieldState.backedgeBuffers.clear();
   }
   bool evaluateConcreteGeneralizedLoopInt(llvm::Value* candidate,
                                           llvm::BasicBlock* incomingBlock,
@@ -511,11 +518,31 @@ public:
 
   backup_point make_generalized_loop_backup(BasicBlock* bb,
                                             const backup_point& canonical,
-                                            const backup_point& source) {
-    backup_point generalized = source;
+                                            llvm::ArrayRef<backup_point> sources) {
+    // Use the first source as the base for the generalized snapshot shape
+    // (buffer, counter, etc.). For 2-way loops this matches the original
+    // single-source behavior exactly; for N-way we pick sources[0] as the
+    // representative snapshot since the caller must restore a coherent view.
+    // No backedges: canonical-only path. Return canonical with local-stack
+    // addresses filtered, matching the pre-N-way fallback where
+    // make_generalized_loop_backup was called with canonical as both args.
+    if (sources.empty()) {
+      backup_point generalized = canonical;
+      llvm::DenseMap<uint64_t, ValueByteReference> filteredBuffer;
+      for (const auto& entry : canonical.buffer) {
+        if (!this->isTrackedLocalStackAddress(entry.first)) {
+          filteredBuffer[entry.first] = entry.second;
+        }
+      }
+      generalized.buffer = std::move(filteredBuffer);
+      generalized.cache = InstructionCache();
+      generalized.assumptions.clear();
+      return generalized;
+    }
+    backup_point generalized = sources.front();
     llvm::DenseMap<uint64_t, ValueByteReference> filteredBuffer;
-    filteredBuffer.reserve(source.buffer.size());
-    for (const auto& entry : source.buffer) {
+    filteredBuffer.reserve(sources.front().buffer.size());
+    for (const auto& entry : sources.front().buffer) {
       if (!this->isTrackedLocalStackAddress(entry.first)) {
         filteredBuffer[entry.first] = entry.second;
       }
@@ -525,30 +552,51 @@ public:
     generalized.assumptions.clear();
 
     auto* canonicalSource = canonical.sourceBlock;
-    auto* backedgeSource = source.sourceBlock;
-    if (!bb || !canonicalSource || !backedgeSource ||
-        canonicalSource == backedgeSource) {
+    if (!bb || !canonicalSource) {
+      return generalized;
+    }
+    // Filter backedges: drop any that duplicate canonicalSource. This
+    // preserves the existing 2-way "canonicalSource == backedgeSource"
+    // bailout for the trivial degenerate case.
+    llvm::SmallVector<const backup_point*, 2> effectiveSources;
+    effectiveSources.reserve(sources.size());
+    for (const auto& src : sources) {
+      if (src.sourceBlock && src.sourceBlock != canonicalSource) {
+        effectiveSources.push_back(&src);
+      }
+    }
+    if (effectiveSources.empty()) {
       return generalized;
     }
 
     std::array<llvm::PHINode*, REGISTER_COUNT> registerPhis{};
     std::array<llvm::PHINode*, FLAGS_END> flagPhis{};
     llvm::IRBuilder<> phiBuilder(bb, bb->begin());
-    auto mergeValue = [&](llvm::Value* canonicalValue, llvm::Value* backedgeValue,
+    auto mergeValue = [&](llvm::Value* canonicalValue,
+                          llvm::ArrayRef<llvm::Value*> backedgeValues,
                           const char* name, llvm::PHINode*& phiOut,
-                          bool widenFirstBackedge)
-        -> llvm::Value* {
-      if (!canonicalValue || !backedgeValue ||
-          canonicalValue->getType() != backedgeValue->getType() ||
-          canonicalValue == backedgeValue) {
-        return backedgeValue;
+                          bool widenFirstBackedge) -> llvm::Value* {
+      // Require canonical + all backedges present and type-matched. Any
+      // type mismatch or nullptr falls back to the first backedge value,
+      // preserving the pre-N-way single-backedge semantics.
+      if (!canonicalValue || backedgeValues.empty()) {
+        return backedgeValues.empty() ? nullptr : backedgeValues.front();
       }
-      auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(), 2, name);
+      for (auto* beValue : backedgeValues) {
+        if (!beValue || beValue->getType() != canonicalValue->getType() ||
+            beValue == canonicalValue) {
+          return backedgeValues.front();
+        }
+      }
+      auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(),
+                                       1 + backedgeValues.size(), name);
       phi->addIncoming(canonicalValue, canonicalSource);
-      phi->addIncoming(widenFirstBackedge
-                           ? llvm::UndefValue::get(backedgeValue->getType())
-                           : backedgeValue,
-                       backedgeSource);
+      for (size_t i = 0; i < backedgeValues.size(); ++i) {
+        phi->addIncoming(widenFirstBackedge
+                             ? llvm::UndefValue::get(backedgeValues[i]->getType())
+                             : backedgeValues[i],
+                         effectiveSources[i]->sourceBlock);
+      }
       phiOut = phi;
       return phi;
     };
@@ -559,16 +607,26 @@ public:
         Register::R12, Register::R13, Register::R14, Register::R15,
     };
 
+    llvm::SmallVector<llvm::Value*, 2> regValues;
+    llvm::SmallVector<llvm::Value*, 2> flagValues;
     for (size_t i = 0; i < REGISTER_COUNT; ++i) {
       const bool widenFirstBackedge =
           !shouldPreserveGeneralizedBackedgeRegisterIndex(i);
-      generalized.vec[i] = mergeValue(canonical.vec[i], source.vec[i],
+      regValues.clear();
+      for (auto* src : effectiveSources) {
+        regValues.push_back(src->vec[i]);
+      }
+      generalized.vec[i] = mergeValue(canonical.vec[i], regValues,
                                       "loop_reg_phi", registerPhis[i],
                                       widenFirstBackedge);
     }
     for (size_t i = 0; i < FLAGS_END; ++i) {
+      flagValues.clear();
+      for (auto* src : effectiveSources) {
+        flagValues.push_back(src->vecflag[i]);
+      }
       generalized.vecflag[i] =
-          mergeValue(canonical.vecflag[i], source.vecflag[i], "loop_flag_phi",
+          mergeValue(canonical.vecflag[i], flagValues, "loop_flag_phi",
                      flagPhis[i], false);
     }
     generalizedLoopRegisterPhis[bb] = registerPhis;
@@ -596,7 +654,17 @@ public:
       if (!BBbackup.contains(bb)) {
         BBbackup[bb] = snapshot;
       }
-      generalizedLoopBackedgeBackup[bb] = std::move(snapshot);
+      // Append per-source; a repeat call from the same sourceBlock replaces
+      // that block's entry in place, preserving uniqueness without growing
+      // the vector unboundedly on iterative lift passes.
+      auto& backedges = generalizedLoopBackedgeBackup[bb];
+      for (auto& existing : backedges) {
+        if (existing.sourceBlock == snapshot.sourceBlock) {
+          existing = std::move(snapshot);
+          return;
+        }
+      }
+      backedges.push_back(std::move(snapshot));
       return;
     }
 
@@ -624,9 +692,8 @@ public:
     clearGeneralizedLoopControlFieldState();
     if (generalizedLoopBackedgeBackup.contains(bb) && BBbackup.contains(bb)) {
       printvalue2("loading generalized backup");
-      auto snapshot =
-          make_generalized_loop_backup(bb, BBbackup[bb],
-                                       generalizedLoopBackedgeBackup[bb]);
+      auto& backedges = generalizedLoopBackedgeBackup[bb];
+      auto snapshot = make_generalized_loop_backup(bb, BBbackup[bb], backedges);
       if (this->liftProgressDiagEnabled) {
         auto formatHex = [](uint64_t value) {
           std::ostringstream os;
@@ -634,34 +701,29 @@ public:
           return os.str();
         };
         uint64_t canonicalControl = 0;
-        uint64_t backedgeControl = 0;
         const bool hasCanonicalControl = readConstantTrackedQword(
             BBbackup[bb].buffer, kThemidaControlCursorSlot, canonicalControl);
-        const bool hasBackedgeControl =
-            readConstantTrackedQword(generalizedLoopBackedgeBackup[bb].buffer,
-                                     kThemidaControlCursorSlot, backedgeControl);
         std::cout << "[diag] load_generalized_backup bb=" << bb->getName().str()
                   << " sourceCanonical="
                   << (BBbackup[bb].sourceBlock
                           ? BBbackup[bb].sourceBlock->getName().str()
                           : std::string("<null>"))
-                  << " sourceBackedge="
-                  << (generalizedLoopBackedgeBackup[bb].sourceBlock
-                          ? generalizedLoopBackedgeBackup[bb].sourceBlock->getName().str()
-                          : std::string("<null>"))
-                  << " backedge14fca0="
-                  << (generalizedLoopBackedgeBackup[bb].buffer.contains(1375392) ? 1 : 0)
-                  << " backedge14fca8="
-                  << (generalizedLoopBackedgeBackup[bb].buffer.contains(1375400) ? 1 : 0)
-                  << " backedge14fcb0="
-                  << (generalizedLoopBackedgeBackup[bb].buffer.contains(1375408) ? 1 : 0)
+                  << " backedgeCount=" << backedges.size()
                   << " canonicalControl="
                   << (hasCanonicalControl ? formatHex(canonicalControl)
-                                          : std::string("na"))
-                  << " backedgeControl="
-                  << (hasBackedgeControl ? formatHex(backedgeControl)
-                                         : std::string("na"))
-                  << "\n";
+                                          : std::string("na"));
+        for (size_t i = 0; i < backedges.size(); ++i) {
+          uint64_t be = 0;
+          const bool hasBE = readConstantTrackedQword(backedges[i].buffer,
+                                                      kThemidaControlCursorSlot, be);
+          std::cout << " backedge[" << i << "]source="
+                    << (backedges[i].sourceBlock
+                            ? backedges[i].sourceBlock->getName().str()
+                            : std::string("<null>"))
+                    << " backedge[" << i << "]control="
+                    << (hasBE ? formatHex(be) : std::string("na"));
+        }
+        std::cout << "\n";
       }
       restore_backup_point(snapshot);
       auto storedStateIt = generalizedLoopControlFieldStates.find(bb);
@@ -669,38 +731,66 @@ public:
           storedStateIt->second.valid) {
         activeGeneralizedLoopControlFieldState = storedStateIt->second;
         activeGeneralizedLoopEntrySourceBlock =
-            activeGeneralizedLoopControlFieldState.backedgeSource;
-        activeGeneralizedLoopLocalBuffer = extractLocalStackBuffer(
-            activeGeneralizedLoopControlFieldState.backedgeBuffer);
+            activeGeneralizedLoopControlFieldState.backedgeSources.empty()
+                ? nullptr
+                : activeGeneralizedLoopControlFieldState.backedgeSources.front();
+        if (!activeGeneralizedLoopControlFieldState.backedgeBuffers.empty()) {
+          activeGeneralizedLoopLocalBuffer = extractLocalStackBuffer(
+              activeGeneralizedLoopControlFieldState.backedgeBuffers.front());
+        } else {
+          activeGeneralizedLoopLocalBuffer.clear();
+        }
       } else {
         activeGeneralizedLoopEntrySourceBlock =
-            generalizedLoopBackedgeBackup[bb].sourceBlock;
-        uint64_t canonicalControl = 0;
-        uint64_t backedgeControl = 0;
+            backedges.empty() ? nullptr : backedges.front().sourceBlock;
         activeGeneralizedLoopLocalBuffer =
-            extractLocalStackBuffer(generalizedLoopBackedgeBackup[bb].buffer);
-        if (readConstantTrackedQword(BBbackup[bb].buffer, kThemidaControlCursorSlot,
-                                     canonicalControl) &&
-            readConstantTrackedQword(generalizedLoopBackedgeBackup[bb].buffer,
-                                     kThemidaControlCursorSlot, backedgeControl) &&
-            canonicalControl != backedgeControl && BBbackup[bb].sourceBlock &&
-            generalizedLoopBackedgeBackup[bb].sourceBlock &&
-            BBbackup[bb].sourceBlock != generalizedLoopBackedgeBackup[bb].sourceBlock) {
-          activeGeneralizedLoopControlFieldState.valid = true;
-          activeGeneralizedLoopControlFieldState.headerBlock = bb;
-          activeGeneralizedLoopControlFieldState.canonicalSource =
-              BBbackup[bb].sourceBlock;
-          activeGeneralizedLoopControlFieldState.backedgeSource =
-              generalizedLoopBackedgeBackup[bb].sourceBlock;
-          activeGeneralizedLoopControlFieldState.canonicalControl =
-              canonicalControl;
-          activeGeneralizedLoopControlFieldState.backedgeControl =
-              backedgeControl;
-          activeGeneralizedLoopControlFieldState.canonicalBuffer = BBbackup[bb].buffer;
-          activeGeneralizedLoopControlFieldState.backedgeBuffer =
-              generalizedLoopBackedgeBackup[bb].buffer;
-          generalizedLoopControlFieldStates[bb] =
-              activeGeneralizedLoopControlFieldState;
+            backedges.empty()
+                ? llvm::DenseMap<uint64_t, ValueByteReference>{}
+                : extractLocalStackBuffer(backedges.front().buffer);
+        uint64_t canonicalControl = 0;
+        const bool hasCanonical = readConstantTrackedQword(
+            BBbackup[bb].buffer, kThemidaControlCursorSlot, canonicalControl);
+        if (hasCanonical && BBbackup[bb].sourceBlock && !backedges.empty()) {
+          // Collect backedges whose sourceBlock is distinct from canonical
+          // AND whose control value differs from canonical. At least one
+          // such backedge is required to activate the state.
+          llvm::SmallVector<llvm::BasicBlock*, 2> sources;
+          llvm::SmallVector<uint64_t, 2> controls;
+          llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> buffers;
+          for (const auto& be : backedges) {
+            if (!be.sourceBlock || be.sourceBlock == BBbackup[bb].sourceBlock) {
+              continue;
+            }
+            uint64_t beControl = 0;
+            if (!readConstantTrackedQword(be.buffer, kThemidaControlCursorSlot,
+                                          beControl)) {
+              continue;
+            }
+            if (beControl == canonicalControl) {
+              continue;
+            }
+            sources.push_back(be.sourceBlock);
+            controls.push_back(beControl);
+            buffers.push_back(be.buffer);
+          }
+          if (!sources.empty()) {
+            activeGeneralizedLoopControlFieldState.valid = true;
+            activeGeneralizedLoopControlFieldState.headerBlock = bb;
+            activeGeneralizedLoopControlFieldState.canonicalSource =
+                BBbackup[bb].sourceBlock;
+            activeGeneralizedLoopControlFieldState.canonicalControl =
+                canonicalControl;
+            activeGeneralizedLoopControlFieldState.canonicalBuffer =
+                BBbackup[bb].buffer;
+            activeGeneralizedLoopControlFieldState.backedgeSources =
+                std::move(sources);
+            activeGeneralizedLoopControlFieldState.backedgeControls =
+                std::move(controls);
+            activeGeneralizedLoopControlFieldState.backedgeBuffers =
+                std::move(buffers);
+            generalizedLoopControlFieldStates[bb] =
+                activeGeneralizedLoopControlFieldState;
+          }
         }
       }
       if (this->liftProgressDiagEnabled && bb && bb->getName() == "bb_solved_const282") {
@@ -722,14 +812,16 @@ public:
         for (size_t i = 0; i < tracedIndices.size(); ++i) {
           size_t regIndex = tracedIndices[i];
           std::cout << " " << tracedNames[i] << " canonical="
-                    << valueToString(BBbackup[bb].vec[regIndex])
-                    << " backedge="
-                    << valueToString(generalizedLoopBackedgeBackup[bb].vec[regIndex]);
+                    << valueToString(BBbackup[bb].vec[regIndex]);
+          for (size_t j = 0; j < backedges.size(); ++j) {
+            std::cout << " backedge[" << j << "]="
+                      << valueToString(backedges[j].vec[regIndex]);
+          }
         }
         std::cout << "\n";
       }
       auto seedInvariantLocalQwords = [&](const backup_point& canonicalSnapshot,
-                                          const backup_point& backedgeSnapshot) {
+                                          llvm::ArrayRef<backup_point> backedgeSnapshots) {
         std::set<uint64_t> seededQwordStarts;
         for (const auto& entry : activeGeneralizedLoopLocalBuffer) {
           uint64_t qwordStart = entry.first & ~0x7ULL;
@@ -740,12 +832,22 @@ public:
             continue;
           }
           uint64_t canonicalValue = 0;
-          uint64_t backedgeValue = 0;
           if (!readConstantTrackedQword(canonicalSnapshot.buffer, qwordStart,
-                                        canonicalValue) ||
-              !readConstantTrackedQword(backedgeSnapshot.buffer, qwordStart,
-                                        backedgeValue) ||
-              canonicalValue != backedgeValue) {
+                                        canonicalValue)) {
+            continue;
+          }
+          // All backedges must read the same concrete qword value for
+          // the invariant to hold. Any mismatch disqualifies the qword.
+          bool allMatch = true;
+          for (const auto& be : backedgeSnapshots) {
+            uint64_t beValue = 0;
+            if (!readConstantTrackedQword(be.buffer, qwordStart, beValue) ||
+                beValue != canonicalValue) {
+              allMatch = false;
+              break;
+            }
+          }
+          if (!allMatch) {
             continue;
           }
           for (uint8_t i = 0; i < 8; ++i) {
@@ -754,12 +856,13 @@ public:
           }
         }
       };
-      seedInvariantLocalQwords(BBbackup[bb], generalizedLoopBackedgeBackup[bb]);
+      seedInvariantLocalQwords(BBbackup[bb], backedges);
       return;
     }
     if (BBbackup.contains(bb)) {
       printvalue2("loading generalized backup");
-      auto snapshot = make_generalized_loop_backup(bb, BBbackup[bb], BBbackup[bb]);
+      auto snapshot = make_generalized_loop_backup(
+          bb, BBbackup[bb], llvm::ArrayRef<backup_point>{});
       restore_backup_point(snapshot);
     }
   }
@@ -810,7 +913,7 @@ public:
       loadOffset = castInst->getOperand(0);
     }
     auto* phi = llvm::dyn_cast<llvm::PHINode>(loadOffset);
-    if (!phi || phi->getNumIncomingValues() != 2) {
+    if (!phi || phi->getNumIncomingValues() < 2) {
       return nullptr;
     }
     auto* state = getGeneralizedLoopStateForHeader(phi->getParent());
@@ -833,9 +936,11 @@ public:
         return retrieveBufferedOrConcreteValue(state->canonicalBuffer, address,
                                               byteCount);
       }
-      if (incomingBlock == state->backedgeSource) {
-        return retrieveBufferedOrConcreteValue(state->backedgeBuffer, address,
-                                              byteCount);
+      for (size_t i = 0; i < state->backedgeSources.size(); ++i) {
+        if (incomingBlock == state->backedgeSources[i]) {
+          return retrieveBufferedOrConcreteValue(state->backedgeBuffers[i],
+                                                 address, byteCount);
+        }
       }
       return nullptr;
     };
@@ -922,7 +1027,7 @@ public:
       }
     }
     auto* phi = llvm::dyn_cast<llvm::PHINode>(loadOffset);
-    if (!phi || phi->getNumIncomingValues() != 2) {
+    if (!phi || phi->getNumIncomingValues() < 2) {
       return nullptr;
     }
     auto* state = getGeneralizedLoopStateForHeader(phi->getParent());
@@ -951,9 +1056,11 @@ public:
         return retrieveBufferedOrConcreteValue(state->canonicalBuffer, address,
                                               byteCount);
       }
-      if (incomingBlock == state->backedgeSource) {
-        return retrieveBufferedOrConcreteValue(state->backedgeBuffer, address,
-                                              byteCount);
+      for (size_t i = 0; i < state->backedgeSources.size(); ++i) {
+        if (incomingBlock == state->backedgeSources[i]) {
+          return retrieveBufferedOrConcreteValue(state->backedgeBuffers[i],
+                                                 address, byteCount);
+        }
       }
       return nullptr;
     };
@@ -1000,23 +1107,38 @@ public:
     }
     auto* canonicalValue = this->builder->getIntN(
         byteCount * 8, state.canonicalControl & llvm::maskTrailingOnes<uint64_t>(byteCount * 8));
-    auto* backedgeValue = this->builder->getIntN(
-        byteCount * 8, state.backedgeControl & llvm::maskTrailingOnes<uint64_t>(byteCount * 8));
     if (this->liftProgressDiagEnabled) {
       std::cout << "[diag] control_slot current=0x" << std::hex
                 << this->current_address << " start=0x" << startAddress
-                << " canonical=0x" << state.canonicalControl
-                << " backedge=0x" << state.backedgeControl << std::dec
+                << " canonical=0x" << state.canonicalControl << std::dec
+                << " backedgeCount=" << state.backedgeControls.size()
                 << " bytes=" << static_cast<unsigned>(byteCount) << "\n";
     }
-    if (canonicalValue == backedgeValue) {
+    if (state.backedgeSources.empty()) {
+      return canonicalValue;
+    }
+    // Build the canonical + N backedge values. If everything collapses to
+    // a single value, skip phi construction.
+    llvm::SmallVector<llvm::Value*, 2> backedgeValues;
+    backedgeValues.reserve(state.backedgeControls.size());
+    bool allSameAsCanonical = true;
+    for (uint64_t be : state.backedgeControls) {
+      auto* v = this->builder->getIntN(
+          byteCount * 8, be & llvm::maskTrailingOnes<uint64_t>(byteCount * 8));
+      if (v != canonicalValue) allSameAsCanonical = false;
+      backedgeValues.push_back(v);
+    }
+    if (allSameAsCanonical) {
       return canonicalValue;
     }
     llvm::IRBuilder<> phiBuilder(state.headerBlock, state.headerBlock->begin());
-    auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(), 2,
+    auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(),
+                                     1 + backedgeValues.size(),
                                      "generalized_control_slot_phi");
     phi->addIncoming(canonicalValue, state.canonicalSource);
-    phi->addIncoming(backedgeValue, state.backedgeSource);
+    for (size_t i = 0; i < backedgeValues.size(); ++i) {
+      phi->addIncoming(backedgeValues[i], state.backedgeSources[i]);
+    }
     return phi;
   }
 
@@ -1027,34 +1149,40 @@ public:
         startAddress != this->kThemidaLoopCarriedSlot || byteCount == 0) {
       return nullptr;
     }
-    auto* canonicalValue = retrieveBufferedOrConcreteValue(
-        activeGeneralizedLoopControlFieldState.canonicalBuffer, startAddress,
-        byteCount);
-    auto* backedgeValue = retrieveBufferedOrConcreteValue(
-        activeGeneralizedLoopControlFieldState.backedgeBuffer, startAddress,
-        byteCount);
+    auto& state = activeGeneralizedLoopControlFieldState;
+    auto* canonicalValue = retrieveBufferedOrConcreteValue(state.canonicalBuffer,
+                                                           startAddress, byteCount);
+    if (!canonicalValue) return nullptr;
     if (this->liftProgressDiagEnabled) {
       std::cout << "[diag] target_slot current=0x" << std::hex
                 << this->current_address << " start=0x" << startAddress
                 << std::dec << " bytes=" << static_cast<unsigned>(byteCount)
-                << "\n";
+                << " backedgeCount=" << state.backedgeBuffers.size() << "\n";
     }
-    if (!canonicalValue || !backedgeValue ||
-        canonicalValue->getType() != backedgeValue->getType()) {
-      return nullptr;
+    // Collect all backedge values, require type match; any missing/mismatch
+    // bails the helper (caller falls through).
+    llvm::SmallVector<llvm::Value*, 2> backedgeValues;
+    backedgeValues.reserve(state.backedgeBuffers.size());
+    bool allSame = true;
+    for (const auto& beBuf : state.backedgeBuffers) {
+      auto* v = retrieveBufferedOrConcreteValue(beBuf, startAddress, byteCount);
+      if (!v || v->getType() != canonicalValue->getType()) {
+        return nullptr;
+      }
+      if (v != canonicalValue) allSame = false;
+      backedgeValues.push_back(v);
     }
-    if (canonicalValue == backedgeValue) {
+    if (state.backedgeSources.empty() || allSame) {
       return canonicalValue;
     }
-    llvm::IRBuilder<> phiBuilder(activeGeneralizedLoopControlFieldState.headerBlock,
-                                 activeGeneralizedLoopControlFieldState.headerBlock
-                                     ->begin());
-    auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(), 2,
+    llvm::IRBuilder<> phiBuilder(state.headerBlock, state.headerBlock->begin());
+    auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(),
+                                     1 + backedgeValues.size(),
                                      "generalized_local_slot_phi");
-    phi->addIncoming(canonicalValue,
-                     activeGeneralizedLoopControlFieldState.canonicalSource);
-    phi->addIncoming(backedgeValue,
-                     activeGeneralizedLoopControlFieldState.backedgeSource);
+    phi->addIncoming(canonicalValue, state.canonicalSource);
+    for (size_t i = 0; i < backedgeValues.size(); ++i) {
+      phi->addIncoming(backedgeValues[i], state.backedgeSources[i]);
+    }
     return phi;
   }
 
@@ -1070,43 +1198,42 @@ public:
     if (!matchGeneralizedLoopControlFieldAddress(loadOffset, fieldOffset)) {
       return nullptr;
     }
+    auto& state = activeGeneralizedLoopControlFieldState;
     auto* canonicalValue = retrieveBufferedOrConcreteValue(
-        activeGeneralizedLoopControlFieldState.canonicalBuffer,
-        activeGeneralizedLoopControlFieldState.canonicalControl + fieldOffset,
-        byteCount);
-    auto* backedgeValue = retrieveBufferedOrConcreteValue(
-        activeGeneralizedLoopControlFieldState.backedgeBuffer,
-        activeGeneralizedLoopControlFieldState.backedgeControl + fieldOffset,
-        byteCount);
-    if (!canonicalValue || !backedgeValue ||
-        canonicalValue->getType() != backedgeValue->getType()) {
-      return nullptr;
-    }
+        state.canonicalBuffer, state.canonicalControl + fieldOffset, byteCount);
+    if (!canonicalValue) return nullptr;
     if (this->liftProgressDiagEnabled) {
       std::cout << "[diag] generalized control-field match block="
-                << activeGeneralizedLoopControlFieldState.headerBlock->getName().str()
+                << state.headerBlock->getName().str()
                 << " fieldOffset=0x" << std::hex << fieldOffset
-                << " canonical=0x"
-                << (activeGeneralizedLoopControlFieldState.canonicalControl +
-                    fieldOffset)
-                << " backedge=0x"
-                << (activeGeneralizedLoopControlFieldState.backedgeControl +
-                    fieldOffset)
+                << " canonical=0x" << (state.canonicalControl + fieldOffset)
                 << std::dec << " bytes=" << static_cast<unsigned>(byteCount)
-                << "\n";
+                << " backedgeCount=" << state.backedgeControls.size() << "\n";
     }
-    if (canonicalValue == backedgeValue) {
+    llvm::SmallVector<llvm::Value*, 2> backedgeValues;
+    backedgeValues.reserve(state.backedgeControls.size());
+    bool allSame = true;
+    for (size_t i = 0; i < state.backedgeControls.size(); ++i) {
+      auto* v = retrieveBufferedOrConcreteValue(
+          state.backedgeBuffers[i],
+          state.backedgeControls[i] + fieldOffset, byteCount);
+      if (!v || v->getType() != canonicalValue->getType()) {
+        return nullptr;
+      }
+      if (v != canonicalValue) allSame = false;
+      backedgeValues.push_back(v);
+    }
+    if (state.backedgeSources.empty() || allSame) {
       return canonicalValue;
     }
-    llvm::IRBuilder<> phiBuilder(activeGeneralizedLoopControlFieldState.headerBlock,
-                                 activeGeneralizedLoopControlFieldState.headerBlock
-                                     ->begin());
-    auto* phi =
-        phiBuilder.CreatePHI(canonicalValue->getType(), 2, "loop_control_field_phi");
-    phi->addIncoming(canonicalValue,
-                     activeGeneralizedLoopControlFieldState.canonicalSource);
-    phi->addIncoming(backedgeValue,
-                     activeGeneralizedLoopControlFieldState.backedgeSource);
+    llvm::IRBuilder<> phiBuilder(state.headerBlock, state.headerBlock->begin());
+    auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(),
+                                     1 + backedgeValues.size(),
+                                     "loop_control_field_phi");
+    phi->addIncoming(canonicalValue, state.canonicalSource);
+    for (size_t i = 0; i < backedgeValues.size(); ++i) {
+      phi->addIncoming(backedgeValues[i], state.backedgeSources[i]);
+    }
     return phi;
   }
   void migrate_generalized_loop_block_impl(BasicBlock* oldBlock,
@@ -1172,8 +1299,19 @@ public:
     }
     auto stateIt = generalizedLoopControlFieldStates.find(bb);
     if (stateIt == generalizedLoopControlFieldStates.end() ||
-        !stateIt->second.valid || !stateIt->second.backedgeSource ||
-        sourceBlock == stateIt->second.backedgeSource) {
+        !stateIt->second.valid) {
+      return;
+    }
+    // The rolled-control promotion semantics (move current backedge into
+    // canonical, install new source as backedge) are only well-defined for
+    // the 1-backedge case. Multi-way loops do not have a single obvious
+    // "current backedge" to promote, so skip the rotation; the existing
+    // N-way state remains valid.
+    if (stateIt->second.backedgeSources.size() != 1) {
+      return;
+    }
+    auto* existingBackedgeSource = stateIt->second.backedgeSources.front();
+    if (!existingBackedgeSource || sourceBlock == existingBackedgeSource) {
       return;
     }
     auto* currentControlValue =
@@ -1181,31 +1319,31 @@ public:
     uint64_t rolledBackedgeControl = 0;
     if (!currentControlValue ||
         !evaluateConcreteGeneralizedLoopInt(currentControlValue,
-                                            stateIt->second.backedgeSource,
+                                            existingBackedgeSource,
                                             rolledBackedgeControl) ||
-        rolledBackedgeControl == stateIt->second.backedgeControl) {
+        rolledBackedgeControl == stateIt->second.backedgeControls.front()) {
       return;
     }
-    auto previousBackedgeSource = stateIt->second.backedgeSource;
-    auto previousBackedgeControl = stateIt->second.backedgeControl;
-    auto previousBackedgeBuffer = stateIt->second.backedgeBuffer;
+    auto previousBackedgeSource = existingBackedgeSource;
+    auto previousBackedgeControl = stateIt->second.backedgeControls.front();
+    auto previousBackedgeBuffer = stateIt->second.backedgeBuffers.front();
     stateIt->second.canonicalSource = previousBackedgeSource;
     stateIt->second.canonicalControl = previousBackedgeControl;
     stateIt->second.canonicalBuffer = previousBackedgeBuffer;
-    stateIt->second.backedgeSource = sourceBlock;
-    stateIt->second.backedgeControl = rolledBackedgeControl;
-    stateIt->second.backedgeBuffer = this->buffer;
+    stateIt->second.backedgeSources.front() = sourceBlock;
+    stateIt->second.backedgeControls.front() = rolledBackedgeControl;
+    stateIt->second.backedgeBuffers.front() = this->buffer;
     if (bb == activeGeneralizedLoopControlFieldState.headerBlock) {
       activeGeneralizedLoopControlFieldState = stateIt->second;
       activeGeneralizedLoopEntrySourceBlock = sourceBlock;
-      activeGeneralizedLoopLocalBuffer =
-          extractLocalStackBuffer(activeGeneralizedLoopControlFieldState.backedgeBuffer);
+      activeGeneralizedLoopLocalBuffer = extractLocalStackBuffer(
+          activeGeneralizedLoopControlFieldState.backedgeBuffers.front());
     }
     if (this->liftProgressDiagEnabled) {
       std::cout << "[diag] roll_generalized_backedge bb=" << bb->getName().str()
                 << " canonical=0x" << std::hex
                 << stateIt->second.canonicalControl << " backedge=0x"
-                << stateIt->second.backedgeControl << std::dec
+                << stateIt->second.backedgeControls.front() << std::dec
                 << " source=" << sourceBlock->getName().str() << "\n";
     }
   }
