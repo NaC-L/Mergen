@@ -718,6 +718,37 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(pvalueset)::computePossibleValues(
 
     if (v_inst->getNumOperands() == 1) {
       auto result = computePossibleValues(v_inst->getOperand(0), Depth + 1);
+      // Integer casts change the bit-width of every value in the set.  Without
+      // this step the set returned for a trunc/zext/sext instruction carries
+      // the *operand* width, which then mismatches callers that compare or
+      // index by the instruction's declared type (e.g. switch dispatch on an
+      // i32 after a trunc from i64).
+      if (auto* castInst = dyn_cast<CastInst>(v_inst)) {
+        auto* srcTy = castInst->getOperand(0)->getType();
+        auto* dstTy = castInst->getType();
+        if (srcTy->isIntegerTy() && dstTy->isIntegerTy()) {
+          std::set<APInt, APIntComparator> castResult;
+          const unsigned width = dstTy->getIntegerBitWidth();
+          for (const auto& value : result) {
+            switch (castInst->getOpcode()) {
+            case Instruction::Trunc:
+              castResult.insert(value.trunc(width));
+              break;
+            case Instruction::ZExt:
+              castResult.insert(value.zext(width));
+              break;
+            case Instruction::SExt:
+              castResult.insert(value.sext(width));
+              break;
+            default:
+              castResult.insert(value);
+              break;
+            }
+          }
+          pv_cache[V] = castResult;
+          return castResult;
+        }
+      }
       pv_cache[V] = result;
       return result;
     }
