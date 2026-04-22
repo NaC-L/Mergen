@@ -48,6 +48,15 @@ check_*.py
 =*
 scriptsdev/
 
+# session-scratch from frontier research / ad-hoc lifter runs at specific
+# addresses.  These get produced when a session dumps per-function IR, saves
+# a handoff note, or records a binary-probe target; they should never land.
+internal_0x*.ll
+internal_0x*_diag.json
+*handoff.md
+linked_target.txt
+vlizer_stub.txt
+
 # review automation
 /artifacts/
 scripts/rewrite/tmp_*.json
