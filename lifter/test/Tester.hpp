@@ -1083,6 +1083,101 @@ private:
   }
 
 
+  bool runComputePossibleValuesPreservesCastWidths(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    lifter.builder->SetInsertPoint(entry);
+
+    // Two i64 constants that differ in both halves, so a trunc to i32 yields
+    // two distinct i32 values and a zext back to i64 would not recover the
+    // high half.
+    const uint64_t lhsValue = 0x00000001'DEADBEEFULL;
+    const uint64_t rhsValue = 0x00000002'CAFEBABEULL;
+
+    // A select over an unresolved condition gives computePossibleValues a
+    // concrete two-element set to feed into the cast.
+    auto* cond = lifter.builder->CreateICmpEQ(
+        lifter.GetRegisterValue(RegisterUnderTest::RAX),
+        makeI64(context, 1), "cast_width_cond");
+    auto* selected = lifter.builder->CreateSelect(
+        cond, makeI64(context, lhsValue), makeI64(context, rhsValue),
+        "cast_width_select");
+
+    auto* truncI32 = lifter.builder->CreateTrunc(
+        selected, llvm::Type::getInt32Ty(context), "cast_width_trunc");
+    auto truncValues = lifter.computePossibleValues(truncI32, 0);
+    if (truncValues.size() != 2) {
+      std::ostringstream os;
+      os << "  trunc result should enumerate both low halves, got size "
+         << truncValues.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    for (const auto& value : truncValues) {
+      if (value.getBitWidth() != 32) {
+        std::ostringstream os;
+        os << "  trunc result width should be 32, got " << value.getBitWidth()
+           << "\n";
+        details = os.str();
+        return false;
+      }
+    }
+    if (!truncValues.contains(llvm::APInt(32, static_cast<uint32_t>(lhsValue))) ||
+        !truncValues.contains(llvm::APInt(32, static_cast<uint32_t>(rhsValue)))) {
+      details =
+          "  trunc result should contain both 32-bit low halves\n";
+      return false;
+    }
+
+    auto* zextI64 = lifter.builder->CreateZExt(
+        truncI32, llvm::Type::getInt64Ty(context), "cast_width_zext");
+    auto zextValues = lifter.computePossibleValues(zextI64, 0);
+    if (zextValues.size() != 2) {
+      std::ostringstream os;
+      os << "  zext result should enumerate both widened values, got size "
+         << zextValues.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    for (const auto& value : zextValues) {
+      if (value.getBitWidth() != 64) {
+        std::ostringstream os;
+        os << "  zext result width should be 64, got " << value.getBitWidth()
+           << "\n";
+        details = os.str();
+        return false;
+      }
+    }
+    if (!zextValues.contains(llvm::APInt(64, static_cast<uint32_t>(lhsValue))) ||
+        !zextValues.contains(llvm::APInt(64, static_cast<uint32_t>(rhsValue)))) {
+      details =
+          "  zext result should zero-extend both trunc halves back to 64 bits\n";
+      return false;
+    }
+
+    auto* sextI64 = lifter.builder->CreateSExt(
+        truncI32, llvm::Type::getInt64Ty(context), "cast_width_sext");
+    auto sextValues = lifter.computePossibleValues(sextI64, 0);
+    for (const auto& value : sextValues) {
+      if (value.getBitWidth() != 64) {
+        std::ostringstream os;
+        os << "  sext result width should be 64, got " << value.getBitWidth()
+           << "\n";
+        details = os.str();
+        return false;
+      }
+    }
+    // 0xDEADBEEF has its high bit set, so SExt must produce 0xFFFFFFFF'DEADBEEF.
+    if (!sextValues.contains(llvm::APInt(64, 0xFFFFFFFF'DEADBEEFULL))) {
+      details =
+          "  sext result should sign-extend the negative low half\n";
+      return false;
+    }
+    return true;
+  }
+
+
   bool runSolvePathSkipsRawZeroInMultiTargetSwitch(std::string& details) {
     LifterUnderTest lifter;
     auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
@@ -1375,6 +1470,8 @@ private:
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeRegisterState);
     runCustom("solve_load_infers_concrete_base_from_tracked_load",
              &InstructionTester::runSolveLoadInfersConcreteBaseFromTrackedLoad);
+    runCustom("compute_possible_values_preserves_cast_widths",
+             &InstructionTester::runComputePossibleValuesPreservesCastWidths);
     runCustom("solve_path_skips_raw_zero_in_multi_target_switch",
              &InstructionTester::runSolvePathSkipsRawZeroInMultiTargetSwitch);
     runCustom("solve_path_widens_mapped_rva_target",
