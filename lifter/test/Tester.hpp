@@ -1178,6 +1178,91 @@ private:
   }
 
 
+  bool runComputePossibleValuesCircularPhiBailsViaDepthGuard(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+    // Build a two-block self-referential phi:
+    //   header:  %self = phi i64 [ 0, %entry ], [ %self, %header ]
+    //            br label %header
+    // computePossibleValues must not infinite-loop on this shape.  The
+    // existing Depth > 16 guard should trigger and return an empty set
+    // (not hang, not crash).
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(context, "header", lifter.fnc);
+    llvm::IRBuilder<>(entry).CreateBr(header);
+
+    lifter.builder->SetInsertPoint(header);
+    llvm::IRBuilder<> phiBuilder(header, header->begin());
+    auto* selfPhi = phiBuilder.CreatePHI(i64Ty, 2, "self_referential_phi");
+    selfPhi->addIncoming(makeI64(context, 0), entry);
+    selfPhi->addIncoming(selfPhi, header);
+    lifter.builder->CreateBr(header);
+
+    auto values = lifter.computePossibleValues(selfPhi, 0);
+    // Two reasonable outcomes are acceptable: the guard bails and returns an
+    // empty set, or the handler dedupes the self-reference and returns just
+    // {0}.  What is NOT acceptable is hanging or exploding the result set.
+    if (values.size() > 1) {
+      std::ostringstream os;
+      os << "  circular phi should resolve to at most one unique value (0);"
+         << " got size " << values.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    if (values.size() == 1 &&
+        !values.contains(llvm::APInt(64, 0))) {
+      details =
+          "  circular phi single-element result should be 0 (the entry incoming)\n";
+      return false;
+    }
+    return true;
+  }
+
+  bool runComputePossibleValuesTruncToI1PreservesWidth(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    lifter.builder->SetInsertPoint(entry);
+
+    // Even-low-bit vs odd-low-bit values, so trunc to i1 yields both 0 and 1.
+    auto* cond = lifter.builder->CreateICmpEQ(
+        lifter.GetRegisterValue(RegisterUnderTest::RAX),
+        makeI64(context, 1), "trunc_i1_cond");
+    auto* selected = lifter.builder->CreateSelect(
+        cond, makeI64(context, 0xDEADBEEEULL), makeI64(context, 0xCAFEBABFULL),
+        "trunc_i1_select");
+    auto* truncI1 = lifter.builder->CreateTrunc(
+        selected, llvm::Type::getInt1Ty(context), "trunc_i1_result");
+
+    auto values = lifter.computePossibleValues(truncI1, 0);
+    if (values.size() != 2) {
+      std::ostringstream os;
+      os << "  trunc to i1 should enumerate both {0, 1}, got size "
+         << values.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    for (const auto& value : values) {
+      if (value.getBitWidth() != 1) {
+        std::ostringstream os;
+        os << "  trunc to i1 result width should be 1, got "
+           << value.getBitWidth() << "\n";
+        details = os.str();
+        return false;
+      }
+    }
+    (void)i64Ty;
+    if (!values.contains(llvm::APInt(1, 0)) ||
+        !values.contains(llvm::APInt(1, 1))) {
+      details = "  trunc to i1 result should contain both 0 and 1\n";
+      return false;
+    }
+    return true;
+  }
+
   bool runComputePossibleValuesPreservesCastWidths(std::string& details) {
     LifterUnderTest lifter;
     auto& context = lifter.context;
@@ -2038,6 +2123,72 @@ bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
     return true;
   }
 
+
+  bool runTargetedThemidаR9OverrideDoesNotFireAtAdjacentAddress(std::string& details) {
+    // The switch in resolveTargetedThemidаR9 is exact-address.  A regression
+    // that accidentally broadened it to a range (e.g. `addr >= 0x140023500 &&
+    // addr <= 0x140023800`) would silently produce a phi at every R9 read in
+    // that window, corrupting samples that rely on exact-match behavior.
+    // Pick an address one byte off every known hot address; the override must
+    // return the original value unchanged.
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    constexpr uint64_t controlSlot = 0x14004DD19ULL;
+    constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+    constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+    auto* preheader =
+        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+    auto* firstBackedge =
+        llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+    auto* loopHeader =
+        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+    lifter.builder->SetInsertPoint(preheader);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, canonicalControl));
+    lifter.branch_backup(loopHeader);
+
+    lifter.builder->SetInsertPoint(firstBackedge);
+    lifter.SetMemoryValue(makeI64(context, controlSlot),
+                          makeI64(context, backedgeControl));
+    lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+    lifter.load_generalized_backup(loopHeader);
+    lifter.builder->SetInsertPoint(loopHeader);
+    constexpr std::array<uint64_t, 3> adjacent = {
+        0x140023672ULL, 0x14002368EULL, 0x140023742ULL};
+    for (uint64_t addr : adjacent) {
+      lifter.current_address = addr;
+      auto* r9 = lifter.GetRegisterValue(RegisterUnderTest::R9);
+      if (llvm::isa<llvm::PHINode>(r9)) {
+        std::ostringstream os;
+        os << "  targeted R9 override fired at non-hot address 0x"
+           << std::hex << addr << " (exact-match contract broken)\n";
+        details = os.str();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool runTargetedThemidаR9OverrideFallsThroughWithoutLoopState(std::string& details) {
+    // Before any generalized-loop backup has been created,
+    // getMostRecentGeneralizedLoopState() returns null and the override must
+    // fall through to the ordinary R9 value instead of attempting to build a
+    // phi from uninitialized state.
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    lifter.builder->SetInsertPoint(entry);
+    lifter.current_address = 0x140023741ULL;   // a hot address, on purpose
+    auto* r9 = lifter.GetRegisterValue(RegisterUnderTest::R9);
+    if (llvm::isa<llvm::PHINode>(r9)) {
+      details =
+          "  targeted R9 override should not fire without an active generalized loop state\n";
+      return false;
+    }
+    return true;
+  }
 
   bool runGeneralizedLoopControlSlotCreatesPhi(std::string& details) {
     LifterUnderTest lifter;
@@ -2949,6 +3100,14 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesPreservesCastWidths);
     runCustom("compute_possible_values_enumerates_phi_incomings",
              &InstructionTester::runComputePossibleValuesEnumeratesPhiIncomings);
+    runCustom("compute_possible_values_circular_phi_bails_via_depth_guard",
+             &InstructionTester::runComputePossibleValuesCircularPhiBailsViaDepthGuard);
+    runCustom("compute_possible_values_trunc_to_i1_preserves_width",
+             &InstructionTester::runComputePossibleValuesTruncToI1PreservesWidth);
+    runCustom("targeted_themida_r9_override_does_not_fire_at_adjacent_address",
+             &InstructionTester::runTargetedThemidаR9OverrideDoesNotFireAtAdjacentAddress);
+    runCustom("targeted_themida_r9_override_falls_through_without_loop_state",
+             &InstructionTester::runTargetedThemidаR9OverrideFallsThroughWithoutLoopState);
     runCustom("generalized_loop_control_field_load_creates_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadCreatesPhi);
     runCustom("solve_path_prefers_mapped_target_over_null_for_indirect_jump",
