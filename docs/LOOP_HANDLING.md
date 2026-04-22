@@ -133,7 +133,7 @@ When the lifter is in loop mode (`currentBlockUsesGeneralizedLoopState() == true
 | `retrieve_generalized_loop_target_slot_value(addr, bytes)` | Phi of canonical/backedge values for a recognized target slot. |
 | `retrieve_generalized_loop_phi_address_value(load, bytes, orgLoad)` | Phi of loaded values when the load's address is a phi of two concrete addresses derived from canonical/backedge. |
 | `retrieve_generalized_loop_local_phi_address_value(load, bytes, orgLoad)` | Same as above for loop-local stack-buffer addresses. |
-| `resolveTargetedThemidаR9(value)` | At three hardcoded Themida instruction addresses, replaces R9 with `(canonicalControl + offset, backedgeControl + offset)` phi. See [Hardcoded reference-sample addresses](#hardcoded-reference-sample-addresses). |
+| `resolveTargetedThemidaR9(value)` | At three hardcoded Themida instruction addresses, replaces R9 with `(canonicalControl + offset, backedgeControl + offset)` phi. See [Hardcoded reference-sample addresses](#hardcoded-reference-sample-addresses). |
 
 `computePossibleValues` (in `lifter/memory/GEPTracker.ipp`) also has a `PHINode` case that unions every incoming's value set, so callers downstream of these phis get the full possible-value enumeration instead of an empty fallback.
 
@@ -148,7 +148,7 @@ static constexpr std::array<uint64_t, 3> kSupportedGeneralizedControlFieldOffset
     0x6ULL, 0xAULL, 0xCULL};
 ```
 
-`resolveTargetedThemidаR9` adds three hardcoded `(instruction-address, control-offset)` pairs:
+`resolveTargetedThemidaR9` adds three hardcoded `(instruction-address, control-offset)` pairs:
 
 | Instruction address | Control offset | Verified hit count on reference sample |
 |---|---|---|
@@ -173,7 +173,7 @@ Loop handling has roughly thirty microtests in `lifter/test/Tester.hpp`. The mos
 | `pending_generalized_loop_*` | Same guards in the `pendingLoopGeneralizationAddresses` lifecycle. |
 | `generalized_loop_restore_*` | Backedge flag-state and register-state merging across `load_generalized_backup`. |
 | `generalized_loop_*_creates_phi` | Each `retrieve_generalized_loop_*` helper produces the expected phi shape (control slot, control slot displacement, target slot, control field load, local phi address). |
-| `targeted_themida_r9_override_produces_phi` | All three hardcoded `(address, offset)` pairs in `resolveTargetedThemidаR9`. |
+| `targeted_themida_r9_override_produces_phi` | All three hardcoded `(address, offset)` pairs in `resolveTargetedThemidaR9`. |
 | `compute_possible_values_*` | The PHI handler unions incomings (also covers cast-width preservation and rolled-arithmetic-chain enumeration). |
 
 When changing loop handling, run at minimum:
@@ -197,6 +197,6 @@ and inspect `output_diagnostics.json` for `lift_stats.instructions_lifted == 254
 |---|---|
 | `REP`/`REPE`/`REPNE`-prefixed `SCAS` | Rejected as `not_implemented`; needs a model for repeated-scan termination. |
 | `INT 2` continuation under VMP 3.6 | Naive architectural fallthrough is wrong; recovery requires modeling the dispatcher / exception-mediated control flow. See `VMP_TESTING_NOTES.md`. |
-| Hardcoded `(address, offset)` pairs in `resolveTargetedThemidаR9` | Only fire on the reference Themida sample. See [Hardcoded reference-sample addresses](#hardcoded-reference-sample-addresses). |
+| Hardcoded `(address, offset)` pairs in `resolveTargetedThemidaR9` | Only fire on the reference Themida sample. See [Hardcoded reference-sample addresses](#hardcoded-reference-sample-addresses). |
 | Loop unrolling / loop-invariant code motion | Not implemented. The lifter relies on LLVM's downstream optimization passes for this once the IR is in shape. |
 | Multi-way backedges (≥3 paths to the same header) | Not exercised by the current generalized-loop machinery; the canonical/backedge model assumes exactly two incoming paths. |

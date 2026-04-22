@@ -2040,8 +2040,8 @@ bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
   }
 
 
-  bool runTargetedThemidаR9OverrideProducesPhi(std::string& details) {
-    // resolveTargetedThemidаR9 hardcodes three instruction addresses where a
+  bool runTargetedThemidaR9OverrideProducesPhi(std::string& details) {
+    // resolveTargetedThemidaR9 hardcodes three instruction addresses where a
     // Themida cursor-derived R9 value must be rematerialized as a phi over
     // canonical/backedge control bases with a per-address offset.  Verify
     // all three cases, not just one, so a regression that silently drops or
@@ -2124,8 +2124,8 @@ bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
   }
 
 
-  bool runTargetedThemidаR9OverrideDoesNotFireAtAdjacentAddress(std::string& details) {
-    // The switch in resolveTargetedThemidаR9 is exact-address.  A regression
+  bool runTargetedThemidaR9OverrideDoesNotFireAtAdjacentAddress(std::string& details) {
+    // The switch in resolveTargetedThemidaR9 is exact-address.  A regression
     // that accidentally broadened it to a range (e.g. `addr >= 0x140023500 &&
     // addr <= 0x140023800`) would silently produce a phi at every R9 read in
     // that window, corrupting samples that rely on exact-match behavior.
@@ -2171,7 +2171,7 @@ bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
     return true;
   }
 
-  bool runTargetedThemidаR9OverrideFallsThroughWithoutLoopState(std::string& details) {
+  bool runTargetedThemidaR9OverrideFallsThroughWithoutLoopState(std::string& details) {
     // Before any generalized-loop backup has been created,
     // getMostRecentGeneralizedLoopState() returns null and the override must
     // fall through to the ordinary R9 value instead of attempting to build a
@@ -3077,7 +3077,7 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
     runCustom("targeted_themida_r9_override_produces_phi",
-             &InstructionTester::runTargetedThemidаR9OverrideProducesPhi);
+             &InstructionTester::runTargetedThemidaR9OverrideProducesPhi);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeRegisterState);
     runCustom("set_register_value_zero_extends_32bit_writes",
@@ -3105,9 +3105,9 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
     runCustom("compute_possible_values_trunc_to_i1_preserves_width",
              &InstructionTester::runComputePossibleValuesTruncToI1PreservesWidth);
     runCustom("targeted_themida_r9_override_does_not_fire_at_adjacent_address",
-             &InstructionTester::runTargetedThemidаR9OverrideDoesNotFireAtAdjacentAddress);
+             &InstructionTester::runTargetedThemidaR9OverrideDoesNotFireAtAdjacentAddress);
     runCustom("targeted_themida_r9_override_falls_through_without_loop_state",
-             &InstructionTester::runTargetedThemidаR9OverrideFallsThroughWithoutLoopState);
+             &InstructionTester::runTargetedThemidaR9OverrideFallsThroughWithoutLoopState);
     runCustom("generalized_loop_control_field_load_creates_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadCreatesPhi);
     runCustom("solve_path_prefers_mapped_target_over_null_for_indirect_jump",
