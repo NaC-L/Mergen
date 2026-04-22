@@ -1956,61 +1956,84 @@ bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
 
 
   bool runTargetedThemidаR9OverrideProducesPhi(std::string& details) {
-    LifterUnderTest lifter;
-    auto& context = lifter.context;
-    auto* preheader =
-        llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
-    auto* firstBackedge =
-        llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
-    auto* loopHeader =
-        llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
-
+    // resolveTargetedThemidаR9 hardcodes three instruction addresses where a
+    // Themida cursor-derived R9 value must be rematerialized as a phi over
+    // canonical/backedge control bases with a per-address offset.  Verify
+    // all three cases, not just one, so a regression that silently drops or
+    // re-offsets a single entry is caught.
     constexpr uint64_t controlSlot = 0x14004DD19ULL;
     constexpr uint64_t canonicalControl = 0x1401AF740ULL;
     constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+    struct Case {
+      uint64_t address;
+      uint64_t offset;
+    };
+    constexpr std::array<Case, 3> cases = {
+        {{0x140023671ULL, 0x0},
+         {0x14002368DULL, 0xA},
+         {0x140023741ULL, 0xC}}};
 
-    lifter.builder->SetInsertPoint(preheader);
-    lifter.SetMemoryValue(makeI64(context, controlSlot),
-                          makeI64(context, canonicalControl));
-    lifter.branch_backup(loopHeader);
+    for (const auto& c : cases) {
+      LifterUnderTest lifter;
+      auto& context = lifter.context;
+      auto* preheader =
+          llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+      auto* firstBackedge =
+          llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+      auto* loopHeader =
+          llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
 
-    lifter.builder->SetInsertPoint(firstBackedge);
-    lifter.SetMemoryValue(makeI64(context, controlSlot),
-                          makeI64(context, backedgeControl));
-    lifter.branch_backup(loopHeader, /*generalized=*/true);
+      lifter.builder->SetInsertPoint(preheader);
+      lifter.SetMemoryValue(makeI64(context, controlSlot),
+                            makeI64(context, canonicalControl));
+      lifter.branch_backup(loopHeader);
 
-    lifter.load_generalized_backup(loopHeader);
-    lifter.builder->SetInsertPoint(loopHeader);
-    lifter.current_address = 0x14002368DULL;
-    auto* value = lifter.GetRegisterValue(RegisterUnderTest::R9);
-    auto* phi = llvm::dyn_cast<llvm::PHINode>(value);
-    if (!phi) {
-      details =
-          "  targeted Themida R9 override should return a phi at semantics-time address 0x14002368D\n";
-      return false;
-    }
-    bool sawCanonical = false;
-    bool sawBackedge = false;
-    for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
-      auto* incomingBlock = phi->getIncomingBlock(i);
-      auto actual = readConstantAPInt(phi->getIncomingValue(i));
-      if (!actual.has_value()) {
-        details = "  targeted R9 phi incoming values should be concrete\n";
+      lifter.builder->SetInsertPoint(firstBackedge);
+      lifter.SetMemoryValue(makeI64(context, controlSlot),
+                            makeI64(context, backedgeControl));
+      lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+      lifter.load_generalized_backup(loopHeader);
+      lifter.builder->SetInsertPoint(loopHeader);
+      lifter.current_address = c.address;
+      auto* value = lifter.GetRegisterValue(RegisterUnderTest::R9);
+      auto* phi = llvm::dyn_cast<llvm::PHINode>(value);
+      if (!phi) {
+        std::ostringstream os;
+        os << "  targeted Themida R9 override should return a phi at 0x"
+           << std::hex << c.address << "\n";
+        details = os.str();
         return false;
       }
-      if (incomingBlock == preheader &&
-          actual->getZExtValue() == canonicalControl + 0xA) {
-        sawCanonical = true;
+      bool sawCanonical = false;
+      bool sawBackedge = false;
+      for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+        auto* incomingBlock = phi->getIncomingBlock(i);
+        auto actual = readConstantAPInt(phi->getIncomingValue(i));
+        if (!actual.has_value()) {
+          std::ostringstream os;
+          os << "  targeted R9 phi incoming values should be concrete at 0x"
+             << std::hex << c.address << "\n";
+          details = os.str();
+          return false;
+        }
+        if (incomingBlock == preheader &&
+            actual->getZExtValue() == canonicalControl + c.offset) {
+          sawCanonical = true;
+        }
+        if (incomingBlock == firstBackedge &&
+            actual->getZExtValue() == backedgeControl + c.offset) {
+          sawBackedge = true;
+        }
       }
-      if (incomingBlock == firstBackedge &&
-          actual->getZExtValue() == backedgeControl + 0xA) {
-        sawBackedge = true;
+      if (!sawCanonical || !sawBackedge) {
+        std::ostringstream os;
+        os << "  targeted R9 phi at 0x" << std::hex << c.address
+           << " should carry control+0x" << c.offset
+           << " on both preheader and backedge incomings\n";
+        details = os.str();
+        return false;
       }
-    }
-    if (!sawCanonical || !sawBackedge) {
-      details =
-          "  targeted R9 phi should preserve canonical/backedge control+0xA values\n";
-      return false;
     }
     return true;
   }
