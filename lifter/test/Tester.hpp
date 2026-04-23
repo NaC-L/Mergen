@@ -3322,6 +3322,93 @@ bool runGeneralizedLoopLocalValueReturnsConcreteStackBufferValue(
   return true;
 }
 
+// retrieve_generalized_loop_local_value_impl supports byteCount=1
+// narrow reads when the tracked stack slice is contiguous. Complements
+// the existing full-width local_value test.
+bool runGeneralizedLoopLocalValueReturnsConcreteStackBufferValueByteCountOne(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t localAddr = STACKP_VALUE + 64;
+  constexpr uint64_t localValue = 0x1122334455667788ULL;
+  constexpr uint8_t low8 = static_cast<uint8_t>(localValue & 0xFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, localAddr), makeI64(context, localValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* result = lifter.GetMemoryValue(makeI64(context, localAddr), 8);
+  auto actual = readConstantAPInt(result);
+  if (!actual.has_value() || actual->getZExtValue() != low8) {
+    details = "  local_value byteCount=1 should return the low-byte slice of the tracked stack value\n";
+    return false;
+  }
+  return true;
+}
+
+// target_slot helper bails for byteCount > 8 and falls through to the
+// normal memory pipeline. This is the target-slot counterpart to the
+// existing control_slot byteCount=16 fallthrough test.
+bool runGeneralizedLoopTargetSlotByteCountSixteenFallsThrough(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t targetValue = 0xCAFEBABECAFED00DULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, targetValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, targetValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* result = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 128);
+  if (llvm::isa<llvm::PHINode>(result)) {
+    details = "  target_slot helper should NOT produce a phi at byteCount=16 (exceeds helper width cap); caller must fall through\n";
+    return false;
+  }
+  return true;
+}
+
 // make_generalized_loop_backup preserves the CONCRETE backedge value
 // for RSP when canonical and backedge RSP differ. Companion to the
 // rsp-collapse test (which uses the same constant on both sides):
@@ -6973,6 +7060,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopTargetSlotCollapsesToCanonicalWhenValuesMatch);
     runCustom("generalized_loop_local_value_returns_concrete_stack_buffer_value",
              &InstructionTester::runGeneralizedLoopLocalValueReturnsConcreteStackBufferValue);
+    runCustom("generalized_loop_local_value_returns_concrete_stack_buffer_value_byte_count_one",
+             &InstructionTester::runGeneralizedLoopLocalValueReturnsConcreteStackBufferValueByteCountOne);
     runCustom("make_generalized_loop_backup_preserves_concrete_rsp_when_values_differ",
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteRspWhenValuesDiffer);
     runCustom("generalized_loop_control_slot_byte_count_two_returns_masked_phi",
@@ -7045,6 +7134,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopTargetSlotByteCountTwoReturnsMaskedPhi);
     runCustom("generalized_loop_target_slot_byte_count_one_returns_masked_phi",
              &InstructionTester::runGeneralizedLoopTargetSlotByteCountOneReturnsMaskedPhi);
+    runCustom("generalized_loop_target_slot_byte_count_sixteen_falls_through",
+             &InstructionTester::runGeneralizedLoopTargetSlotByteCountSixteenFallsThrough);
     runCustom("generalized_loop_control_field_load_byte_count_one_returns_masked_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadByteCountOneReturnsMaskedPhi);
     runCustom("migrate_generalized_loop_block_copies_register_and_flag_phi_maps",
