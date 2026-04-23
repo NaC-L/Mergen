@@ -3565,6 +3565,183 @@ bool runGeneralizedLocalPhiAddressThreeWayResolvesAllIncomings(std::string& deta
   return true;
 }
 
+// phi_address helper with 4-way phi (canonical + 3 backedges). Completes
+// the N-way matrix for the non-local phi-address helper.
+bool runGeneralizedPhiAddressFourWayResolvesAllIncomings(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* thirdBackedge =
+      llvm::BasicBlock::Create(context, "third_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t thirdControl = 0x1401AEC37ULL;
+  constexpr uint64_t canonicalAddr = 0x140061000ULL;
+  constexpr uint64_t firstAddr = 0x140061100ULL;
+  constexpr uint64_t secondAddr = 0x140061200ULL;
+  constexpr uint64_t thirdAddr = 0x140061300ULL;
+  constexpr uint64_t canonicalValue = 0xAAAA0000AAAA0000ULL;
+  constexpr uint64_t firstValue = 0xBBBB1111BBBB1111ULL;
+  constexpr uint64_t secondValue = 0xCCCC2222CCCC2222ULL;
+  constexpr uint64_t thirdValue = 0xDDDD3333DDDD3333ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, canonicalAddr),
+                        makeI64(context, canonicalValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.SetMemoryValue(makeI64(context, firstAddr),
+                        makeI64(context, firstValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.SetMemoryValue(makeI64(context, secondAddr),
+                        makeI64(context, secondValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(thirdBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, thirdControl));
+  lifter.SetMemoryValue(makeI64(context, thirdAddr),
+                        makeI64(context, thirdValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 4, "fourway_phi_addr");
+  addressPhi->addIncoming(makeI64(context, canonicalAddr), preheader);
+  addressPhi->addIncoming(makeI64(context, firstAddr), firstBackedge);
+  addressPhi->addIncoming(makeI64(context, secondAddr), secondBackedge);
+  addressPhi->addIncoming(makeI64(context, thirdAddr), thirdBackedge);
+
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 64);
+  auto* resultPhi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!resultPhi || resultPhi->getNumIncomingValues() != 4) {
+    details = "  4-way phi-address resolver should yield a 4-incoming phi of loaded values\n";
+    return false;
+  }
+  bool sawCanonical = false, sawFirst = false, sawSecond = false, sawThird = false;
+  for (unsigned i = 0; i < resultPhi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(resultPhi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalValue) sawCanonical = true;
+    else if (v == firstValue) sawFirst = true;
+    else if (v == secondValue) sawSecond = true;
+    else if (v == thirdValue) sawThird = true;
+  }
+  if (!sawCanonical || !sawFirst || !sawSecond || !sawThird) {
+    details = "  4-way phi-address resolver should resolve all canonical/backedge values\n";
+    return false;
+  }
+  return true;
+}
+
+// local_phi_address helper with 4-way phi (canonical + 3 backedges).
+// Completes the N-way matrix for the local phi-address helper.
+bool runGeneralizedLocalPhiAddressFourWayResolvesAllIncomings(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* thirdBackedge =
+      llvm::BasicBlock::Create(context, "third_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t thirdControl = 0x1401AEC37ULL;
+  constexpr uint64_t stackA = STACKP_VALUE + 128;
+  constexpr uint64_t stackB = STACKP_VALUE + 136;
+  constexpr uint64_t stackC = STACKP_VALUE + 144;
+  constexpr uint64_t stackD = STACKP_VALUE + 152;
+  constexpr uint64_t valueA = 0x1111111111111111ULL;
+  constexpr uint64_t valueB = 0x2222222222222222ULL;
+  constexpr uint64_t valueC = 0x3333333333333333ULL;
+  constexpr uint64_t valueD = 0x4444444444444444ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, stackA), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.SetMemoryValue(makeI64(context, stackB), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.SetMemoryValue(makeI64(context, stackC), makeI64(context, valueC));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(thirdBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, thirdControl));
+  lifter.SetMemoryValue(makeI64(context, stackD), makeI64(context, valueD));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 4, "fourway_local_phi_addr");
+  addressPhi->addIncoming(makeI64(context, stackA), preheader);
+  addressPhi->addIncoming(makeI64(context, stackB), firstBackedge);
+  addressPhi->addIncoming(makeI64(context, stackC), secondBackedge);
+  addressPhi->addIncoming(makeI64(context, stackD), thirdBackedge);
+
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 64);
+  auto* resultPhi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!resultPhi || resultPhi->getNumIncomingValues() != 4) {
+    details = "  4-way local-phi-address resolver should yield a 4-incoming phi\n";
+    return false;
+  }
+  bool sawA = false, sawB = false, sawC = false, sawD = false;
+  for (unsigned i = 0; i < resultPhi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(resultPhi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == valueA) sawA = true;
+    else if (v == valueB) sawB = true;
+    else if (v == valueC) sawC = true;
+    else if (v == valueD) sawD = true;
+  }
+  if (!sawA || !sawB || !sawC || !sawD) {
+    details = "  4-way local-phi-address resolver should carry all four incoming stack values\n";
+    return false;
+  }
+  return true;
+}
+
 // branch_backup dedup by sourceBlock. A repeat generalized backup from
 // the same sourceBlock must replace that block's entry in place rather
 // than append a duplicate; the vector size stays bounded by the number
@@ -8788,6 +8965,71 @@ bool runComputePossibleValuesOnGeneralizedPhiLoad(std::string& details) {
   }
   return true;
 }
+
+// computePossibleValues on a generalized phi-address load with
+// canonical + 2 backedges should enumerate all three concrete results.
+bool runComputePossibleValuesOnGeneralizedPhiLoadThreeWay(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t canonicalValue = 0x1111222233334444ULL;
+  constexpr uint64_t firstValue = 0xAAAABBBBCCCCDDDDULL;
+  constexpr uint64_t secondValue = 0xEEEEFFFF00001111ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, canonicalControl),
+                        makeI64(context, canonicalValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.SetMemoryValue(makeI64(context, firstControl),
+                        makeI64(context, firstValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.SetMemoryValue(makeI64(context, secondControl),
+                        makeI64(context, secondValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* phiAddress = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* pointer = lifter.getPointer(phiAddress);
+  auto* load = lifter.builder->CreateLoad(llvm::Type::getInt64Ty(context),
+                                          pointer,
+                                          "generalized_phi_load_probe_threeway");
+  auto values = lifter.computePossibleValues(load, 0);
+  if (values.size() != 3 ||
+      !values.contains(llvm::APInt(64, canonicalValue)) ||
+      !values.contains(llvm::APInt(64, firstValue)) ||
+      !values.contains(llvm::APInt(64, secondValue))) {
+    std::ostringstream os;
+    os << "  computePossibleValues should enumerate all three generalized phi-address loads, got size "
+       << values.size() << "\n";
+    details = os.str();
+    return false;
+  }
+  return true;
+}
 bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -9269,6 +9511,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedPhiAddressThreeWayResolvesAllIncomings);
     runCustom("generalized_local_phi_address_three_way_resolves_all_incomings",
              &InstructionTester::runGeneralizedLocalPhiAddressThreeWayResolvesAllIncomings);
+    runCustom("generalized_phi_address_four_way_resolves_all_incomings",
+             &InstructionTester::runGeneralizedPhiAddressFourWayResolvesAllIncomings);
+    runCustom("generalized_local_phi_address_four_way_resolves_all_incomings",
+             &InstructionTester::runGeneralizedLocalPhiAddressFourWayResolvesAllIncomings);
     runCustom("branch_backup_generalized_dedups_by_source_block",
              &InstructionTester::runBranchBackupGeneralizedDedupsBySourceBlock);
     runCustom("merge_value_collapses_identical_canonical_and_backedge_to_single_value",
@@ -9475,6 +9721,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runByteTestJoinPreservesBranchValues);
     runCustom("compute_possible_values_on_generalized_phi_load",
              &InstructionTester::runComputePossibleValuesOnGeneralizedPhiLoad);
+    runCustom("generalized_phi_address_compute_possible_values_three_way",
+             &InstructionTester::runComputePossibleValuesOnGeneralizedPhiLoadThreeWay);
     runCustom("rolled_generalized_phi_address_uses_advanced_pair",
              &InstructionTester::runRolledGeneralizedPhiAddressUsesAdvancedPair);
     runCustom("solve_path_resolves_generalized_phi_load_target",
