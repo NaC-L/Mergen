@@ -4739,6 +4739,198 @@ bool runGeneralizedLoopRestoreFlagPhiCarriesConcreteBackedgeOnDivergence(
   return true;
 }
 
+// retrieve_generalized_loop_target_slot_value_impl with byteCount=2
+// returns an i16 phi carrying the masked lower 16 bits of canonical
+// and backedge loop-carried slot values. Symmetric to the control-slot
+// byteCount=2 test, but exercises the target_slot helper.
+bool runGeneralizedLoopTargetSlotByteCountTwoReturnsMaskedPhi(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t canonicalTarget = 0xAA11BB22CC33D044ULL;
+  constexpr uint64_t backedgeTarget = 0xDD55EE66FF77A088ULL;
+  constexpr uint64_t loCanonical = canonicalTarget & 0xFFFFULL;
+  constexpr uint64_t loBackedge = backedgeTarget & 0xFFFFULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, canonicalTarget));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, backedgeTarget));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* result = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 16);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(result);
+  if (!phi) {
+    details = "  target_slot with byteCount=2 should produce a phi\n";
+    return false;
+  }
+  if (!phi->getType()->isIntegerTy(16)) {
+    details = "  target_slot byteCount=2 phi should have i16 type\n";
+    return false;
+  }
+  bool sawC = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == loCanonical) sawC = true;
+    else if (v == loBackedge) sawB = true;
+  }
+  if (!sawC || !sawB) {
+    details = "  target_slot byteCount=2 phi should carry the masked lower-16 "
+              "bits of canonical and backedge targets\n";
+    return false;
+  }
+  return true;
+}
+
+// retrieve_generalized_loop_control_field_value_impl with byteCount=1
+// yields an i8 phi carrying the masked low byte of canonical and
+// backedge field values for a supported field offset. Exercises the
+// helper's narrow-width read path directly on the control-field helper.
+bool runGeneralizedLoopControlFieldLoadByteCountOneReturnsMaskedPhi(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t fieldOffset = 0x6ULL;
+  constexpr uint16_t canonicalField = 0x11ABU;
+  constexpr uint16_t backedgeField = 0x22CDU;
+  constexpr uint8_t lowCanonical = static_cast<uint8_t>(canonicalField & 0xFFU);
+  constexpr uint8_t lowBackedge = static_cast<uint8_t>(backedgeField & 0xFFU);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(
+      makeI64(context, canonicalControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), canonicalField));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(
+      makeI64(context, backedgeControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), backedgeField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlValue =
+      lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* displaced = lifter.builder->CreateAdd(
+      controlValue, llvm::ConstantInt::get(controlValue->getType(), fieldOffset),
+      "generalized_control_field_plus_6_byte1");
+  auto* fieldValue = lifter.GetMemoryValue(displaced, 8);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(fieldValue);
+  if (!phi) {
+    details = "  control_field helper with byteCount=1 should produce a phi\n";
+    return false;
+  }
+  if (!phi->getType()->isIntegerTy(8)) {
+    details = "  control_field byteCount=1 phi should have i8 type\n";
+    return false;
+  }
+  bool sawC = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == lowCanonical) sawC = true;
+    else if (v == lowBackedge) sawB = true;
+  }
+  if (!sawC || !sawB) {
+    details = "  control_field byteCount=1 phi should carry low-byte masked "
+              "canonical and backedge field values\n";
+    return false;
+  }
+  return true;
+}
+
+// migrate_generalized_loop_block copies the per-header register and
+// flag PHI maps to newBlock when newBlock does not already have entries.
+// The earlier migration test checked BBbackup / backedge backup /
+// control-field state only; this one pins the PHI-map copy explicitly.
+bool runMigrateGeneralizedLoopBlockCopiesRegisterAndFlagPhiMaps(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* oldHeader =
+      llvm::BasicBlock::Create(context, "old_header", lifter.fnc);
+  auto* newHeader =
+      llvm::BasicBlock::Create(context, "new_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetRegisterValue(RegisterUnderTest::RAX, makeI64(context, 0x1111));
+  lifter.SetFlagValue_impl(FLAG_ZF, llvm::ConstantInt::getFalse(context));
+  lifter.branch_backup(oldHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetRegisterValue(RegisterUnderTest::RAX, makeI64(context, 0x2222));
+  lifter.SetFlagValue_impl(FLAG_ZF, llvm::ConstantInt::getTrue(context));
+  lifter.branch_backup(oldHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(oldHeader);
+
+  if (lifter.generalizedLoopRegisterPhis.count(oldHeader) != 1 ||
+      lifter.generalizedLoopFlagPhis.count(oldHeader) != 1) {
+    details = "  setup should have populated register/flag phi maps for oldHeader\n";
+    return false;
+  }
+
+  lifter.migrate_generalized_loop_block(oldHeader, newHeader);
+
+  if (lifter.generalizedLoopRegisterPhis.count(newHeader) != 1 ||
+      lifter.generalizedLoopFlagPhis.count(newHeader) != 1) {
+    details = "  migrate_generalized_loop_block should copy register/flag phi "
+              "maps to newHeader\n";
+    return false;
+  }
+  return true;
+}
+
 // isStructuredLoopHeaderShape: deeper hops allow only 1 predecessor. A
 // chain block (depth >= 1) with 2+ predecessors rejects on the
 // `depth == 0 ? 2 : 1` cap. Complements runStructuredLoopHeaderRejectsMultiplePredecessors
@@ -6328,6 +6520,12 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMakeGeneralizedLoopBackupWidensRdxToUndefOnFirstBackedge);
     runCustom("generalized_loop_restore_flag_phi_carries_concrete_backedge_on_divergence",
              &InstructionTester::runGeneralizedLoopRestoreFlagPhiCarriesConcreteBackedgeOnDivergence);
+    runCustom("generalized_loop_target_slot_byte_count_two_returns_masked_phi",
+             &InstructionTester::runGeneralizedLoopTargetSlotByteCountTwoReturnsMaskedPhi);
+    runCustom("generalized_loop_control_field_load_byte_count_one_returns_masked_phi",
+             &InstructionTester::runGeneralizedLoopControlFieldLoadByteCountOneReturnsMaskedPhi);
+    runCustom("migrate_generalized_loop_block_copies_register_and_flag_phi_maps",
+             &InstructionTester::runMigrateGeneralizedLoopBlockCopiesRegisterAndFlagPhiMaps);
     runCustom("structured_loop_header_rejects_two_predecessors_at_inner_hop",
              &InstructionTester::runStructuredLoopHeaderRejectsTwoPredecessorsAtInnerHop);
     runCustom("branch_backup_generalized_does_not_overwrite_existing_bbbackup",
