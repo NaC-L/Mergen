@@ -5235,6 +5235,82 @@ bool runMakeGeneralizedLoopBackupPreservesConcreteR9OnFirstBackedge(
   return true;
 }
 
+// migrate_generalized_loop_block copies a multi-entry
+// generalizedLoopBackedgeBackup vector intact when newBlock has no entry.
+bool runMigrateGeneralizedLoopBlockCopiesMultiwayBackedgeVector(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* oldHeader = llvm::BasicBlock::Create(context, "old_header", lifter.fnc);
+  auto* newHeader = llvm::BasicBlock::Create(context, "new_header", lifter.fnc);
+  auto* beA = llvm::BasicBlock::Create(context, "beA", lifter.fnc);
+  auto* beB = llvm::BasicBlock::Create(context, "beB", lifter.fnc);
+
+  LifterUnderTest::backup_point a;
+  a.sourceBlock = beA;
+  LifterUnderTest::backup_point b;
+  b.sourceBlock = beB;
+  lifter.generalizedLoopBackedgeBackup[oldHeader].push_back(a);
+  lifter.generalizedLoopBackedgeBackup[oldHeader].push_back(b);
+
+  lifter.migrate_generalized_loop_block(oldHeader, newHeader);
+
+  if (lifter.generalizedLoopBackedgeBackup.count(newHeader) != 1 ||
+      lifter.generalizedLoopBackedgeBackup[newHeader].size() != 2) {
+    details = "  migrate_generalized_loop_block should copy the full multi-entry backedge vector to newHeader\n";
+    return false;
+  }
+  if (lifter.generalizedLoopBackedgeBackup[newHeader][0].sourceBlock != beA ||
+      lifter.generalizedLoopBackedgeBackup[newHeader][1].sourceBlock != beB) {
+    details = "  migrated multi-entry backedge vector should preserve entry order and source blocks\n";
+    return false;
+  }
+  return true;
+}
+
+// migrate_generalized_loop_block copies a multi-entry archived control-field
+// state and rewrites headerBlock to newHeader while preserving the vector
+// contents of backedgeSources/backedgeControls/backedgeBuffers.
+bool runMigrateGeneralizedLoopBlockCopiesMultiwayControlFieldState(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* oldHeader = llvm::BasicBlock::Create(context, "old_header", lifter.fnc);
+  auto* newHeader = llvm::BasicBlock::Create(context, "new_header", lifter.fnc);
+  auto* canonical = llvm::BasicBlock::Create(context, "canonical", lifter.fnc);
+  auto* beA = llvm::BasicBlock::Create(context, "beA", lifter.fnc);
+  auto* beB = llvm::BasicBlock::Create(context, "beB", lifter.fnc);
+
+  LifterUnderTest::GeneralizedLoopControlFieldState stored;
+  stored.valid = true;
+  stored.headerBlock = oldHeader;
+  stored.canonicalSource = canonical;
+  stored.canonicalControl = 0x1111;
+  stored.backedgeSources = {beA, beB};
+  stored.backedgeControls = {0x2222, 0x3333};
+  stored.backedgeBuffers.resize(2);
+  stored.backedgeBuffers[0][0x5000] = ValueByteReference(
+      llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0xAA), 0);
+  stored.backedgeBuffers[1][0x6000] = ValueByteReference(
+      llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0xBB), 0);
+  lifter.generalizedLoopControlFieldStates[oldHeader] = stored;
+
+  lifter.migrate_generalized_loop_block(oldHeader, newHeader);
+
+  if (lifter.generalizedLoopControlFieldStates.count(newHeader) != 1) {
+    details = "  migrate_generalized_loop_block should copy the archived control-field state to newHeader\n";
+    return false;
+  }
+  const auto& migrated = lifter.generalizedLoopControlFieldStates[newHeader];
+  if (migrated.headerBlock != newHeader || migrated.backedgeSources.size() != 2 ||
+      migrated.backedgeSources[0] != beA || migrated.backedgeSources[1] != beB ||
+      migrated.backedgeControls[0] != 0x2222 || migrated.backedgeControls[1] != 0x3333) {
+    details = "  migrated multi-entry control-field state should preserve vectors and rewrite headerBlock\n";
+    return false;
+  }
+  return true;
+}
+
 // retrieve_generalized_loop_target_slot_value_impl bails (returns
 // nullptr) when the canonical buffer has no tracked value at the
 // requested address, even when state is otherwise valid. The caller
@@ -8068,6 +8144,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runRecordGeneralizedLoopBackedgeSingleSourceNoOpWhenControlUnchanged);
     runCustom("migrate_generalized_loop_block_copies_all_state_to_new_block",
              &InstructionTester::runMigrateGeneralizedLoopBlockCopiesAllStateToNewBlock);
+    runCustom("migrate_generalized_loop_block_copies_multiway_backedge_vector",
+             &InstructionTester::runMigrateGeneralizedLoopBlockCopiesMultiwayBackedgeVector);
+    runCustom("generalized_loop_migrate_block_copies_multiway_control_field_state",
+             &InstructionTester::runMigrateGeneralizedLoopBlockCopiesMultiwayControlFieldState);
     runCustom("generalized_loop_load_generalized_backup_prefers_stored_state_over_fresh_backedge_backup",
              &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupPrefersStoredStateOverFreshBackedgeBackup);
     runCustom("generalized_loop_state_getter_prefers_active_state_over_archive",
