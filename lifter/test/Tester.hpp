@@ -4503,6 +4503,120 @@ bool runMigrateGeneralizedLoopBlockPreservesExistingRegisterAndFlagPhiMaps(
   return true;
 }
 
+// migrate_generalized_loop_block must NOT overwrite a pre-existing
+// generalizedLoopBackedgeBackup entry on newBlock. This is the
+// backedge-vector counterpart to the existing BBbackup and register/flag
+// phi map preserve tests.
+bool runMigrateGeneralizedLoopBlockPreservesExistingBackedgeBackup(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* oldHeader =
+      llvm::BasicBlock::Create(context, "old_header", lifter.fnc);
+  auto* newHeader =
+      llvm::BasicBlock::Create(context, "new_header", lifter.fnc);
+  auto* preseedHeader =
+      llvm::BasicBlock::Create(context, "preseed_header", lifter.fnc);
+  auto* preseedBackedge =
+      llvm::BasicBlock::Create(context, "preseed_backedge", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t oldCanonical = 0x1401AF740ULL;
+  constexpr uint64_t oldBackedge = 0x1401AF0F6ULL;
+  constexpr uint64_t newCanonical = 0x1401BFFFFULL;
+  constexpr uint64_t newBackedge = 0x1401BFF00ULL;
+
+  // Seed oldHeader with one backedge backup entry.
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, oldCanonical));
+  lifter.branch_backup(oldHeader);
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, oldBackedge));
+  lifter.branch_backup(oldHeader, /*generalized=*/true);
+
+  // Seed newHeader with a DIFFERENT backedge backup entry that must survive.
+  lifter.builder->SetInsertPoint(preseedHeader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, newCanonical));
+  lifter.branch_backup(newHeader);
+  lifter.builder->SetInsertPoint(preseedBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, newBackedge));
+  lifter.branch_backup(newHeader, /*generalized=*/true);
+
+  auto preservedSize = lifter.generalizedLoopBackedgeBackup[newHeader].size();
+  auto preservedSource = lifter.generalizedLoopBackedgeBackup[newHeader].front().sourceBlock;
+
+  lifter.migrate_generalized_loop_block(oldHeader, newHeader);
+
+  if (lifter.generalizedLoopBackedgeBackup[newHeader].size() != preservedSize ||
+      lifter.generalizedLoopBackedgeBackup[newHeader].front().sourceBlock != preservedSource) {
+    details = "  migrate_generalized_loop_block must not overwrite existing generalizedLoopBackedgeBackup[newBlock]\n";
+    return false;
+  }
+  return true;
+}
+
+// migrate_generalized_loop_block must NOT overwrite a pre-existing
+// generalizedLoopControlFieldStates entry on newBlock. This is the
+// control-field-state counterpart to the BBbackup/register-phi preserve
+// tests. Existing state for newBlock must survive untouched.
+bool runMigrateGeneralizedLoopBlockPreservesExistingControlFieldState(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* oldHeader =
+      llvm::BasicBlock::Create(context, "old_header", lifter.fnc);
+  auto* newHeader =
+      llvm::BasicBlock::Create(context, "new_header", lifter.fnc);
+  auto* preseedHeader =
+      llvm::BasicBlock::Create(context, "preseed_header", lifter.fnc);
+  auto* preseedBackedge =
+      llvm::BasicBlock::Create(context, "preseed_backedge", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t oldCanonical = 0x1401AF740ULL;
+  constexpr uint64_t oldBackedge = 0x1401AF0F6ULL;
+  constexpr uint64_t newCanonical = 0x1401BFFFFULL;
+  constexpr uint64_t newBackedge = 0x1401BFF00ULL;
+
+  // Seed oldHeader state.
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, oldCanonical));
+  lifter.branch_backup(oldHeader);
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, oldBackedge));
+  lifter.branch_backup(oldHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(oldHeader);
+
+  // Seed newHeader with its own generalized control-field state.
+  lifter.builder->SetInsertPoint(preseedHeader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, newCanonical));
+  lifter.branch_backup(newHeader);
+  lifter.builder->SetInsertPoint(preseedBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, newBackedge));
+  lifter.branch_backup(newHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(newHeader);
+
+  auto preservedHeaderBlock = lifter.generalizedLoopControlFieldStates[newHeader].headerBlock;
+  auto preservedCanonical = lifter.generalizedLoopControlFieldStates[newHeader].canonicalControl;
+
+  lifter.migrate_generalized_loop_block(oldHeader, newHeader);
+
+  if (lifter.generalizedLoopControlFieldStates[newHeader].headerBlock != preservedHeaderBlock ||
+      lifter.generalizedLoopControlFieldStates[newHeader].canonicalControl != preservedCanonical) {
+    details = "  migrate_generalized_loop_block must not overwrite existing generalizedLoopControlFieldStates[newBlock]\n";
+    return false;
+  }
+  return true;
+}
+
 // make_generalized_loop_backup preserves R9 (shouldPreserveGeneralizedBackedgeRegisterIndex
 // index 9). Confirms the preserve list extends past RCX/RSP/R12 to R9 -
 // a hot loop_reg_phi lane in the Themida sample.
@@ -7106,6 +7220,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMigrateGeneralizedLoopBlockPreservesExistingNewBlockEntry);
     runCustom("migrate_generalized_loop_block_preserves_existing_register_and_flag_phi_maps",
              &InstructionTester::runMigrateGeneralizedLoopBlockPreservesExistingRegisterAndFlagPhiMaps);
+    runCustom("migrate_generalized_loop_block_preserves_existing_backedge_backup",
+             &InstructionTester::runMigrateGeneralizedLoopBlockPreservesExistingBackedgeBackup);
+    runCustom("migrate_generalized_loop_block_preserves_existing_control_field_state",
+             &InstructionTester::runMigrateGeneralizedLoopBlockPreservesExistingControlFieldState);
     runCustom("make_generalized_loop_backup_preserves_concrete_r9_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteR9OnFirstBackedge);
     runCustom("generalized_loop_target_slot_bails_when_canonical_buffer_lacks_slot",
