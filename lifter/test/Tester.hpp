@@ -3884,6 +3884,188 @@ bool runGeneralizedLoopTargetSlotCollapsesToCanonicalWhenValuesMatch(
   return true;
 }
 
+// target_slot helper with byteCount=1 collapses to a scalar i8 when
+// canonical and backedge buffers hold the same carried value.
+bool runGeneralizedLoopTargetSlotByteCountOneCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t sharedCarriedValue = 0xDEADBEEFCAFEBA77ULL;
+  constexpr uint8_t lowShared = static_cast<uint8_t>(sharedCarriedValue & 0xFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, sharedCarriedValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, sharedCarriedValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* carried = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 8);
+  if (llvm::isa<llvm::PHINode>(carried)) {
+    details = "  target_slot byteCount=1 should collapse matching values to a scalar, not a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(carried);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed target_slot byteCount=1 should carry the shared low byte\n";
+    return false;
+  }
+  return true;
+}
+
+// target_slot helper with byteCount=2 collapses to a scalar i16 when
+// canonical and backedge buffers hold the same carried value.
+bool runGeneralizedLoopTargetSlotByteCountTwoCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t sharedCarriedValue = 0xDEADBEEFCAFEBA77ULL;
+  constexpr uint16_t lowShared = static_cast<uint16_t>(sharedCarriedValue & 0xFFFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, sharedCarriedValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, sharedCarriedValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* carried = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 16);
+  if (llvm::isa<llvm::PHINode>(carried)) {
+    details = "  target_slot byteCount=2 should collapse matching values to a scalar, not a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(carried);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed target_slot byteCount=2 should carry the shared low 16 bits\n";
+    return false;
+  }
+  return true;
+}
+
+// control_slot helper with byteCount=1 collapses to a scalar i8 when
+// canonical and backedge controls match (low byte is shared).
+bool runGeneralizedLoopControlSlotByteCountOneCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t sharedControl = 0x1401AF740ULL;
+  constexpr uint8_t lowShared = static_cast<uint8_t>(sharedControl & 0xFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, sharedControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, sharedControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* result = lifter.GetMemoryValue(makeI64(context, controlSlot), 8);
+  if (llvm::isa<llvm::PHINode>(result)) {
+    details = "  control_slot byteCount=1 should collapse matching values to a scalar, not a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(result);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed control_slot byteCount=1 should carry the shared low byte\n";
+    return false;
+  }
+  return true;
+}
+
+// control_slot helper with byteCount=2 collapses to a scalar i16 when
+// canonical and backedge controls match (low 16 bits shared).
+bool runGeneralizedLoopControlSlotByteCountTwoCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t sharedControl = 0x1401AF740ULL;
+  constexpr uint16_t lowShared = static_cast<uint16_t>(sharedControl & 0xFFFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, sharedControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, sharedControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* result = lifter.GetMemoryValue(makeI64(context, controlSlot), 16);
+  if (llvm::isa<llvm::PHINode>(result)) {
+    details = "  control_slot byteCount=2 should collapse matching values to a scalar, not a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(result);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed control_slot byteCount=2 should carry the shared low 16 bits\n";
+    return false;
+  }
+  return true;
+}
+
 // retrieve_generalized_loop_local_value_impl returns the concrete local
 // stack-buffer value directly (no phi) when the active buffer contains
 // a tracked value at the address. Exercises the retrieveValueFromBufferSlice
@@ -8607,6 +8789,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteR12OnFirstBackedge);
     runCustom("generalized_loop_target_slot_collapses_to_canonical_when_values_match",
              &InstructionTester::runGeneralizedLoopTargetSlotCollapsesToCanonicalWhenValuesMatch);
+    runCustom("generalized_loop_target_slot_byte_count_one_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLoopTargetSlotByteCountOneCollapsesWhenValuesMatch);
+    runCustom("generalized_loop_target_slot_byte_count_two_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLoopTargetSlotByteCountTwoCollapsesWhenValuesMatch);
     runCustom("generalized_loop_local_value_returns_concrete_stack_buffer_value",
              &InstructionTester::runGeneralizedLoopLocalValueReturnsConcreteStackBufferValue);
     runCustom("generalized_loop_local_value_returns_concrete_stack_buffer_value_byte_count_one",
@@ -8665,6 +8851,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayNoOpWhenSourceMatchesCanonical);
     runCustom("generalized_loop_control_slot_collapses_when_canonical_matches_backedge_value",
              &InstructionTester::runGeneralizedLoopControlSlotCollapsesWhenCanonicalMatchesBackedgeValue);
+    runCustom("generalized_loop_control_slot_byte_count_one_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLoopControlSlotByteCountOneCollapsesWhenValuesMatch);
+    runCustom("generalized_loop_control_slot_byte_count_two_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLoopControlSlotByteCountTwoCollapsesWhenValuesMatch);
     runCustom("generalized_loop_control_slot_bails_when_canonical_buffer_lacks_slot",
              &InstructionTester::runGeneralizedLoopControlSlotBailsWhenCanonicalBufferLacksSlot);
     runCustom("generalized_loop_control_slot_bails_when_backedge_buffer_lacks_slot",
