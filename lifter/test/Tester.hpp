@@ -4454,6 +4454,93 @@ bool runGeneralizedLoopControlSlotCollapsesWhenCanonicalMatchesBackedgeValue(
   return true;
 }
 
+// retrieve_generalized_loop_control_slot_value_impl bails when the
+// canonical buffer lacks the probed slot, even if the backedge buffer
+// has it. This is the canonical-side symmetric bail branch for the
+// generalized control-slot helper after its buffer-lookup generalization.
+bool runGeneralizedLoopControlSlotBailsWhenCanonicalBufferLacksSlot(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t probeSlot = controlSlot + 0x20;
+  constexpr uint64_t backedgeOnlyValue = 0xABCDEF1234567890ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  // Deliberately do NOT seed probeSlot on canonical.
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, probeSlot),
+                        makeI64(context, backedgeOnlyValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* loaded = lifter.GetMemoryValue(makeI64(context, probeSlot), 64);
+  if (llvm::isa<llvm::PHINode>(loaded)) {
+    details = "  control_slot helper should bail when canonical buffer lacks the probe slot; got an unexpected phi instead of fallback\n";
+    return false;
+  }
+  return true;
+}
+
+// Backedge-side symmetric branch: canonical buffer has the probed slot,
+// backedge buffer does not. The control-slot helper must return nullptr
+// and the caller must fall through.
+bool runGeneralizedLoopControlSlotBailsWhenBackedgeBufferLacksSlot(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t probeSlot = controlSlot + 0x20;
+  constexpr uint64_t canonicalOnlyValue = 0x1234567890ABCDEFULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, probeSlot),
+                        makeI64(context, canonicalOnlyValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  // Deliberately do NOT seed probeSlot on backedge.
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* loaded = lifter.GetMemoryValue(makeI64(context, probeSlot), 64);
+  if (llvm::isa<llvm::PHINode>(loaded)) {
+    details = "  control_slot helper should bail when backedge buffer lacks the probe slot; got an unexpected phi instead of fallback\n";
+    return false;
+  }
+  return true;
+}
+
 
 // migrate_generalized_loop_block is a no-op when oldBlock == newBlock.
 // The function's contract opens with `if (oldBlock == newBlock) return;`
@@ -7371,6 +7458,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayNoOpWhenSourceMatchesCanonical);
     runCustom("generalized_loop_control_slot_collapses_when_canonical_matches_backedge_value",
              &InstructionTester::runGeneralizedLoopControlSlotCollapsesWhenCanonicalMatchesBackedgeValue);
+    runCustom("generalized_loop_control_slot_bails_when_canonical_buffer_lacks_slot",
+             &InstructionTester::runGeneralizedLoopControlSlotBailsWhenCanonicalBufferLacksSlot);
+    runCustom("generalized_loop_control_slot_bails_when_backedge_buffer_lacks_slot",
+             &InstructionTester::runGeneralizedLoopControlSlotBailsWhenBackedgeBufferLacksSlot);
     runCustom("migrate_generalized_loop_block_no_op_when_same_block",
              &InstructionTester::runMigrateGeneralizedLoopBlockNoOpWhenSameBlock);
     runCustom("migrate_generalized_loop_block_preserves_existing_new_block_entry",
