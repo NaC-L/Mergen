@@ -6096,6 +6096,61 @@ bool runGeneralizedLoopLoadGeneralizedBackupClearsStateWhenBackupMissing(
   return true;
 }
 
+// If only generalized backedge data exists for a header, load_generalized_backup
+// must still clear stale active state and local-buffer state before no-oping.
+// This covers the `generalizedLoopBackedgeBackup.contains(bb) && BBbackup.contains(bb)`
+// guard when the left side is true and the canonical backup is missing.
+bool runGeneralizedLoopLoadGeneralizedBackupClearsStateWhenCanonicalBackupMissing(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* staleHeader =
+      llvm::BasicBlock::Create(context, "stale_header", lifter.fnc);
+  auto* staleSource =
+      llvm::BasicBlock::Create(context, "stale_source", lifter.fnc);
+  auto* backedgeOnlyHeader =
+      llvm::BasicBlock::Create(context, "backedge_only_header", lifter.fnc);
+  auto* backedgeSource =
+      llvm::BasicBlock::Create(context, "backedge_source", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t localStackAddr = 0x14FCA0ULL;
+
+  lifter.builder->SetInsertPoint(backedgeSource);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.branch_backup(backedgeOnlyHeader, /*generalized=*/true);
+  // branch_backup(generalized=true) seeds BBbackup on the first snapshot;
+  // erase it to model the partial-state guard in load_generalized_backup_impl.
+  lifter.BBbackup.erase(backedgeOnlyHeader);
+  if (!lifter.generalizedLoopBackedgeBackup.contains(backedgeOnlyHeader) ||
+      lifter.BBbackup.contains(backedgeOnlyHeader)) {
+    details = "  setup should leave only generalized backedge backup data\n";
+    return false;
+  }
+
+  lifter.activeGeneralizedLoopControlFieldState.valid = true;
+  lifter.activeGeneralizedLoopControlFieldState.headerBlock = staleHeader;
+  lifter.activeGeneralizedLoopControlFieldState.canonicalSource = staleSource;
+  lifter.activeGeneralizedLoopControlFieldState.canonicalControl = 0x1401AF740ULL;
+  lifter.activeGeneralizedLoopEntrySourceBlock = staleSource;
+  lifter.activeGeneralizedLoopLocalBuffer[localStackAddr] = ValueByteReference(
+      llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0xAA), 0);
+
+  lifter.load_generalized_backup(backedgeOnlyHeader);
+  if (lifter.activeGeneralizedLoopControlFieldState.valid ||
+      lifter.activeGeneralizedLoopControlFieldState.headerBlock != nullptr ||
+      lifter.activeGeneralizedLoopControlFieldState.canonicalSource != nullptr ||
+      lifter.activeGeneralizedLoopEntrySourceBlock != nullptr ||
+      !lifter.activeGeneralizedLoopLocalBuffer.empty()) {
+    details =
+        "  load_generalized_backup(backedge-only) must clear stale loop state\n";
+    return false;
+  }
+  return true;
+}
+
 // load_generalized_backup with NO backedges (never saw a generalized=true
 // branch_backup) falls through to the canonical-only path, which calls
 // make_generalized_loop_backup with an empty ArrayRef. The resulting
@@ -10526,6 +10581,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopBackupCanonicalOnlyPathPreservesBBbackupState);
     runCustom("generalized_loop_load_generalized_backup_clears_state_when_backup_missing",
              &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupClearsStateWhenBackupMissing);
+    runCustom("generalized_loop_load_generalized_backup_clears_state_when_canonical_backup_missing",
+             &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupClearsStateWhenCanonicalBackupMissing);
     runCustom("generalized_loop_backup_canonical_only_path_leaves_flag_phis_empty",
              &InstructionTester::runGeneralizedLoopBackupCanonicalOnlyPathLeavesFlagPhisEmpty);
     runCustom("generalized_phi_address_unwraps_zext_cast_over_phi",
