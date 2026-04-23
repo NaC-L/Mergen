@@ -1812,6 +1812,50 @@ bool runStructuredLoopHeaderRejectsCycleInChain(std::string& details) {
     return true;
   }
 
+  bool runComputePossibleValuesLoopPhiBinaryOpCrossProduct(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+    auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+    lifter.builder->SetInsertPoint(entry);
+    lifter.builder->CreateBr(loopHeader);
+    llvm::IRBuilder<>(backedge).CreateBr(loopHeader);
+
+    llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+    auto* lhsPhi = phiBuilder.CreatePHI(i64Ty, 2, "lhs_loop_phi");
+    lhsPhi->addIncoming(makeI64(context, 1), entry);
+    lhsPhi->addIncoming(makeI64(context, 4), backedge);
+    auto* rhsPhi = phiBuilder.CreatePHI(i64Ty, 2, "rhs_loop_phi");
+    rhsPhi->addIncoming(makeI64(context, 0x10), entry);
+    rhsPhi->addIncoming(makeI64(context, 0x40), backedge);
+
+    lifter.builder->SetInsertPoint(loopHeader);
+    auto* sum = lifter.builder->CreateAdd(lhsPhi, rhsPhi, "loop_phi_sum");
+    auto values = lifter.computePossibleValues(sum, 0);
+    const std::array<uint64_t, 4> expected = {0x11, 0x41, 0x14, 0x44};
+    if (values.size() != expected.size()) {
+      std::ostringstream os;
+      os << "  loop PHI binary op should produce four cross-product sums, got "
+         << values.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    for (uint64_t want : expected) {
+      if (!values.contains(llvm::APInt(64, want))) {
+        std::ostringstream os;
+        os << "  loop PHI binary op missing sum 0x" << std::hex << want
+           << "\n";
+        details = os.str();
+        return false;
+      }
+    }
+    return true;
+  }
+
+
   bool runComputePossibleValuesTruncToI1PreservesWidth(std::string& details) {
     LifterUnderTest lifter;
     auto& context = lifter.context;
@@ -10876,6 +10920,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch);
     runCustom("compute_possible_values_loop_select_unknown_condition_unions_phi_branches",
              &InstructionTester::runComputePossibleValuesLoopSelectUnknownConditionUnionsPhiBranches);
+    runCustom("compute_possible_values_loop_phi_binary_op_cross_product",
+             &InstructionTester::runComputePossibleValuesLoopPhiBinaryOpCrossProduct);
     runCustom("compute_possible_values_trunc_to_i1_preserves_width",
              &InstructionTester::runComputePossibleValuesTruncToI1PreservesWidth);
     runCustom("generalized_loop_control_field_load_creates_phi",
