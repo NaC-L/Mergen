@@ -780,6 +780,373 @@ private:
   }
 
 
+// canGeneralizeStructuredLoopHeader: forward-target rejected. The target
+// address MUST be at or before the current block's address for it to be
+// a backward loop edge.
+bool runLoopGeneralizationForwardTargetRejected(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  auto* forwardTarget =
+      llvm::BasicBlock::Create(lifter.context, "forward_target", lifter.fnc);
+  auto* body = llvm::BasicBlock::Create(lifter.context, "body", lifter.fnc);
+  auto* exit = llvm::BasicBlock::Create(lifter.context, "exit", lifter.fnc);
+
+  llvm::IRBuilder<> tb(forwardTarget);
+  tb.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+  llvm::IRBuilder<> bb(body);
+  bb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+  llvm::IRBuilder<> eb(exit);
+  eb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+  // Current block is at 0x1000; forward target at 0x2000 is NOT a
+  // backward edge, so generalization must reject.
+  lifter.blockInfo = BBInfo(0x1000, current);
+  lifter.visitedAddresses.insert(0x2000);
+  lifter.addrToBB[0x2000] = forwardTarget;
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x2000)) {
+    details = "  forward target (addr > current block) must not be "
+              "generalized as a loop header\n";
+    return false;
+  }
+  return true;
+}
+
+// canGeneralizeStructuredLoopHeader: not-yet-visited backward target
+// rejected. A header address we have never lifted before cannot be
+// reused as a loop latch - the latch shape proof requires the header's
+// block to exist and already have its terminator.
+bool runLoopGeneralizationNotVisitedTargetRejected(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+  auto* body = llvm::BasicBlock::Create(lifter.context, "body", lifter.fnc);
+  auto* exit = llvm::BasicBlock::Create(lifter.context, "exit", lifter.fnc);
+  llvm::IRBuilder<> hb(header);
+  hb.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+  llvm::IRBuilder<> bb(body);
+  bb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+  llvm::IRBuilder<> eb(exit);
+  eb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+  lifter.blockInfo = BBInfo(0x2000, current);
+  // Deliberately do NOT insert into visitedAddresses.
+  lifter.addrToBB[0x1000] = header;
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  backward target never visited must not be generalized "
+              "(visitedAddresses guard)\n";
+    return false;
+  }
+  return true;
+}
+
+// canGeneralizeStructuredLoopHeader: already-pending address rejected.
+// A header already queued for generalization must not re-enter the
+// pipeline; otherwise the lifter would oscillate between pending and
+// active lifts on the same block.
+bool runLoopGeneralizationAlreadyPendingRejected(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+  auto* body = llvm::BasicBlock::Create(lifter.context, "body", lifter.fnc);
+  auto* exit = llvm::BasicBlock::Create(lifter.context, "exit", lifter.fnc);
+  llvm::IRBuilder<> hb(header);
+  hb.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+  llvm::IRBuilder<> bb(body);
+  bb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+  llvm::IRBuilder<> eb(exit);
+  eb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+  lifter.blockInfo = BBInfo(0x2000, current);
+  lifter.visitedAddresses.insert(0x1000);
+  lifter.addrToBB[0x1000] = header;
+  lifter.pendingLoopGeneralizationAddresses.insert(0x1000);
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  already-pending header must not be re-admitted to "
+              "generalization\n";
+    return false;
+  }
+  return true;
+}
+
+// canGeneralizeStructuredLoopHeader: already-generalized address rejected.
+// Once a header has been fully promoted into generalizedLoopAddresses, the
+// guard must short-circuit and refuse to re-enter the promotion flow.
+bool runLoopGeneralizationAlreadyGeneralizedRejected(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+  auto* body = llvm::BasicBlock::Create(lifter.context, "body", lifter.fnc);
+  auto* exit = llvm::BasicBlock::Create(lifter.context, "exit", lifter.fnc);
+  llvm::IRBuilder<> hb(header);
+  hb.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+  llvm::IRBuilder<> bb(body);
+  bb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+  llvm::IRBuilder<> eb(exit);
+  eb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+  lifter.blockInfo = BBInfo(0x2000, current);
+  lifter.visitedAddresses.insert(0x1000);
+  lifter.addrToBB[0x1000] = header;
+  lifter.generalizedLoopAddresses.insert(0x1000);
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  already-generalized header must not be re-admitted\n";
+    return false;
+  }
+  return true;
+}
+
+// canGeneralizeStructuredLoopHeader: no-reach target rejected. A header
+// that exists and has the right shape but whose CFG cannot actually reach
+// the current block (blockCanReach returns false) must be rejected.
+// Without a demonstrable cycle there is no loop to generalize.
+bool runLoopGeneralizationNoReachRejected(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+  auto* bodyLeft = llvm::BasicBlock::Create(lifter.context, "body_left", lifter.fnc);
+  auto* bodyRight =
+      llvm::BasicBlock::Create(lifter.context, "body_right", lifter.fnc);
+
+  // Header branches to bodyLeft and bodyRight, both of which ret - no
+  // path reaches `current`. blockCanReach(header, current) is false.
+  llvm::IRBuilder<> hb(header);
+  hb.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), bodyLeft, bodyRight);
+  llvm::IRBuilder<> lb(bodyLeft);
+  lb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+  llvm::IRBuilder<> rb(bodyRight);
+  rb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+  lifter.blockInfo = BBInfo(0x2000, current);
+  lifter.visitedAddresses.insert(0x1000);
+  lifter.addrToBB[0x1000] = header;
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  header that cannot reach current block must not be "
+              "generalized as a loop (no actual cycle)\n";
+    return false;
+  }
+  return true;
+}
+
+// isStructuredLoopHeaderShape: empty block in chain rejects. The walk
+// from the header must never encounter an empty basic block; an empty
+// block is a mid-construction artifact and not a valid shape.
+bool runStructuredLoopHeaderRejectsEmptyBlockInChain(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+  auto* emptyMid =
+      llvm::BasicBlock::Create(lifter.context, "empty_mid", lifter.fnc);
+  // Single unconditional br from header to empty block, then empty.
+  llvm::IRBuilder<> hb(header);
+  hb.CreateBr(emptyMid);
+  // emptyMid deliberately has no instructions - walker should reject.
+
+  lifter.blockInfo = BBInfo(0x2000, current);
+  lifter.visitedAddresses.insert(0x1000);
+  lifter.addrToBB[0x1000] = header;
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  chain that walks into an empty block must not be "
+              "recognized as a structured loop header\n";
+    return false;
+  }
+  return true;
+}
+
+// isStructuredLoopHeaderShape: depth >= 8 rejects. The walker caps at
+// 8 hops; a chain of 9 single-successor blocks exceeds the cap.
+bool runStructuredLoopHeaderRejectsDeepChain(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  constexpr unsigned kChainLen = 10;  // > 8 hop cap
+  std::array<llvm::BasicBlock*, kChainLen> chain{};
+  for (unsigned i = 0; i < kChainLen; ++i) {
+    chain[i] = llvm::BasicBlock::Create(lifter.context,
+                                        ("chain_" + std::to_string(i)).c_str(),
+                                        lifter.fnc);
+  }
+  for (unsigned i = 0; i + 1 < kChainLen; ++i) {
+    llvm::IRBuilder<> b(chain[i]);
+    b.CreateBr(chain[i + 1]);
+  }
+  // Last block has a ret - no conditional branch anywhere in the chain.
+  llvm::IRBuilder<> lastB(chain[kChainLen - 1]);
+  lastB.CreateRet(
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+
+  lifter.blockInfo = BBInfo(0x2000, current);
+  lifter.visitedAddresses.insert(0x1000);
+  lifter.addrToBB[0x1000] = chain[0];
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  chain deeper than the walker's 8-hop cap must not be "
+              "recognized as a structured loop header\n";
+    return false;
+  }
+  return true;
+}
+
+
+// mergeValue type-mismatch fallback. When canonical and backedge hold
+// values of different LLVM types, mergeValue bails and returns the
+// backedge value directly - no phi is constructed. Exercises the
+// `canonicalValue->getType() != backedgeValue->getType()` early-return
+// in make_generalized_loop_backup's mergeValue lambda.
+bool runMergeValueReturnsBackedgeOnTypeMismatch(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t backedgeRsp = 0x14FE80ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  // Canonical RSP is narrower (i32) than backedge RSP (i64) - forces a
+  // type mismatch in mergeValue. RSP is preserve-register, so the
+  // fallback returns the concrete backedge value.
+  lifter.SetRegisterValue(
+      RegisterUnderTest::RSP,
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0x1234));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetRegisterValue(RegisterUnderTest::RSP,
+                          makeI64(context, backedgeRsp));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* rsp = lifter.GetRegisterValue(RegisterUnderTest::RSP);
+  if (llvm::isa<llvm::PHINode>(rsp)) {
+    details = "  mergeValue on type-mismatched canonical/backedge should "
+              "skip phi construction and return the backedge value\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(rsp);
+  if (!actual.has_value() || actual->getZExtValue() != backedgeRsp) {
+    details = "  type-mismatch fallback should yield the backedge RSP\n";
+    return false;
+  }
+  return true;
+}
+
+// branch_backup non-generalized path. A plain branch_backup(bb) (no
+// generalized=true) writes the snapshot into BBbackup[bb] unconditionally
+// and does NOT touch generalizedLoopBackedgeBackup. Exercises the
+// non-loop-latch branch of branch_backup_impl.
+bool runBranchBackupPlainReplacesBBbackupOnly(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* target =
+      llvm::BasicBlock::Create(context, "branch_target", lifter.fnc);
+  constexpr uint64_t marker = 0x140050000ULL;
+  constexpr uint64_t firstValue = 0xAAAAAAAAAAAAAAAAULL;
+  constexpr uint64_t secondValue = 0xBBBBBBBBBBBBBBBBULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, marker), makeI64(context, firstValue));
+  lifter.branch_backup(target);
+  // Second non-generalized call must REPLACE BBbackup[target] wholesale.
+  lifter.SetMemoryValue(makeI64(context, marker), makeI64(context, secondValue));
+  lifter.branch_backup(target);
+
+  auto it = lifter.BBbackup.find(target);
+  if (it == lifter.BBbackup.end()) {
+    details = "  BBbackup[target] missing after plain branch_backup\n";
+    return false;
+  }
+  uint64_t storedMarker = 0;
+  if (!lifter.readConstantTrackedQword(it->second.buffer, marker, storedMarker)) {
+    details = "  BBbackup buffer should contain the marker slot\n";
+    return false;
+  }
+  if (storedMarker != secondValue) {
+    std::ostringstream os;
+    os << "  BBbackup should reflect the second (most recent) non-generalized "
+          "call, got 0x" << std::hex << storedMarker << "\n";
+    details = os.str();
+    return false;
+  }
+  // generalizedLoopBackedgeBackup must NOT have an entry for target.
+  if (lifter.generalizedLoopBackedgeBackup.count(target) != 0) {
+    details = "  plain branch_backup must not populate "
+              "generalizedLoopBackedgeBackup\n";
+    return false;
+  }
+  return true;
+}
+
+// isStructuredLoopHeaderShape: cycle in walked chain rejected. When the
+// walker's seenBlocks set hits a block it already visited on this walk,
+// it refuses the chain. A self-branch at the end of a chain forms such
+// a cycle without a conditional branch anywhere in the walk.
+bool runStructuredLoopHeaderRejectsCycleInChain(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+  auto* mid = llvm::BasicBlock::Create(lifter.context, "mid", lifter.fnc);
+
+  // header -> mid -> header: unconditional cycle with no conditional
+  // branch. Walker must reject on cycle detection.
+  llvm::IRBuilder<> hb(header);
+  hb.CreateBr(mid);
+  llvm::IRBuilder<> mb(mid);
+  mb.CreateBr(header);
+
+  lifter.blockInfo = BBInfo(0x2000, current);
+  lifter.visitedAddresses.insert(0x1000);
+  lifter.addrToBB[0x1000] = header;
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  unconditional cycle without a conditional branch must "
+              "not be recognized as a structured loop header\n";
+    return false;
+  }
+  return true;
+}
+
   bool runGeneralizedLoopWithoutBypassTagKeepsNormalRestore(std::string& details) {
     LifterUnderTest lifter;
     auto* bb = llvm::BasicBlock::Create(lifter.context, "loop_header", lifter.fnc);
@@ -2001,6 +2368,286 @@ bool runRecordGeneralizedLoopBackedgeMultiwayAppendsNewBodySource(
   if (!sawUpdatedControl) {
     details = "  multi-way body entry should reflect latest rolled control "
               "after repeat record\n";
+    return false;
+  }
+  return true;
+}
+
+// Phi-address helper with 3-way phi (canonical + 2 distinct backedges).
+// After PR #123 relaxed the sanity check from `!= 2` to `< 2`, the helper
+// must match each incoming against canonicalSource or any of
+// state->backedgeSources[i]. Exercises the N-way matching loop in
+// retrieve_generalized_loop_phi_address_value_impl.
+bool runGeneralizedPhiAddressThreeWayResolvesAllIncomings(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  // Three distinct target addresses, each with a distinct stored value.
+  constexpr uint64_t canonicalAddr = 0x140060000ULL;
+  constexpr uint64_t firstAddr = 0x140060100ULL;
+  constexpr uint64_t secondAddr = 0x140060200ULL;
+  constexpr uint64_t canonicalValue = 0xAAAA0000AAAA0000ULL;
+  constexpr uint64_t firstValue = 0xBBBB1111BBBB1111ULL;
+  constexpr uint64_t secondValue = 0xCCCC2222CCCC2222ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, canonicalAddr),
+                        makeI64(context, canonicalValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.SetMemoryValue(makeI64(context, firstAddr),
+                        makeI64(context, firstValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.SetMemoryValue(makeI64(context, secondAddr),
+                        makeI64(context, secondValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 3, "threeway_phi_addr");
+  addressPhi->addIncoming(makeI64(context, canonicalAddr), preheader);
+  addressPhi->addIncoming(makeI64(context, firstAddr), firstBackedge);
+  addressPhi->addIncoming(makeI64(context, secondAddr), secondBackedge);
+
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 64);
+  auto* resultPhi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!resultPhi) {
+    details = "  3-way phi-address resolver should yield a phi of loaded values\n";
+    return false;
+  }
+  if (resultPhi->getNumIncomingValues() != 3) {
+    std::ostringstream os;
+    os << "  3-way phi-address resolver should preserve 3 incomings, got "
+       << resultPhi->getNumIncomingValues() << "\n";
+    details = os.str();
+    return false;
+  }
+  bool sawCanonical = false, sawFirst = false, sawSecond = false;
+  for (unsigned i = 0; i < resultPhi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(resultPhi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalValue) sawCanonical = true;
+    else if (v == firstValue) sawFirst = true;
+    else if (v == secondValue) sawSecond = true;
+  }
+  if (!sawCanonical || !sawFirst || !sawSecond) {
+    details = "  3-way phi-address resolver should resolve each incoming to "
+              "its stored value (canonical + 2 backedges)\n";
+    return false;
+  }
+  return true;
+}
+
+// Local-phi-address helper with 3-way phi, same premise as above but
+// targeting loop-local stack slots. Exercises the parallel matching
+// loop in retrieve_generalized_loop_local_phi_address_value_impl.
+bool runGeneralizedLocalPhiAddressThreeWayResolvesAllIncomings(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t stackA = STACKP_VALUE;
+  constexpr uint64_t stackB = STACKP_VALUE + 8;
+  constexpr uint64_t stackC = STACKP_VALUE + 16;
+  constexpr uint64_t valueA = 0x1111111111111111ULL;
+  constexpr uint64_t valueB = 0x2222222222222222ULL;
+  constexpr uint64_t valueC = 0x3333333333333333ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, stackA), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.SetMemoryValue(makeI64(context, stackB), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.SetMemoryValue(makeI64(context, stackC), makeI64(context, valueC));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 3, "threeway_local_phi_addr");
+  addressPhi->addIncoming(makeI64(context, stackA), preheader);
+  addressPhi->addIncoming(makeI64(context, stackB), firstBackedge);
+  addressPhi->addIncoming(makeI64(context, stackC), secondBackedge);
+
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 64);
+  auto* resultPhi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!resultPhi || resultPhi->getNumIncomingValues() != 3) {
+    details = "  3-way local-phi-address resolver should yield a 3-incoming "
+              "phi\n";
+    return false;
+  }
+  bool sawA = false, sawB = false, sawC = false;
+  for (unsigned i = 0; i < resultPhi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(resultPhi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == valueA) sawA = true;
+    else if (v == valueB) sawB = true;
+    else if (v == valueC) sawC = true;
+  }
+  if (!sawA || !sawB || !sawC) {
+    details = "  3-way local-phi-address resolver should carry all three "
+              "incoming stack values\n";
+    return false;
+  }
+  return true;
+}
+
+// branch_backup dedup by sourceBlock. A repeat generalized backup from
+// the same sourceBlock must replace that block's entry in place rather
+// than append a duplicate; the vector size stays bounded by the number
+// of distinct source blocks.
+bool runBranchBackupGeneralizedDedupsBySourceBlock(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  // Second call from the SAME source block - must replace, not append.
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  auto it = lifter.generalizedLoopBackedgeBackup.find(loopHeader);
+  if (it == lifter.generalizedLoopBackedgeBackup.end()) {
+    details = "  generalizedLoopBackedgeBackup missing after two generalized calls\n";
+    return false;
+  }
+  if (it->second.size() != 1) {
+    std::ostringstream os;
+    os << "  repeat branch_backup from same source should dedup; got size "
+       << it->second.size() << " expected 1\n";
+    details = os.str();
+    return false;
+  }
+  // The stored entry must reflect the SECOND call (the one that
+  // overwrote).
+  uint64_t storedControl = 0;
+  if (!lifter.readConstantTrackedQword(it->second.front().buffer, controlSlot,
+                                        storedControl)) {
+    details = "  deduped backedge buffer should still contain controlSlot\n";
+    return false;
+  }
+  if (storedControl != secondControl) {
+    std::ostringstream os;
+    os << "  deduped backedge should reflect second call's control value, "
+          "got 0x" << std::hex << storedControl << " expected 0x"
+       << secondControl << "\n";
+    details = os.str();
+    return false;
+  }
+  return true;
+}
+
+// mergeValue collapse: when canonical and backedge register/flag values
+// resolve to the SAME SSA value, no phi is built and the shared value
+// is returned directly. Exercises the `canonicalValue == backedgeValue`
+// early-return in the mergeValue lambda of make_generalized_loop_backup.
+bool runMergeValueCollapsesIdenticalCanonicalAndBackedgeToSingleValue(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  // RSP has widenFirstBackedge=false, so mergeValue uses the concrete
+  // backedge value. Seed both sides to the SAME RSP constant - this
+  // should skip phi construction entirely.
+  constexpr uint64_t sharedRsp = 0x14FEA0ULL;  // matches STACKP_VALUE shape
+  auto* sharedRspVal = makeI64(context, sharedRsp);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetRegisterValue(RegisterUnderTest::RSP, sharedRspVal);
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetRegisterValue(RegisterUnderTest::RSP, sharedRspVal);
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* rsp = lifter.GetRegisterValue(RegisterUnderTest::RSP);
+  if (llvm::isa<llvm::PHINode>(rsp)) {
+    details = "  mergeValue should collapse identical canonical/backedge RSP "
+              "to a single value, not a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(rsp);
+  if (!actual.has_value() || actual->getZExtValue() != sharedRsp) {
+    details = "  collapsed RSP should carry the shared concrete constant\n";
     return false;
   }
   return true;
@@ -3346,6 +3993,34 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopNestedInnerOverwritesOuterActiveState);
     runCustom("record_generalized_loop_backedge_multiway_appends_new_body_source",
              &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayAppendsNewBodySource);
+    runCustom("generalized_phi_address_three_way_resolves_all_incomings",
+             &InstructionTester::runGeneralizedPhiAddressThreeWayResolvesAllIncomings);
+    runCustom("generalized_local_phi_address_three_way_resolves_all_incomings",
+             &InstructionTester::runGeneralizedLocalPhiAddressThreeWayResolvesAllIncomings);
+    runCustom("branch_backup_generalized_dedups_by_source_block",
+             &InstructionTester::runBranchBackupGeneralizedDedupsBySourceBlock);
+    runCustom("merge_value_collapses_identical_canonical_and_backedge_to_single_value",
+             &InstructionTester::runMergeValueCollapsesIdenticalCanonicalAndBackedgeToSingleValue);
+    runCustom("loop_generalization_forward_target_rejected",
+             &InstructionTester::runLoopGeneralizationForwardTargetRejected);
+    runCustom("loop_generalization_not_visited_target_rejected",
+             &InstructionTester::runLoopGeneralizationNotVisitedTargetRejected);
+    runCustom("loop_generalization_already_pending_rejected",
+             &InstructionTester::runLoopGeneralizationAlreadyPendingRejected);
+    runCustom("loop_generalization_already_generalized_rejected",
+             &InstructionTester::runLoopGeneralizationAlreadyGeneralizedRejected);
+    runCustom("loop_generalization_no_reach_rejected",
+             &InstructionTester::runLoopGeneralizationNoReachRejected);
+    runCustom("structured_loop_header_rejects_empty_block_in_chain",
+             &InstructionTester::runStructuredLoopHeaderRejectsEmptyBlockInChain);
+    runCustom("structured_loop_header_rejects_deep_chain",
+             &InstructionTester::runStructuredLoopHeaderRejectsDeepChain);
+    runCustom("merge_value_returns_backedge_on_type_mismatch",
+             &InstructionTester::runMergeValueReturnsBackedgeOnTypeMismatch);
+    runCustom("branch_backup_non_generalized_isolates_bbbackup_from_backedge_backup",
+             &InstructionTester::runBranchBackupPlainReplacesBBbackupOnly);
+    runCustom("structured_loop_header_rejects_cycle_in_chain",
+             &InstructionTester::runStructuredLoopHeaderRejectsCycleInChain);
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
