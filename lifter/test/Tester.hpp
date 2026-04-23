@@ -6356,6 +6356,100 @@ bool runGeneralizedLocalPhiAddressCollapsesWhenAllIncomingsResolveToSameValue(
   return true;
 }
 
+// local_phi_address helper with byteCount=1 collapses to a scalar i8
+// when all incomings resolve to the same local-slot loaded low byte.
+bool runGeneralizedLocalPhiAddressByteCountOneCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t stackA = STACKP_VALUE + 56;
+  constexpr uint64_t stackB = STACKP_VALUE + 64;
+  constexpr uint64_t sharedValue = 0xABABABABCDCDCD77ULL;
+  constexpr uint8_t lowShared = static_cast<uint8_t>(sharedValue & 0xFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, stackA), makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, stackB), makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "shared_local_phi_addr_byte1");
+  addressPhi->addIncoming(makeI64(context, stackA), preheader);
+  addressPhi->addIncoming(makeI64(context, stackB), backedge);
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 8);
+  if (llvm::isa<llvm::PHINode>(resolved)) {
+    details = "  local_phi_address byteCount=1 should collapse to shared low byte, not emit a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(resolved);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed local_phi_address byteCount=1 should be shared low byte\n";
+    return false;
+  }
+  return true;
+}
+
+// local_phi_address helper with byteCount=2 collapses to a scalar i16
+// when all incomings resolve to the same local-slot loaded low 16 bits.
+bool runGeneralizedLocalPhiAddressByteCountTwoCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t stackA = STACKP_VALUE + 112;
+  constexpr uint64_t stackB = STACKP_VALUE + 120;
+  constexpr uint64_t sharedValue = 0xABABABABCD44CD77ULL;
+  constexpr uint16_t lowShared = static_cast<uint16_t>(sharedValue & 0xFFFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, stackA), makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, stackB), makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "shared_local_phi_addr_byte2");
+  addressPhi->addIncoming(makeI64(context, stackA), preheader);
+  addressPhi->addIncoming(makeI64(context, stackB), backedge);
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 16);
+  if (llvm::isa<llvm::PHINode>(resolved)) {
+    details = "  local_phi_address byteCount=2 should collapse to shared low 16 bits, not emit a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(resolved);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed local_phi_address byteCount=2 should be shared low 16 bits\n";
+    return false;
+  }
+  return true;
+}
+
 // target_slot helper with byteCount=1 returns an i8 phi carrying the
 // masked low byte of canonical and backedge loop-carried slot values.
 // Complements the byteCount=2 target_slot test.
@@ -7062,6 +7156,100 @@ bool runGeneralizedPhiAddressCollapsesWhenAllIncomingsResolveToSameValue(
   auto actual = readConstantAPInt(resolved);
   if (!actual.has_value() || actual->getZExtValue() != sharedValue) {
     details = "  collapsed phi_address result should be the shared value\n";
+    return false;
+  }
+  return true;
+}
+
+// phi_address helper with byteCount=1 collapses to a scalar i8 when all
+// incomings resolve to the same loaded low byte.
+bool runGeneralizedPhiAddressByteCountOneCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t addrA = 0x1400D0000ULL;
+  constexpr uint64_t addrB = 0x1400D0080ULL;
+  constexpr uint64_t sharedValue = 0x9999AAAABBBBCC77ULL;
+  constexpr uint8_t lowShared = static_cast<uint8_t>(sharedValue & 0xFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, addrA), makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, addrB), makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "shared_phi_addr_byte1");
+  addressPhi->addIncoming(makeI64(context, addrA), preheader);
+  addressPhi->addIncoming(makeI64(context, addrB), backedge);
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 8);
+  if (llvm::isa<llvm::PHINode>(resolved)) {
+    details = "  phi_address byteCount=1 should collapse to shared low byte, not emit a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(resolved);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed phi_address byteCount=1 should be shared low byte\n";
+    return false;
+  }
+  return true;
+}
+
+// phi_address helper with byteCount=2 collapses to a scalar i16 when all
+// incomings resolve to the same loaded low 16 bits.
+bool runGeneralizedPhiAddressByteCountTwoCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t addrA = 0x1400D1000ULL;
+  constexpr uint64_t addrB = 0x1400D1080ULL;
+  constexpr uint64_t sharedValue = 0x9999AAAABB44CC77ULL;
+  constexpr uint16_t lowShared = static_cast<uint16_t>(sharedValue & 0xFFFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, addrA), makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, addrB), makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "shared_phi_addr_byte2");
+  addressPhi->addIncoming(makeI64(context, addrA), preheader);
+  addressPhi->addIncoming(makeI64(context, addrB), backedge);
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 16);
+  if (llvm::isa<llvm::PHINode>(resolved)) {
+    details = "  phi_address byteCount=2 should collapse to shared low 16 bits, not emit a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(resolved);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed phi_address byteCount=2 should be shared low 16 bits\n";
     return false;
   }
   return true;
@@ -8885,6 +9073,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedPhiAddressUnwrapsTruncCastOverPhi);
     runCustom("generalized_local_phi_address_collapses_when_all_incomings_resolve_to_same_value",
              &InstructionTester::runGeneralizedLocalPhiAddressCollapsesWhenAllIncomingsResolveToSameValue);
+    runCustom("generalized_local_phi_address_byte_count_one_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLocalPhiAddressByteCountOneCollapsesWhenValuesMatch);
+    runCustom("generalized_local_phi_address_byte_count_two_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLocalPhiAddressByteCountTwoCollapsesWhenValuesMatch);
     runCustom("generalized_loop_restore_flag_collapses_when_canonical_matches_backedge",
              &InstructionTester::runGeneralizedLoopRestoreFlagCollapsesWhenCanonicalMatchesBackedge);
     runCustom("structured_loop_header_accepts_seven_hop_chain",
@@ -8913,6 +9105,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runBranchBackupGeneralizedDoesNotOverwriteExistingBBbackup);
     runCustom("generalized_phi_address_collapses_when_all_incomings_resolve_to_same_value",
              &InstructionTester::runGeneralizedPhiAddressCollapsesWhenAllIncomingsResolveToSameValue);
+    runCustom("generalized_phi_address_byte_count_one_collapses_when_values_match",
+             &InstructionTester::runGeneralizedPhiAddressByteCountOneCollapsesWhenValuesMatch);
+    runCustom("generalized_phi_address_byte_count_two_collapses_when_values_match",
+             &InstructionTester::runGeneralizedPhiAddressByteCountTwoCollapsesWhenValuesMatch);
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
