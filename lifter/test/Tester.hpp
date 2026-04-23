@@ -2660,6 +2660,39 @@ bool runGeneralizedLoopStateGetterByHeaderExactMatchOnly(
   return true;
 }
 
+// getMostRecentGeneralizedLoopState returns nullptr when neither an
+// active state nor any archived per-header state exists.
+bool runGeneralizedLoopStateGetterReturnsNullWhenNoStateExists(
+    std::string& details) {
+  LifterUnderTest lifter;
+  if (lifter.getMostRecentGeneralizedLoopState() != nullptr) {
+    details = "  getMostRecentGeneralizedLoopState should return nullptr when no active or archived state exists\n";
+    return false;
+  }
+  return true;
+}
+
+// getGeneralizedLoopStateForHeader ignores archived entries whose
+// `valid` flag is false, returning nullptr even when the map contains
+// a slot for that header.
+bool runGeneralizedLoopStateGetterByHeaderRejectsInvalidStoredEntry(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+
+  LifterUnderTest::GeneralizedLoopControlFieldState stored;
+  stored.valid = false;
+  stored.headerBlock = header;
+  stored.canonicalControl = 0x8888;
+  lifter.generalizedLoopControlFieldStates[header] = stored;
+
+  if (lifter.getGeneralizedLoopStateForHeader(header) != nullptr) {
+    details = "  getGeneralizedLoopStateForHeader should return nullptr for an invalid stored entry\n";
+    return false;
+  }
+  return true;
+}
+
 // Phi-address helper with 3-way phi (canonical + 2 distinct backedges).
 // After PR #123 relaxed the sanity check from `!= 2` to `< 2`, the helper
 // must match each incoming against canonicalSource or any of
@@ -3921,6 +3954,7 @@ bool runGeneralizedLoopControlFieldLoadCollapsesWhenValuesMatch(
   }
   return true;
 }
+
 
 
 // retrieve_generalized_loop_control_slot_value_impl bails on byteCount=0
@@ -7516,6 +7550,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopStateGetterFallsBackToArchivedState);
     runCustom("generalized_loop_state_getter_by_header_exact_match_only",
              &InstructionTester::runGeneralizedLoopStateGetterByHeaderExactMatchOnly);
+    runCustom("generalized_loop_state_getter_returns_null_when_no_state_exists",
+             &InstructionTester::runGeneralizedLoopStateGetterReturnsNullWhenNoStateExists);
+    runCustom("generalized_loop_state_getter_by_header_rejects_invalid_stored_entry",
+             &InstructionTester::runGeneralizedLoopStateGetterByHeaderRejectsInvalidStoredEntry);
     runCustom("make_generalized_loop_backup_widens_rax_to_undef_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge);
     runCustom("generalized_phi_address_with_negative_displacement_resolves_loaded_values",
