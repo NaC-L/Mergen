@@ -2660,6 +2660,140 @@ bool runGeneralizedLoopStateGetterByHeaderExactMatchOnly(
   return true;
 }
 
+// Stored-state helper fast path: when a valid active generalized-loop
+// state exists but has no backedgeSources, control_slot returns the
+// canonical value directly. This exercises the
+// `state.backedgeSources.empty()` branch of the helper.
+bool runGeneralizedLoopControlSlotReturnsCanonicalWhenStoredStateHasNoBackedges(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* header = llvm::BasicBlock::Create(context, "header", lifter.fnc);
+  auto* canonical = llvm::BasicBlock::Create(context, "canonical", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+
+  LifterUnderTest::GeneralizedLoopControlFieldState stored;
+  stored.valid = true;
+  stored.headerBlock = header;
+  stored.canonicalSource = canonical;
+  stored.canonicalControl = canonicalControl;
+  stored.canonicalBuffer[controlSlot] = ValueByteReference(
+      llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), static_cast<uint8_t>(canonicalControl & 0xFFULL)), 0);
+  lifter.activeGeneralizedLoopControlFieldState = stored;
+  lifter.builder->SetInsertPoint(header);
+
+  auto* result = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  if (llvm::isa<llvm::PHINode>(result)) {
+    details = "  control_slot should return canonical scalar directly when stored state has no backedges\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(result);
+  if (!actual.has_value() || actual->getZExtValue() != canonicalControl) {
+    details = "  control_slot no-backedge fast path should yield canonicalControl\n";
+    return false;
+  }
+  return true;
+}
+
+// Stored-state fast path for target_slot: no backedges means the helper
+// returns the canonical target value directly.
+bool runGeneralizedLoopTargetSlotReturnsCanonicalWhenStoredStateHasNoBackedges(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* header = llvm::BasicBlock::Create(context, "header", lifter.fnc);
+  auto* canonical = llvm::BasicBlock::Create(context, "canonical", lifter.fnc);
+
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;
+  constexpr uint64_t canonicalTarget = 0xCAFEBABECAFED00DULL;
+
+  LifterUnderTest::GeneralizedLoopControlFieldState stored;
+  stored.valid = true;
+  stored.headerBlock = header;
+  stored.canonicalSource = canonical;
+  for (uint8_t i = 0; i < 8; ++i) {
+    stored.canonicalBuffer[loopCarriedSlot + i] = ValueByteReference(
+        llvm::ConstantInt::get(llvm::Type::getInt8Ty(context),
+                               static_cast<uint8_t>((canonicalTarget >> (i * 8)) & 0xFFULL)),
+        0);
+  }
+  lifter.activeGeneralizedLoopControlFieldState = stored;
+  lifter.builder->SetInsertPoint(header);
+
+  auto* result = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 64);
+  if (llvm::isa<llvm::PHINode>(result)) {
+    details = "  target_slot should return canonical target directly when stored state has no backedges\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(result);
+  if (!actual.has_value() || actual->getZExtValue() != canonicalTarget) {
+    details = "  target_slot no-backedge fast path should yield canonical target\n";
+    return false;
+  }
+  return true;
+}
+
+// Stored-state fast path for control_field: no backedges means the helper
+// returns the canonical field value directly.
+bool runGeneralizedLoopControlFieldReturnsCanonicalWhenStoredStateHasNoBackedges(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* header = llvm::BasicBlock::Create(context, "header", lifter.fnc);
+  auto* canonical = llvm::BasicBlock::Create(context, "canonical", lifter.fnc);
+  auto* i8Ty = llvm::Type::getInt8Ty(context);
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t fieldOffset = 0xAULL;
+  constexpr uint16_t canonicalField = 0x7788U;
+
+  LifterUnderTest::GeneralizedLoopControlFieldState stored;
+  stored.valid = true;
+  stored.headerBlock = header;
+  stored.canonicalSource = canonical;
+  stored.canonicalControl = canonicalControl;
+  // Seed control-slot bytes.
+  for (uint8_t i = 0; i < 8; ++i) {
+    stored.canonicalBuffer[controlSlot + i] = ValueByteReference(
+        llvm::ConstantInt::get(llvm::Type::getInt8Ty(context),
+                               static_cast<uint8_t>((canonicalControl >> (i * 8)) & 0xFFULL)),
+        0);
+  }
+  // Seed field bytes at supported offset 0xA.
+  stored.canonicalBuffer[canonicalControl + fieldOffset] =
+      ValueByteReference(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context),
+                                               static_cast<uint8_t>(canonicalField & 0xFFU)),
+                         0);
+  stored.canonicalBuffer[canonicalControl + fieldOffset + 1] =
+      ValueByteReference(llvm::ConstantInt::get(llvm::Type::getInt8Ty(context),
+                                               static_cast<uint8_t>((canonicalField >> 8) & 0xFFU)),
+                         0);
+  lifter.activeGeneralizedLoopControlFieldState = stored;
+  lifter.builder->SetInsertPoint(header);
+
+  auto* controlSlotPtr = lifter.builder->CreateGEP(i8Ty, lifter.memoryAlloc,
+                                                   makeI64(context, controlSlot),
+                                                   "control_slot_ptr_stored_no_backedge");
+  auto* controlLoad = lifter.builder->CreateLoad(i64Ty, controlSlotPtr, "control_cursor_stored_no_backedge");
+  auto* fieldAddress = lifter.builder->CreateAdd(
+      controlLoad, makeI64(context, fieldOffset), "control_field_addr_stored_no_backedge");
+  auto* result = lifter.GetMemoryValue(fieldAddress, 16);
+  if (llvm::isa<llvm::PHINode>(result)) {
+    details = "  control_field should return canonical field directly when stored state has no backedges\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(result);
+  if (!actual.has_value() || actual->getZExtValue() != canonicalField) {
+    details = "  control_field no-backedge fast path should yield canonical field\n";
+    return false;
+  }
+  return true;
+}
+
 // getMostRecentGeneralizedLoopState returns nullptr when neither an
 // active state nor any archived per-header state exists.
 bool runGeneralizedLoopStateGetterReturnsNullWhenNoStateExists(
@@ -8160,6 +8294,12 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopStateGetterReturnsNullWhenNoStateExists);
     runCustom("generalized_loop_state_getter_by_header_rejects_invalid_stored_entry",
              &InstructionTester::runGeneralizedLoopStateGetterByHeaderRejectsInvalidStoredEntry);
+    runCustom("generalized_loop_control_slot_returns_canonical_when_stored_state_has_no_backedges",
+             &InstructionTester::runGeneralizedLoopControlSlotReturnsCanonicalWhenStoredStateHasNoBackedges);
+    runCustom("generalized_loop_target_slot_returns_canonical_when_stored_state_has_no_backedges",
+             &InstructionTester::runGeneralizedLoopTargetSlotReturnsCanonicalWhenStoredStateHasNoBackedges);
+    runCustom("generalized_loop_control_field_returns_canonical_when_stored_state_has_no_backedges",
+             &InstructionTester::runGeneralizedLoopControlFieldReturnsCanonicalWhenStoredStateHasNoBackedges);
     runCustom("make_generalized_loop_backup_widens_rax_to_undef_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge);
     runCustom("generalized_phi_address_with_negative_displacement_resolves_loaded_values",
