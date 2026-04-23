@@ -2750,6 +2750,122 @@ bool runGeneralizedPhiAddressByteCountOneReturnsMaskedPhi(
   return true;
 }
 
+// retrieve_generalized_loop_phi_address_value_impl with byteCount=2
+// returns an i16 phi carrying the masked low 16 bits of the loaded values.
+// Complements the existing byteCount=1 coverage.
+bool runGeneralizedPhiAddressByteCountTwoReturnsMaskedPhi(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t addrA = 0x1400F0000ULL;
+  constexpr uint64_t addrB = 0x1400F0100ULL;
+  constexpr uint64_t valueA = 0x11112222333344AAULL;
+  constexpr uint64_t valueB = 0x55556666777788BBULL;
+  constexpr uint16_t lowA = static_cast<uint16_t>(valueA & 0xFFFFULL);
+  constexpr uint16_t lowB = static_cast<uint16_t>(valueB & 0xFFFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, addrA), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, addrB), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "phi_addr_byte2");
+  addressPhi->addIncoming(makeI64(context, addrA), preheader);
+  addressPhi->addIncoming(makeI64(context, addrB), backedge);
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 16);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi || !phi->getType()->isIntegerTy(16)) {
+    details = "  phi_address byteCount=2 should produce an i16 phi\n";
+    return false;
+  }
+  bool sawA = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == lowA) sawA = true;
+    else if (v == lowB) sawB = true;
+  }
+  if (!sawA || !sawB) {
+    details = "  phi_address byteCount=2 should carry masked low-16 loaded values\n";
+    return false;
+  }
+  return true;
+}
+
+// local_phi_address helper with byteCount=1 returns an i8 phi carrying
+// the masked low byte of the local-slot loaded values. Complements the
+// byteCount=2 local_phi_address test.
+bool runGeneralizedLocalPhiAddressByteCountOneReturnsMaskedPhi(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t localA = STACKP_VALUE + 88;
+  constexpr uint64_t localB = STACKP_VALUE + 96;
+  constexpr uint64_t valueA = 0xAAAABBBBCCCC1122ULL;
+  constexpr uint64_t valueB = 0xDDDDEEEEFFFF3344ULL;
+  constexpr uint8_t lowA = static_cast<uint8_t>(valueA & 0xFFULL);
+  constexpr uint8_t lowB = static_cast<uint8_t>(valueB & 0xFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, localA), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, localB), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* addressPhi = lifter.builder->CreatePHI(i64Ty, 2, "local_phi_addr_byte1");
+  addressPhi->addIncoming(makeI64(context, localA), preheader);
+  addressPhi->addIncoming(makeI64(context, localB), backedge);
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 8);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi || !phi->getType()->isIntegerTy(8)) {
+    details = "  local_phi_address byteCount=1 should produce an i8 phi\n";
+    return false;
+  }
+  bool sawA = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == lowA) sawA = true;
+    else if (v == lowB) sawB = true;
+  }
+  if (!sawA || !sawB) {
+    details = "  local_phi_address byteCount=1 should carry masked low-byte loaded values\n";
+    return false;
+  }
+  return true;
+}
+
 // local_phi_address helper with byteCount=2 returns an i16 phi carrying
 // the masked low 16 bits of the local-slot loaded values.
 bool runGeneralizedLocalPhiAddressByteCountTwoReturnsMaskedPhi(
@@ -7949,6 +8065,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopLocalPhiAddressUnwrapsTruncCastOverPhi);
     runCustom("generalized_local_phi_address_byte_count_two_returns_masked_phi",
              &InstructionTester::runGeneralizedLocalPhiAddressByteCountTwoReturnsMaskedPhi);
+    runCustom("generalized_local_phi_address_byte_count_one_returns_masked_phi",
+             &InstructionTester::runGeneralizedLocalPhiAddressByteCountOneReturnsMaskedPhi);
     runCustom("structured_loop_header_allows_jump_chain",
              &InstructionTester::runStructuredLoopHeaderAllowsJumpChain);
 
@@ -8066,6 +8184,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedPhiAddressBaseCaseWithoutDisplacementResolvesLoadedValues);
     runCustom("generalized_phi_address_byte_count_one_returns_masked_phi",
              &InstructionTester::runGeneralizedPhiAddressByteCountOneReturnsMaskedPhi);
+    runCustom("generalized_phi_address_byte_count_two_returns_masked_phi",
+             &InstructionTester::runGeneralizedPhiAddressByteCountTwoReturnsMaskedPhi);
     runCustom("generalized_loop_non_themida_target_slot_produces_no_phi",
              &InstructionTester::runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi);
     runCustom("loop_generalization_missing_addr_to_bb_entry_rejected",
