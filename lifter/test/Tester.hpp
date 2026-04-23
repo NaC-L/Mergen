@@ -814,6 +814,38 @@ private:
     return true;
   }
 
+  bool runStructuredLoopHeaderAllowsPartialChainAfterTrampoline(
+      std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::DirectJump;
+
+    auto* trampoline =
+        llvm::BasicBlock::Create(lifter.context, "loop_trampoline", lifter.fnc);
+    auto* partialLift =
+        llvm::BasicBlock::Create(lifter.context, "partial_lift", lifter.fnc);
+
+    llvm::IRBuilder<> trampolineBuilder(trampoline);
+    trampolineBuilder.CreateBr(partialLift);
+
+    // Non-empty but unterminated: this mirrors a mid-lift successor reached
+    // through a one-instruction trampoline header.
+    llvm::IRBuilder<> partialBuilder(partialLift);
+    partialBuilder.CreateAlloca(
+        llvm::Type::getInt64Ty(lifter.context), nullptr, "partial_mid_lift");
+
+    lifter.blockInfo = BBInfo(0x2000, partialLift);
+    lifter.visitedAddresses.insert(0x1000);
+    lifter.addrToBB[0x1000] = trampoline;
+
+    if (!lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+      details =
+          "  partial mid-lift successor should be accepted after a single unconditional-br trampoline\n";
+      return false;
+    }
+    return true;
+  }
+
   bool runStructuredLoopHeaderRejectsAcyclicBackwardBranch(
       std::string& details) {
     LifterUnderTest lifter;
@@ -10446,6 +10478,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLocalPhiAddressByteCountTwoReturnsMaskedPhi);
     runCustom("structured_loop_header_allows_jump_chain",
              &InstructionTester::runStructuredLoopHeaderAllowsJumpChain);
+    runCustom("structured_loop_header_rejects_partial_chain_without_trampoline",
+             &InstructionTester::runStructuredLoopHeaderRejectsPartialChainWithoutTrampoline);
+    runCustom("structured_loop_header_allows_partial_chain_after_trampoline",
+             &InstructionTester::runStructuredLoopHeaderAllowsPartialChainAfterTrampoline);
 
     runCustom("structured_loop_header_rejects_acyclic_backward_branch",
              &InstructionTester::runStructuredLoopHeaderRejectsAcyclicBackwardBranch);
