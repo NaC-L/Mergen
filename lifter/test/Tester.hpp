@@ -2445,6 +2445,115 @@ bool runRecordGeneralizedLoopBackedgeMultiwayAppendsNewBodySource(
   return true;
 }
 
+// record_generalized_loop_backedge multi-way path is a no-op when the
+// current sourceBlock equals canonicalSource. This is the last early-return
+// in the multi-way branch and complements the unchanged-control no-op test.
+bool runRecordGeneralizedLoopBackedgeMultiwayNoOpWhenSourceMatchesCanonical(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, firstControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, secondControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  const auto sizeBefore = lifter.activeGeneralizedLoopControlFieldState.backedgeSources.size();
+  const auto canonicalBefore = lifter.activeGeneralizedLoopControlFieldState.canonicalControl;
+
+  // Call record from canonical source itself; multi-way branch must no-op.
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, 0x1401AFFFFULL));
+  lifter.record_generalized_loop_backedge(loopHeader);
+
+  if (lifter.activeGeneralizedLoopControlFieldState.backedgeSources.size() != sizeBefore ||
+      lifter.activeGeneralizedLoopControlFieldState.canonicalControl != canonicalBefore) {
+    details = "  multi-way record from canonical source must be a no-op\n";
+    return false;
+  }
+  return true;
+}
+
+// load_generalized_backup prefers the archived generalizedLoopControlFieldStates
+// entry over reconstructing state from the raw generalizedLoopBackedgeBackup
+// when a stored valid state exists. This prevents later incidental mutations
+// of the raw backedge backup from silently changing the active state on re-entry.
+bool runGeneralizedLoopLoadGeneralizedBackupPrefersStoredStateOverFreshBackedgeBackup(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* bogusBackedge =
+      llvm::BasicBlock::Create(context, "bogus_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t originalBackedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t bogusBackedgeControl = 0x1401AEB43ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, originalBackedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  // First load archives the reconstructed state into generalizedLoopControlFieldStates.
+  lifter.load_generalized_backup(loopHeader);
+  if (!lifter.generalizedLoopControlFieldStates.count(loopHeader) ||
+      !lifter.generalizedLoopControlFieldStates[loopHeader].valid) {
+    details = "  setup should archive a valid control-field state on first load\n";
+    return false;
+  }
+  auto archivedSource = lifter.generalizedLoopControlFieldStates[loopHeader].backedgeSources.front();
+  auto archivedControl = lifter.generalizedLoopControlFieldStates[loopHeader].backedgeControls.front();
+
+  // Mutate the RAW backedge backup after the archive exists. A fresh
+  // reconstruction would now see bogusBackedge/bogusControl, but the
+  // storedState branch should ignore this and reuse the archived state.
+  auto& rawBackedge = lifter.generalizedLoopBackedgeBackup[loopHeader].front();
+  lifter.builder->SetInsertPoint(bogusBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, bogusBackedgeControl));
+  rawBackedge.sourceBlock = bogusBackedge;
+  rawBackedge.buffer = lifter.buffer;
+
+  lifter.load_generalized_backup(loopHeader);
+
+  if (lifter.activeGeneralizedLoopControlFieldState.backedgeSources.front() != archivedSource ||
+      lifter.activeGeneralizedLoopControlFieldState.backedgeControls.front() != archivedControl) {
+    details = "  stored generalizedLoopControlFieldStates entry should win over mutated raw backedge backup on reload\n";
+    return false;
+  }
+  return true;
+}
+
 // Phi-address helper with 3-way phi (canonical + 2 distinct backedges).
 // After PR #123 relaxed the sanity check from `!= 2` to `< 2`, the helper
 // must match each incoming against canonicalSource or any of
@@ -7162,6 +7271,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runRecordGeneralizedLoopBackedgeSingleSourceNoOpWhenControlUnchanged);
     runCustom("migrate_generalized_loop_block_copies_all_state_to_new_block",
              &InstructionTester::runMigrateGeneralizedLoopBlockCopiesAllStateToNewBlock);
+    runCustom("generalized_loop_load_generalized_backup_prefers_stored_state_over_fresh_backedge_backup",
+             &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupPrefersStoredStateOverFreshBackedgeBackup);
     runCustom("make_generalized_loop_backup_widens_rax_to_undef_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge);
     runCustom("generalized_phi_address_with_negative_displacement_resolves_loaded_values",
@@ -7212,6 +7323,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runBranchBackupGeneralizedAppendsWhenSourceDiffers);
     runCustom("record_generalized_loop_backedge_multiway_no_op_when_control_unchanged",
              &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayNoOpWhenControlUnchanged);
+    runCustom("record_generalized_loop_backedge_multiway_no_op_when_source_matches_canonical",
+             &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayNoOpWhenSourceMatchesCanonical);
     runCustom("generalized_loop_control_slot_collapses_when_canonical_matches_backedge_value",
              &InstructionTester::runGeneralizedLoopControlSlotCollapsesWhenCanonicalMatchesBackedgeValue);
     runCustom("migrate_generalized_loop_block_no_op_when_same_block",
