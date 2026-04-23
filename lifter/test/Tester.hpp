@@ -1788,6 +1788,37 @@ bool runStructuredLoopHeaderRejectsCycleInChain(std::string& details) {
     return true;
   }
 
+  bool runComputePossibleValuesLoopPhiUndefIncomingProducesOnlyConcrete(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+    llvm::IRBuilder<>(entry).CreateBr(header);
+    llvm::IRBuilder<>(backedge).CreateBr(header);
+
+    // PHI carries one concrete and one undef incoming. Undef is neither
+    // ConstantInt nor Instruction, so its possible-value set is empty;
+    // the concrete value should still appear unmolested in the result.
+    lifter.builder->SetInsertPoint(header);
+    llvm::IRBuilder<> phiBuilder(header, header->begin());
+    auto* phi = phiBuilder.CreatePHI(i64Ty, 2, "loop_phi_undef_incoming");
+    phi->addIncoming(makeI64(context, 0xC0DE), entry);
+    phi->addIncoming(llvm::UndefValue::get(i64Ty), backedge);
+
+    auto values = lifter.computePossibleValues(phi, 0);
+    if (values.size() != 1 || !values.contains(llvm::APInt(64, 0xC0DE))) {
+      std::ostringstream os;
+      os << "  loop phi with undef incoming should yield {0xC0DE}, got size "
+         << values.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
   bool runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch(
       std::string& details) {
     LifterUnderTest lifter;
@@ -10997,6 +11028,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesLoopHeaderAllocaReturnsEmptySet);
     runCustom("compute_possible_values_loop_phi_duplicate_incomings_deduplicate",
              &InstructionTester::runComputePossibleValuesLoopPhiDuplicateIncomingsDeduplicate);
+    runCustom("compute_possible_values_loop_phi_undef_incoming_produces_only_concrete",
+             &InstructionTester::runComputePossibleValuesLoopPhiUndefIncomingProducesOnlyConcrete);
     runCustom("compute_possible_values_loop_select_known_conditions_prune_phi_branch",
              &InstructionTester::runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch);
     runCustom("compute_possible_values_loop_select_unknown_condition_unions_phi_branches",
