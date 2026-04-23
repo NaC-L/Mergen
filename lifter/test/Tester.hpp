@@ -609,6 +609,18 @@ private:
         /*expectReuse=*/true, details);
   }
 
+  bool runPendingGeneralizedLoopIndirectJumpAllowedWhenUnresolved(
+      std::string& details) {
+    // Current behavior: once the target value solved concretely to the
+    // pending generalized-loop header, the pending-path machinery reuses
+    // that header even under IndirectJump context. This differs from the
+    // stricter canGeneralizeStructuredLoopHeader gate used for fresh loop
+    // promotion. Pin the behavior rather than asserting a false symmetry.
+    return runPendingGeneralizedLoopByContext(
+        LifterUnderTest::PathSolveContext::IndirectJump, "indirect-jump",
+        /*expectReuse=*/true, details);
+  }
+
 
   bool runStructuredLoopHeaderAllowsConditionalBackedge(std::string& details) {
     LifterUnderTest lifter;
@@ -3603,6 +3615,37 @@ bool runGeneralizedLoopBackupCanonicalOnlyPathPreservesBBbackupState(
   return true;
 }
 
+// Canonical-only load path: flag PHI map stays empty when there are no
+// generalized backedges. Symmetric to the register-phi canonical-only
+// test but for generalizedLoopFlagPhis.
+bool runGeneralizedLoopBackupCanonicalOnlyPathLeavesFlagPhisEmpty(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetFlagValue_impl(FLAG_CF, llvm::ConstantInt::getFalse(context));
+  lifter.branch_backup(loopHeader);
+
+  lifter.load_generalized_backup(loopHeader);
+
+  if (lifter.generalizedLoopFlagPhis.count(loopHeader) != 0) {
+    details = "  flag-phi map should stay empty on the canonical-only "
+              "fallback path\n";
+    return false;
+  }
+  return true;
+}
+
 // retrieve_generalized_loop_phi_address_value_impl unwraps a ZExt cast
 // over the phi-of-addresses operand. The helper walks past chained
 // IntegerTy CastInsts to recover the underlying phi. Exercises the
@@ -4734,6 +4777,69 @@ bool runGeneralizedLoopRestoreFlagPhiCarriesConcreteBackedgeOnDivergence(
   if (!sawCanonical || !sawBackedge) {
     details = "  FLAG_SF phi should carry both canonical and backedge SSA "
               "values directly\n";
+    return false;
+  }
+  return true;
+}
+
+// Preserved-register coverage: RDI at index 7 in
+// shouldPreserveGeneralizedBackedgeRegisterIndex. Completes the remaining
+// hot loop_reg_phi lane not yet covered by earlier RCX/RSP/R9/R10/R12/R14 tests.
+bool runMakeGeneralizedLoopBackupPreservesConcreteRdiOnFirstBackedge(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t canonicalRdi = 0xD100111122223333ULL;
+  constexpr uint64_t backedgeRdi = 0xD100444455556666ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetRegisterValue(RegisterUnderTest::RDI,
+                          makeI64(context, canonicalRdi));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetRegisterValue(RegisterUnderTest::RDI,
+                          makeI64(context, backedgeRdi));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* rdi = lifter.GetRegisterValue(RegisterUnderTest::RDI);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(rdi);
+  if (!phi) {
+    details = "  RDI should become a phi at the loop header\n";
+    return false;
+  }
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    if (llvm::isa<llvm::UndefValue>(phi->getIncomingValue(i))) {
+      details = "  RDI phi must not carry Undef - RDI is preserved (index 7)\n";
+      return false;
+    }
+  }
+  bool sawC = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalRdi) sawC = true;
+    else if (v == backedgeRdi) sawB = true;
+  }
+  if (!sawC || !sawB) {
+    details = "  RDI phi should carry both concrete values (preserve set)\n";
     return false;
   }
   return true;
@@ -6381,6 +6487,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runPendingGeneralizedLoopConditionalBranchAllowed);
     runCustom("pending_generalized_loop_direct_jump_allowed",
              &InstructionTester::runPendingGeneralizedLoopDirectJumpAllowed);
+    runCustom("pending_generalized_loop_indirect_jump_allowed_when_unresolved",
+             &InstructionTester::runPendingGeneralizedLoopIndirectJumpAllowedWhenUnresolved);
     runCustom("tiny_outlined_call_bypasses_outline_policy",
              &InstructionTester::runTinyOutlinedCallBypassesOutlinePolicy);
     runCustom("structured_loop_header_allows_conditional_backedge",
@@ -6478,6 +6586,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopControlSlotByteCountSixteenFallsThrough);
     runCustom("generalized_loop_backup_canonical_only_path_preserves_bbbackup_state",
              &InstructionTester::runGeneralizedLoopBackupCanonicalOnlyPathPreservesBBbackupState);
+    runCustom("generalized_loop_backup_canonical_only_path_leaves_flag_phis_empty",
+             &InstructionTester::runGeneralizedLoopBackupCanonicalOnlyPathLeavesFlagPhisEmpty);
     runCustom("generalized_phi_address_unwraps_zext_cast_over_phi",
              &InstructionTester::runGeneralizedPhiAddressUnwrapsZExtCastOverPhi);
     runCustom("generalized_phi_address_unwraps_sext_cast_over_phi",
@@ -6510,6 +6620,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteR10OnFirstBackedge);
     runCustom("make_generalized_loop_backup_preserves_concrete_r14_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteR14OnFirstBackedge);
+    runCustom("make_generalized_loop_backup_preserves_concrete_rdi_on_first_backedge",
+             &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteRdiOnFirstBackedge);
     runCustom("generalized_loop_restore_flag_collapses_when_canonical_matches_backedge",
              &InstructionTester::runGeneralizedLoopRestoreFlagCollapsesWhenCanonicalMatchesBackedge);
     runCustom("structured_loop_header_accepts_seven_hop_chain",
