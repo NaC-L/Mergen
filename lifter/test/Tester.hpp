@@ -3169,6 +3169,152 @@ bool runGeneralizedLoopLocalValueUsesActiveStateFromUnrelatedBlock(
 
 
 
+// KNOWN-LIMITATION (phi_address helper uses the PHI's parent header state
+// even when queried from an unrelated block).
+//
+// retrieve_generalized_loop_phi_address_value_impl looks up state via
+// getGeneralizedLoopStateForHeader(phi->getParent()) and never validates the
+// current insertion block. A header-owned PHI therefore still resolves
+// through generalized-loop state when queried from an unrelated block.
+//
+// When phi_address starts validating the current insertion block (or scopes
+// helper use differently), this test MUST fail and be rewritten to assert the
+// fixed contract.
+bool runGeneralizedPhiAddressUsesStateFromUnrelatedBlock(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* unrelated =
+      llvm::BasicBlock::Create(context, "unrelated", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t addrA = 0x140062000ULL;
+  constexpr uint64_t addrB = 0x140062100ULL;
+  constexpr uint64_t valueA = 0x1111222233334444ULL;
+  constexpr uint64_t valueB = 0xAAAABBBBCCCCDDDDULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, addrA), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, addrB), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+  auto* addressPhi = phiBuilder.CreatePHI(i64Ty, 2, "unrelated_block_phi_addr");
+  addressPhi->addIncoming(makeI64(context, addrA), preheader);
+  addressPhi->addIncoming(makeI64(context, addrB), backedge);
+
+  lifter.builder->SetInsertPoint(unrelated);
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi) {
+    details = "  current phi_address limitation should still produce a generalized phi from an unrelated block\n";
+    return false;
+  }
+  bool sawA = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == valueA) sawA = true;
+    else if (v == valueB) sawB = true;
+  }
+  if (!sawA || !sawB) {
+    details = "  unrelated-block phi_address limitation should still use canonical/backedge loaded values\n";
+    return false;
+  }
+  return true;
+}
+
+// KNOWN-LIMITATION (local_phi_address helper uses the PHI's parent header
+// state even when queried from an unrelated block).
+//
+// retrieve_generalized_loop_local_phi_address_value_impl also looks up state
+// via getGeneralizedLoopStateForHeader(phi->getParent()) and never validates
+// the current insertion block.
+//
+// When local_phi_address starts validating the current insertion block (or
+// scopes helper use differently), this test MUST fail and be rewritten to
+// assert the fixed contract.
+bool runGeneralizedLocalPhiAddressUsesStateFromUnrelatedBlock(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* unrelated =
+      llvm::BasicBlock::Create(context, "unrelated", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t stackA = STACKP_VALUE + 160;
+  constexpr uint64_t stackB = STACKP_VALUE + 168;
+  constexpr uint64_t valueA = 0x123456789ABCDEF0ULL;
+  constexpr uint64_t valueB = 0x0FEDCBA987654321ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, stackA), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, stackB), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+  auto* addressPhi = phiBuilder.CreatePHI(i64Ty, 2, "unrelated_block_local_phi_addr");
+  addressPhi->addIncoming(makeI64(context, stackA), preheader);
+  addressPhi->addIncoming(makeI64(context, stackB), backedge);
+
+  lifter.builder->SetInsertPoint(unrelated);
+  auto* resolved = lifter.GetMemoryValue(addressPhi, 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi) {
+    details = "  current local_phi_address limitation should still produce a generalized phi from an unrelated block\n";
+    return false;
+  }
+  bool sawA = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == valueA) sawA = true;
+    else if (v == valueB) sawB = true;
+  }
+  if (!sawA || !sawB) {
+    details = "  unrelated-block local_phi_address limitation should still use canonical/backedge loaded values\n";
+    return false;
+  }
+  return true;
+}
+
+
 
 
 
@@ -10068,6 +10214,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runStructuredLoopHeaderAllowsConditionalBackedge);
     runCustom("solve_load_phi_address_creates_phi_of_loaded_values",
              &InstructionTester::runSolveLoadPhiAddressCreatesPhiOfLoadedValues);
+    runCustom("generalized_phi_address_uses_state_from_unrelated_block",
+             &InstructionTester::runGeneralizedPhiAddressUsesStateFromUnrelatedBlock);
+    runCustom("generalized_local_phi_address_uses_state_from_unrelated_block",
+             &InstructionTester::runGeneralizedLocalPhiAddressUsesStateFromUnrelatedBlock);
     runCustom("solve_load_phi_address_with_displacement_creates_phi_of_loaded_values",
              &InstructionTester::runSolveLoadPhiAddressWithDisplacementCreatesPhiOfLoadedValues);
     runCustom("generalized_loop_local_phi_address_creates_phi_of_loaded_values",
