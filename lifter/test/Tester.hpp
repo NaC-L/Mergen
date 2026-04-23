@@ -8965,6 +8965,71 @@ bool runComputePossibleValuesOnGeneralizedPhiLoad(std::string& details) {
   }
   return true;
 }
+
+// computePossibleValues on a generalized phi-address load with
+// canonical + 2 backedges should enumerate all three concrete results.
+bool runComputePossibleValuesOnGeneralizedPhiLoadThreeWay(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t canonicalValue = 0x1111222233334444ULL;
+  constexpr uint64_t firstValue = 0xAAAABBBBCCCCDDDDULL;
+  constexpr uint64_t secondValue = 0xEEEEFFFF00001111ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, canonicalControl),
+                        makeI64(context, canonicalValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.SetMemoryValue(makeI64(context, firstControl),
+                        makeI64(context, firstValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.SetMemoryValue(makeI64(context, secondControl),
+                        makeI64(context, secondValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* phiAddress = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* pointer = lifter.getPointer(phiAddress);
+  auto* load = lifter.builder->CreateLoad(llvm::Type::getInt64Ty(context),
+                                          pointer,
+                                          "generalized_phi_load_probe_threeway");
+  auto values = lifter.computePossibleValues(load, 0);
+  if (values.size() != 3 ||
+      !values.contains(llvm::APInt(64, canonicalValue)) ||
+      !values.contains(llvm::APInt(64, firstValue)) ||
+      !values.contains(llvm::APInt(64, secondValue))) {
+    std::ostringstream os;
+    os << "  computePossibleValues should enumerate all three generalized phi-address loads, got size "
+       << values.size() << "\n";
+    details = os.str();
+    return false;
+  }
+  return true;
+}
 bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -9656,6 +9721,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runByteTestJoinPreservesBranchValues);
     runCustom("compute_possible_values_on_generalized_phi_load",
              &InstructionTester::runComputePossibleValuesOnGeneralizedPhiLoad);
+    runCustom("generalized_phi_address_compute_possible_values_three_way",
+             &InstructionTester::runComputePossibleValuesOnGeneralizedPhiLoadThreeWay);
     runCustom("rolled_generalized_phi_address_uses_advanced_pair",
              &InstructionTester::runRolledGeneralizedPhiAddressUsesAdvancedPair);
     runCustom("solve_path_resolves_generalized_phi_load_target",
