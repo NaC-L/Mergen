@@ -2984,6 +2984,75 @@ bool runGeneralizedLoopControlFieldIgnoresBaseCandidate(std::string& details) {
   return true;
 }
 
+// KNOWN-LIMITATION (control_field still produces a generalized phi from an
+// unrelated block).
+//
+// Even though retrieve_generalized_loop_control_field_value_impl checks the
+// current insertion block against the active header, a control-field-shaped
+// address queried from an unrelated block still yields a generalized phi in
+// the current end-to-end GetMemoryValue path.
+//
+// When control_field is fully scoped to the active header across the full
+// resolution pipeline, this test MUST fail and be rewritten to assert the
+// fixed contract.
+bool runGeneralizedLoopControlFieldUsesActiveStateFromUnrelatedBlock(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* unrelated =
+      llvm::BasicBlock::Create(context, "unrelated", lifter.fnc);
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t fieldOffset = 0xAULL;
+  constexpr uint16_t canonicalField = 0x7788U;
+  constexpr uint16_t backedgeField = 0x99AAU;
+  constexpr uint64_t fakeBaseA = 0x7777000000000000ULL;
+  constexpr uint64_t fakeBaseB = 0x8888000000000000ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(
+      makeI64(context, canonicalControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), canonicalField));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(
+      makeI64(context, backedgeControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), backedgeField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  llvm::IRBuilder<> phiBuilder(unrelated, unrelated->begin());
+  auto* fakeBasePhi = phiBuilder.CreatePHI(i64Ty, 2, "fake_control_field_base_unrelated");
+  fakeBasePhi->addIncoming(makeI64(context, fakeBaseA), preheader);
+  fakeBasePhi->addIncoming(makeI64(context, fakeBaseB), backedge);
+  lifter.builder->SetInsertPoint(unrelated);
+  auto* fakeFieldAddress = lifter.builder->CreateAdd(
+      fakeBasePhi, makeI64(context, fieldOffset),
+      "fake_control_field_addr_unrelated");
+  auto* result = lifter.GetMemoryValue(fakeFieldAddress, 16);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(result);
+  if (!phi) {
+    details = "  current control_field limitation should still produce a generalized phi from an unrelated block\n";
+    return false;
+  }
+  return true;
+}
+
+
 // KNOWN-LIMITATION (control_slot helper does not require the current block
 // to be the active generalized-loop header).
 //
@@ -10337,6 +10406,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopControlFieldReturnsCanonicalWhenStoredStateHasNoBackedges);
     runCustom("generalized_loop_control_field_ignores_base_candidate",
              &InstructionTester::runGeneralizedLoopControlFieldIgnoresBaseCandidate);
+    runCustom("generalized_loop_control_field_uses_active_state_from_unrelated_block",
+             &InstructionTester::runGeneralizedLoopControlFieldUsesActiveStateFromUnrelatedBlock);
     runCustom("make_generalized_loop_backup_widens_rax_to_undef_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge);
     runCustom("generalized_phi_address_with_negative_displacement_resolves_loaded_values",
