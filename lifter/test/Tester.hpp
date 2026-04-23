@@ -1728,6 +1728,28 @@ bool runStructuredLoopHeaderRejectsCycleInChain(std::string& details) {
     return true;
   }
 
+  bool runComputePossibleValuesLoopHeaderAllocaReturnsEmptySet(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* header = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+    lifter.builder->SetInsertPoint(header);
+    // An alloca has no statically enumerable possible value: the helper
+    // must early-return an empty set rather than descend into its size
+    // operand or invent a pointer constant.
+    auto* slot = lifter.builder->CreateAlloca(
+        llvm::Type::getInt64Ty(context), nullptr, "loop_local_alloca");
+    auto values = lifter.computePossibleValues(slot, 0);
+    if (!values.empty()) {
+      std::ostringstream os;
+      os << "  alloca in loop header should produce no possible values, got size "
+         << values.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
   bool runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch(
       std::string& details) {
     LifterUnderTest lifter;
@@ -10933,6 +10955,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesCircularPhiBailsViaDepthGuard);
     runCustom("compute_possible_values_empty_loop_phi_returns_empty_set",
              &InstructionTester::runComputePossibleValuesEmptyLoopPhiReturnsEmptySet);
+    runCustom("compute_possible_values_loop_header_alloca_returns_empty_set",
+             &InstructionTester::runComputePossibleValuesLoopHeaderAllocaReturnsEmptySet);
     runCustom("compute_possible_values_loop_select_known_conditions_prune_phi_branch",
              &InstructionTester::runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch);
     runCustom("compute_possible_values_loop_select_unknown_condition_unions_phi_branches",
