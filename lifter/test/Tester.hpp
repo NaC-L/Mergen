@@ -6436,6 +6436,118 @@ bool runGeneralizedLoopLocalPhiAddressUnwrapsZExtCastOverPhi(
   return true;
 }
 
+// local_phi_address helper unwraps SExt over the phi-of-addresses operand.
+bool runGeneralizedLoopLocalPhiAddressUnwrapsSExtCastOverPhi(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i32Ty = llvm::Type::getInt32Ty(context);
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr int32_t localSlotA = static_cast<int32_t>(STACKP_VALUE);
+  constexpr int32_t localSlotB = static_cast<int32_t>(STACKP_VALUE + 8);
+  constexpr uint64_t valueA = 0x1111222233334444ULL;
+  constexpr uint64_t valueB = 0x5555666677778888ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, static_cast<uint64_t>(localSlotA)), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, static_cast<uint64_t>(localSlotB)), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* phi32 = lifter.builder->CreatePHI(i32Ty, 2, "local_stack_phi_i32_sext");
+  phi32->addIncoming(llvm::ConstantInt::getSigned(i32Ty, localSlotA), preheader);
+  phi32->addIncoming(llvm::ConstantInt::getSigned(i32Ty, localSlotB), backedge);
+  auto* sextAddr = lifter.builder->CreateSExt(phi32, i64Ty, "local_stack_sext");
+  auto* resolved = lifter.GetMemoryValue(sextAddr, 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi) {
+    details = "  local_phi_address helper should unwrap SExt and produce a phi of loaded values\n";
+    return false;
+  }
+  bool sawA = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == valueA) sawA = true;
+    else if (v == valueB) sawB = true;
+  }
+  if (!sawA || !sawB) {
+    details = "  SExt-wrapped local_phi_address load should resolve both incomings\n";
+    return false;
+  }
+  return true;
+}
+
+// local_phi_address helper unwraps Trunc over the phi-of-addresses operand.
+bool runGeneralizedLoopLocalPhiAddressUnwrapsTruncCastOverPhi(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i128Ty = llvm::Type::getInt128Ty(context);
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t localSlotA = STACKP_VALUE + 16;
+  constexpr uint64_t localSlotB = STACKP_VALUE + 24;
+  constexpr uint64_t valueA = 0xABCDEF0112345678ULL;
+  constexpr uint64_t valueB = 0x12345678ABCDEF01ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, localSlotA), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, localSlotB), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* phi128 = lifter.builder->CreatePHI(i128Ty, 2, "local_stack_phi_i128_trunc");
+  phi128->addIncoming(llvm::ConstantInt::get(i128Ty, localSlotA), preheader);
+  phi128->addIncoming(llvm::ConstantInt::get(i128Ty, localSlotB), backedge);
+  auto* truncAddr = lifter.builder->CreateTrunc(phi128, i64Ty, "local_stack_trunc");
+  auto* resolved = lifter.GetMemoryValue(truncAddr, 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi) {
+    details = "  local_phi_address helper should unwrap Trunc and produce a phi of loaded values\n";
+    return false;
+  }
+  bool sawA = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == valueA) sawA = true;
+    else if (v == valueB) sawB = true;
+  }
+  if (!sawA || !sawB) {
+    details = "  Trunc-wrapped local_phi_address load should resolve both incomings\n";
+    return false;
+  }
+  return true;
+}
+
 
   bool runGeneralizedLoopControlFieldLoadCreatesPhi(std::string& details) {
     constexpr std::array<uint64_t, 3> fieldOffsets = {0x6ULL, 0xAULL, 0xCULL};
@@ -7544,6 +7656,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopLocalPhiAddressCreatesPhiOfLoadedValues);
     runCustom("generalized_loop_local_phi_address_unwraps_zext_cast_over_phi",
              &InstructionTester::runGeneralizedLoopLocalPhiAddressUnwrapsZExtCastOverPhi);
+    runCustom("generalized_loop_local_phi_address_unwraps_sext_cast_over_phi",
+             &InstructionTester::runGeneralizedLoopLocalPhiAddressUnwrapsSExtCastOverPhi);
+    runCustom("generalized_loop_local_phi_address_unwraps_trunc_cast_over_phi",
+             &InstructionTester::runGeneralizedLoopLocalPhiAddressUnwrapsTruncCastOverPhi);
     runCustom("structured_loop_header_allows_jump_chain",
              &InstructionTester::runStructuredLoopHeaderAllowsJumpChain);
 
