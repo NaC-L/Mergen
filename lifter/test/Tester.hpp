@@ -6658,6 +6658,76 @@ bool runGeneralizedLoopLocalPhiAddressUnwrapsTruncCastOverPhi(
     return true;
   }
 
+// retrieve_generalized_loop_control_field_value_impl also handles full
+// 64-bit reads when canonical and backedge buffers each hold a qword at a
+// supported field offset. This complements the existing 16-bit create-phi
+// test and 8-bit/16-bit narrow-width coverage.
+bool runGeneralizedLoopControlFieldLoadQwordCreatesPhi(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i8Ty = llvm::Type::getInt8Ty(context);
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t fieldOffset = 0xAULL;
+  constexpr uint64_t canonicalField = 0x1111222233334444ULL;
+  constexpr uint64_t backedgeField = 0xAAAABBBBCCCCDDDDULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, canonicalControl + fieldOffset),
+                        makeI64(context, canonicalField));
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + fieldOffset),
+                        makeI64(context, backedgeField));
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlSlotPtr = lifter.builder->CreateGEP(
+      i8Ty, lifter.memoryAlloc, makeI64(context, controlSlot),
+      "control_slot_ptr_qword");
+  auto* controlLoad =
+      lifter.builder->CreateLoad(i64Ty, controlSlotPtr, "control_cursor_qword");
+  auto* fieldAddress = lifter.builder->CreateAdd(
+      controlLoad, makeI64(context, fieldOffset), "control_field_addr_qword");
+  auto* resolved = lifter.GetMemoryValue(fieldAddress, 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi) {
+    details = "  qword control-field load should produce a phi when canonical/backedge qwords differ\n";
+    return false;
+  }
+  bool sawCanonical = false;
+  bool sawBackedge = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) {
+      details = "  qword control-field phi incomings should stay concrete in the focused test\n";
+      return false;
+    }
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalField) sawCanonical = true;
+    else if (v == backedgeField) sawBackedge = true;
+  }
+  if (!sawCanonical || !sawBackedge) {
+    details = "  qword control-field phi should preserve both canonical and backedge qword values\n";
+    return false;
+  }
+  return true;
+}
+
 
   bool runSolvePathWidensMappedRvaTarget(std::string& details) {
     LifterUnderTest lifter;
@@ -7873,6 +7943,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesTruncToI1PreservesWidth);
     runCustom("generalized_loop_control_field_load_creates_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadCreatesPhi);
+    runCustom("generalized_loop_control_field_load_qword_creates_phi",
+             &InstructionTester::runGeneralizedLoopControlFieldLoadQwordCreatesPhi);
     runCustom("solve_path_prefers_mapped_target_over_null_for_indirect_jump",
              &InstructionTester::runSolvePathPrefersMappedTargetOverNullForIndirectJump);
     runCustom("solve_path_widens_mapped_rva_target",
