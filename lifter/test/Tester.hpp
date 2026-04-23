@@ -3816,6 +3816,7 @@ bool runGeneralizedLoopControlFieldLoadCollapsesWhenValuesMatch(
   return true;
 }
 
+
 // retrieve_generalized_loop_control_slot_value_impl bails on byteCount=0
 // and byteCount>8 via the `byteCount == 0 || byteCount > 8` guard. Test
 // the upper bound by requesting a 16-byte read at the control slot -
@@ -4832,6 +4833,49 @@ bool runGeneralizedLoopTargetSlotBailsWhenCanonicalBufferLacksSlot(
   if (llvm::isa<llvm::PHINode>(loaded)) {
     details = "  target_slot helper should bail when canonical buffer lacks "
               "the slot; got an unexpected phi instead of fallback\n";
+    return false;
+  }
+  return true;
+}
+
+// retrieve_generalized_loop_target_slot_value_impl bails when the
+// backedge buffer lacks the gated slot, even if canonical has it. This is
+// the backedge-side symmetric branch to the existing canonical-lacks-slot test.
+bool runGeneralizedLoopTargetSlotBailsWhenBackedgeBufferLacksSlot(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t canonicalOnlyValue = 0xABABABABABABABABULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, canonicalOnlyValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  // Deliberately do NOT seed loopCarriedSlot on backedge.
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* loaded = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 64);
+  if (llvm::isa<llvm::PHINode>(loaded)) {
+    details = "  target_slot helper should bail when backedge buffer lacks the slot; got an unexpected phi instead of fallback\n";
     return false;
   }
   return true;
@@ -7341,6 +7385,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteR9OnFirstBackedge);
     runCustom("generalized_loop_target_slot_bails_when_canonical_buffer_lacks_slot",
              &InstructionTester::runGeneralizedLoopTargetSlotBailsWhenCanonicalBufferLacksSlot);
+    runCustom("generalized_loop_target_slot_bails_when_backedge_buffer_lacks_slot",
+             &InstructionTester::runGeneralizedLoopTargetSlotBailsWhenBackedgeBufferLacksSlot);
     runCustom("make_generalized_loop_backup_preserves_concrete_r10_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteR10OnFirstBackedge);
     runCustom("make_generalized_loop_backup_preserves_concrete_r14_on_first_backedge",
