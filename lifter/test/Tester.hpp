@@ -3613,6 +3613,109 @@ bool runGeneralizedLoopLocalValueReturnsConcreteStackBufferValueByteCountOne(
   return true;
 }
 
+// load_generalized_backup moves loop-local stack bytes into
+// activeGeneralizedLoopLocalBuffer while keeping non-local bytes in the
+// main buffer. This covers the direct extractLocalStackBuffer +
+// filteredBuffer split on the normal generalized-loop path.
+bool runGeneralizedLoopLoadGeneralizedBackupMovesLocalBytesToActiveLocalBuffer(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t localStackAddr = STACKP_VALUE - 0x20;
+  constexpr uint64_t nonLocalAddr = 0x500000ULL;
+  auto* localValue = llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0xAA);
+  auto* nonLocalValue = llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0x55);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, localStackAddr), localValue);
+  lifter.SetMemoryValue(makeI64(context, nonLocalAddr), nonLocalValue);
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, localStackAddr), localValue);
+  lifter.SetMemoryValue(makeI64(context, nonLocalAddr), nonLocalValue);
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+
+  if (lifter.buffer.contains(localStackAddr)) {
+    details = "  generalized backup should filter local stack bytes out of the main buffer\n";
+    return false;
+  }
+  if (!lifter.activeGeneralizedLoopLocalBuffer.contains(localStackAddr)) {
+    details = "  generalized backup should move local stack bytes into activeGeneralizedLoopLocalBuffer\n";
+    return false;
+  }
+  if (!lifter.buffer.contains(nonLocalAddr)) {
+    details = "  generalized backup should keep non-local bytes in the main buffer\n";
+    return false;
+  }
+  return true;
+}
+
+// seedInvariantLocalQwords copies matching canonical/backedge local qwords
+// back into the main buffer after the generalized load, while keeping the
+// same qword in activeGeneralizedLoopLocalBuffer. This covers the
+// invariant-local-qword reseeding path.
+bool runGeneralizedLoopLoadGeneralizedBackupSeedsInvariantLocalQword(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  // Must satisfy qwordStart <= STACKP_VALUE - 0x100 to avoid the skip.
+  constexpr uint64_t invariantLocalQword = STACKP_VALUE - 0x100;
+  constexpr uint64_t invariantValue = 0x1122334455667788ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, invariantLocalQword), makeI64(context, invariantValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, invariantLocalQword), makeI64(context, invariantValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+
+  if (!lifter.activeGeneralizedLoopLocalBuffer.contains(invariantLocalQword)) {
+    details = "  invariant local qword should remain tracked in activeGeneralizedLoopLocalBuffer\n";
+    return false;
+  }
+  if (!lifter.buffer.contains(invariantLocalQword)) {
+    details = "  seedInvariantLocalQwords should copy matching local qword bytes back into the main buffer\n";
+    return false;
+  }
+  auto result = readConstantAPInt(
+      lifter.GetMemoryValue(makeI64(context, invariantLocalQword), 64));
+  if (!result.has_value() || result->getZExtValue() != invariantValue) {
+    details = "  seeded invariant local qword should read back as the original shared value\n";
+    return false;
+  }
+  return true;
+}
+
 // target_slot helper bails for byteCount > 8 and falls through to the
 // normal memory pipeline. This is the target-slot counterpart to the
 // existing control_slot byteCount=16 fallthrough test.
@@ -7817,6 +7920,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopLocalValueReturnsConcreteStackBufferValue);
     runCustom("generalized_loop_local_value_returns_concrete_stack_buffer_value_byte_count_one",
              &InstructionTester::runGeneralizedLoopLocalValueReturnsConcreteStackBufferValueByteCountOne);
+    runCustom("generalized_loop_load_generalized_backup_moves_local_bytes_to_active_local_buffer",
+             &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupMovesLocalBytesToActiveLocalBuffer);
+    runCustom("generalized_loop_load_generalized_backup_seeds_invariant_local_qword",
+             &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupSeedsInvariantLocalQword);
     runCustom("make_generalized_loop_backup_preserves_concrete_rsp_when_values_differ",
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteRspWhenValuesDiffer);
     runCustom("generalized_loop_control_slot_byte_count_two_returns_masked_phi",
