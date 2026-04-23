@@ -2554,6 +2554,114 @@ bool runGeneralizedLoopLoadGeneralizedBackupPrefersStoredStateOverFreshBackedgeB
   return true;
 }
 
+// load_generalized_backup stored-state branch chooses the FIRST
+// backedgeSources entry as activeGeneralizedLoopEntrySourceBlock and seeds
+// activeGeneralizedLoopLocalBuffer from the FIRST backedgeBuffers entry.
+// This is a direct pin of the stored-state branch's current policy.
+bool runGeneralizedLoopLoadGeneralizedBackupStoredStateUsesFirstBackedgeAsActiveEntry(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* firstStoredBackedge = llvm::BasicBlock::Create(context, "first_stored_backedge", lifter.fnc);
+  auto* secondStoredBackedge = llvm::BasicBlock::Create(context, "second_stored_backedge", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t originalBackedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t localA = STACKP_VALUE - 0x20;
+  constexpr uint64_t localB = STACKP_VALUE - 0x28;
+
+  // Seed minimal snapshots so load_generalized_backup enters the stored-state branch.
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, originalBackedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  // Replace the archived state with a hand-crafted 2-backedge state.
+  LifterUnderTest::GeneralizedLoopControlFieldState stored;
+  stored.valid = true;
+  stored.headerBlock = loopHeader;
+  stored.canonicalSource = preheader;
+  stored.canonicalControl = canonicalControl;
+  stored.canonicalBuffer = lifter.BBbackup[loopHeader].buffer;
+  stored.backedgeSources = {firstStoredBackedge, secondStoredBackedge};
+  stored.backedgeControls = {0x1111ULL, 0x2222ULL};
+  stored.backedgeBuffers.resize(2);
+  stored.backedgeBuffers[0][localA] = ValueByteReference(
+      llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0xAA), 0);
+  stored.backedgeBuffers[1][localB] = ValueByteReference(
+      llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0xBB), 0);
+  lifter.generalizedLoopControlFieldStates[loopHeader] = stored;
+
+  lifter.load_generalized_backup(loopHeader);
+
+  if (lifter.activeGeneralizedLoopEntrySourceBlock != firstStoredBackedge) {
+    details = "  stored-state branch should choose backedgeSources.front() as activeGeneralizedLoopEntrySourceBlock\n";
+    return false;
+  }
+  if (!lifter.activeGeneralizedLoopLocalBuffer.contains(localA) ||
+      lifter.activeGeneralizedLoopLocalBuffer.contains(localB)) {
+    details = "  stored-state branch should seed activeGeneralizedLoopLocalBuffer from backedgeBuffers.front() only\n";
+    return false;
+  }
+  return true;
+}
+
+// If the stored archived state is valid but has NO backedgeBuffers,
+// load_generalized_backup clears activeGeneralizedLoopLocalBuffer and sets
+// activeGeneralizedLoopEntrySourceBlock to nullptr. This is the empty-vector
+// branch of the stored-state path.
+bool runGeneralizedLoopLoadGeneralizedBackupStoredStateWithoutBackedgesClearsActiveLocalBuffer(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader = llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t staleLocal = STACKP_VALUE - 0x30;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  // Seed stale local state to prove it gets cleared.
+  lifter.activeGeneralizedLoopLocalBuffer[staleLocal] = ValueByteReference(
+      llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), 0xCC), 0);
+
+  LifterUnderTest::GeneralizedLoopControlFieldState stored;
+  stored.valid = true;
+  stored.headerBlock = loopHeader;
+  stored.canonicalSource = preheader;
+  stored.canonicalControl = canonicalControl;
+  lifter.generalizedLoopControlFieldStates[loopHeader] = stored;
+
+  lifter.load_generalized_backup(loopHeader);
+
+  if (lifter.activeGeneralizedLoopEntrySourceBlock != nullptr) {
+    details = "  stored-state branch with no backedges should set activeGeneralizedLoopEntrySourceBlock to nullptr\n";
+    return false;
+  }
+  if (!lifter.activeGeneralizedLoopLocalBuffer.empty()) {
+    details = "  stored-state branch with no backedgeBuffers should clear activeGeneralizedLoopLocalBuffer\n";
+    return false;
+  }
+  return true;
+}
+
 // getMostRecentGeneralizedLoopState prefers the ACTIVE state over any
 // archived entries. This is the direct state-getter counterpart to the
 // load_generalized_backup stored-state precedence test.
@@ -7906,6 +8014,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopStateGetterReturnsNullWhenNoStateExists);
     runCustom("generalized_loop_state_getter_by_header_rejects_invalid_stored_entry",
              &InstructionTester::runGeneralizedLoopStateGetterByHeaderRejectsInvalidStoredEntry);
+    runCustom("generalized_loop_load_generalized_backup_stored_state_uses_first_backedge_as_active_entry",
+             &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupStoredStateUsesFirstBackedgeAsActiveEntry);
+    runCustom("generalized_loop_load_generalized_backup_stored_state_without_backedges_clears_active_local_buffer",
+             &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupStoredStateWithoutBackedgesClearsActiveLocalBuffer);
     runCustom("make_generalized_loop_backup_widens_rax_to_undef_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge);
     runCustom("generalized_phi_address_with_negative_displacement_resolves_loaded_values",
