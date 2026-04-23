@@ -771,6 +771,49 @@ private:
     return true;
   }
 
+
+  bool runStructuredLoopHeaderRejectsPartialChainWithoutTrampoline(
+      std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext =
+        LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+    auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+    auto* partialLift =
+        llvm::BasicBlock::Create(lifter.context, "partial_lift", lifter.fnc);
+
+    llvm::IRBuilder<> currentBuilder(current);
+    currentBuilder.CreateBr(header);
+
+    // Header is NOT a trampoline: give it a non-branch instruction first,
+    // then an unconditional br. That defeats the size()==1 trampoline test.
+    llvm::IRBuilder<> headerBuilder(header);
+    headerBuilder.CreateAdd(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1),
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 2),
+        "not_a_trampoline");
+    headerBuilder.CreateBr(partialLift);
+
+    // Same partial successor shape as above: non-empty, no terminator.
+    llvm::IRBuilder<> partialBuilder(partialLift);
+    partialBuilder.CreateAdd(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 3),
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 4),
+        "partial_mid_lift");
+
+    lifter.blockInfo = BBInfo(0x2000, current);
+    lifter.visitedAddresses.insert(0x1000);
+    lifter.addrToBB[0x1000] = header;
+
+    if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+      details =
+          "  partial mid-lift successor must reject when the entry block is not a single unconditional-br trampoline\n";
+      return false;
+    }
+    return true;
+  }
+
   bool runStructuredLoopHeaderRejectsAcyclicBackwardBranch(
       std::string& details) {
     LifterUnderTest lifter;
@@ -5084,6 +5127,59 @@ bool runGeneralizedLoopRestoreFlagPhiCarriesConcreteBackedgeOnDivergence(
   return true;
 }
 
+// control_slot helper at byteCount=1 returns an i8 phi carrying the
+// masked low byte of canonical and backedge controlCursor values.
+// Complements the existing byteCount=2 control_slot test.
+bool runGeneralizedLoopControlSlotByteCountOneReturnsMaskedPhi(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AABBCCULL;
+  constexpr uint64_t backedgeControl = 0x1401DDEEFFULL;
+  constexpr uint8_t loCanonical = static_cast<uint8_t>(canonicalControl & 0xFFULL);
+  constexpr uint8_t loBackedge = static_cast<uint8_t>(backedgeControl & 0xFFULL);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* result = lifter.GetMemoryValue(makeI64(context, controlSlot), 8);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(result);
+  if (!phi || !phi->getType()->isIntegerTy(8)) {
+    details = "  control_slot byteCount=1 should produce an i8 phi\n";
+    return false;
+  }
+  bool sawC = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == loCanonical) sawC = true;
+    else if (v == loBackedge) sawB = true;
+  }
+  if (!sawC || !sawB) {
+    details = "  control_slot byteCount=1 phi should carry masked low-byte canonical and backedge values\n";
+    return false;
+  }
+  return true;
+}
+
 // Preserved-register coverage: RDI at index 7 in
 // shouldPreserveGeneralizedBackedgeRegisterIndex. Completes the remaining
 // hot loop_reg_phi lane not yet covered by earlier RCX/RSP/R9/R10/R12/R14 tests.
@@ -5212,6 +5308,7 @@ bool runGeneralizedLoopTargetSlotByteCountTwoReturnsMaskedPhi(
   }
   return true;
 }
+
 
 // retrieve_generalized_loop_control_field_value_impl with byteCount=1
 // yields an i8 phi carrying the masked low byte of canonical and
@@ -6880,6 +6977,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteRspWhenValuesDiffer);
     runCustom("generalized_loop_control_slot_byte_count_two_returns_masked_phi",
              &InstructionTester::runGeneralizedLoopControlSlotByteCountTwoReturnsMaskedPhi);
+    runCustom("generalized_loop_control_slot_byte_count_one_returns_masked_phi",
+             &InstructionTester::runGeneralizedLoopControlSlotByteCountOneReturnsMaskedPhi);
     runCustom("make_generalized_loop_backup_populates_register_phis_map",
              &InstructionTester::runMakeGeneralizedLoopBackupPopulatesRegisterPhisMap);
     runCustom("make_generalized_loop_backup_populates_flag_phis_map",
