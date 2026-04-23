@@ -2984,6 +2984,135 @@ bool runGeneralizedLoopControlFieldIgnoresBaseCandidate(std::string& details) {
   return true;
 }
 
+// KNOWN-LIMITATION (control_slot helper does not require the current block
+// to be the active generalized-loop header).
+//
+// retrieve_generalized_loop_control_slot_value_impl reads only the scalar
+// active state and builds its phi into state.headerBlock. A read from an
+// unrelated block still returns the generalized control-slot phi instead of
+// falling through.
+//
+// When control_slot starts validating the current insertion block against the
+// active header (or otherwise scopes helper use correctly), this test MUST
+// fail and be rewritten to assert the fixed contract.
+bool runGeneralizedLoopControlSlotUsesActiveStateFromUnrelatedBlock(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* unrelated =
+      llvm::BasicBlock::Create(context, "unrelated", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(unrelated);
+  auto* result = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(result);
+  if (!phi) {
+    details = "  current control_slot limitation should still produce a generalized phi from an unrelated block\n";
+    return false;
+  }
+  bool sawCanonical = false, sawBackedge = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalControl) sawCanonical = true;
+    else if (v == backedgeControl) sawBackedge = true;
+  }
+  if (!sawCanonical || !sawBackedge) {
+    details = "  unrelated-block control_slot limitation should still use canonical/backedge active-state values\n";
+    return false;
+  }
+  return true;
+}
+
+// KNOWN-LIMITATION (target_slot helper does not require the current block
+// to be the active generalized-loop header).
+//
+// retrieve_generalized_loop_target_slot_value_impl also reads only the
+// scalar active state. A carried-slot read from an unrelated block still
+// returns the generalized target-slot phi instead of falling through.
+//
+// When target_slot starts validating the current insertion block against the
+// active header (or otherwise scopes helper use correctly), this test MUST
+// fail and be rewritten to assert the fixed contract.
+bool runGeneralizedLoopTargetSlotUsesActiveStateFromUnrelatedBlock(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* unrelated =
+      llvm::BasicBlock::Create(context, "unrelated", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t canonicalTarget = 0x1111222233334444ULL;
+  constexpr uint64_t backedgeTarget = 0xAAAABBBBCCCCDDDDULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, canonicalTarget));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, backedgeTarget));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(unrelated);
+  auto* result = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(result);
+  if (!phi) {
+    details = "  current target_slot limitation should still produce a generalized phi from an unrelated block\n";
+    return false;
+  }
+  bool sawCanonical = false, sawBackedge = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalTarget) sawCanonical = true;
+    else if (v == backedgeTarget) sawBackedge = true;
+  }
+  if (!sawCanonical || !sawBackedge) {
+    details = "  unrelated-block target_slot limitation should still use canonical/backedge carried values\n";
+    return false;
+  }
+  return true;
+}
+
+
 
 
 
@@ -9933,6 +10062,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopNestedInnerTargetSlotUsesInnerState);
     runCustom("generalized_loop_nested_inner_control_slot_uses_inner_state",
              &InstructionTester::runGeneralizedLoopNestedInnerControlSlotUsesInnerState);
+    runCustom("generalized_loop_control_slot_uses_active_state_from_unrelated_block",
+             &InstructionTester::runGeneralizedLoopControlSlotUsesActiveStateFromUnrelatedBlock);
+    runCustom("generalized_loop_target_slot_uses_active_state_from_unrelated_block",
+             &InstructionTester::runGeneralizedLoopTargetSlotUsesActiveStateFromUnrelatedBlock);
     runCustom("record_generalized_loop_backedge_multiway_appends_new_body_source",
              &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayAppendsNewBodySource);
     runCustom("generalized_phi_address_three_way_resolves_all_incomings",
