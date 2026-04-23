@@ -4420,6 +4420,118 @@ bool runGeneralizedLoopControlFieldLoadCollapsesWhenValuesMatch(
   return true;
 }
 
+// control_field helper with byteCount=1 collapses to a scalar i8 when
+// canonical and backedge store the same field value.
+bool runGeneralizedLoopControlFieldLoadByteCountOneCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t fieldOffset = 0x6ULL;
+  constexpr uint16_t sharedField = 0x77BB;
+  constexpr uint8_t lowShared = static_cast<uint8_t>(sharedField & 0xFFU);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(
+      makeI64(context, canonicalControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), sharedField));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(
+      makeI64(context, backedgeControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), sharedField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlValue =
+      lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* displaced = lifter.builder->CreateAdd(
+      controlValue, llvm::ConstantInt::get(controlValue->getType(), fieldOffset),
+      "generalized_control_field_plus_6_byte1_collapse");
+  auto* fieldValue = lifter.GetMemoryValue(displaced, 8);
+  if (llvm::isa<llvm::PHINode>(fieldValue)) {
+    details = "  control_field byteCount=1 should collapse matching values to a scalar, not a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(fieldValue);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed control_field byteCount=1 should carry the shared low byte\n";
+    return false;
+  }
+  return true;
+}
+
+// control_field helper with byteCount=2 collapses to a scalar i16 when
+// canonical and backedge store the same field value.
+bool runGeneralizedLoopControlFieldLoadByteCountTwoCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t fieldOffset = 0x6ULL;
+  constexpr uint32_t sharedField = 0xDEAD77BBU;
+  constexpr uint16_t lowShared = static_cast<uint16_t>(sharedField & 0xFFFFU);
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(
+      makeI64(context, canonicalControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), sharedField));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(
+      makeI64(context, backedgeControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), sharedField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlValue =
+      lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* displaced = lifter.builder->CreateAdd(
+      controlValue, llvm::ConstantInt::get(controlValue->getType(), fieldOffset),
+      "generalized_control_field_plus_6_byte2_collapse");
+  auto* fieldValue = lifter.GetMemoryValue(displaced, 16);
+  if (llvm::isa<llvm::PHINode>(fieldValue)) {
+    details = "  control_field byteCount=2 should collapse matching values to a scalar, not a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(fieldValue);
+  if (!actual.has_value() || actual->getZExtValue() != lowShared) {
+    details = "  collapsed control_field byteCount=2 should carry the shared low 16 bits\n";
+    return false;
+  }
+  return true;
+}
+
 
 
 
@@ -8515,6 +8627,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMakeGeneralizedLoopBackupPopulatesFlagPhisMap);
     runCustom("generalized_loop_control_field_load_collapses_when_values_match",
              &InstructionTester::runGeneralizedLoopControlFieldLoadCollapsesWhenValuesMatch);
+    runCustom("generalized_loop_control_field_load_byte_count_one_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLoopControlFieldLoadByteCountOneCollapsesWhenValuesMatch);
+    runCustom("generalized_loop_control_field_load_byte_count_two_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLoopControlFieldLoadByteCountTwoCollapsesWhenValuesMatch);
     runCustom("generalized_loop_control_slot_byte_count_sixteen_falls_through",
              &InstructionTester::runGeneralizedLoopControlSlotByteCountSixteenFallsThrough);
     runCustom("generalized_loop_backup_canonical_only_path_preserves_bbbackup_state",
