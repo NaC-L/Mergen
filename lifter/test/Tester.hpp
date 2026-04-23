@@ -3112,6 +3112,61 @@ bool runGeneralizedLoopTargetSlotUsesActiveStateFromUnrelatedBlock(
   return true;
 }
 
+// KNOWN-LIMITATION (local_value helper does not require the current block
+// to be the active generalized-loop header).
+//
+// retrieve_generalized_loop_local_value_impl() only checks whether
+// activeGeneralizedLoopLocalBuffer is non-empty. A loop-local stack read from
+// an unrelated block still resolves through that active local buffer instead
+// of falling through.
+//
+// When local_value starts validating the current insertion block against the
+// active header (or otherwise scopes helper use correctly), this test MUST
+// fail and be rewritten to assert the fixed contract.
+bool runGeneralizedLoopLocalValueUsesActiveStateFromUnrelatedBlock(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+  auto* unrelated =
+      llvm::BasicBlock::Create(context, "unrelated", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t localAddr = STACKP_VALUE + 24;
+  constexpr uint64_t localValue = 0x7777888899990000ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, localAddr),
+                        makeI64(context, localValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(unrelated);
+  auto* result = lifter.GetMemoryValue(makeI64(context, localAddr), 64);
+  auto actual = readConstantAPInt(result);
+  if (!actual.has_value() || actual->getZExtValue() != localValue) {
+    details =
+        "  unrelated-block local_value limitation should still read the active local buffer's value\n";
+    return false;
+  }
+  return true;
+}
+
+
 
 
 
@@ -10152,6 +10207,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopLocalValueReturnsConcreteStackBufferValueByteCountOne);
     runCustom("generalized_loop_nested_inner_local_value_uses_inner_state",
              &InstructionTester::runGeneralizedLoopNestedInnerLocalValueUsesInnerState);
+    runCustom("generalized_loop_local_value_uses_active_state_from_unrelated_block",
+             &InstructionTester::runGeneralizedLoopLocalValueUsesActiveStateFromUnrelatedBlock);
     runCustom("generalized_loop_load_generalized_backup_moves_local_bytes_to_active_local_buffer",
              &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupMovesLocalBytesToActiveLocalBuffer);
     runCustom("generalized_loop_load_generalized_backup_seeds_invariant_local_qword",
