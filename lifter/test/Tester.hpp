@@ -1750,6 +1750,44 @@ bool runStructuredLoopHeaderRejectsCycleInChain(std::string& details) {
     return true;
   }
 
+  bool runComputePossibleValuesLoopPhiDuplicateIncomingsDeduplicate(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    auto* armA = llvm::BasicBlock::Create(context, "arm_a", lifter.fnc);
+    auto* armB = llvm::BasicBlock::Create(context, "arm_b", lifter.fnc);
+    auto* header = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+    llvm::IRBuilder<>(entry).CreateBr(armA);
+    llvm::IRBuilder<>(armA).CreateBr(header);
+    llvm::IRBuilder<>(armB).CreateBr(header);
+
+    // Two incomings carry the SAME concrete constant. std::set<APInt>
+    // deduplication must produce a singleton, not a 2-element multiset.
+    // This matters for switch-target enumeration where the same value
+    // appears on more than one backedge shape.
+    lifter.builder->SetInsertPoint(header);
+    llvm::IRBuilder<> phiBuilder(header, header->begin());
+    auto* phi = phiBuilder.CreatePHI(i64Ty, 2, "loop_phi_duplicate");
+    phi->addIncoming(makeI64(context, 0x1234), armA);
+    phi->addIncoming(makeI64(context, 0x1234), armB);
+
+    auto values = lifter.computePossibleValues(phi, 0);
+    if (values.size() != 1) {
+      std::ostringstream os;
+      os << "  loop phi with duplicate incoming constants should dedup to size 1, got "
+         << values.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    if (!values.contains(llvm::APInt(64, 0x1234))) {
+      details = "  loop phi dedup result should be the shared constant 0x1234\n";
+      return false;
+    }
+    return true;
+  }
+
   bool runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch(
       std::string& details) {
     LifterUnderTest lifter;
@@ -10957,6 +10995,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesEmptyLoopPhiReturnsEmptySet);
     runCustom("compute_possible_values_loop_header_alloca_returns_empty_set",
              &InstructionTester::runComputePossibleValuesLoopHeaderAllocaReturnsEmptySet);
+    runCustom("compute_possible_values_loop_phi_duplicate_incomings_deduplicate",
+             &InstructionTester::runComputePossibleValuesLoopPhiDuplicateIncomingsDeduplicate);
     runCustom("compute_possible_values_loop_select_known_conditions_prune_phi_branch",
              &InstructionTester::runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch);
     runCustom("compute_possible_values_loop_select_unknown_condition_unions_phi_branches",
