@@ -520,6 +520,21 @@ private:
     return true;
   }
 
+  bool runLoopGeneralizationUnknownContextBlocked(std::string& details) {
+    LifterUnderTest lifter;
+    lifter.currentPathSolveContext = LifterUnderTest::PathSolveContext::Unknown;
+    if (lifter.currentPathSolveAllowsStructuredLoopGeneralization()) {
+      details = "  unknown path-solve context must not generalize loop state\n";
+      return false;
+    }
+    if (lifter.currentPathSolveAllowsStructuredLoopGeneralizationForResolvedTarget()) {
+      details =
+          "  resolved-target widening must not admit unknown loop context\n";
+      return false;
+    }
+    return true;
+  }
+
   bool runPendingGeneralizedLoopByContext(
       LifterUnderTest::PathSolveContext context, const char* contextName,
       bool expectReuse, std::string& details) {
@@ -10585,6 +10600,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runLoopGeneralizationIndirectJumpAllowedWhenResolved);
     runCustom("loop_generalization_ret_blocked",
              &InstructionTester::runLoopGeneralizationRetBlocked);
+    runCustom("loop_generalization_unknown_context_blocked",
+             &InstructionTester::runLoopGeneralizationUnknownContextBlocked);
     runCustom("pending_generalized_loop_indirect_jump_allowed_when_resolved",
              &InstructionTester::runPendingGeneralizedLoopIndirectJumpAllowedWhenResolved);
     runCustom("pending_generalized_loop_ret_blocked",
