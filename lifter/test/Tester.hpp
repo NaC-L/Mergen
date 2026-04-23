@@ -2192,6 +2192,190 @@ bool runGeneralizedLoopLoadBackupWithThreeBackedgesProducesFourWayPhi(
   return true;
 }
 
+// target_slot helper with 4-way phi (canonical + 3 backedges). Parallel
+// of runGeneralizedLoopLoadBackupWithThreeBackedgesProducesFourWayPhi
+// which covers control_slot at 4-way.
+bool runGeneralizedLoopTargetSlotFourWayProducesPhi(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* thirdBackedge =
+      llvm::BasicBlock::Create(context, "third_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t thirdControl = 0x1401AEC37ULL;
+  constexpr uint64_t canonicalTarget = 0x1000ULL;
+  constexpr uint64_t firstTarget = 0x2000ULL;
+  constexpr uint64_t secondTarget = 0x3000ULL;
+  constexpr uint64_t thirdTarget = 0x4000ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, canonicalTarget));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, firstTarget));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, secondTarget));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(thirdBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, thirdControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, thirdTarget));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* carried = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(carried);
+  if (!phi) {
+    details = "  target_slot helper with 4-way state should produce a phi\n";
+    return false;
+  }
+  if (phi->getNumIncomingValues() != 4) {
+    std::ostringstream os;
+    os << "  target_slot 4-way phi should carry 4 incomings, got "
+       << phi->getNumIncomingValues() << "\n";
+    details = os.str();
+    return false;
+  }
+  bool sawC = false, sawF = false, sawS = false, sawT = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalTarget) sawC = true;
+    else if (v == firstTarget) sawF = true;
+    else if (v == secondTarget) sawS = true;
+    else if (v == thirdTarget) sawT = true;
+  }
+  if (!sawC || !sawF || !sawS || !sawT) {
+    details = "  target_slot 4-way phi should carry each canonical/first/second/third target\n";
+    return false;
+  }
+  return true;
+}
+
+// control_field_load helper with 4-way phi (canonical + 3 backedges).
+// Parallel of target_slot 4-way and control_slot 4-way tests.
+bool runGeneralizedLoopControlFieldLoadFourWayProducesPhi(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* thirdBackedge =
+      llvm::BasicBlock::Create(context, "third_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+  constexpr uint64_t thirdControl = 0x1401AEC37ULL;
+  constexpr uint64_t fieldOffset = 0xAULL;
+  constexpr uint16_t canonicalField = 0x1111U;
+  constexpr uint16_t firstField = 0x2222U;
+  constexpr uint16_t secondField = 0x3333U;
+  constexpr uint16_t thirdField = 0x4444U;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(
+      makeI64(context, canonicalControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), canonicalField));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.SetMemoryValue(
+      makeI64(context, firstControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), firstField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.SetMemoryValue(
+      makeI64(context, secondControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), secondField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(thirdBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, thirdControl));
+  lifter.SetMemoryValue(
+      makeI64(context, thirdControl + fieldOffset),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(context), thirdField));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlValue =
+      lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* displaced = lifter.builder->CreateAdd(
+      controlValue, llvm::ConstantInt::get(controlValue->getType(), fieldOffset),
+      "control_field_plus_A_fourway");
+  auto* fieldValue = lifter.GetMemoryValue(displaced, 16);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(fieldValue);
+  if (!phi) {
+    details = "  control_field_load 4-way state should produce a phi\n";
+    return false;
+  }
+  if (phi->getNumIncomingValues() != 4) {
+    std::ostringstream os;
+    os << "  control_field_load 4-way phi should carry 4 incomings, got "
+       << phi->getNumIncomingValues() << "\n";
+    details = os.str();
+    return false;
+  }
+  bool sawC = false, sawF = false, sawS = false, sawT = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalField) sawC = true;
+    else if (v == firstField) sawF = true;
+    else if (v == secondField) sawS = true;
+    else if (v == thirdField) sawT = true;
+  }
+  if (!sawC || !sawF || !sawS || !sawT) {
+    details = "  control_field_load 4-way phi should carry each canonical/first/second/third field\n";
+    return false;
+  }
+  return true;
+}
+
 // target_slot helper with 3-way phi (canonical + 2 backedges). The
 // existing 2-way collapse/phi tests and the 4-way control_slot test
 // cover adjacent shapes; this exercises the N-way matching loop in
@@ -9069,6 +9253,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopLoadBackupWithThreeBackedgesProducesFourWayPhi);
     runCustom("generalized_loop_target_slot_three_way_produces_phi",
              &InstructionTester::runGeneralizedLoopTargetSlotThreeWayProducesPhi);
+    runCustom("generalized_loop_target_slot_four_way_produces_phi",
+             &InstructionTester::runGeneralizedLoopTargetSlotFourWayProducesPhi);
+    runCustom("generalized_loop_control_field_load_four_way_produces_phi",
+             &InstructionTester::runGeneralizedLoopControlFieldLoadFourWayProducesPhi);
     runCustom("generalized_loop_control_field_load_three_way_produces_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadThreeWayProducesPhi);
     runCustom("generalized_loop_non_themida_control_slot_produces_no_phi",
