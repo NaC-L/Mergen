@@ -1713,6 +1713,56 @@ bool runStructuredLoopHeaderRejectsCycleInChain(std::string& details) {
     return true;
   }
 
+  bool runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+    auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+    lifter.builder->SetInsertPoint(entry);
+    lifter.builder->CreateBr(loopHeader);
+    llvm::IRBuilder<>(backedge).CreateBr(loopHeader);
+
+    llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+    auto* truePhi = phiBuilder.CreatePHI(i64Ty, 2, "known_true_loop_phi");
+    truePhi->addIncoming(makeI64(context, 0x11), entry);
+    truePhi->addIncoming(makeI64(context, 0x22), backedge);
+    auto* falsePhi = phiBuilder.CreatePHI(i64Ty, 2, "known_false_loop_phi");
+    falsePhi->addIncoming(makeI64(context, 0x33), entry);
+    falsePhi->addIncoming(makeI64(context, 0x44), backedge);
+
+    lifter.builder->SetInsertPoint(loopHeader);
+    auto* knownTrueSelect = llvm::SelectInst::Create(
+        llvm::ConstantInt::getTrue(context), truePhi, makeI64(context, 0xDEAD),
+        "known_true_loop_select");
+    lifter.builder->Insert(knownTrueSelect);
+    auto* knownFalseSelect = llvm::SelectInst::Create(
+        llvm::ConstantInt::getFalse(context), makeI64(context, 0xBEEF), falsePhi,
+        "known_false_loop_select");
+    lifter.builder->Insert(knownFalseSelect);
+
+    auto trueValues = lifter.computePossibleValues(knownTrueSelect, 0);
+    if (trueValues.size() != 2 ||
+        !trueValues.contains(llvm::APInt(64, 0x11)) ||
+        !trueValues.contains(llvm::APInt(64, 0x22))) {
+      details =
+          "  known-true loop select should recurse only into the true PHI branch\n";
+      return false;
+    }
+    auto falseValues = lifter.computePossibleValues(knownFalseSelect, 0);
+    if (falseValues.size() != 2 ||
+        !falseValues.contains(llvm::APInt(64, 0x33)) ||
+        !falseValues.contains(llvm::APInt(64, 0x44))) {
+      details =
+          "  known-false loop select should recurse only into the false PHI branch\n";
+      return false;
+    }
+    return true;
+  }
+
   bool runComputePossibleValuesTruncToI1PreservesWidth(std::string& details) {
     LifterUnderTest lifter;
     auto& context = lifter.context;
@@ -10773,6 +10823,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesCircularPhiBailsViaDepthGuard);
     runCustom("compute_possible_values_empty_loop_phi_returns_empty_set",
              &InstructionTester::runComputePossibleValuesEmptyLoopPhiReturnsEmptySet);
+    runCustom("compute_possible_values_loop_select_known_conditions_prune_phi_branch",
+             &InstructionTester::runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch);
     runCustom("compute_possible_values_trunc_to_i1_preserves_width",
              &InstructionTester::runComputePossibleValuesTruncToI1PreservesWidth);
     runCustom("generalized_loop_control_field_load_creates_phi",
