@@ -1763,6 +1763,55 @@ bool runStructuredLoopHeaderRejectsCycleInChain(std::string& details) {
     return true;
   }
 
+  bool runComputePossibleValuesLoopSelectUnknownConditionUnionsPhiBranches(
+      std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+
+    auto* entry = llvm::BasicBlock::Create(context, "entry", lifter.fnc);
+    auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+    auto* loopHeader = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+    lifter.builder->SetInsertPoint(entry);
+    lifter.builder->CreateBr(loopHeader);
+    llvm::IRBuilder<>(backedge).CreateBr(loopHeader);
+
+    llvm::IRBuilder<> phiBuilder(loopHeader, loopHeader->begin());
+    auto* truePhi = phiBuilder.CreatePHI(i64Ty, 2, "unknown_true_loop_phi");
+    truePhi->addIncoming(makeI64(context, 0x101), entry);
+    truePhi->addIncoming(makeI64(context, 0x202), backedge);
+    auto* falsePhi = phiBuilder.CreatePHI(i64Ty, 2, "unknown_false_loop_phi");
+    falsePhi->addIncoming(makeI64(context, 0x303), entry);
+    falsePhi->addIncoming(makeI64(context, 0x404), backedge);
+
+    lifter.builder->SetInsertPoint(loopHeader);
+    auto* unknownCond = lifter.builder->CreateICmpEQ(
+        lifter.GetRegisterValue(RegisterUnderTest::RAX), makeI64(context, 7),
+        "unknown_loop_select_cond");
+    auto* selected = lifter.builder->CreateSelect(
+        unknownCond, truePhi, falsePhi, "unknown_loop_select");
+
+    auto values = lifter.computePossibleValues(selected, 0);
+    const std::array<uint64_t, 4> expected = {0x101, 0x202, 0x303, 0x404};
+    if (values.size() != expected.size()) {
+      std::ostringstream os;
+      os << "  unknown-condition loop select should union four PHI values, got "
+         << values.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    for (uint64_t want : expected) {
+      if (!values.contains(llvm::APInt(64, want))) {
+        std::ostringstream os;
+        os << "  unknown-condition loop select missing 0x" << std::hex << want
+           << "\n";
+        details = os.str();
+        return false;
+      }
+    }
+    return true;
+  }
+
   bool runComputePossibleValuesTruncToI1PreservesWidth(std::string& details) {
     LifterUnderTest lifter;
     auto& context = lifter.context;
@@ -10825,6 +10874,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesEmptyLoopPhiReturnsEmptySet);
     runCustom("compute_possible_values_loop_select_known_conditions_prune_phi_branch",
              &InstructionTester::runComputePossibleValuesLoopSelectKnownConditionsPrunePhiBranch);
+    runCustom("compute_possible_values_loop_select_unknown_condition_unions_phi_branches",
+             &InstructionTester::runComputePossibleValuesLoopSelectUnknownConditionUnionsPhiBranches);
     runCustom("compute_possible_values_trunc_to_i1_preserves_width",
              &InstructionTester::runComputePossibleValuesTruncToI1PreservesWidth);
     runCustom("generalized_loop_control_field_load_creates_phi",
