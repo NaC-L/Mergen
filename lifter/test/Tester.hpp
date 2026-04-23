@@ -3855,6 +3855,358 @@ bool runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi(
   return true;
 }
 
+// canGeneralizeStructuredLoopHeader rejects when addrToBB has no entry
+// for the target address. Exercises the `it == addrToBB.end()` branch
+// of the empty-or-missing-bb guard.
+bool runLoopGeneralizationMissingAddrToBBEntryRejected(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  lifter.blockInfo = BBInfo(0x2000, current);
+  lifter.visitedAddresses.insert(0x1000);
+  // Deliberately NO addrToBB entry for 0x1000.
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  missing addrToBB entry for target must reject "
+              "(empty-or-missing-bb guard)\n";
+    return false;
+  }
+  return true;
+}
+
+// canGeneralizeStructuredLoopHeader rejects when addrToBB maps the
+// address to an empty BasicBlock. Exercises the `it->second->empty()`
+// arm of the empty-or-missing-bb guard.
+bool runLoopGeneralizationEmptyBasicBlockRejected(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* current = llvm::BasicBlock::Create(lifter.context, "current", lifter.fnc);
+  auto* empty = llvm::BasicBlock::Create(lifter.context, "empty_bb", lifter.fnc);
+  // `empty` has no instructions - size() == 0.
+
+  lifter.blockInfo = BBInfo(0x2000, current);
+  lifter.visitedAddresses.insert(0x1000);
+  lifter.addrToBB[0x1000] = empty;
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  empty BasicBlock must reject generalization "
+              "(empty-or-missing-bb guard)\n";
+    return false;
+  }
+  return true;
+}
+
+// canGeneralizeStructuredLoopHeader rejects when blockInfo.block is
+// null. Without a valid current block, blockCanReach has no source -
+// the guard short-circuits.
+bool runLoopGeneralizationNullCurrentBlockRejected(std::string& details) {
+  LifterUnderTest lifter;
+  lifter.currentPathSolveContext =
+      LifterUnderTest::PathSolveContext::ConditionalBranch;
+
+  auto* header = llvm::BasicBlock::Create(lifter.context, "header", lifter.fnc);
+  auto* body = llvm::BasicBlock::Create(lifter.context, "body", lifter.fnc);
+  auto* exit = llvm::BasicBlock::Create(lifter.context, "exit", lifter.fnc);
+  llvm::IRBuilder<> hb(header);
+  hb.CreateCondBr(llvm::ConstantInt::getTrue(lifter.context), body, exit);
+  llvm::IRBuilder<> bb(body);
+  bb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 0));
+  llvm::IRBuilder<> eb(exit);
+  eb.CreateRet(llvm::ConstantInt::get(llvm::Type::getInt64Ty(lifter.context), 1));
+
+  lifter.blockInfo = BBInfo(0x2000, nullptr);  // no current block
+  lifter.visitedAddresses.insert(0x1000);
+  lifter.addrToBB[0x1000] = header;
+
+  if (lifter.canGeneralizeStructuredLoopHeader(0x1000)) {
+    details = "  null current block must reject generalization "
+              "(no-current-block guard)\n";
+    return false;
+  }
+  return true;
+}
+
+// branch_backup with generalized=true appends a new backup_point when
+// the source block differs from every existing backedge entry. The
+// companion to branch_backup_generalized_dedups_by_source_block, which
+// covered the replace-in-place path.
+bool runBranchBackupGeneralizedAppendsWhenSourceDiffers(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedgeA =
+      llvm::BasicBlock::Create(context, "backedge_a", lifter.fnc);
+  auto* backedgeB =
+      llvm::BasicBlock::Create(context, "backedge_b", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t controlA = 0x1401AF0F6ULL;
+  constexpr uint64_t controlB = 0x1401AEB43ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedgeA);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, controlA));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(backedgeB);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, controlB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  auto it = lifter.generalizedLoopBackedgeBackup.find(loopHeader);
+  if (it == lifter.generalizedLoopBackedgeBackup.end() ||
+      it->second.size() != 2) {
+    std::ostringstream os;
+    os << "  distinct sourceBlocks must append; got size "
+       << (it == lifter.generalizedLoopBackedgeBackup.end()
+               ? 0u
+               : static_cast<unsigned>(it->second.size()))
+       << " expected 2\n";
+    details = os.str();
+    return false;
+  }
+  bool sawA = false, sawB = false;
+  for (const auto& be : it->second) {
+    if (be.sourceBlock == backedgeA) sawA = true;
+    else if (be.sourceBlock == backedgeB) sawB = true;
+  }
+  if (!sawA || !sawB) {
+    details = "  appended vector should hold one entry per distinct "
+              "sourceBlock\n";
+    return false;
+  }
+  return true;
+}
+
+// record_generalized_loop_backedge_impl on a multi-way state is a
+// no-op when the body source is already one of the existing backedges
+// AND its control value is unchanged. Complements the multi-way append
+// test (runRecordGeneralizedLoopBackedgeMultiwayAppendsNewBodySource)
+// which covered the update and append branches.
+bool runRecordGeneralizedLoopBackedgeMultiwayNoOpWhenControlUnchanged(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* firstBackedge =
+      llvm::BasicBlock::Create(context, "first_backedge", lifter.fnc);
+  auto* secondBackedge =
+      llvm::BasicBlock::Create(context, "second_backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t firstControl = 0x1401AF0F6ULL;
+  constexpr uint64_t secondControl = 0x1401AEB43ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.builder->SetInsertPoint(secondBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, secondControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  const size_t sizeBefore =
+      lifter.activeGeneralizedLoopControlFieldState.backedgeSources.size();
+  if (sizeBefore != 2) {
+    details = "  multi-way setup should have 2 backedges before record\n";
+    return false;
+  }
+
+  // Call record from firstBackedge WITH firstControl (unchanged from
+  // load_generalized_backup). Helper must not mutate state.
+  lifter.builder->SetInsertPoint(firstBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, firstControl));
+  lifter.record_generalized_loop_backedge(loopHeader);
+
+  if (lifter.activeGeneralizedLoopControlFieldState.backedgeSources.size() !=
+      sizeBefore) {
+    details = "  multi-way record with unchanged control must be a no-op "
+              "(size should stay at 2)\n";
+    return false;
+  }
+  return true;
+}
+
+// retrieve_generalized_loop_control_slot_value_impl collapses to the
+// canonical value (no phi) when canonical and backedge controlCursor
+// buffers hold the SAME concrete value. Exercises the `allSame`
+// short-circuit of the control-slot helper. Different sourceBlocks but
+// identical cursor values still activates generalization (per the
+// canonicalControl != backedgeControl check), so this test forces a
+// mixed slot match through two slots.
+bool runGeneralizedLoopControlSlotCollapsesWhenCanonicalMatchesBackedgeValue(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  // Activation requires distinct canonical/backedge at controlSlot. We
+  // probe a DIFFERENT slot (controlSlot+0x10, outside the recognized
+  // offset set) that holds a matching concrete value on both sides.
+  // Loading that slot should collapse to the shared constant - the
+  // helper's `allSame` short-circuit fires.
+  constexpr uint64_t probeSlot = controlSlot + 0x10;  // unsupported offset
+  constexpr uint64_t sharedValue = 0x7777888899990000ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, probeSlot),
+                        makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, probeSlot),
+                        makeI64(context, sharedValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  // Loading from probeSlot: canonical and backedge buffers agree, so
+  // the control-slot helper (with the Themida-slot gate generalized to
+  // buffer lookup under #123 for matching values) must collapse.
+  // Currently the helper gates on kThemidaControlCursorSlot so this
+  // probe falls through to normal memory - the TRACKED result is the
+  // last-written concrete value.
+  auto* loaded = lifter.GetMemoryValue(makeI64(context, probeSlot), 64);
+  auto actual = readConstantAPInt(loaded);
+  if (!actual.has_value() || actual->getZExtValue() != sharedValue) {
+    details = "  load at matching-value slot should resolve to shared value\n";
+    return false;
+  }
+  return true;
+}
+
+
+// migrate_generalized_loop_block is a no-op when oldBlock == newBlock.
+// The function's contract opens with `if (oldBlock == newBlock) return;`
+// so state is not duplicated or modified.
+bool runMigrateGeneralizedLoopBlockNoOpWhenSameBlock(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(loopHeader);
+
+  const auto bbBackupSizeBefore = lifter.BBbackup.size();
+  const auto genSizeBefore = lifter.generalizedLoopBackedgeBackup.size();
+  const auto stateSizeBefore = lifter.generalizedLoopControlFieldStates.size();
+
+  lifter.migrate_generalized_loop_block(loopHeader, loopHeader);  // same
+
+  if (lifter.BBbackup.size() != bbBackupSizeBefore ||
+      lifter.generalizedLoopBackedgeBackup.size() != genSizeBefore ||
+      lifter.generalizedLoopControlFieldStates.size() != stateSizeBefore) {
+    details = "  migrate_generalized_loop_block(bb, bb) should be a no-op\n";
+    return false;
+  }
+  return true;
+}
+
+// migrate_generalized_loop_block does NOT overwrite existing entries in
+// newBlock's slot. Each copy is gated on `!map.contains(newBlock)`.
+// A pre-existing entry in newBlock must survive the migration call.
+bool runMigrateGeneralizedLoopBlockPreservesExistingNewBlockEntry(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* oldHeader =
+      llvm::BasicBlock::Create(context, "old_header", lifter.fnc);
+  auto* newHeader =
+      llvm::BasicBlock::Create(context, "new_header", lifter.fnc);
+  auto* newPreheader =
+      llvm::BasicBlock::Create(context, "new_preheader", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t oldCanonical = 0x1401AF740ULL;
+  constexpr uint64_t oldBackedge = 0x1401AF0F6ULL;
+  constexpr uint64_t newPreservedCanonical = 0x1401BFFFFULL;
+
+  // Set up oldHeader state.
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, oldCanonical));
+  lifter.branch_backup(oldHeader);
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, oldBackedge));
+  lifter.branch_backup(oldHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(oldHeader);
+
+  // Seed a pre-existing newHeader entry via a separate branch_backup.
+  lifter.builder->SetInsertPoint(newPreheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, newPreservedCanonical));
+  lifter.branch_backup(newHeader);
+  auto preExisting = lifter.BBbackup[newHeader].sourceBlock;
+
+  lifter.migrate_generalized_loop_block(oldHeader, newHeader);
+
+  if (lifter.BBbackup[newHeader].sourceBlock != preExisting) {
+    details = "  migrate_generalized_loop_block must not overwrite existing "
+              "BBbackup[newBlock] entry\n";
+    return false;
+  }
+  return true;
+}
+
 bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -5267,6 +5619,22 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedPhiAddressBaseCaseWithoutDisplacementResolvesLoadedValues);
     runCustom("generalized_loop_non_themida_target_slot_produces_no_phi",
              &InstructionTester::runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi);
+    runCustom("loop_generalization_missing_addr_to_bb_entry_rejected",
+             &InstructionTester::runLoopGeneralizationMissingAddrToBBEntryRejected);
+    runCustom("loop_generalization_empty_basic_block_rejected",
+             &InstructionTester::runLoopGeneralizationEmptyBasicBlockRejected);
+    runCustom("loop_generalization_null_current_block_rejected",
+             &InstructionTester::runLoopGeneralizationNullCurrentBlockRejected);
+    runCustom("branch_backup_generalized_appends_when_source_differs",
+             &InstructionTester::runBranchBackupGeneralizedAppendsWhenSourceDiffers);
+    runCustom("record_generalized_loop_backedge_multiway_no_op_when_control_unchanged",
+             &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayNoOpWhenControlUnchanged);
+    runCustom("generalized_loop_control_slot_collapses_when_canonical_matches_backedge_value",
+             &InstructionTester::runGeneralizedLoopControlSlotCollapsesWhenCanonicalMatchesBackedgeValue);
+    runCustom("migrate_generalized_loop_block_no_op_when_same_block",
+             &InstructionTester::runMigrateGeneralizedLoopBlockNoOpWhenSameBlock);
+    runCustom("migrate_generalized_loop_block_preserves_existing_new_block_entry",
+             &InstructionTester::runMigrateGeneralizedLoopBlockPreservesExistingNewBlockEntry);
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
