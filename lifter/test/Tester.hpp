@@ -1659,6 +1659,28 @@ bool runStructuredLoopHeaderRejectsCycleInChain(std::string& details) {
     return true;
   }
 
+  bool runComputePossibleValuesEmptyLoopPhiReturnsEmptySet(std::string& details) {
+    LifterUnderTest lifter;
+    auto& context = lifter.context;
+    auto* i64Ty = llvm::Type::getInt64Ty(context);
+    auto* header = llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+    lifter.builder->SetInsertPoint(header);
+    llvm::IRBuilder<> phiBuilder(header, header->begin());
+    auto* emptyPhi = phiBuilder.CreatePHI(i64Ty, 0, "empty_loop_phi");
+    lifter.builder->CreateRetVoid();
+
+    auto values = lifter.computePossibleValues(emptyPhi, 0);
+    if (!values.empty()) {
+      std::ostringstream os;
+      os << "  empty loop phi should produce no possible values, got size "
+         << values.size() << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
   bool runComputePossibleValuesTruncToI1PreservesWidth(std::string& details) {
     LifterUnderTest lifter;
     auto& context = lifter.context;
@@ -10713,6 +10735,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runComputePossibleValuesEnumeratesPhiIncomings);
     runCustom("compute_possible_values_circular_phi_bails_via_depth_guard",
              &InstructionTester::runComputePossibleValuesCircularPhiBailsViaDepthGuard);
+    runCustom("compute_possible_values_empty_loop_phi_returns_empty_set",
+             &InstructionTester::runComputePossibleValuesEmptyLoopPhiReturnsEmptySet);
     runCustom("compute_possible_values_trunc_to_i1_preserves_width",
              &InstructionTester::runComputePossibleValuesTruncToI1PreservesWidth);
     runCustom("generalized_loop_control_field_load_creates_phi",
