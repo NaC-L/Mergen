@@ -2795,6 +2795,64 @@ bool runRecordGeneralizedLoopBackedgeSingleSourceNoOpWhenControlUnchanged(
   return true;
 }
 
+// record_generalized_loop_backedge 1-backedge: positive rotation case.
+// When the body source differs from the existing backedge source AND the
+// rolled control value differs, the old backedge becomes canonical and
+// the body source becomes the new single backedge.
+bool runRecordGeneralizedLoopBackedgeSingleSourceRotatesCanonicalAndBackedge(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* bodyBlock =
+      llvm::BasicBlock::Create(context, "body", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t rolledControl = 0x1401AEB43ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(bodyBlock);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, rolledControl));
+  lifter.record_generalized_loop_backedge(loopHeader);
+
+  const auto& state = lifter.activeGeneralizedLoopControlFieldState;
+  if (!state.valid) {
+    details = "  state should remain valid after positive rotation\n";
+    return false;
+  }
+  if (state.canonicalSource != backedge ||
+      state.canonicalControl != backedgeControl) {
+    details = "  positive rotation should promote the old backedge into canonical\n";
+    return false;
+  }
+  if (state.backedgeSources.size() != 1 ||
+      state.backedgeSources.front() != bodyBlock ||
+      state.backedgeControls.front() != rolledControl) {
+    details = "  positive rotation should install the body source as the new single backedge\n";
+    return false;
+  }
+  return true;
+}
+
 // migrate_generalized_loop_block copies BBbackup, generalizedLoopBackedgeBackup,
 // generalizedLoopRegisterPhis, generalizedLoopFlagPhis, and
 // generalizedLoopControlFieldStates from oldBlock to newBlock when
@@ -4245,6 +4303,71 @@ bool runMigrateGeneralizedLoopBlockPreservesExistingNewBlockEntry(
   if (lifter.BBbackup[newHeader].sourceBlock != preExisting) {
     details = "  migrate_generalized_loop_block must not overwrite existing "
               "BBbackup[newBlock] entry\n";
+    return false;
+  }
+  return true;
+}
+
+// migrate_generalized_loop_block must NOT overwrite pre-existing register
+// and flag phi maps on newBlock; each copy is gated on
+// `!generalizedLoopRegisterPhis.contains(newBlock)` / same for flags.
+bool runMigrateGeneralizedLoopBlockPreservesExistingRegisterAndFlagPhiMaps(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* oldHeader =
+      llvm::BasicBlock::Create(context, "old_header", lifter.fnc);
+  auto* newHeader =
+      llvm::BasicBlock::Create(context, "new_header", lifter.fnc);
+  auto* preseedHeader =
+      llvm::BasicBlock::Create(context, "preseed_header", lifter.fnc);
+  auto* preseedBackedge =
+      llvm::BasicBlock::Create(context, "preseed_backedge", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t oldCanonical = 0x1401AF740ULL;
+  constexpr uint64_t oldBackedge = 0x1401AF0F6ULL;
+  constexpr uint64_t newCanonical = 0x1401BFFFFULL;
+  constexpr uint64_t newBackedge = 0x1401BFF00ULL;
+
+  // Seed oldHeader with phi maps.
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, oldCanonical));
+  lifter.SetRegisterValue(RegisterUnderTest::RAX, makeI64(context, 0x1111));
+  lifter.SetFlagValue_impl(FLAG_ZF, llvm::ConstantInt::getFalse(context));
+  lifter.branch_backup(oldHeader);
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, oldBackedge));
+  lifter.SetRegisterValue(RegisterUnderTest::RAX, makeI64(context, 0x2222));
+  lifter.SetFlagValue_impl(FLAG_ZF, llvm::ConstantInt::getTrue(context));
+  lifter.branch_backup(oldHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(oldHeader);
+
+  // Seed newHeader with DIFFERENT phi maps that must survive migration.
+  lifter.builder->SetInsertPoint(preseedHeader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, newCanonical));
+  lifter.SetRegisterValue(RegisterUnderTest::RAX, makeI64(context, 0x3333));
+  lifter.SetFlagValue_impl(FLAG_ZF, llvm::ConstantInt::getFalse(context));
+  lifter.branch_backup(newHeader);
+  lifter.builder->SetInsertPoint(preseedBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, newBackedge));
+  lifter.SetRegisterValue(RegisterUnderTest::RAX, makeI64(context, 0x4444));
+  lifter.SetFlagValue_impl(FLAG_ZF, llvm::ConstantInt::getTrue(context));
+  lifter.branch_backup(newHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(newHeader);
+
+  auto* preservedRaxPhi = lifter.generalizedLoopRegisterPhis[newHeader][0];
+  auto* preservedZfPhi = lifter.generalizedLoopFlagPhis[newHeader][static_cast<size_t>(FLAG_ZF)];
+
+  lifter.migrate_generalized_loop_block(oldHeader, newHeader);
+
+  if (lifter.generalizedLoopRegisterPhis[newHeader][0] != preservedRaxPhi ||
+      lifter.generalizedLoopFlagPhis[newHeader][static_cast<size_t>(FLAG_ZF)] != preservedZfPhi) {
+    details = "  migrate_generalized_loop_block must not overwrite existing register/flag phi maps on newBlock\n";
     return false;
   }
   return true;
@@ -6487,6 +6610,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runPendingGeneralizedLoopConditionalBranchAllowed);
     runCustom("pending_generalized_loop_direct_jump_allowed",
              &InstructionTester::runPendingGeneralizedLoopDirectJumpAllowed);
+    runCustom("record_generalized_loop_backedge_single_source_rotates_canonical_and_backedge",
+             &InstructionTester::runRecordGeneralizedLoopBackedgeSingleSourceRotatesCanonicalAndBackedge);
     runCustom("pending_generalized_loop_indirect_jump_allowed_when_unresolved",
              &InstructionTester::runPendingGeneralizedLoopIndirectJumpAllowedWhenUnresolved);
     runCustom("tiny_outlined_call_bypasses_outline_policy",
@@ -6612,6 +6737,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMigrateGeneralizedLoopBlockNoOpWhenSameBlock);
     runCustom("migrate_generalized_loop_block_preserves_existing_new_block_entry",
              &InstructionTester::runMigrateGeneralizedLoopBlockPreservesExistingNewBlockEntry);
+    runCustom("migrate_generalized_loop_block_preserves_existing_register_and_flag_phi_maps",
+             &InstructionTester::runMigrateGeneralizedLoopBlockPreservesExistingRegisterAndFlagPhiMaps);
     runCustom("make_generalized_loop_backup_preserves_concrete_r9_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteR9OnFirstBackedge);
     runCustom("generalized_loop_target_slot_bails_when_canonical_buffer_lacks_slot",
