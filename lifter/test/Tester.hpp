@@ -2847,6 +2847,81 @@ bool runGeneralizedLoopNestedInnerControlSlotUsesInnerState(
   return true;
 }
 
+// KNOWN-LIMITATION (nested loops make local_value read the inner active
+// local buffer, not the queried outer loop state).
+//
+// retrieve_generalized_loop_local_value_impl() reads only
+// activeGeneralizedLoopLocalBuffer. After an inner load_generalized_backup
+// overwrites that buffer, a local stack-slot read at the outer header
+// resolves using the inner loop's tracked local bytes.
+//
+// When local-value lookup gains per-header lazy lookup (or nested active
+// local-buffer stacking), this test MUST fail and be rewritten to assert the
+// fixed contract.
+bool runGeneralizedLoopNestedInnerLocalValueUsesInnerState(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* outerPreheader =
+      llvm::BasicBlock::Create(context, "outer_preheader", lifter.fnc);
+  auto* outerBackedge =
+      llvm::BasicBlock::Create(context, "outer_backedge", lifter.fnc);
+  auto* outerHeader =
+      llvm::BasicBlock::Create(context, "outer_header", lifter.fnc);
+  auto* innerPreheader =
+      llvm::BasicBlock::Create(context, "inner_preheader", lifter.fnc);
+  auto* innerBackedge =
+      llvm::BasicBlock::Create(context, "inner_backedge", lifter.fnc);
+  auto* innerHeader =
+      llvm::BasicBlock::Create(context, "inner_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t outerCanonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t outerBackedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t innerCanonicalControl = 0x1401BA72CULL;
+  constexpr uint64_t innerBackedgeControl = 0x1401BA97FULL;
+  constexpr uint64_t localAddr = STACKP_VALUE + 24;
+  constexpr uint64_t outerLocalValue = 0x1111222233334444ULL;
+  constexpr uint64_t innerLocalValue = 0xAAAABBBBCCCCDDDDULL;
+
+  lifter.builder->SetInsertPoint(outerPreheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, outerCanonicalControl));
+  lifter.branch_backup(outerHeader);
+
+  lifter.builder->SetInsertPoint(outerBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, outerBackedgeControl));
+  lifter.SetMemoryValue(makeI64(context, localAddr),
+                        makeI64(context, outerLocalValue));
+  lifter.branch_backup(outerHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(outerHeader);
+
+  lifter.builder->SetInsertPoint(innerPreheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, innerCanonicalControl));
+  lifter.branch_backup(innerHeader);
+
+  lifter.builder->SetInsertPoint(innerBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, innerBackedgeControl));
+  lifter.SetMemoryValue(makeI64(context, localAddr),
+                        makeI64(context, innerLocalValue));
+  lifter.branch_backup(innerHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(innerHeader);
+
+  lifter.builder->SetInsertPoint(outerHeader);
+  auto* result = lifter.GetMemoryValue(makeI64(context, localAddr), 64);
+  auto actual = readConstantAPInt(result);
+  if (!actual.has_value() || actual->getZExtValue() != innerLocalValue) {
+    details =
+        "  nested local_value limitation should read the inner active local buffer's value, not the outer loop's value\n";
+    return false;
+  }
+  return true;
+}
+
+
 
 
 // Multi-way rolled-control: record_generalized_loop_backedge appends or
@@ -9876,6 +9951,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopLocalValueReturnsConcreteStackBufferValue);
     runCustom("generalized_loop_local_value_returns_concrete_stack_buffer_value_byte_count_one",
              &InstructionTester::runGeneralizedLoopLocalValueReturnsConcreteStackBufferValueByteCountOne);
+    runCustom("generalized_loop_nested_inner_local_value_uses_inner_state",
+             &InstructionTester::runGeneralizedLoopNestedInnerLocalValueUsesInnerState);
     runCustom("generalized_loop_load_generalized_backup_moves_local_bytes_to_active_local_buffer",
              &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupMovesLocalBytesToActiveLocalBuffer);
     runCustom("generalized_loop_load_generalized_backup_seeds_invariant_local_qword",
