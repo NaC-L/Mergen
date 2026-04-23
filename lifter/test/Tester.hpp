@@ -3152,6 +3152,39 @@ bool runGeneralizedLoopStateGetterReturnsNullWhenNoStateExists(
   return true;
 }
 
+// KNOWN-LIMITATION (getMostRecentGeneralizedLoopState returns archived
+// entries without checking `valid`).
+//
+// The helper returns `&generalizedLoopControlFieldStates.begin()->second`
+// whenever the archive map is non-empty, even if that stored state is
+// invalid. With no active state and only invalid archived entries, the
+// contract should be nullptr; current behavior returns a non-null pointer to
+// the invalid state.
+//
+// When getMostRecentGeneralizedLoopState starts filtering archived entries by
+// `valid`, this test MUST fail and be rewritten to assert the fixed contract.
+bool runGeneralizedLoopStateGetterReturnsInvalidArchivedEntry(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto* archivedHeader =
+      llvm::BasicBlock::Create(lifter.context, "archived_header", lifter.fnc);
+
+  LifterUnderTest::GeneralizedLoopControlFieldState archived;
+  archived.valid = false;
+  archived.headerBlock = archivedHeader;
+  archived.canonicalControl = 0x9999;
+  lifter.generalizedLoopControlFieldStates[archivedHeader] = archived;
+
+  auto* state = lifter.getMostRecentGeneralizedLoopState();
+  if (!state || state->headerBlock != archivedHeader || state->valid) {
+    details =
+        "  current getMostRecentGeneralizedLoopState limitation should return the invalid archived entry when no active state exists\n";
+    return false;
+  }
+  return true;
+}
+
+
 // getGeneralizedLoopStateForHeader ignores archived entries whose
 // `valid` flag is false, returning nullptr even when the map contains
 // a slot for that header.
@@ -9638,6 +9671,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopStateGetterReturnsNullWhenNoStateExists);
     runCustom("generalized_loop_state_getter_by_header_rejects_invalid_stored_entry",
              &InstructionTester::runGeneralizedLoopStateGetterByHeaderRejectsInvalidStoredEntry);
+    runCustom("generalized_loop_state_getter_returns_invalid_archived_entry",
+             &InstructionTester::runGeneralizedLoopStateGetterReturnsInvalidArchivedEntry);
     runCustom("generalized_loop_control_slot_returns_canonical_when_stored_state_has_no_backedges",
              &InstructionTester::runGeneralizedLoopControlSlotReturnsCanonicalWhenStoredStateHasNoBackedges);
     runCustom("generalized_loop_target_slot_returns_canonical_when_stored_state_has_no_backedges",
