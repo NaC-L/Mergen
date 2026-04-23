@@ -6945,6 +6945,64 @@ bool runGeneralizedLoopControlFieldLoadQwordCreatesPhi(std::string& details) {
   return true;
 }
 
+// Full-width qword collapse companion to the existing qword create-phi
+// test. When canonical and backedge buffers hold the SAME qword at a
+// supported field offset, the helper returns the shared qword directly
+// rather than building a phi.
+bool runGeneralizedLoopControlFieldLoadQwordCollapsesWhenValuesMatch(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i8Ty = llvm::Type::getInt8Ty(context);
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t fieldOffset = 0xAULL;
+  constexpr uint64_t sharedField = 0x1111222233334444ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, canonicalControl + fieldOffset),
+                        makeI64(context, sharedField));
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, backedgeControl + fieldOffset),
+                        makeI64(context, sharedField));
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* controlSlotPtr = lifter.builder->CreateGEP(
+      i8Ty, lifter.memoryAlloc, makeI64(context, controlSlot),
+      "control_slot_ptr_qword_collapse");
+  auto* controlLoad =
+      lifter.builder->CreateLoad(i64Ty, controlSlotPtr, "control_cursor_qword_collapse");
+  auto* fieldAddress = lifter.builder->CreateAdd(
+      controlLoad, makeI64(context, fieldOffset), "control_field_addr_qword_collapse");
+  auto* resolved = lifter.GetMemoryValue(fieldAddress, 64);
+  if (llvm::isa<llvm::PHINode>(resolved)) {
+    details = "  qword control-field load should collapse to the shared qword, not produce a phi\n";
+    return false;
+  }
+  auto actual = readConstantAPInt(resolved);
+  if (!actual.has_value() || actual->getZExtValue() != sharedField) {
+    details = "  collapsed qword control-field should read back the shared qword value\n";
+    return false;
+  }
+  return true;
+}
+
 
   bool runSolvePathWidensMappedRvaTarget(std::string& details) {
     LifterUnderTest lifter;
@@ -8170,6 +8228,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopControlFieldLoadCreatesPhi);
     runCustom("generalized_loop_control_field_load_qword_creates_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadQwordCreatesPhi);
+    runCustom("generalized_loop_control_field_load_qword_collapses_when_values_match",
+             &InstructionTester::runGeneralizedLoopControlFieldLoadQwordCollapsesWhenValuesMatch);
     runCustom("solve_path_prefers_mapped_target_over_null_for_indirect_jump",
              &InstructionTester::runSolvePathPrefersMappedTargetOverNullForIndirectJump);
     runCustom("solve_path_widens_mapped_rva_target",
