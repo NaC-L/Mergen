@@ -2768,6 +2768,86 @@ bool runGeneralizedLoopNestedInnerTargetSlotUsesInnerState(
   return true;
 }
 
+// KNOWN-LIMITATION (nested loops make control_slot read the inner active
+// state, not the queried outer loop state).
+//
+// retrieve_generalized_loop_control_slot_value_impl also reads only the
+// scalar activeGeneralizedLoopControlFieldState. After an inner
+// load_generalized_backup overwrites that scalar, a control-slot read at the
+// outer header resolves using the inner loop's control values.
+//
+// When control_slot gains per-header lazy lookup (or nested active-state
+// stacking), this test MUST fail and be rewritten to assert the fixed
+// contract.
+bool runGeneralizedLoopNestedInnerControlSlotUsesInnerState(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* outerPreheader =
+      llvm::BasicBlock::Create(context, "outer_preheader", lifter.fnc);
+  auto* outerBackedge =
+      llvm::BasicBlock::Create(context, "outer_backedge", lifter.fnc);
+  auto* outerHeader =
+      llvm::BasicBlock::Create(context, "outer_header", lifter.fnc);
+  auto* innerPreheader =
+      llvm::BasicBlock::Create(context, "inner_preheader", lifter.fnc);
+  auto* innerBackedge =
+      llvm::BasicBlock::Create(context, "inner_backedge", lifter.fnc);
+  auto* innerHeader =
+      llvm::BasicBlock::Create(context, "inner_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t outerCanonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t outerBackedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t innerCanonicalControl = 0x1401BA72CULL;
+  constexpr uint64_t innerBackedgeControl = 0x1401BA97FULL;
+
+  lifter.builder->SetInsertPoint(outerPreheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, outerCanonicalControl));
+  lifter.branch_backup(outerHeader);
+
+  lifter.builder->SetInsertPoint(outerBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, outerBackedgeControl));
+  lifter.branch_backup(outerHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(outerHeader);
+
+  lifter.builder->SetInsertPoint(innerPreheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, innerCanonicalControl));
+  lifter.branch_backup(innerHeader);
+
+  lifter.builder->SetInsertPoint(innerBackedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, innerBackedgeControl));
+  lifter.branch_backup(innerHeader, /*generalized=*/true);
+  lifter.load_generalized_backup(innerHeader);
+
+  lifter.builder->SetInsertPoint(outerHeader);
+  auto* control = lifter.GetMemoryValue(makeI64(context, controlSlot), 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(control);
+  if (!phi || phi->getNumIncomingValues() != 2) {
+    details = "  current nested control_slot limitation should still produce the inner 2-way phi\n";
+    return false;
+  }
+  bool sawInnerCanonical = false, sawInnerBackedge = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == innerCanonicalControl) sawInnerCanonical = true;
+    else if (v == innerBackedgeControl) sawInnerBackedge = true;
+  }
+  if (!sawInnerCanonical || !sawInnerBackedge) {
+    details =
+        "  nested control_slot limitation should read the inner active state's control values, not the outer state's values\n";
+    return false;
+  }
+  return true;
+}
+
+
 
 // Multi-way rolled-control: record_generalized_loop_backedge appends or
 // updates per body source when the header has >=2 backedges. 1-backedge
@@ -9712,6 +9792,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopNestedInnerOverwritesOuterActiveState);
     runCustom("generalized_loop_nested_inner_target_slot_uses_inner_state",
              &InstructionTester::runGeneralizedLoopNestedInnerTargetSlotUsesInnerState);
+    runCustom("generalized_loop_nested_inner_control_slot_uses_inner_state",
+             &InstructionTester::runGeneralizedLoopNestedInnerControlSlotUsesInnerState);
     runCustom("record_generalized_loop_backedge_multiway_appends_new_body_source",
              &InstructionTester::runRecordGeneralizedLoopBackedgeMultiwayAppendsNewBodySource);
     runCustom("generalized_phi_address_three_way_resolves_all_incomings",
