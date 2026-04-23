@@ -4207,6 +4207,117 @@ bool runMigrateGeneralizedLoopBlockPreservesExistingNewBlockEntry(
   return true;
 }
 
+// make_generalized_loop_backup preserves R9 (shouldPreserveGeneralizedBackedgeRegisterIndex
+// index 9). Confirms the preserve list extends past RCX/RSP/R12 to R9 -
+// a hot loop_reg_phi lane in the Themida sample.
+bool runMakeGeneralizedLoopBackupPreservesConcreteR9OnFirstBackedge(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t canonicalR9 = 0x9000111122223333ULL;
+  constexpr uint64_t backedgeR9 = 0x9000444455556666ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.SetRegisterValue(RegisterUnderTest::R9,
+                          makeI64(context, canonicalR9));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetRegisterValue(RegisterUnderTest::R9,
+                          makeI64(context, backedgeR9));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* r9 = lifter.GetRegisterValue(RegisterUnderTest::R9);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(r9);
+  if (!phi) {
+    details = "  R9 should become a phi at the loop header\n";
+    return false;
+  }
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    if (llvm::isa<llvm::UndefValue>(phi->getIncomingValue(i))) {
+      details = "  R9 phi must not carry Undef - R9 is preserved (index 9)\n";
+      return false;
+    }
+  }
+  bool sawC = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalR9) sawC = true;
+    else if (v == backedgeR9) sawB = true;
+  }
+  if (!sawC || !sawB) {
+    details = "  R9 phi should carry both concrete values (preserve set)\n";
+    return false;
+  }
+  return true;
+}
+
+// retrieve_generalized_loop_target_slot_value_impl bails (returns
+// nullptr) when the canonical buffer has no tracked value at the
+// requested address, even when state is otherwise valid. The caller
+// then falls through to the normal memory pipeline.
+bool runGeneralizedLoopTargetSlotBailsWhenCanonicalBufferLacksSlot(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t loopCarriedSlot = 0x14004DC67ULL;  // gated address
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint64_t backedgeOnlyValue = 0xCDCDCDCDCDCDCDCDULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  // Deliberately do NOT seed the loopCarriedSlot on canonical.
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, loopCarriedSlot),
+                        makeI64(context, backedgeOnlyValue));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  // GetMemoryValue at loop-carried slot: target_slot helper bails
+  // because canonical buffer doesn't have a tracked value here.
+  // Fallback yields the live tracked value (backedge-side seeded).
+  auto* loaded = lifter.GetMemoryValue(makeI64(context, loopCarriedSlot), 64);
+  if (llvm::isa<llvm::PHINode>(loaded)) {
+    details = "  target_slot helper should bail when canonical buffer lacks "
+              "the slot; got an unexpected phi instead of fallback\n";
+    return false;
+  }
+  return true;
+}
+
 bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -5635,6 +5746,10 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMigrateGeneralizedLoopBlockNoOpWhenSameBlock);
     runCustom("migrate_generalized_loop_block_preserves_existing_new_block_entry",
              &InstructionTester::runMigrateGeneralizedLoopBlockPreservesExistingNewBlockEntry);
+    runCustom("make_generalized_loop_backup_preserves_concrete_r9_on_first_backedge",
+             &InstructionTester::runMakeGeneralizedLoopBackupPreservesConcreteR9OnFirstBackedge);
+    runCustom("generalized_loop_target_slot_bails_when_canonical_buffer_lacks_slot",
+             &InstructionTester::runGeneralizedLoopTargetSlotBailsWhenCanonicalBufferLacksSlot);
     runCustom("generalized_loop_restore_merges_backedge_flag_state",
              &InstructionTester::runGeneralizedLoopRestoreMergesBackedgeFlagState);
     runCustom("generalized_loop_restore_merges_backedge_register_state",
