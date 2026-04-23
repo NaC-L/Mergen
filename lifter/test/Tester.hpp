@@ -2554,6 +2554,112 @@ bool runGeneralizedLoopLoadGeneralizedBackupPrefersStoredStateOverFreshBackedgeB
   return true;
 }
 
+// getMostRecentGeneralizedLoopState prefers the ACTIVE state over any
+// archived entries. This is the direct state-getter counterpart to the
+// load_generalized_backup stored-state precedence test.
+bool runGeneralizedLoopStateGetterPrefersActiveStateOverArchive(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto* activeHeader =
+      llvm::BasicBlock::Create(lifter.context, "active_header", lifter.fnc);
+  auto* archivedHeader =
+      llvm::BasicBlock::Create(lifter.context, "archived_header", lifter.fnc);
+  auto* canonical =
+      llvm::BasicBlock::Create(lifter.context, "canonical", lifter.fnc);
+  auto* activeBackedge =
+      llvm::BasicBlock::Create(lifter.context, "active_backedge", lifter.fnc);
+  auto* archivedBackedge =
+      llvm::BasicBlock::Create(lifter.context, "archived_backedge", lifter.fnc);
+
+  lifter.activeGeneralizedLoopControlFieldState.valid = true;
+  lifter.activeGeneralizedLoopControlFieldState.headerBlock = activeHeader;
+  lifter.activeGeneralizedLoopControlFieldState.canonicalSource = canonical;
+  lifter.activeGeneralizedLoopControlFieldState.canonicalControl = 0x1111;
+  lifter.activeGeneralizedLoopControlFieldState.backedgeSources = {activeBackedge};
+  lifter.activeGeneralizedLoopControlFieldState.backedgeControls = {0x2222};
+
+  LifterUnderTest::GeneralizedLoopControlFieldState archived;
+  archived.valid = true;
+  archived.headerBlock = archivedHeader;
+  archived.canonicalSource = canonical;
+  archived.canonicalControl = 0x3333;
+  archived.backedgeSources = {archivedBackedge};
+  archived.backedgeControls = {0x4444};
+  lifter.generalizedLoopControlFieldStates[archivedHeader] = archived;
+
+  auto* state = lifter.getMostRecentGeneralizedLoopState();
+  if (!state || state->headerBlock != activeHeader ||
+      state->canonicalControl != 0x1111 ||
+      state->backedgeControls.front() != 0x2222) {
+    details = "  getMostRecentGeneralizedLoopState should prefer the active state over archived entries\n";
+    return false;
+  }
+  return true;
+}
+
+// getMostRecentGeneralizedLoopState falls back to the archived per-header
+// map when the active state is invalid.
+bool runGeneralizedLoopStateGetterFallsBackToArchivedState(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto* archivedHeader =
+      llvm::BasicBlock::Create(lifter.context, "archived_header", lifter.fnc);
+  auto* canonical =
+      llvm::BasicBlock::Create(lifter.context, "canonical", lifter.fnc);
+  auto* archivedBackedge =
+      llvm::BasicBlock::Create(lifter.context, "archived_backedge", lifter.fnc);
+
+  LifterUnderTest::GeneralizedLoopControlFieldState archived;
+  archived.valid = true;
+  archived.headerBlock = archivedHeader;
+  archived.canonicalSource = canonical;
+  archived.canonicalControl = 0x5555;
+  archived.backedgeSources = {archivedBackedge};
+  archived.backedgeControls = {0x6666};
+  lifter.generalizedLoopControlFieldStates[archivedHeader] = archived;
+
+  auto* state = lifter.getMostRecentGeneralizedLoopState();
+  if (!state || state->headerBlock != archivedHeader ||
+      state->canonicalControl != 0x5555 ||
+      state->backedgeControls.front() != 0x6666) {
+    details = "  getMostRecentGeneralizedLoopState should fall back to the archived map when active state is invalid\n";
+    return false;
+  }
+  return true;
+}
+
+// getGeneralizedLoopStateForHeader returns nullptr for null or missing
+// headers, and returns the stored valid entry for an exact header match.
+bool runGeneralizedLoopStateGetterByHeaderExactMatchOnly(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto* storedHeader =
+      llvm::BasicBlock::Create(lifter.context, "stored_header", lifter.fnc);
+  auto* otherHeader =
+      llvm::BasicBlock::Create(lifter.context, "other_header", lifter.fnc);
+
+  LifterUnderTest::GeneralizedLoopControlFieldState stored;
+  stored.valid = true;
+  stored.headerBlock = storedHeader;
+  stored.canonicalControl = 0x7777;
+  lifter.generalizedLoopControlFieldStates[storedHeader] = stored;
+
+  if (lifter.getGeneralizedLoopStateForHeader(nullptr) != nullptr) {
+    details = "  getGeneralizedLoopStateForHeader(nullptr) must return nullptr\n";
+    return false;
+  }
+  if (lifter.getGeneralizedLoopStateForHeader(otherHeader) != nullptr) {
+    details = "  getGeneralizedLoopStateForHeader(otherHeader) must return nullptr when no stored entry exists\n";
+    return false;
+  }
+  auto* state = lifter.getGeneralizedLoopStateForHeader(storedHeader);
+  if (!state || state->headerBlock != storedHeader || state->canonicalControl != 0x7777) {
+    details = "  getGeneralizedLoopStateForHeader should return the stored valid entry for an exact header match\n";
+    return false;
+  }
+  return true;
+}
+
 // Phi-address helper with 3-way phi (canonical + 2 distinct backedges).
 // After PR #123 relaxed the sanity check from `!= 2` to `< 2`, the helper
 // must match each incoming against canonicalSource or any of
@@ -7404,6 +7510,12 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runMigrateGeneralizedLoopBlockCopiesAllStateToNewBlock);
     runCustom("generalized_loop_load_generalized_backup_prefers_stored_state_over_fresh_backedge_backup",
              &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupPrefersStoredStateOverFreshBackedgeBackup);
+    runCustom("generalized_loop_state_getter_prefers_active_state_over_archive",
+             &InstructionTester::runGeneralizedLoopStateGetterPrefersActiveStateOverArchive);
+    runCustom("generalized_loop_state_getter_falls_back_to_archived_state",
+             &InstructionTester::runGeneralizedLoopStateGetterFallsBackToArchivedState);
+    runCustom("generalized_loop_state_getter_by_header_exact_match_only",
+             &InstructionTester::runGeneralizedLoopStateGetterByHeaderExactMatchOnly);
     runCustom("make_generalized_loop_backup_widens_rax_to_undef_on_first_backedge",
              &InstructionTester::runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge);
     runCustom("generalized_phi_address_with_negative_displacement_resolves_loaded_values",
