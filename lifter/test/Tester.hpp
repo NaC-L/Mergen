@@ -6028,6 +6028,74 @@ bool runGeneralizedLoopControlSlotByteCountSixteenFallsThrough(
   return true;
 }
 
+// retrieve_generalized_loop_control_slot_value_impl also rejects byteCount=0.
+// Exercise the lower-bound guard directly: a zero-width probe must not build
+// a generalized control-slot phi even when an active generalized-loop state exists.
+bool runGeneralizedLoopControlSlotByteCountZeroReturnsNull(std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge =
+      llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, canonicalControl));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot),
+                        makeI64(context, backedgeControl));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* result = lifter.retrieve_generalized_loop_control_slot_value(controlSlot, 0);
+  if (result != nullptr) {
+    details = "  control_slot helper must return nullptr for byteCount=0\n";
+    return false;
+  }
+  return true;
+}
+
+// load_generalized_backup clears any active generalized-loop state before it
+// decides whether backup data exists for the requested header. A missing header
+// should therefore leave no stale active state behind and should not crash.
+bool runGeneralizedLoopLoadGeneralizedBackupClearsStateWhenBackupMissing(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto* staleHeader =
+      llvm::BasicBlock::Create(lifter.context, "stale_header", lifter.fnc);
+  auto* staleSource =
+      llvm::BasicBlock::Create(lifter.context, "stale_source", lifter.fnc);
+  auto* missingHeader =
+      llvm::BasicBlock::Create(lifter.context, "missing_header", lifter.fnc);
+
+  lifter.activeGeneralizedLoopControlFieldState.valid = true;
+  lifter.activeGeneralizedLoopControlFieldState.headerBlock = staleHeader;
+  lifter.activeGeneralizedLoopControlFieldState.canonicalSource = staleSource;
+  lifter.activeGeneralizedLoopControlFieldState.canonicalControl = 0x1401AF740ULL;
+  lifter.activeGeneralizedLoopEntrySourceBlock = staleSource;
+
+  lifter.load_generalized_backup(missingHeader);
+  if (lifter.activeGeneralizedLoopControlFieldState.valid ||
+      lifter.activeGeneralizedLoopControlFieldState.headerBlock != nullptr ||
+      lifter.activeGeneralizedLoopControlFieldState.canonicalSource != nullptr ||
+      lifter.activeGeneralizedLoopEntrySourceBlock != nullptr) {
+    details =
+        "  load_generalized_backup(missing) must clear stale active loop state\n";
+    return false;
+  }
+  return true;
+}
+
 // load_generalized_backup with NO backedges (never saw a generalized=true
 // branch_backup) falls through to the canonical-only path, which calls
 // make_generalized_loop_backup with an empty ArrayRef. The resulting
@@ -10452,8 +10520,12 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopControlFieldLoadByteCountTwoCollapsesWhenValuesMatch);
     runCustom("generalized_loop_control_slot_byte_count_sixteen_falls_through",
              &InstructionTester::runGeneralizedLoopControlSlotByteCountSixteenFallsThrough);
+    runCustom("generalized_loop_control_slot_byte_count_zero_returns_null",
+             &InstructionTester::runGeneralizedLoopControlSlotByteCountZeroReturnsNull);
     runCustom("generalized_loop_backup_canonical_only_path_preserves_bbbackup_state",
              &InstructionTester::runGeneralizedLoopBackupCanonicalOnlyPathPreservesBBbackupState);
+    runCustom("generalized_loop_load_generalized_backup_clears_state_when_backup_missing",
+             &InstructionTester::runGeneralizedLoopLoadGeneralizedBackupClearsStateWhenBackupMissing);
     runCustom("generalized_loop_backup_canonical_only_path_leaves_flag_phis_empty",
              &InstructionTester::runGeneralizedLoopBackupCanonicalOnlyPathLeavesFlagPhisEmpty);
     runCustom("generalized_phi_address_unwraps_zext_cast_over_phi",
