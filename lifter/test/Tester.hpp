@@ -3957,6 +3957,7 @@ bool runGeneralizedLoopControlFieldLoadCollapsesWhenValuesMatch(
 
 
 
+
 // retrieve_generalized_loop_control_slot_value_impl bails on byteCount=0
 // and byteCount>8 via the `byteCount == 0 || byteCount > 8` guard. Test
 // the upper bound by requesting a 16-byte read at the control slot -
@@ -6375,6 +6376,66 @@ bool runSolvePathResolvesGeneralizedPhiLoadTarget(std::string& details) {
     return true;
   }
 
+// retrieve_generalized_loop_local_phi_address_value_impl unwraps integer
+// casts over the phi-of-addresses operand just like the non-local helper.
+// This covers the local helper's cast-unwrapping loop with a ZExt.
+bool runGeneralizedLoopLocalPhiAddressUnwrapsZExtCastOverPhi(
+    std::string& details) {
+  LifterUnderTest lifter;
+  auto& context = lifter.context;
+  auto* i32Ty = llvm::Type::getInt32Ty(context);
+  auto* i64Ty = llvm::Type::getInt64Ty(context);
+  auto* preheader =
+      llvm::BasicBlock::Create(context, "preheader", lifter.fnc);
+  auto* backedge = llvm::BasicBlock::Create(context, "backedge", lifter.fnc);
+  auto* loopHeader =
+      llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
+
+  constexpr uint64_t controlSlot = 0x14004DD19ULL;
+  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
+  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  constexpr uint32_t localSlotA = static_cast<uint32_t>(STACKP_VALUE);
+  constexpr uint32_t localSlotB = static_cast<uint32_t>(STACKP_VALUE + 8);
+  constexpr uint64_t valueA = 0x1111222233334444ULL;
+  constexpr uint64_t valueB = 0x5555666677778888ULL;
+
+  lifter.builder->SetInsertPoint(preheader);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, canonicalControl));
+  lifter.SetMemoryValue(makeI64(context, localSlotA), makeI64(context, valueA));
+  lifter.branch_backup(loopHeader);
+
+  lifter.builder->SetInsertPoint(backedge);
+  lifter.SetMemoryValue(makeI64(context, controlSlot), makeI64(context, backedgeControl));
+  lifter.SetMemoryValue(makeI64(context, localSlotB), makeI64(context, valueB));
+  lifter.branch_backup(loopHeader, /*generalized=*/true);
+
+  lifter.load_generalized_backup(loopHeader);
+  lifter.builder->SetInsertPoint(loopHeader);
+  auto* phi32 = lifter.builder->CreatePHI(i32Ty, 2, "local_stack_phi_i32");
+  phi32->addIncoming(llvm::ConstantInt::get(i32Ty, localSlotA), preheader);
+  phi32->addIncoming(llvm::ConstantInt::get(i32Ty, localSlotB), backedge);
+  auto* zextAddr = lifter.builder->CreateZExt(phi32, i64Ty, "local_stack_zext");
+  auto* resolved = lifter.GetMemoryValue(zextAddr, 64);
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(resolved);
+  if (!phi) {
+    details = "  local_phi_address helper should unwrap ZExt and produce a phi of loaded values\n";
+    return false;
+  }
+  bool sawA = false, sawB = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto actual = readConstantAPInt(phi->getIncomingValue(i));
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == valueA) sawA = true;
+    else if (v == valueB) sawB = true;
+  }
+  if (!sawA || !sawB) {
+    details = "  ZExt-wrapped local_phi_address load should resolve both incomings\n";
+    return false;
+  }
+  return true;
+}
+
 
   bool runGeneralizedLoopControlFieldLoadCreatesPhi(std::string& details) {
     constexpr std::array<uint64_t, 3> fieldOffsets = {0x6ULL, 0xAULL, 0xCULL};
@@ -7481,6 +7542,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runSolveLoadPhiAddressWithDisplacementCreatesPhiOfLoadedValues);
     runCustom("generalized_loop_local_phi_address_creates_phi_of_loaded_values",
              &InstructionTester::runGeneralizedLoopLocalPhiAddressCreatesPhiOfLoadedValues);
+    runCustom("generalized_loop_local_phi_address_unwraps_zext_cast_over_phi",
+             &InstructionTester::runGeneralizedLoopLocalPhiAddressUnwrapsZExtCastOverPhi);
     runCustom("structured_loop_header_allows_jump_chain",
              &InstructionTester::runStructuredLoopHeaderAllowsJumpChain);
 
