@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Themida preserves the guest binary's own imports (Win32 APIs) in the IAT,",
+    "but rewrites each call site from `call [rip+IAT]` to a VM-staged",
+    "`push target; ret` where `target` was loaded from the IAT by an upstream",
+    "VM handler. The lifter currently does not recognize this transfer pattern",
+    "as an import call, so the guest's externals do not surface in the IR.",
+    "See scripts/dev/trace_external_calls.py for a Unicorn-based tracer that",
+    "shows the real call mechanism at runtime.",
+    "",
+    "Themida strips its own SDK markers (VirtualizerSDK64.dll#103/#503,",
+    "VirtualizerStart/End) from the protected binary's IAT, so those",
+    "appear in the non-virt reference but not in the virt binary. The",
+    "ignore_imports pattern filters them out before update / compare."
+  ],
+  "samples": [
+    {
+      "name": "example2",
+      "reference_binary": "../testthemida/example2.bin",
+      "virt_binary": "../testthemida/example2-virt.bin",
+      "entry": "0x140001000",
+      "ignore_imports": ["^VirtualizerSDK64\\.dll#"],
+      "required_imports": [
+        "CharUpperA",
+        "GetStdHandle",
+        "ReadConsoleA",
+        "WriteConsoleA"
+      ]
+    }
+  ]
+}

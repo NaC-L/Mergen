@@ -763,10 +763,40 @@ public:
       }
       return false;
     };
+    // Diagnostic toggle: MERGEN_NO_LOOP_GEN=1 disables the entire loop-
+    // generalization gate.  Use this to measure how much of a lift's
+    // coverage/reachability depends on generalization vs. pure concrete
+    // exploration.  Expected effect: more instructions visited, smaller
+    // loops (no phi widening), potentially runaway lifts on real loops.
+    if (const char* env = std::getenv("MERGEN_NO_LOOP_GEN")) {
+      if (env[0] == '1' && env[1] == 0) return reject("env-disabled");
+    }
     if (getControlFlow() != ControlFlow::Unflatten) return reject("not-unflatten");
     if (!contextAllows) return reject("context-not-allowed");
     if (addr > blockInfo.block_address) return reject("forward-target");
     if (!visitedAddresses.contains(addr)) return reject("not-visited");
+    // Revisit-count threshold: let a structured-loop header execute
+    // concretely for the first N visits before switching to generalization.
+    // Short guest loops (< N iterations) fully unroll; long loops and VM
+    // dispatchers (which re-enter the header many times) still generalize.
+    // Tunable via MERGEN_GEN_MIN_REVISITS.
+    //
+    // Default 0 keeps the pre-existing behaviour (threshold never
+    // rejects). Non-zero values currently expose latent state-machinery
+    // bugs in the Themida VM dispatcher path (crashes at T=6/8/12 on
+    // example2-virt.bin) - experiment flag, not a production tuning yet.
+    unsigned revisitThreshold = 0;
+    if (const char* env = std::getenv("MERGEN_GEN_MIN_REVISITS")) {
+      char* end = nullptr;
+      unsigned long parsed = std::strtoul(env, &end, 10);
+      if (end != env && *end == '\0') {
+        revisitThreshold = static_cast<unsigned>(parsed);
+      }
+    }
+    auto attemptIt = liftAttemptCounts.find(addr);
+    const unsigned attempts =
+        attemptIt == liftAttemptCounts.end() ? 0 : attemptIt->second;
+    if (attempts < revisitThreshold) return reject("below-revisit-threshold");
     if (pendingLoopGeneralizationAddresses.contains(addr)) return reject("already-pending");
     if (generalizedLoopAddresses.contains(addr)) return reject("already-generalized");
     auto it = addrToBB.find(addr);
@@ -808,9 +838,7 @@ public:
 
   void liftBasicBlockFromAddress(uint64_t addr) {
     ++liftStats.blocks_attempted;
-    if (liftProgressDiagEnabled) {
-      ++liftAttemptCounts[addr];
-    }
+    ++liftAttemptCounts[addr];
     printvalue2(this->finished);
     printvalue2(this->run);
     this->run = 1;
