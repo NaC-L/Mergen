@@ -47,6 +47,7 @@ enum class DiagCode : uint16_t {
   OptimizationComplete      = 501,
   SignatureSearchComplete   = 502,
   LiftBlockBudgetExceeded   = 503,
+  IncompleteBlockSealed     = 504,
 
 };
 

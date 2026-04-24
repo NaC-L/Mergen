@@ -1401,6 +1401,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRegisterValue(const Register key,
   printvalue(value);
   Register newKey = getBiggestEncoding(key);
   SetRegisterValue_internal(newKey, value);
+  // Any write invalidates a stale import-provenance binding on this
+  // register; a later `call reg` must not emit a named external call
+  // unless a fresh `mov reg, [rip+iat]` re-tagged it.
+  registerImportSource.erase(newKey);
 
 }
 

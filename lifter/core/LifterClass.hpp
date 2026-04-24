@@ -359,6 +359,15 @@ public:
   // function declarations instead of opaque inttoptr calls.
   std::unordered_map<uint64_t, std::string> importMap;
 
+  // Register-indirect import provenance: maps a register (canonicalized to
+  // its 64-bit encoding via getBiggestEncoding) to the import name last
+  // loaded into it.  Set by lift_mov when the source is `[rip+disp]` with
+  // disp+RIP in importMap.  Cleared on every SetRegisterValue so any other
+  // write invalidates the binding.  Read by lift_call for register-indirect
+  // calls so `mov rsi, [rip+iat]; call rsi` resolves to a named external
+  // call instead of an opaque inttoptr.
+  std::unordered_map<Register, std::string> registerImportSource;
+
   // If targetVA is an import thunk, returns the import name.
   // Otherwise returns empty string.
   std::string resolveImportName(uint64_t targetVA) {
@@ -476,6 +485,12 @@ public:
         this->run = 0;
         this->finished = 1;
         builder->CreateUnreachable();
+        // Surface the bailout as a warning so callers can see that the
+        // lift reached an unmapped address (typically the result of a
+        // queued constant target that turned out not to be real code).
+        diagnostics.warning(
+            DiagCode::UnresolvedIndirectJump, addr,
+            "liftAddress: target address not mapped in image; emitted unreachable");
         return;
       }
       // what about the basicblock?
@@ -895,6 +910,13 @@ public:
         continue;
       llvm::IRBuilder<> fallbackBuilder(&BB);
       fallbackBuilder.CreateRet(llvm::UndefValue::get(fnc->getReturnType()));
+      // Surface the seal as a warning so silent dataflow corruption
+      // (ret undef -> noundef UB -> O2 unreachable) is visible in
+      // output_diagnostics.json instead of having to read the IR.
+      diagnostics.warning(
+          DiagCode::IncompleteBlockSealed, 0,
+          "Basic block '" + BB.getName().str() +
+              "' had no terminator; sealed with ret undef");
     }
   }
 
