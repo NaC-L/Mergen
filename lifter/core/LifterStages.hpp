@@ -126,6 +126,19 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
             size_t maxLen = fileSize - (hnOff + 2);
             if (strnlen(funcName, maxLen) == maxLen) continue;
             lifter->importMap[iatSlotVA] = funcName;
+            // Alias the hint/name entry's runtime VA to the same name.
+            // The Win32 loader replaces each IAT slot at startup with the
+            // resolved function pointer, but the lifter's static memory
+            // model returns the on-disk QWORD - which for name imports is
+            // the RVA of the hint/name entry.  Without this alias, when an
+            // obfuscated dispatcher loads the IAT slot and uses the value
+            // as a call/ret target, lift_call/lift_ret would see the hint/
+            // name address (e.g. 0x140002628 for GetStdHandle) and fail to
+            // recognise it as an import.  Including the alias lets the
+            // existing import-recognition paths fire on the lifter's
+            // pre-load value just as they do on the runtime value.
+            uint64_t hintNameVA = imageBase + hintNameRva;
+            lifter->importMap[hintNameVA] = funcName;
           }
         }
       }
