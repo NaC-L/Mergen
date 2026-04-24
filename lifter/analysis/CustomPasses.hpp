@@ -161,6 +161,23 @@ public:
           auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I);
           if (!GEP) continue;
           if (GEP->getPointerOperand() != memory) continue;
+          // Skip GEPs that escape via a call argument: migrating them to the
+          // stack alloca and then having a call use the resulting pointer
+          // blocks mem2reg/SROA, leaving hundreds of dead stack stores in
+          // the post-opt IR. Leave such GEPs through %memory - it is
+          // already a function argument, so escaping it costs nothing.
+          // Other non-load/store uses (ptrtoint, GEP-of-GEP, etc.) still
+          // get migrated; rewrite_smoke samples rely on that.
+          {
+            bool escapesViaCall = false;
+            for (auto* U : GEP->users()) {
+              if (llvm::isa<llvm::CallBase>(U)) {
+                escapesViaCall = true;
+                break;
+              }
+            }
+            if (escapesViaCall) continue;
+          }
           auto* OffOp = GEP->getOperand(GEP->getNumOperands() - 1);
 
           if (auto* CI = dyn_cast<ConstantInt>(OffOp)) {

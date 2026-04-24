@@ -298,7 +298,22 @@ public:
       funcArgInfo(Register::R9, I64, 1),
   };
 
-  static inline constexpr std::array<SignatureSpec, 33> kNamedFunctionSpecs = {{
+  // GetStdHandle(DWORD nStdHandle) -> HANDLE
+  // WriteConsoleA / ReadConsoleA  (HANDLE, ptr buf, count, ptr out)
+  static inline constexpr std::array<funcArgInfo, 4> kConsoleIOArgs = {
+      funcArgInfo(Register::RCX, I64, 0),
+      funcArgInfo(Register::RDX, I64, 1),
+      funcArgInfo(Register::R8,  I32, 0),
+      funcArgInfo(Register::R9,  I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 1> kCharUpperArgs = {
+      funcArgInfo(Register::RCX, I64, 1),
+  };
+  static inline constexpr std::array<funcArgInfo, 1> kGetStdHandleArgs = {
+      funcArgInfo(Register::RCX, I32, 0),
+  };
+
+  static inline constexpr std::array<SignatureSpec, 37> kNamedFunctionSpecs = {{
       {"MessageBoxW", nullptr, 0, kMessageBoxArgs.data(), kMessageBoxArgs.size()},
       {"MessageBoxA", nullptr, 0, kMessageBoxArgs.data(), kMessageBoxArgs.size()},
       {"GetTickCount64", nullptr, 0, nullptr, 0},
@@ -332,6 +347,10 @@ public:
       {"RegOpenKeyExW", nullptr, 0, kRegOpenKeyExWArgs.data(), kRegOpenKeyExWArgs.size()},
       {"RegQueryValueExW", nullptr, 0, kRegQueryValueExWArgs.data(), kRegQueryValueExWArgs.size()},
       {"RegCloseKey", nullptr, 0, kCloseHandleArgs.data(), kCloseHandleArgs.size()},
+      {"GetStdHandle", nullptr, 0, kGetStdHandleArgs.data(), kGetStdHandleArgs.size()},
+      {"WriteConsoleA", nullptr, 0, kConsoleIOArgs.data(), kConsoleIOArgs.size()},
+      {"ReadConsoleA",  nullptr, 0, kConsoleIOArgs.data(), kConsoleIOArgs.size()},
+      {"CharUpperA",    nullptr, 0, kCharUpperArgs.data(), kCharUpperArgs.size()},
   }};
 
   static std::unordered_map<std::string, functioninfo>& getNamedFunctionsByName() {
