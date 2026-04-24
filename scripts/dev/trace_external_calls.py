@@ -229,7 +229,16 @@ def trace(
     uc.mem_write(TEB_BASE + 0x10, struct.pack("<Q", STACK_BASE))
     uc.reg_write(ux.UC_X86_REG_MSR, (0xC0000101, TEB_BASE))  # IA32_GS_BASE
 
-    # Patch IAT: every slot points at a unique sentinel in unmapped space.
+    # Map a page of `ret` instructions at the sentinel base so each import
+    # sentinel address is a mapped minimal stub that immediately returns to
+    # its caller (the VM's pre-staged continuation). This lets the
+    # emulator continue past the first import and observe subsequent ones.
+    SENTINEL_PAGE_SIZE = 0x10000
+    uc.mem_map(SENTINEL_BASE, SENTINEL_PAGE_SIZE, unicorn.UC_PROT_READ | unicorn.UC_PROT_EXEC)
+    # Fill with 0xC3 (near ret) so any fetch within the page just rets.
+    uc.mem_write(SENTINEL_BASE, b"\xC3" * SENTINEL_PAGE_SIZE)
+    # Patch IAT: every slot points at a unique sentinel that now executes
+    # as a ret. The code_hook below uses sentinel_to_name to label calls.
     sentinel_to_name: Dict[int, str] = {}
     for i, (iat_va, fname) in enumerate(imports):
         sentinel = SENTINEL_BASE + i * 0x10
@@ -346,11 +355,21 @@ def trace(
                 f"[FETCH-SENTINEL] -> {name}  insn={state['insns']}  "
                 f"last_pc=0x{state['last_pc']:x}  rsp=0x{rsp_now:x}  ret_to=0x{ret_to:x}"
             )
-        else:
-            print(
-                f"[UNMAPPED] addr=0x{addr:x}  insn={state['insns']}  "
-                f"last_pc=0x{state['last_pc']:x}  rsp=0x{rsp_now:x}  ret_to=0x{ret_to:x}"
-            )
+            # Simulate the import returning: set RIP=ret_to, bump rsp
+            # (the original ret already popped, so just jump to the saved
+            # return address). Also stash a fake return in RAX so callers
+            # don't blow up on checks.
+            try:
+                uc.reg_write(ux.UC_X86_REG_RIP, ret_to)
+                uc.reg_write(ux.UC_X86_REG_RAX, 0x1234)
+                return True  # handled; continue execution
+            except Exception as exc:
+                print(f"  [!] failed to redirect: {exc}")
+                return False
+        print(
+            f"[UNMAPPED] addr=0x{addr:x}  insn={state['insns']}  "
+            f"last_pc=0x{state['last_pc']:x}  rsp=0x{rsp_now:x}  ret_to=0x{ret_to:x}"
+        )
         return False  # let unicorn raise; we'll handle in the outer try
 
     uc.hook_add(UC_HOOK_CODE, code_hook)
