@@ -1186,6 +1186,11 @@ public:
   std::set<uint64_t> generalizedLoopAddresses;
   std::set<uint64_t> pendingLoopGeneralizationAddresses;
   std::set<uint64_t> stackBypassGeneralizedLoopAddresses;
+  // PCs where the ret-to-IAT chain (lift_ret) has successfully recognised
+  // a concrete import call. Used to suppress the UnresolvedRetChain
+  // warning for downstream symbolic re-entries of the same PC - the
+  // concrete semantics are already captured by the earlier chain site.
+  std::set<uint64_t> chainedImportRetSites;
   llvm::DenseMap<uint64_t, llvm::BasicBlock*> addrToBB;
 
   // creates an edge to created bb

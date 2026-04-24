@@ -539,6 +539,7 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
         if (!visitedAddresses.contains(contVA)) {
           addUnvisitedAddr(BBInfo(contVA, contBB));
         }
+        chainedImportRetSites.insert(current_address - instruction.length);
         destination = contVA;
         // Stop the outer per-instruction lift loop for this block: the
         // chain has emitted the block's terminator (br to contBB). Any
@@ -556,12 +557,17 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   ScopedPathSolveContext pathSolveContext(this, PathSolveContext::Ret);
   auto pathResult = solvePath(function, destination, realval);
   if (pathResult == PATH_unsolved) {
-    ++liftStats.blocks_unreachable;
     uint64_t diagAddr = current_address - instruction.length;
-    std::cout << "[diag] lift_ret: unresolved ROP chain at 0x"
-              << std::hex << diagAddr << std::dec << "\n" << std::flush;
-    diagnostics.warning(DiagCode::UnresolvedRetChain, diagAddr,
-                        "Unresolved ROP chain (ret to symbolic address)");
+    // Suppress the warning when this PC has already been recognised as a
+    // concrete VM-staged import ret-site by an earlier chain fire; the
+    // symbolic re-entry here carries no new information.
+    if (chainedImportRetSites.find(diagAddr) == chainedImportRetSites.end()) {
+      ++liftStats.blocks_unreachable;
+      std::cout << "[diag] lift_ret: unresolved ROP chain at 0x"
+                << std::hex << diagAddr << std::dec << "\n" << std::flush;
+      diagnostics.warning(DiagCode::UnresolvedRetChain, diagAddr,
+                          "Unresolved ROP chain (ret to symbolic address)");
+    }
   }
 
   // If the callee returned to our speculative call's return address,
