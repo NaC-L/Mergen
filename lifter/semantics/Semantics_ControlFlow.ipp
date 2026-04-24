@@ -510,14 +510,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   // the import VA for further lifting.
   //
   // A chained-continuation variant (pop the pre-staged continuation and
-  // feed it to solvePath so exploration continues to the next VM handler)
-  // was tried here, including a mapped-address safety guard on the first
-  // chain step. Chaining reliably crashes the lifter on T>=32 runs of
-  // example2-virt.bin after exploring past the first import call. The
-  // crash is downstream of the chain itself (in one of the additional
-  // blocks that chaining unlocks), so the guard does not catch it. Needs
-  // a deeper root-cause investigation before chaining is safe to land.
-  
+  // feed it to solvePath) was tried again at the current shape-aware
+  // defaults: at effective T=16 on IndirectJump it safely fires once
+  // (GetStdHandle @ 0x14017fa77, continuation 0x1401c888e) and explores
+  // 40 more blocks, but does not surface any additional imports (still
+  // 1/4). At T>=32 it still crashes at ~1891 blocks deep. The chain is
+  // not wired in because: (a) the T>=32 crash blocks broader use, and
+  // (b) at safe T=16 the post-chain exploration does not reach other
+  // import ret sites within the generalization-bounded budget. See #187
+  // for the chain tombstone.
+
   ScopedPathSolveContext pathSolveContext(this, PathSolveContext::Ret);
   auto pathResult = solvePath(function, destination, realval);
   if (pathResult == PATH_unsolved) {
