@@ -503,22 +503,47 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   }
 
   SetRegisterValue(Register::RSP, rsp_result);
-  // Ret-to-IAT import recognition is centralised in the PathSolver
-  // resolveTargetBlock hook: it catches any solvePath resolution whose
-  // target lands in importMap (IAT VA or hint/name alias), creates a
-  // leaf block with 'call @import(); unreachable', and does not queue
-  // the import VA for further lifting.
-  //
-  // A chained-continuation variant (pop the pre-staged continuation and
-  // feed it to solvePath) was tried again at the current shape-aware
-  // defaults: at effective T=16 on IndirectJump it safely fires once
-  // (GetStdHandle @ 0x14017fa77, continuation 0x1401c888e) and explores
-  // 40 more blocks, but does not surface any additional imports (still
-  // 1/4). At T>=32 it still crashes at ~1891 blocks deep. The chain is
-  // not wired in because: (a) the T>=32 crash blocks broader use, and
-  // (b) at safe T=16 the post-chain exploration does not reach other
-  // import ret sites within the generalization-bounded budget. See #187
-  // for the chain tombstone.
+
+  if (auto* targetConst = llvm::dyn_cast<llvm::ConstantInt>(realval)) {
+    uint64_t targetVA =
+        normalizeFileBackedRuntimeTargetAddress(targetConst->getZExtValue());
+    auto importIt = importMap.find(targetVA);
+    if (importIt != importMap.end()) {
+      auto* contVal = GetMemoryValue(getSPaddress(), 64);
+      if (auto* contConst = llvm::dyn_cast<llvm::ConstantInt>(contVal)) {
+        uint64_t contVA = contConst->getZExtValue();
+        const std::string& importName = importIt->second;
+        // Emit `call @import` but with an EMPTY volatileRegs set so the
+        // lifter does not clobber caller-saved GPRs post-call. Rationale:
+        // VM-staged imports are invoked from a dispatcher that preserves
+        // its own caller-saved state across the external call in the
+        // real binary (otherwise the VM would be broken). Clobbering
+        // those regs in the lifter makes the dispatcher's next step
+        // non-concrete, trapping further exploration in one handler.
+        auto* externFuncType = parseArgsType(
+            signatures.getFunctionInfo(importName), builder->getContext());
+        llvm::Function* externFunc = llvm::cast<llvm::Function>(
+            fnc->getParent()
+                ->getOrInsertFunction(importName, externFuncType)
+                .getCallee());
+        std::vector<llvm::Value*> args =
+            parseArgs(signatures.getFunctionInfo(importName));
+        auto* callResult = builder->CreateCall(externFunc, args);
+        auto fx = buildUnknownCallFx();
+        fx.target = CallTargetClass::KnownByName;
+        fx.volatileRegs = {};
+        applyPostCallEffects(callResult, fx);
+        auto* contBB = getOrCreateBB(contVA,
+            "bb_after_import_" + importName + "_" + std::to_string(contVA));
+        builder->CreateBr(contBB);
+        if (!visitedAddresses.contains(contVA)) {
+          addUnvisitedAddr(BBInfo(contVA, contBB));
+        }
+        destination = contVA;
+        return;
+      }
+    }
+  }
 
   ScopedPathSolveContext pathSolveContext(this, PathSolveContext::Ret);
   auto pathResult = solvePath(function, destination, realval);
