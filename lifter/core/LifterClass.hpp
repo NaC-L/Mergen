@@ -797,9 +797,13 @@ public:
     // Tunable via MERGEN_GEN_MIN_REVISITS.
     //
     // Default 0 keeps the pre-existing behaviour (threshold never
-    // rejects). Non-zero values currently expose latent state-machinery
-    // bugs in the Themida VM dispatcher path (crashes at T=6/8/12 on
-    // example2-virt.bin) - experiment flag, not a production tuning yet.
+    // rejects). Non-zero values currently regress the rewrite_smoke
+    // VM-loop samples (their IR shape expects generalisation to fire
+    // immediately). Themida-style targets benefit from T=16+ but the
+    // knob is exposed rather than defaulted until a shape-aware
+    // heuristic can distinguish a VM dispatcher from a simple loop.
+    // Values {6, 8, 12} crash on example2-virt.bin - unrelated
+    // dispatcher-state bug; avoid those when sweeping.
     unsigned revisitThreshold = 0;
     if (const char* env = std::getenv("MERGEN_GEN_MIN_REVISITS")) {
       char* end = nullptr;

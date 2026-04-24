@@ -84,11 +84,42 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     bool generalizedBackup;
   };
 
+  auto importBlocks = std::make_shared<std::unordered_map<uint64_t, BasicBlock*>>();
+  auto resolveImportTarget = [&, this, importBlocks](uint64_t target) -> BasicBlock* {
+    auto importIt = importMap.find(target);
+    if (importIt == importMap.end()) return nullptr;
+    auto cached = importBlocks->find(target);
+    if (cached != importBlocks->end()) return cached->second;
+    const std::string& importName = importIt->second;
+    BasicBlock* importBB = BasicBlock::Create(
+        builder->getContext(), "bb_import_" + importName, fnc);
+    BasicBlock* savedBB = builder->GetInsertBlock();
+    auto savedIP = builder->GetInsertPoint();
+    builder->SetInsertPoint(importBB);
+    callFunctionIR(importName, nullptr);
+    builder->CreateUnreachable();
+    builder->SetInsertPoint(savedBB, savedIP);
+    diagnostics.info(
+        DiagCode::CallOutlinedImportThunk,
+        current_address - instruction.length,
+        "Resolved indirect-transfer import: " + importName);
+    (*importBlocks)[target] = importBB;
+    return importBB;
+  };
+
   auto resolveTargetBlock = [&](uint64_t target, const std::string& name)
       -> ResolvedTargetBlock {
     if (auto* reused = getLiftedBackedgeBB(target)) {
       record_generalized_loop_backedge(reused);
       return {reused, true, false};
+    }
+    // Import recognition: if the resolved target is an entry in importMap
+    // (IAT slot VA or its hint/name VA alias), the transfer is actually
+    // a call to a named external function.  Materialise a leaf block with
+    // call @import + unreachable so we do not follow into Kernel32 or
+    // try to lift the on-disk hint/name bytes as code.
+    if (auto* importBB = resolveImportTarget(target)) {
+      return {importBB, /*reusedBackedge=*/false, /*generalizedBackup=*/false};
     }
 
     const bool backwardVisitedTarget =
