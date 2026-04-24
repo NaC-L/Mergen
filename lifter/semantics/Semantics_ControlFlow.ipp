@@ -558,16 +558,32 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   auto pathResult = solvePath(function, destination, realval);
   if (pathResult == PATH_unsolved) {
     uint64_t diagAddr = current_address - instruction.length;
-    // Suppress the warning when this PC has already been recognised as a
-    // concrete VM-staged import ret-site by an earlier chain fire; the
-    // symbolic re-entry here carries no new information.
-    if (chainedImportRetSites.find(diagAddr) == chainedImportRetSites.end()) {
+    const bool chained =
+        chainedImportRetSites.find(diagAddr) != chainedImportRetSites.end();
+    if (!chained) {
       ++liftStats.blocks_unreachable;
-      std::cout << "[diag] lift_ret: unresolved ROP chain at 0x"
-                << std::hex << diagAddr << std::dec << "\n" << std::flush;
       diagnostics.warning(DiagCode::UnresolvedRetChain, diagAddr,
                           "Unresolved ROP chain (ret to symbolic address)");
     }
+    // Block is currently unterminated: solvePath did not resolve the popped
+    // RIP, no chain fired, and we are at a `ret`. The most accurate
+    // semantic is "return to a caller we do not have context for" -
+    // degrade to REAL_return behaviour: emit `ret rax` and stop the
+    // block. This keeps the IR well-formed, lets DCE collapse the block
+    // if it ends up unreachable, and prevents the outer per-instruction
+    // lift loop from advancing past the ret and emitting a second
+    // terminator into the same block.
+    if (!builder->GetInsertBlock()->getTerminator()) {
+      auto rax = GetRegisterValue(Register::RAX);
+      rax = createZExtOrTruncFolder(
+          rax,
+          llvm::Type::getIntNTy(
+              context, file.getMode() == arch_mode::X64 ? 64 : 32));
+      builder->CreateRet(rax);
+    }
+    run = 0;
+    finished = 1;
+    return;
   }
 
   // If the callee returned to our speculative call's return address,
