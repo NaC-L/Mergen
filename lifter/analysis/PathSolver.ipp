@@ -119,7 +119,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
     // call @import + unreachable so we do not follow into Kernel32 or
     // try to lift the on-disk hint/name bytes as code.
     if (auto* importBB = resolveImportTarget(target)) {
-      return {importBB, /*reusedBackedge=*/false, /*generalizedBackup=*/false};
+      // Mark as reusedBackedge so solvePath skips queuing the target for
+      // further lifting - the import block is a terminal leaf, attempting
+      // to lift at its 'address' (an IAT slot or hint/name VA) would try
+      // to decode on-disk data as code.
+      return {importBB, /*reusedBackedge=*/true, /*generalizedBackup=*/false};
     }
 
     const bool backwardVisitedTarget =
