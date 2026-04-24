@@ -174,13 +174,25 @@ python test.py micro
 python test.py baseline
 ```
 
-For changes that touch register/flag phi shape, also re-run the Themida sample to confirm the 2544-instruction benchmark holds:
+For changes that touch register/flag phi shape, also run the two Themida gates — a coverage gate and a correctness gate. Both must stay green (or at least not regress).
+
+**Coverage gate** — confirms the VM unrolls without crashing:
 
 ```
 build_iced\lifter.exe ..\testthemida\example2-virt.bin 0x140001000
 ```
 
-and inspect `output_diagnostics.json` for `lift_stats.instructions_lifted == 2544` and `summary.warning == 0`, `summary.error == 0`.
+Inspect `output_diagnostics.json` for `lift_stats.instructions_lifted == 2544` and `summary.warning == 0`, `summary.error == 0`. This only certifies that the lifter walked the VM's 2544 handler instructions without reporting errors — it does **not** certify that the recovered IR is semantically equivalent to the original function.
+
+**Correctness gate** — confirms the devirtualized IR calls the same external imports as the non-virtualized reference:
+
+```
+python test.py themida
+```
+
+Fails hard if any required import from `scripts/rewrite/themida_samples.json` is missing from the lifted IR. Required imports are pinned against a lift of the non-virt reference binary; regenerate with `python test.py themida --update` when the reference changes (not when the virt output changes). Passing this gate means the VM devirtualization recovered the guest program's external-call semantics, not just the VM's own state-machine activity.
+
+This gate is currently **red** on `example2-virt.bin`: the lifter unrolls the VM but does not surface the guest's `GetStdHandle` / `WriteConsoleA` / `ReadConsoleA` / `CharUpperA` calls. That gap is the active Themida-frontier work item — the coverage gate passing while the correctness gate fails is exactly the failure mode the two-gate split is designed to make visible.
 
 ## Known limitations
 
