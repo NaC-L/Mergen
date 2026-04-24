@@ -35,6 +35,7 @@ try:
     import unicorn
     from unicorn import Uc, UC_ARCH_X86, UC_MODE_64
     from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_UNMAPPED, UC_HOOK_INSN_INVALID
+    from unicorn import UC_HOOK_MEM_WRITE
     from unicorn import x86_const as ux
 except ImportError as exc:
     sys.exit(f"Missing dependency: {exc}. pip install unicorn capstone")
@@ -192,6 +193,7 @@ def trace(
     max_insns: int,
     max_hits: int,
     verbose_calls: bool,
+    dump_visited: Optional[Path] = None,
 ) -> int:
     data = binary.read_bytes()
     info = _parse_pe(data)
@@ -253,9 +255,24 @@ def trace(
         "last_pc": entry,
     }
 
+    # Ordered list of unique instruction PCs (each address recorded once, in
+    # the order the emulator first executes it). Useful for diffing against
+    # the lifter's reached-addresses list to find the divergence point.
+    visited_pcs: List[int] = []
+    visited_set: set = set()
+
+    # Every time a stack write stores a sentinel value, record
+    # (sentinel, writer_pc, stack_addr, insn_count). Themida obfuscates with
+    # push-pop swap gadgets so a single sentinel may be staged transiently
+    # multiple times before the final ret picks it up.
+    sentinel_pushes: List[Tuple[int, int, int, int]] = []
+
     def code_hook(_uc, addr, size, _ud):
         state["insns"] += 1
         state["last_pc"] = addr
+        if addr not in visited_set:
+            visited_set.add(addr)
+            visited_pcs.append(addr)
         if state["insns"] > max_insns:
             uc.emu_stop()
             return
@@ -339,6 +356,17 @@ def trace(
     uc.hook_add(UC_HOOK_CODE, code_hook)
     uc.hook_add(UC_HOOK_MEM_UNMAPPED, unmapped_hook)
 
+    def mem_write_hook(_uc, _access, addr, size, value, _ud):
+        if size != 8:
+            return
+        if not (STACK_BASE <= addr < STACK_BASE + STACK_SIZE):
+            return
+        uv = value & 0xFFFFFFFFFFFFFFFF
+        if uv in sentinel_to_name:
+            sentinel_pushes.append((uv, state["last_pc"], addr, state["insns"]))
+
+    uc.hook_add(UC_HOOK_MEM_WRITE, mem_write_hook)
+
     print(f"\n[run] starting emulation @ 0x{entry:x}, max_insns={max_insns}\n")
     try:
         uc.emu_start(entry, 0, count=max_insns)
@@ -353,6 +381,23 @@ def trace(
     print(f"sentinel hits         : {len(state['hits'])}")
     for callsite, mn, kind, target, name in state["hits"]:
         print(f"  @0x{callsite:x}  {mn:<4}  kind={kind:<24}  -> {name}")
+    if sentinel_pushes:
+        print(f"\n--- sentinel push history ({len(sentinel_pushes)} stack writes) ---")
+        from collections import defaultdict
+        per_sent: Dict[int, List[Tuple[int, int, int]]] = defaultdict(list)
+        for s, pc, a, n in sentinel_pushes:
+            per_sent[s].append((pc, a, n))
+        for sent, events in per_sent.items():
+            name = sentinel_to_name[sent]
+            print(f"  {name}: {len(events)} pushes; last 5:")
+            for pc, a, n in events[-5:]:
+                print(f"      insn={n:>7} @0x{pc:x} -> [0x{a:x}]")
+    if dump_visited is not None:
+        dump_visited.write_text(
+            "\n".join(f"0x{a:x}" for a in visited_pcs) + "\n",
+            encoding="utf-8",
+        )
+        print(f"dumped {len(visited_pcs)} unique PCs to {dump_visited}")
     return 0 if state["hits"] else 1
 
 
@@ -365,6 +410,8 @@ def main() -> None:
                     help="stop after this many distinct external-call observations")
     ap.add_argument("--verbose-calls", action="store_true",
                     help="log every call/jmp, not just the external ones")
+    ap.add_argument("--dump-visited", type=Path, default=None,
+                    help="write newline-separated unique PCs executed, in order")
     args = ap.parse_args()
     sys.exit(trace(
         args.binary,
@@ -372,6 +419,7 @@ def main() -> None:
         max_insns=args.max_insns,
         max_hits=args.max_hits,
         verbose_calls=args.verbose_calls,
+        dump_visited=args.dump_visited,
     ))
 
 
