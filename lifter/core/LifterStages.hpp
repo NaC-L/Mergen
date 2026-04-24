@@ -26,6 +26,13 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
     lifter->liftProgressDiagEnabled =
         value == "1" || value == "true" || value == "TRUE";
   }
+  if (const char* env = std::getenv("MERGEN_MAX_BLOCK_BUDGET")) {
+    char* end = nullptr;
+    unsigned long parsed = std::strtoul(env, &end, 10);
+    if (end != env && *end == '\0') {
+      lifter->maxBasicBlockBudget = static_cast<uint32_t>(parsed);
+    }
+  }
   // Memory policy configured later in prepareLifterStageContext
   // when RuntimeImageContext (with PE stack reserve) is available.
 
