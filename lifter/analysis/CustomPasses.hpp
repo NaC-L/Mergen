@@ -259,6 +259,70 @@ public:
   }
 };
 
+// Drops trailing stores to `inttoptr (i64 K to ptr)` constants that sit
+// before a terminator with no observable consumer in between.
+//
+// The lifter's pseudo-memory model emits writes to obfuscator-controlled
+// scratch regions (Themida's `.vlizer` slots, register-spill scratch in
+// `.data`, etc.) as `store ... ptr inttoptr (i64 K to ptr)`. LLVM's DSE
+// treats those stores conservatively because every `inttoptr` constant
+// can theoretically alias an externally observable pointer, so they
+// survive `-O2` even when nothing in the lifted function reads them.
+//
+// We know better: anything written between the last side-effecting
+// instruction (call/load/store-through-non-inttoptr/fence) and a `ret`
+// or `unreachable` terminator is dead - the function does not read
+// it, and the lifter never exposes those concrete addresses to the
+// caller. Walk each block backwards from its terminator and drop the
+// trailing run of inttoptr-constant stores.
+class StripTrailingScratchStoresPass
+    : public llvm::PassInfoMixin<StripTrailingScratchStoresPass> {
+public:
+  static bool isInttoptrConstantStore(const llvm::StoreInst* SI) {
+    auto* ptr = SI->getPointerOperand();
+    if (auto* CE = llvm::dyn_cast<llvm::ConstantExpr>(ptr)) {
+      return CE->getOpcode() == llvm::Instruction::IntToPtr &&
+             llvm::isa<llvm::ConstantInt>(CE->getOperand(0));
+    }
+    if (auto* I = llvm::dyn_cast<llvm::IntToPtrInst>(ptr)) {
+      return llvm::isa<llvm::ConstantInt>(I->getOperand(0));
+    }
+    return false;
+  }
+
+  llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager&) {
+    bool changed = false;
+    for (auto& F : M) {
+      for (auto& BB : F) {
+        auto* term = BB.getTerminator();
+        if (!term) continue;
+        if (!llvm::isa<llvm::ReturnInst>(term) &&
+            !llvm::isa<llvm::UnreachableInst>(term)) continue;
+        // Walk backwards from the terminator over the trailing run of
+        // dead inttoptr-constant stores.
+        std::vector<llvm::StoreInst*> toErase;
+        for (auto it = BB.rbegin(); it != BB.rend(); ++it) {
+          auto& I = *it;
+          if (&I == term) continue;
+          auto* SI = llvm::dyn_cast<llvm::StoreInst>(&I);
+          if (SI && !SI->isVolatile() && !SI->isAtomic() &&
+              isInttoptrConstantStore(SI)) {
+            toErase.push_back(SI);
+            continue;
+          }
+          break;
+        }
+        for (auto* SI : toErase) {
+          SI->eraseFromParent();
+          changed = true;
+        }
+      }
+    }
+    return changed ? llvm::PreservedAnalyses::none()
+                   : llvm::PreservedAnalyses::all();
+  }
+};
+
 // refactor & template for filereader
 class GEPLoadPass : public llvm::PassInfoMixin<GEPLoadPass> {
 public:
