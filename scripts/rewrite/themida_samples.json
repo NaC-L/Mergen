@@ -1,0 +1,19 @@
+{
+  "samples": [
+    {
+      "name": "example2",
+      "reference_binary": "../testthemida/example2.bin",
+      "virt_binary": "../testthemida/example2-virt.bin",
+      "entry": "0x140001000",
+      "ignore_imports": [
+        "^VirtualizerSDK64\\.dll#"
+      ],
+      "required_imports": [
+        "CharUpperA",
+        "GetStdHandle",
+        "ReadConsoleA",
+        "WriteConsoleA"
+      ]
+    }
+  ]
+}

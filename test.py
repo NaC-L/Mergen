@@ -18,6 +18,7 @@ DEFAULT_VECTORS = ROOT / "lifter" / "test" / "test_vectors" / "oracle_vectors.js
 IR_OUTPUT_DIR = ROOT.parent / "rewrite-regression-work" / "ir_outputs"
 GOLDEN_HASHES_FILE = ROOT / "lifter" / "test" / "test_vectors" / "golden_ir_hashes.json"
 SEMANTIC_SCRIPT = REWRITE_DIR / "check_semantic.py"
+THEMIDA_SCRIPT = REWRITE_DIR / "check_themida_equivalence.py"
 
 # C-compiled samples produce toolchain-dependent IR (different addresses across
 # compiler versions/machines). Exclude them from golden hash determinism checks;
@@ -254,6 +255,15 @@ def run_vmp(filter_tokens: List[str]) -> None:
     _run(args)
 
 
+def run_themida(filter_tokens: List[str], update: bool) -> None:
+    args = [sys.executable, str(THEMIDA_SCRIPT)]
+    if update:
+        args.append("--update")
+    if filter_tokens:
+        args.extend(filter_tokens)
+    _run(args)
+
+
 def run_negative_checks() -> None:
     lifter_path = ROOT / "build_iced" / "lifter.exe"
     if not lifter_path.exists():
@@ -423,6 +433,16 @@ def parse_args() -> argparse.Namespace:
         help="attempt local VMP target lifts (recommended for big control-flow/semantics changes)",
     )
     vmp.add_argument("filter", nargs="*", help="optional VMP target name filter tokens")
+    themida = sub.add_parser(
+        "themida",
+        help="run Themida devirtualization import-equivalence checks",
+    )
+    themida.add_argument(
+        "--update",
+        action="store_true",
+        help="regenerate required_imports from reference binaries",
+    )
+    themida.add_argument("filter", nargs="*", help="optional sample name filter tokens")
     return parser.parse_args()
 
 
@@ -481,6 +501,10 @@ def main() -> None:
 
     if command == "vmp":
         run_vmp(args.filter)
+        return
+
+    if command == "themida":
+        run_themida(args.filter, args.update)
         return
 
     if command == "flags":
