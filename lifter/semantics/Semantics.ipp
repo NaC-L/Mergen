@@ -56,6 +56,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::liftInstructionSemantics() {
 #include "x86_64_opcodes.x"
 #undef OPCODE
 #undef OPCODE_CASE
+  case Mnemonic::INT1:
+  case Mnemonic::INT3:
   case Mnemonic::UD2: {
     Function* externFunc = cast<Function>(
         fnc->getParent()
