@@ -81,6 +81,19 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
           // name lookup (common with bound imports and some linkers).
           if (iltOff == 0) iltOff = iatOff;
 
+          // Resolve DLL name once per descriptor.  Used as the namespace
+          // prefix when synthesizing a name for ordinal imports that
+          // have no hint/name entry.
+          std::string dllName;
+          if (auto dllNameOff = lifter->file.RvaToFileOffset(imports->rva_name);
+              dllNameOff != 0 && dllNameOff < fileSize) {
+            const char* raw =
+                reinterpret_cast<const char*>(fileBase + dllNameOff);
+            size_t dllMaxLen = fileSize - dllNameOff;
+            if (strnlen(raw, dllMaxLen) < dllMaxLen) dllName = raw;
+          }
+          if (dllName.empty()) dllName = "unknown";
+
           auto* ilt = reinterpret_cast<const uint64_t*>(fileBase + iltOff);
           uint32_t iatRva = imports->rva_first_thunk;
           // Cap iteration to prevent walking off mapped memory when the
@@ -89,8 +102,17 @@ createConfiguredLifterForRuntime(uint8_t* fileBase, size_t fileSize,
 
           for (size_t i = 0; i < maxIltEntries && ilt[i] != 0; ++i) {
             uint64_t iatSlotVA = imageBase + iatRva + i * 8;
-            // Bit 63 set = import by ordinal, no name available.
-            if (ilt[i] & (1ULL << 63)) continue;
+            // Bit 63 set = import by ordinal.  Synthesize "<dll>#<ord>"
+            // so the fast path in lift_call resolves and we emit a named
+            // external declaration instead of falling through to operand
+            // dispatch (which would treat raw on-disk IAT bytes as a
+            // jump target and silently corrupt the lift).
+            if (ilt[i] & (1ULL << 63)) {
+              uint16_t ordinal = static_cast<uint16_t>(ilt[i] & 0xFFFF);
+              lifter->importMap[iatSlotVA] =
+                  dllName + "#" + std::to_string(ordinal);
+              continue;
+            }
             // Bits 30:0 = RVA to hint/name entry {uint16_t hint; char name[]}.
             uint32_t hintNameRva = static_cast<uint32_t>(ilt[i] & 0x7FFFFFFF);
             auto hnOff = lifter->file.RvaToFileOffset(hintNameRva);
