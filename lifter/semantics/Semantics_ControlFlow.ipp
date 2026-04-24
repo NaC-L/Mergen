@@ -540,6 +540,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
           addUnvisitedAddr(BBInfo(contVA, contBB));
         }
         destination = contVA;
+        // Stop the outer per-instruction lift loop for this block: the
+        // chain has emitted the block's terminator (br to contBB). Any
+        // further instruction lift here would emit a SECOND terminator,
+        // leaving the block malformed - the second br silently orphans
+        // everything the chain's first br reached, so the new import's
+        // call ends up in a dead BB that O2 then DCEs.
+        run = 0;
+        finished = 1;
         return;
       }
     }
