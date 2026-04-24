@@ -796,15 +796,29 @@ public:
     // dispatchers (which re-enter the header many times) still generalize.
     // Tunable via MERGEN_GEN_MIN_REVISITS.
     //
-    // Default 0 keeps the pre-existing behaviour (threshold never
-    // rejects). Non-zero values currently regress the rewrite_smoke
-    // VM-loop samples (their IR shape expects generalisation to fire
-    // immediately). Themida-style targets benefit from T=16+ but the
-    // knob is exposed rather than defaulted until a shape-aware
-    // heuristic can distinguish a VM dispatcher from a simple loop.
+    // Shape-aware default: when the current path-solve context is
+    // IndirectJump (or a resolved-target widening from one), the header
+    // is most likely a VM dispatcher that re-enters with different
+    // opcodes on every iteration. Holding off generalisation until the
+    // header has been revisited enough times lets concrete exploration
+    // cover more handlers before the state is abstracted to phis.
+    // Simple guest loops reached through ConditionalBranch/DirectJump
+    // keep threshold 0 so their first backedge immediately generalises
+    // (which is what rewrite_smoke VM-loop samples rely on).
+    //
     // Values {6, 8, 12} crash on example2-virt.bin - unrelated
-    // dispatcher-state bug; avoid those when sweeping.
-    unsigned revisitThreshold = 0;
+    // dispatcher-state bug; avoid those when sweeping manually via
+    // MERGEN_GEN_MIN_REVISITS.
+    // Only IndirectJump context indicates a dispatcher (jmp reg / jmp [mem])
+    // whose targets come from indirect computation. DirectJump and
+    // ConditionalBranch paths belong to simple guest loops and keep
+    // threshold 0 so their first backedge immediately generalises. This
+    // preserves the rewrite_smoke VM-loop sample patterns while still
+    // holding off generalisation on Themida-style dispatchers long enough
+    // for concrete exploration to cover the IAT-gadget ret sites.
+    const bool dispatcherShape =
+        currentPathSolveContext == PathSolveContext::IndirectJump;
+    unsigned revisitThreshold = dispatcherShape ? 16u : 0u;
     if (const char* env = std::getenv("MERGEN_GEN_MIN_REVISITS")) {
       char* end = nullptr;
       unsigned long parsed = std::strtoul(env, &end, 10);
