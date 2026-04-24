@@ -480,6 +480,17 @@ public:
     {
       auto decodeSample = profiler.sample("lift_decode");
       this->current_address = addr;
+      // Per-instruction VA breadcrumb: complements MERGEN_BLOCK_TRACE_FILE
+      // by pinning the exact instruction PC when a crash occurs within a
+      // block. Set MERGEN_INSTR_TRACE_FILE to enable.
+      if (const char* trace = std::getenv("MERGEN_INSTR_TRACE_FILE")) {
+        FILE* f = std::fopen(trace, "a");
+        if (f) {
+          std::fprintf(f, "0x%llx\n", (unsigned long long)addr);
+          std::fflush(f);
+          std::fclose(f);
+        }
+      }
       auto offset = file.address_to_mapped_address(addr);
       if (offset == 0) {
         this->run = 0;
