@@ -763,6 +763,14 @@ public:
       }
       return false;
     };
+    // Diagnostic toggle: MERGEN_NO_LOOP_GEN=1 disables the entire loop-
+    // generalization gate.  Use this to measure how much of a lift's
+    // coverage/reachability depends on generalization vs. pure concrete
+    // exploration.  Expected effect: more instructions visited, smaller
+    // loops (no phi widening), potentially runaway lifts on real loops.
+    if (const char* env = std::getenv("MERGEN_NO_LOOP_GEN")) {
+      if (env[0] == '1' && env[1] == 0) return reject("env-disabled");
+    }
     if (getControlFlow() != ControlFlow::Unflatten) return reject("not-unflatten");
     if (!contextAllows) return reject("context-not-allowed");
     if (addr > blockInfo.block_address) return reject("forward-target");
