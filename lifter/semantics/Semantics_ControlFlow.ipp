@@ -432,6 +432,55 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   }
 
   SetRegisterValue(Register::RSP, rsp_result);
+
+  // Ret-to-IAT import recognition.  If the value being popped resolves to
+  // a concrete IAT slot, this ret is actually a 'push target; ret'
+  // indirect-call gadget (VMP/Themida dispatcher idiom, or plain thunk).
+  // Emit the named external call, then simulate the external's own ret by
+  // popping the continuation address off the stack so control flow resumes
+  // at the VM's post-call handler instead of lifting IAT bytes as code.
+  //
+  // Try two routes to a concrete target: direct ConstantInt (the popped
+  // value was a SSA-folded load of an IAT slot) and computePossibleValues
+  // returning a single concrete value (obfuscation chains that fold to one
+  // address on this path).
+  {
+    uint64_t retTargetAddr = 0;
+    bool retTargetResolved = false;
+    if (auto* constInt = llvm::dyn_cast<llvm::ConstantInt>(realval)) {
+      retTargetAddr = constInt->getZExtValue();
+      retTargetResolved = true;
+    } else {
+      auto pvset = computePossibleValues(realval);
+      if (pvset.size() == 1) {
+        retTargetAddr = pvset.begin()->getZExtValue();
+        retTargetResolved = true;
+      }
+    }
+    if (retTargetResolved) {
+      retTargetAddr = normalizeRuntimeTargetAddress(retTargetAddr);
+      auto importIt = importMap.find(retTargetAddr);
+      if (importIt != importMap.end()) {
+        const auto& importName = importIt->second;
+        callFunctionIR(importName, nullptr);
+        diagnostics.info(
+            DiagCode::CallOutlinedImportThunk,
+            current_address - instruction.length,
+            "Resolved ret-to-IAT import: " + importName);
+        // Simulate the external callee's own ret by popping one more
+        // qword (the continuation address pre-staged by the caller).
+        // The new [rsp] now holds that continuation; feed it to solvePath
+        // so the lifter continues at the VM's post-call handler instead
+        // of the IAT pointer we just consumed.
+        auto* continuationValue = GetMemoryValue(getSPaddress(), 64);
+        rsp_result = createAddFolder(
+            rsp_result,
+            llvm::ConstantInt::get(rsp_result->getType(), ptrSize));
+        SetRegisterValue(Register::RSP, rsp_result);
+        realval = continuationValue;
+      }
+    }
+  }
   
   ScopedPathSolveContext pathSolveContext(this, PathSolveContext::Ret);
   auto pathResult = solvePath(function, destination, realval);
