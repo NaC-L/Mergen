@@ -503,13 +503,20 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
   }
 
   SetRegisterValue(Register::RSP, rsp_result);
-
   // Ret-to-IAT import recognition is centralised in the PathSolver
   // resolveTargetBlock hook: it catches any solvePath resolution whose
   // target lands in importMap (IAT VA or hint/name alias), creates a
   // leaf block with 'call @import(); unreachable', and does not queue
-  // the import VA for further lifting.  This covers ret-to-IAT as well
-  // as any other indirect transfer that ends up at an imported target.
+  // the import VA for further lifting.
+  //
+  // A chained-continuation variant (pop the pre-staged continuation and
+  // feed it to solvePath so exploration continues to the next VM handler)
+  // was tried here, including a mapped-address safety guard on the first
+  // chain step. Chaining reliably crashes the lifter on T>=32 runs of
+  // example2-virt.bin after exploring past the first import call. The
+  // crash is downstream of the chain itself (in one of the additional
+  // blocks that chaining unlocks), so the guard does not catch it. Needs
+  // a deeper root-cause investigation before chaining is safe to land.
   
   ScopedPathSolveContext pathSolveContext(this, PathSolveContext::Ret);
   auto pathResult = solvePath(function, destination, realval);
