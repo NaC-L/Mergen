@@ -445,6 +445,32 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pop() {
 
   SetRegisterValue(Register::RSP, result); // then add rsp 8
 
+  // Guard: `pop rsp` (destination operand IS RSP) with a concrete popped
+  // value outside the tracked pseudo-stack range is a VM stack-switch
+  // gadget whose subsequent [rsp] loads dereference into unmapped
+  // memory and crash the lifter. When we can see this statically, bail
+  // the block with a structured warning and an unreachable terminator
+  // instead of letting the next memory op take us down. Symbolic Rvalue
+  // is already handled by the existing symbolic-load path.
+  if (instruction.types[0] >= OperandType::Register8 &&
+      instruction.types[0] <= OperandType::Register64 &&
+      getBiggestEncoding(instruction.regs[0]) == Register::RSP) {
+    if (auto* rvConst = llvm::dyn_cast<llvm::ConstantInt>(Rvalue)) {
+      uint64_t rv = rvConst->getZExtValue();
+      if (!isTrackedStackAddress(rv)) {
+        diagnostics.warning(
+            DiagCode::UnresolvedIndirectJump,
+            current_address - instruction.length,
+            "pop rsp loaded an out-of-range concrete value; bailing to"
+            " avoid a downstream unmapped-memory crash");
+        builder->CreateUnreachable();
+        run = 0;
+        finished = 1;
+        return;
+      }
+    }
+  }
+
   SetIndexValue(0, Rvalue); // op
                             // mov val, rsp first
                             /* ???
