@@ -1059,6 +1059,17 @@ public:
         generalizedLoopAddresses.insert(out.block_address);
       }
       visitedAddresses.insert(out.block_address);
+      // Per-block VA breadcrumb to pin crashes when a debugger is not
+      // available. Emitted only when MERGEN_BLOCK_TRACE_FILE is set.
+      if (const char* trace = std::getenv("MERGEN_BLOCK_TRACE_FILE")) {
+        FILE* f = std::fopen(trace, "a");
+        if (f) {
+          std::fprintf(f, "%zu 0x%llx\n", fnc->size(),
+              (unsigned long long)out.block_address);
+          std::fflush(f);
+          std::fclose(f);
+        }
+      }
       blockInfo = out;
       return true;
     }
