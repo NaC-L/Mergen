@@ -49,6 +49,24 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_mov() {
   printvalue(Rvalue);
 
   SetIndexValue(0, Rvalue);
+
+  // Provenance tagging: if this is `mov reg, [rip+disp]` and disp+RIP
+  // resolves to an IAT slot, remember which import the register now holds.
+  // A later `call reg` can then emit a named external call without needing
+  // SSA-level back-tracing through the folded load.
+  if (instruction.types[0] >= OperandType::Register8 &&
+      instruction.types[0] <= OperandType::Register64 &&
+      instruction.types[1] >= OperandType::Memory8 &&
+      instruction.types[1] <= OperandType::Memory64 &&
+      instruction.mem_base == Register::RIP &&
+      instruction.mem_index == Register::None) {
+    uint64_t ea = current_address + instruction.mem_disp;
+    auto it = importMap.find(ea);
+    if (it != importMap.end()) {
+      registerImportSource[getBiggestEncoding(instruction.regs[0])] =
+          it->second;
+    }
+  }
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_cmovcc() {
 
@@ -174,6 +192,59 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_call() {
       emittedExternalCall = true;
 
       // Skip the switch/Unflatten path entirely.
+      goto call_done;
+    }
+    // Unresolved RIP-relative call: importMap has no entry for this IAT
+    // slot.  Emit an opaque external call with strict-ABI clobber and
+    // continue at the post-call address.  Falling through to operand
+    // dispatch would treat the raw on-disk IAT bytes as a jump target
+    // and silently corrupt the lift (the post-call block ends up
+    // sealed with ret undef).
+    {
+      auto fx = this->buildUnknownCallFx();
+      fx.target = CallTargetClass::UnknownIndirect;
+      auto* eaValue = builder->getInt64(ea);
+      auto* targetPtr = builder->CreateIntToPtr(
+          eaValue, PointerType::get(context, 0));
+      auto* callResult = builder->CreateCall(
+          parseArgsType(nullptr, context), targetPtr, parseArgs(nullptr));
+      applyPostCallEffects(callResult, fx);
+      abi::printCallEffectsDiag(fx, current_address - instruction.length);
+      diagnostics.warning(
+          DiagCode::CallIndirectUnresolved,
+          current_address - instruction.length,
+          "Unresolved RIP-relative IAT call at EA=0x" +
+              std::to_string(ea) + " (no importMap entry)");
+      emittedExternalCall = true;
+      goto call_done;
+    }
+  }
+
+  // Provenance-based fast path for register-indirect calls.  If this
+  // register was last loaded from an IAT slot, emit the named external
+  // call directly — this covers the common MSVC pattern:
+  //   mov rsi, [rip+iat]
+  //   call rsi
+  //   ... args setup ...
+  //   call rsi
+  // where the concolic engine has folded the load to a ConstantInt
+  // matching the on-disk IAT value, losing SSA provenance.
+  if (instruction.types[0] >= OperandType::Register8 &&
+      instruction.types[0] <= OperandType::Register64) {
+    Register reg = getBiggestEncoding(instruction.regs[0]);
+    auto it = registerImportSource.find(reg);
+    if (it != registerImportSource.end()) {
+      const auto& importName = it->second;
+      callFunctionIR(importName, nullptr);
+      debugging::doIfDebug([&]() {
+        std::cout << "[call-abi] resolved import via register provenance: "
+                  << importName << "\n" << std::flush;
+      });
+      diagnostics.info(
+          DiagCode::CallOutlinedImportThunk,
+          current_address - instruction.length,
+          "Resolved register-indirect import: " + importName);
+      emittedExternalCall = true;
       goto call_done;
     }
   }
