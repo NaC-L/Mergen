@@ -504,56 +504,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
 
   SetRegisterValue(Register::RSP, rsp_result);
 
-  // Ret-to-IAT import recognition.  If the value being popped resolves to
-  // a concrete IAT slot, this ret is actually a 'push target; ret'
-  // indirect-call gadget (VMP/Themida dispatcher idiom, or plain thunk).
-  // Emit the named external call, then simulate the external's own ret by
-  // popping the continuation address off the stack so control flow resumes
-  // at the VM's post-call handler instead of lifting IAT bytes as code.
-  //
-  // Try two routes to a concrete target: direct ConstantInt (the popped
-  // value was a SSA-folded load of an IAT slot) and computePossibleValues
-  // returning a single concrete value (obfuscation chains that fold to one
-  // address on this path).
-  {
-    uint64_t retTargetAddr = 0;
-    bool retTargetResolved = false;
-    if (auto* constInt = llvm::dyn_cast<llvm::ConstantInt>(realval)) {
-      retTargetAddr = constInt->getZExtValue();
-      retTargetResolved = true;
-    } else {
-      auto pvset = computePossibleValues(realval);
-      if (pvset.size() == 1) {
-        retTargetAddr = pvset.begin()->getZExtValue();
-        retTargetResolved = true;
-      }
-    }
-    if (retTargetResolved) {
-      retTargetAddr = normalizeRuntimeTargetAddress(retTargetAddr);
-      auto importIt = importMap.find(retTargetAddr);
-      if (importIt != importMap.end()) {
-        const auto& importName = importIt->second;
-        callFunctionIR(importName, nullptr);
-        diagnostics.info(
-            DiagCode::CallOutlinedImportThunk,
-            current_address - instruction.length,
-            "Resolved ret-to-IAT import: " + importName);
-        // The continuation address that the caller pre-staged on the stack
-        // (e.g. Themida's VM pushes the next-handler address below the IAT
-        // pointer) is not generally resolvable from the lifter's static
-        // memory model: the stored slot holds runtime-specific data we
-        // cannot reconstruct statically.  Terminate this path here - the
-        // named external call is in the IR, which is what the devirtual-
-        // isation correctness gate needs.  If we need transitive control
-        // flow later, route it through a dedicated 'imported-call-con-
-        // tinuation' analysis that has enough state to resolve it.
-        builder->CreateUnreachable();
-        run = 0;
-        finished = 1;
-        return;
-      }
-    }
-  }
+  // Ret-to-IAT import recognition is centralised in the PathSolver
+  // resolveTargetBlock hook: it catches any solvePath resolution whose
+  // target lands in importMap (IAT VA or hint/name alias), creates a
+  // leaf block with 'call @import(); unreachable', and does not queue
+  // the import VA for further lifting.  This covers ret-to-IAT as well
+  // as any other indirect transfer that ends up at an imported target.
   
   ScopedPathSolveContext pathSolveContext(this, PathSolveContext::Ret);
   auto pathResult = solvePath(function, destination, realval);
