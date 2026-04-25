@@ -2426,6 +2426,25 @@
       ]
     },
     {
+      "name": "vm_bitreverse64_loop",
+      "symbol": "vm_bitreverse64_loop_target",
+      "patterns": [
+        "llvm.bitreverse.i64"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: zero stays zero" },
+        { "inputs": { "RCX": 1 },                    "expected": 9223372036854775808,  "label": "x=1 -> MSB" },
+        { "inputs": { "RCX": 255 },                  "expected": 18374686479671623680, "label": "x=0xFF -> top byte" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 1,                    "label": "x=2^63 -> 1 (MSB to LSB)" },
+        { "inputs": { "RCX": 51966 },                "expected": 9174676865883832320,  "label": "x=0xCAFE" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 9033516422034096128,  "label": "x=0xCAFEBABE" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1115552785675988040,  "label": "0x123...DEF0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "max u64: bitreverse fixed point" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 12123218500447562873, "label": "x=K (golden ratio)" },
+        { "inputs": { "RCX": 12297829382473034410 }, "expected": 6148914691236517205,  "label": "0xAAAA... -> 0x5555..." }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
