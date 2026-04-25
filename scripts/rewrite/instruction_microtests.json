@@ -2146,6 +2146,26 @@
       ]
     },
     {
+      "name": "vm_gcd64_loop",
+      "symbol": "vm_gcd64_loop_target",
+      "patterns": [
+        "urem",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0,                    "RDX": 0 },                    "expected": 0,                    "label": "both zero" },
+        { "inputs": { "RCX": 12,                   "RDX": 18 },                   "expected": 6,                    "label": "gcd(12,18)=6" },
+        { "inputs": { "RCX": 0,                    "RDX": 7 },                    "expected": 7,                    "label": "gcd(0,7)=7" },
+        { "inputs": { "RCX": 7,                    "RDX": 0 },                    "expected": 7,                    "label": "gcd(7,0)=7: skip loop" },
+        { "inputs": { "RCX": 9223372036854775808,   "RDX": 4611686018427387904 },  "expected": 4611686018427387904,  "label": "gcd(2^63, 2^62)=2^62" },
+        { "inputs": { "RCX": 3405691582,            "RDX": 3735928559 },           "expected": 1,                    "label": "gcd(0xCAFEBABE, 0xDEADBEEF)=1" },
+        { "inputs": { "RCX": 18446744073709551615, "RDX": 18446744073709551614 }, "expected": 1,                    "label": "adjacent max u64: coprime" },
+        { "inputs": { "RCX": 123456789012345,      "RDX": 987654321098765 },      "expected": 5,                    "label": "large coprime-ish" },
+        { "inputs": { "RCX": 51966,                "RDX": 47806 },                "expected": 2,                    "label": "gcd(0xCAFE, 0xBABE)=2" },
+        { "inputs": { "RCX": 18446744073709551614, "RDX": 2 },                    "expected": 2,                    "label": "gcd(max-1, 2)=2" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
