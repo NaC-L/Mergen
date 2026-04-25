@@ -1135,6 +1135,31 @@
       ]
     },
     {
+      "name": "vm_runlength_loop",
+      "symbol": "vm_runlength_loop_target",
+      "patterns": [
+        "add",
+        "and",
+        "lshr",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0, "label": "no runs" },
+        { "inputs": { "RCX": 1 },     "expected": 1, "label": "single 1 bit" },
+        { "inputs": { "RCX": 3 },     "expected": 1, "label": "contiguous 11" },
+        { "inputs": { "RCX": 5 },     "expected": 2, "label": "0101: 2 runs" },
+        { "inputs": { "RCX": 7 },     "expected": 1, "label": "contiguous 111" },
+        { "inputs": { "RCX": 65535 }, "expected": 1, "label": "all 16 ones: 1 run" },
+        { "inputs": { "RCX": 21845 }, "expected": 8, "label": "0x5555: 8 isolated 1s" },
+        { "inputs": { "RCX": 43690 }, "expected": 8, "label": "0xAAAA: 8 isolated 1s" },
+        { "inputs": { "RCX": 52428 }, "expected": 4, "label": "0xCCCC: 4 pairs" },
+        { "inputs": { "RCX": 3855 },  "expected": 2, "label": "0x0F0F: 2 runs of 4" },
+        { "inputs": { "RCX": 61680 }, "expected": 2, "label": "0xF0F0: 2 runs of 4" },
+        { "inputs": { "RCX": 4660 },  "expected": 4, "label": "0x1234: 4 runs" },
+        { "inputs": { "RCX": 43520 }, "expected": 4, "label": "0xAA00: 4 isolated 1s in upper byte" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
