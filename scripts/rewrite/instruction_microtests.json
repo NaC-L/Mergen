@@ -685,6 +685,33 @@
       ]
     },
     {
+      "name": "vm_isqrt_loop",
+      "symbol": "vm_isqrt_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 65535"] },
+        "phi i32",
+        "udiv",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,   "label": "isqrt(0)" },
+        { "inputs": { "RCX": 1 },     "expected": 1,   "label": "isqrt(1)" },
+        { "inputs": { "RCX": 2 },     "expected": 1,   "label": "isqrt(2)" },
+        { "inputs": { "RCX": 4 },     "expected": 2,   "label": "isqrt(4)" },
+        { "inputs": { "RCX": 9 },     "expected": 3,   "label": "isqrt(9)" },
+        { "inputs": { "RCX": 10 },    "expected": 3,   "label": "isqrt(10)" },
+        { "inputs": { "RCX": 16 },    "expected": 4,   "label": "isqrt(16)" },
+        { "inputs": { "RCX": 25 },    "expected": 5,   "label": "isqrt(25)" },
+        { "inputs": { "RCX": 100 },   "expected": 10,  "label": "isqrt(100)" },
+        { "inputs": { "RCX": 255 },   "expected": 15,  "label": "isqrt(255)" },
+        { "inputs": { "RCX": 256 },   "expected": 16,  "label": "isqrt(256)" },
+        { "inputs": { "RCX": 1000 },  "expected": 31,  "label": "isqrt(1000)" },
+        { "inputs": { "RCX": 9999 },  "expected": 99,  "label": "isqrt(9999)" },
+        { "inputs": { "RCX": 65535 }, "expected": 255, "label": "isqrt(65535)" },
+        { "inputs": { "RCX": 65536 }, "expected": 0,   "label": "isqrt(0) again (mask drops bit 16)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
