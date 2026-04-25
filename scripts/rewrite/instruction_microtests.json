@@ -5127,6 +5127,26 @@
       ]
     },
     {
+      "name": "vm_byte_eq_first_count64_loop",
+      "symbol": "vm_byte_eq_first_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1, "label": "x=0 n=1: byte0=0=first, cnt=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2: bytes [1,0] - only first matches" },
+        { "inputs": { "RCX": 2 },                    "expected": 1, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 1, "label": "x=7 n=8: only byte0=7" },
+        { "inputs": { "RCX": 8 },                    "expected": 1, "label": "x=8 n=1: trivially 1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE: n=7 only first matches" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 8, "label": "all 0xFF n=8: all bytes match first" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 1, "label": "0x0102...0708: n=1 trivially 1" },
+        { "inputs": { "RCX": 12297829382473034410 }, "expected": 3, "label": "0xAAAA...AAAA n=3 (low nibble=2+1=3): all 0xAA" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
