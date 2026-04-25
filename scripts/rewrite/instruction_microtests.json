@@ -1488,6 +1488,29 @@
       ]
     },
     {
+      "name": "vm_imported_popcnt_loop",
+      "symbol": "vm_imported_popcnt_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "call",
+        "xor",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,   "label": "limit=1, x=0" },
+        { "inputs": { "RCX": 1 },          "expected": 4,   "label": "limit=2: popcount(1) + popcount(1^0x42)" },
+        { "inputs": { "RCX": 7 },          "expected": 32,  "label": "limit=8" },
+        { "inputs": { "RCX": 255 },        "expected": 48,  "label": "0xFF: limit=8" },
+        { "inputs": { "RCX": 170 },        "expected": 12,  "label": "0xAA: limit=3" },
+        { "inputs": { "RCX": 85 },         "expected": 28,  "label": "0x55: limit=6" },
+        { "inputs": { "RCX": 65535 },      "expected": 104, "label": "0xFFFF: limit=8" },
+        { "inputs": { "RCX": 74565 },      "expected": 42,  "label": "0x12345: limit=6" },
+        { "inputs": { "RCX": 11259375 },   "expected": 112, "label": "0xABCDEF: limit=8" },
+        { "inputs": { "RCX": -889275714 }, "expected": 148, "label": "0xCAFEBABE: limit=7" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
