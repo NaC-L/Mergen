@@ -1084,6 +1084,32 @@
       ]
     },
     {
+      "name": "vm_ca_loop",
+      "symbol": "vm_ca_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "shl",
+        "lshr",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,   "label": "empty state" },
+        { "inputs": { "RCX": 1 },     "expected": 1,   "label": "n=0, state=1" },
+        { "inputs": { "RCX": 257 },   "expected": 2,   "label": "n=1, state=1: left=2, right=0, state=2" },
+        { "inputs": { "RCX": 513 },   "expected": 5,   "label": "n=2" },
+        { "inputs": { "RCX": 769 },   "expected": 8,   "label": "n=3" },
+        { "inputs": { "RCX": 1025 },  "expected": 20,  "label": "n=4" },
+        { "inputs": { "RCX": 1793 },  "expected": 128, "label": "n=7, state=1" },
+        { "inputs": { "RCX": 256 },   "expected": 0,   "label": "n=1, state=0" },
+        { "inputs": { "RCX": 24 },    "expected": 24,  "label": "n=0, state=0x18" },
+        { "inputs": { "RCX": 280 },   "expected": 60,  "label": "n=1, state=0x18" },
+        { "inputs": { "RCX": 1816 },  "expected": 24,  "label": "n=7, state=0x18" },
+        { "inputs": { "RCX": 1877 },  "expected": 170, "label": "n=7, state=0x55" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
