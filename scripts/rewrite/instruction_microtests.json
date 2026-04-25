@@ -966,6 +966,29 @@
       ]
     },
     {
+      "name": "vm_modcounter_loop",
+      "symbol": "vm_modcounter_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "add",
+        "urem"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0, "label": "n=0" },
+        { "inputs": { "RCX": 4096 },  "expected": 1, "label": "counter=0,step=1,n=1" },
+        { "inputs": { "RCX": 8192 },  "expected": 2, "label": "n=2" },
+        { "inputs": { "RCX": 28672 }, "expected": 0, "label": "n=7: wraps" },
+        { "inputs": { "RCX": 61440 }, "expected": 1, "label": "n=15: 15%7=1" },
+        { "inputs": { "RCX": 62208 }, "expected": 3, "label": "step=3,n=15: 45%7=3" },
+        { "inputs": { "RCX": 61968 }, "expected": 5, "label": "0xF210: counter=16,step=3,n=15" },
+        { "inputs": { "RCX": 62805 }, "expected": 6, "label": "0xF555" },
+        { "inputs": { "RCX": 65535 }, "expected": 4, "label": "0xFFFF" },
+        { "inputs": { "RCX": 33023 }, "expected": 4, "label": "0x80FF" },
+        { "inputs": { "RCX": 4660 },  "expected": 6, "label": "0x1234" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
