@@ -5023,6 +5023,26 @@
       ]
     },
     {
+      "name": "vm_blsmsk64_loop",
+      "symbol": "vm_blsmsk64_loop_target",
+      "patterns": [
+        "xor",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 18446744073709551615, "label": "x=0: 0^(-1)=all-1s" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 1,                    "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 1,                    "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 15,                   "label": "x=8 n=1: 8^7=15 BLSMSK" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1,                    "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1,                    "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1,                    "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 256 },                  "expected": 511,                  "label": "0x100 n=1: 256^255=511 (low 9 bits)" },
+        { "inputs": { "RCX": 128 },                  "expected": 255,                  "label": "0x80 n=1: 128^127=255 (low 8 bits)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
