@@ -4210,6 +4210,27 @@
       ]
     },
     {
+      "name": "vm_orxor_pair64_loop",
+      "symbol": "vm_orxor_pair64_loop_target",
+      "patterns": [
+        "or",
+        "xor",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 a=0 b=0 n=1: a|b=0; b=0^0=0; ret 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 7,                    "label": "x=1 n=2: trace through 2 iters" },
+        { "inputs": { "RCX": 2 },                    "expected": 100,                  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 7332103,              "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 16,                   "label": "x=8 n=1: a|0=8; b=8^0=8; ret 16" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 437732809233088,      "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3937552892141111,     "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 720599,                "label": "all 0xFF: a|b stays ~0; b evolves via XOR-mul *7" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 145247719580765712,   "label": "0x0102...0708: n=1 single iter" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 2623536934927580640, "label": "0x12345...EF0: n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
