@@ -5756,6 +5756,26 @@
       ]
     },
     {
+      "name": "vm_byte_sum_uge_thresh64_loop",
+      "symbol": "vm_byte_sum_uge_thresh64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,    "label": "x=0 n=1 byte=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,    "label": "x=1 n=2 [1,0] none qualify" },
+        { "inputs": { "RCX": 128 },                  "expected": 128,  "label": "0x80 n=1 byte=0x80 -> 128" },
+        { "inputs": { "RCX": 127 },                  "expected": 0,    "label": "0x7F n=8 [0x7F,0,...,0] -> 0" },
+        { "inputs": { "RCX": 255 },                  "expected": 255,  "label": "0xFF n=8 [0xFF,0,...,0] -> 255" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 832,  "label": "0xCAFEBABE n=7 [BE,BA,FE,CA,0,0,0] sum 4 high bytes" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 824,  "label": "0xDEADBEEF n=8 sum 4 negs" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 2040, "label": "all 0xFF n=8 8*255" },
+        { "inputs": { "RCX": 9259542123273814144 }, "expected": 128,  "label": "0x8080808080808080 n=1 byte=0x80" },
+        { "inputs": { "RCX": 18338377315828106751 }, "expected": 509, "label": "0xFE7F0102030405FF n=8 high-bit bytes sum=509" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
