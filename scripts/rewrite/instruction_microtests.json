@@ -1255,6 +1255,29 @@
       ]
     },
     {
+      "name": "vm_dupcount_loop",
+      "symbol": "vm_dupcount_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "icmp eq",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0, "label": "limit=1: no compares" },
+        { "inputs": { "RCX": 1 },          "expected": 0, "label": "limit=2, data=[1,0]" },
+        { "inputs": { "RCX": 4369 },       "expected": 1, "label": "0x1111: limit=2, data=[1,1]" },
+        { "inputs": { "RCX": 74565 },      "expected": 0, "label": "0x12345: limit=6, all distinct" },
+        { "inputs": { "RCX": 858996001 },  "expected": 0, "label": "0x33334321: limit=2, data=[1,2]" },
+        { "inputs": { "RCX": 2004318071 }, "expected": 7, "label": "0x77777777: limit=8, all 7s" },
+        { "inputs": { "RCX": 287454020 },  "expected": 2, "label": "0x11223344: limit=5, data=[4,4,3,3,2]" },
+        { "inputs": { "RCX": 305419895 },  "expected": 1, "label": "0x12345677: limit=8" },
+        { "inputs": { "RCX": 4294967295 }, "expected": 7, "label": "all F: 7 dups" },
+        { "inputs": { "RCX": 268439552 },  "expected": 0, "label": "0x10001000: limit=1, no scan" },
+        { "inputs": { "RCX": 171 },        "expected": 1, "label": "0xAB: limit=4, data=[B,A,0,0]" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
