@@ -5329,6 +5329,26 @@
       ]
     },
     {
+      "name": "vm_dword_lt_thresh_count64_loop",
+      "symbol": "vm_dword_lt_thresh_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1, "label": "x=0 n=1: dword=0 < 0x40000000" },
+        { "inputs": { "RCX": 1 },                    "expected": 2, "label": "x=1 n=2: both dwords [1,0] < 0x40000000" },
+        { "inputs": { "RCX": 2 },                    "expected": 1, "label": "x=2 n=1: 2 < 0x40000000" },
+        { "inputs": { "RCX": 3 },                    "expected": 2, "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 0, "label": "0xCAFEBABE: n=1 single dword > 0x40000000" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1, "label": "0xDEADBEEF: n=2 dwords [0xDEADBEEF,0]" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFF: 0xFFFFFFFF >= 0x40000000" },
+        { "inputs": { "RCX": 4611686015206162432 }, "expected": 0, "label": "0x3FFFFFFF40000000 n=1: low dword=0x40000000 NOT < 0x40000000" },
+        { "inputs": { "RCX": 1073741824 },           "expected": 0, "label": "0x40000000 n=1: equality not strict less" },
+        { "inputs": { "RCX": 305419896 },            "expected": 1, "label": "0x12345678 n=1: < 0x40000000" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
