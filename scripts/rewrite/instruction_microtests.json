@@ -355,6 +355,76 @@
       ]
     },
     {
+      "name": "vm_popcount_loop",
+      "symbol": "vm_popcount_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "add i32",
+        "lshr",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0, "label": "v=0: halt immediately" },
+        { "inputs": { "RCX": 1 },   "expected": 1, "label": "v=0x01: 1 bit" },
+        { "inputs": { "RCX": 3 },   "expected": 2, "label": "v=0x03: 2 bits" },
+        { "inputs": { "RCX": 7 },   "expected": 3, "label": "v=0x07: 3 bits" },
+        { "inputs": { "RCX": 15 },  "expected": 4, "label": "v=0x0F: 4 bits" },
+        { "inputs": { "RCX": 170 }, "expected": 4, "label": "v=0xAA: alternating bits" },
+        { "inputs": { "RCX": 85 },  "expected": 4, "label": "v=0x55: alternating bits" },
+        { "inputs": { "RCX": 255 }, "expected": 8, "label": "v=0xFF: all bits set" },
+        { "inputs": { "RCX": 256 }, "expected": 0, "label": "v=0 again (mask clears bit 8)" },
+        { "inputs": { "RCX": 257 }, "expected": 1, "label": "v=0x01 again after mask" }
+      ]
+    },
+    {
+      "name": "vm_power_loop",
+      "symbol": "vm_power_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        { "line_all": ["and i32", ", 3"] },
+        "phi i32",
+        "mul i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 1,   "label": "base=1, exp=0" },
+        { "inputs": { "RCX": 1 },  "expected": 1,   "label": "base=2, exp=0" },
+        { "inputs": { "RCX": 8 },  "expected": 1,   "label": "base=1, exp=1" },
+        { "inputs": { "RCX": 10 }, "expected": 3,   "label": "base=3, exp=1" },
+        { "inputs": { "RCX": 15 }, "expected": 8,   "label": "base=8, exp=1" },
+        { "inputs": { "RCX": 18 }, "expected": 9,   "label": "base=3, exp=2" },
+        { "inputs": { "RCX": 23 }, "expected": 64,  "label": "base=8, exp=2" },
+        { "inputs": { "RCX": 31 }, "expected": 512, "label": "base=8, exp=3" },
+        { "inputs": { "RCX": 7 },  "expected": 1,   "label": "base=8, exp=0" },
+        { "inputs": { "RCX": 16 }, "expected": 1,   "label": "base=1, exp=2" }
+      ]
+    },
+    {
+      "name": "vm_bitreverse_loop",
+      "symbol": "vm_bitreverse_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "shl",
+        "or",
+        "lshr",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },    "expected": 0,   "label": "reverse(0x00)" },
+        { "inputs": { "RCX": 1 },    "expected": 128, "label": "reverse(0x01) = 0x80" },
+        { "inputs": { "RCX": 128 },  "expected": 1,   "label": "reverse(0x80) = 0x01" },
+        { "inputs": { "RCX": 170 },  "expected": 85,  "label": "reverse(0xAA) = 0x55" },
+        { "inputs": { "RCX": 85 },   "expected": 170, "label": "reverse(0x55) = 0xAA" },
+        { "inputs": { "RCX": 255 },  "expected": 255, "label": "reverse(0xFF) = 0xFF" },
+        { "inputs": { "RCX": 18 },   "expected": 72,  "label": "reverse(0x12) = 0x48" },
+        { "inputs": { "RCX": 51 },   "expected": 204, "label": "reverse(0x33) = 0xCC" },
+        { "inputs": { "RCX": 64 },   "expected": 2,   "label": "reverse(0x40) = 0x02" },
+        { "inputs": { "RCX": 256 },  "expected": 0,   "label": "mask drops bit 8" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
