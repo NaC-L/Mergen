@@ -2024,6 +2024,27 @@
       ]
     },
     {
+      "name": "vm_four_input_loop",
+      "symbol": "vm_four_input_loop_target",
+      "patterns": [
+        "xor",
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0,          "RDX": 0,          "R8": 0, "R9": 0 },          "expected": 0,          "label": "all zero" },
+        { "inputs": { "RCX": 5,          "RDX": 7,          "R8": 11, "R9": 13 },        "expected": 6070737,    "label": "x=5,y=7,z=11,w=13" },
+        { "inputs": { "RCX": 15,         "RDX": 1,          "R8": 1, "R9": 0 },          "expected": 15,         "label": "oscillation: 16 trips, z=1, w=0" },
+        { "inputs": { "RCX": 1,          "RDX": 1,          "R8": 1, "R9": 1 },          "expected": 1,          "label": "all ones, n=2" },
+        { "inputs": { "RCX": 51966,      "RDX": 47806,      "R8": 57005, "R9": 64206 }, "expected": 4147403342, "label": "0xCAFE,0xBABE,0xDEAD,0xFACE" },
+        { "inputs": { "RCX": 4294967295, "RDX": 1,          "R8": 1, "R9": 1 },          "expected": 4294967295, "label": "x=-1, oscillates back" },
+        { "inputs": { "RCX": 305419896, "RDX": 2596069104, "R8": 3, "R9": 5 },          "expected": 4276205933, "label": "x=0x12345678, n=9" },
+        { "inputs": { "RCX": 7,          "RDX": 3,          "R8": 5, "R9": 11 },        "expected": 2343751,    "label": "x=7, n=8" },
+        { "inputs": { "RCX": 0,          "RDX": 1,          "R8": 2, "R9": 3 },          "expected": 5,          "label": "n=1: (0^1)*2+3=5" },
+        { "inputs": { "RCX": 2147483648, "RDX": 1073741824, "R8": 3, "R9": 7 },          "expected": 1073741831, "label": "x=0x80000000, n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
