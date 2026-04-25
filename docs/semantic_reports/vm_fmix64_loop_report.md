@@ -1,14 +1,12 @@
 # vm_fmix64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_fmix64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_fmix64_loop.ll`
 - **Symbol:** `vm_fmix64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_fmix64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_fmix64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | x=0: zero stays zero (no shift contribution) |
-| 2 | RCX=1 | 9038243705893100514 | 9038243705893100514 | — | **no** | x=1, n=2 |
-| 3 | RCX=7 | 8486797414100562630 | 8486797414100562630 | — | **no** | x=7, n=8 max |
-| 4 | RCX=255 | 12226072129499856351 | 12226072129499856351 | — | **no** | x=0xFF, n=8 |
-| 5 | RCX=51966 | 5965516933220053433 | 5965516933220053433 | — | **no** | x=0xCAFE, n=7 |
-| 6 | RCX=3405691582 | 1408996039744156717 | 1408996039744156717 | — | **no** | x=0xCAFEBABE, n=7 |
-| 7 | RCX=1311768467463790320 | 1781385183907554200 | 1781385183907554200 | — | **no** | x=0x123...DEF0, n=1 |
-| 8 | RCX=18446744073709551615 | 14764577206887631716 | 14764577206887631716 | — | **no** | max u64, n=8 |
-| 9 | RCX=11400714819323198485 | 2186571374379122088 | 2186571374379122088 | — | **no** | x=K (golden), n=6 |
-| 10 | RCX=3735928559 | 10102246366604652111 | 10102246366604652111 | — | **no** | x=0xDEADBEEF, n=8 |
-
-## Failure detail
-
-### case 1: x=0: zero stays zero (no shift contribution)
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1, n=2
-
-- inputs: `RCX=1`
-- manifest expected: `9038243705893100514`
-- native: `9038243705893100514`
-- lifted: `—`
-
-### case 3: x=7, n=8 max
-
-- inputs: `RCX=7`
-- manifest expected: `8486797414100562630`
-- native: `8486797414100562630`
-- lifted: `—`
-
-### case 4: x=0xFF, n=8
-
-- inputs: `RCX=255`
-- manifest expected: `12226072129499856351`
-- native: `12226072129499856351`
-- lifted: `—`
-
-### case 5: x=0xCAFE, n=7
-
-- inputs: `RCX=51966`
-- manifest expected: `5965516933220053433`
-- native: `5965516933220053433`
-- lifted: `—`
-
-### case 6: x=0xCAFEBABE, n=7
-
-- inputs: `RCX=3405691582`
-- manifest expected: `1408996039744156717`
-- native: `1408996039744156717`
-- lifted: `—`
-
-### case 7: x=0x123...DEF0, n=1
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `1781385183907554200`
-- native: `1781385183907554200`
-- lifted: `—`
-
-### case 8: max u64, n=8
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `14764577206887631716`
-- native: `14764577206887631716`
-- lifted: `—`
-
-### case 9: x=K (golden), n=6
-
-- inputs: `RCX=11400714819323198485`
-- manifest expected: `2186571374379122088`
-- native: `2186571374379122088`
-- lifted: `—`
-
-### case 10: x=0xDEADBEEF, n=8
-
-- inputs: `RCX=3735928559`
-- manifest expected: `10102246366604652111`
-- native: `10102246366604652111`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0: zero stays zero (no shift contribution) |
+| 2 | RCX=1 | 9038243705893100514 | 9038243705893100514 | 9038243705893100514 | yes | x=1, n=2 |
+| 3 | RCX=7 | 8486797414100562630 | 8486797414100562630 | 8486797414100562630 | yes | x=7, n=8 max |
+| 4 | RCX=255 | 12226072129499856351 | 12226072129499856351 | 12226072129499856351 | yes | x=0xFF, n=8 |
+| 5 | RCX=51966 | 5965516933220053433 | 5965516933220053433 | 5965516933220053433 | yes | x=0xCAFE, n=7 |
+| 6 | RCX=3405691582 | 1408996039744156717 | 1408996039744156717 | 1408996039744156717 | yes | x=0xCAFEBABE, n=7 |
+| 7 | RCX=1311768467463790320 | 1781385183907554200 | 1781385183907554200 | 1781385183907554200 | yes | x=0x123...DEF0, n=1 |
+| 8 | RCX=18446744073709551615 | 14764577206887631716 | 14764577206887631716 | 14764577206887631716 | yes | max u64, n=8 |
+| 9 | RCX=11400714819323198485 | 2186571374379122088 | 2186571374379122088 | 2186571374379122088 | yes | x=K (golden), n=6 |
+| 10 | RCX=3735928559 | 10102246366604652111 | 10102246366604652111 | 10102246366604652111 | yes | x=0xDEADBEEF, n=8 |
 
 ## Source
 

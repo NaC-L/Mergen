@@ -1,14 +1,12 @@
 # vm_decdigits64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_decdigits64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_decdigits64_loop.ll`
 - **Symbol:** `vm_decdigits64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_decdigits64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_decdigits64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 1 | 1 | — | **no** | x=0: special-case 1 digit |
-| 2 | RCX=1 | 1 | 1 | — | **no** | x=1 |
-| 3 | RCX=10 | 2 | 2 | — | **no** | x=10 |
-| 4 | RCX=100 | 3 | 3 | — | **no** | x=100 |
-| 5 | RCX=999 | 3 | 3 | — | **no** | x=999 |
-| 6 | RCX=1000 | 4 | 4 | — | **no** | x=1000 |
-| 7 | RCX=1000000000 | 10 | 10 | — | **no** | x=10^9 |
-| 8 | RCX=51966 | 5 | 5 | — | **no** | x=0xCAFE = 51966 |
-| 9 | RCX=18446744073709551615 | 20 | 20 | — | **no** | max u64: 20 digits |
-| 10 | RCX=11400714819323198485 | 20 | 20 | — | **no** | K (golden), 20 digits |
-
-## Failure detail
-
-### case 1: x=0: special-case 1 digit
-
-- inputs: `RCX=0`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 2: x=1
-
-- inputs: `RCX=1`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 3: x=10
-
-- inputs: `RCX=10`
-- manifest expected: `2`
-- native: `2`
-- lifted: `—`
-
-### case 4: x=100
-
-- inputs: `RCX=100`
-- manifest expected: `3`
-- native: `3`
-- lifted: `—`
-
-### case 5: x=999
-
-- inputs: `RCX=999`
-- manifest expected: `3`
-- native: `3`
-- lifted: `—`
-
-### case 6: x=1000
-
-- inputs: `RCX=1000`
-- manifest expected: `4`
-- native: `4`
-- lifted: `—`
-
-### case 7: x=10^9
-
-- inputs: `RCX=1000000000`
-- manifest expected: `10`
-- native: `10`
-- lifted: `—`
-
-### case 8: x=0xCAFE = 51966
-
-- inputs: `RCX=51966`
-- manifest expected: `5`
-- native: `5`
-- lifted: `—`
-
-### case 9: max u64: 20 digits
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `20`
-- native: `20`
-- lifted: `—`
-
-### case 10: K (golden), 20 digits
-
-- inputs: `RCX=11400714819323198485`
-- manifest expected: `20`
-- native: `20`
-- lifted: `—`
+| 1 | RCX=0 | 1 | 1 | 1 | yes | x=0: special-case 1 digit |
+| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1 |
+| 3 | RCX=10 | 2 | 2 | 2 | yes | x=10 |
+| 4 | RCX=100 | 3 | 3 | 3 | yes | x=100 |
+| 5 | RCX=999 | 3 | 3 | 3 | yes | x=999 |
+| 6 | RCX=1000 | 4 | 4 | 4 | yes | x=1000 |
+| 7 | RCX=1000000000 | 10 | 10 | 10 | yes | x=10^9 |
+| 8 | RCX=51966 | 5 | 5 | 5 | yes | x=0xCAFE = 51966 |
+| 9 | RCX=18446744073709551615 | 20 | 20 | 20 | yes | max u64: 20 digits |
+| 10 | RCX=11400714819323198485 | 20 | 20 | 20 | yes | K (golden), 20 digits |
 
 ## Source
 

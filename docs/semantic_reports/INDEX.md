@@ -2,8 +2,8 @@
 
 Each report compares the **native binary** built from `testcases/rewrite_smoke/<name>` (linked through a small driver that calls the target symbol directly) against the **lifted+optimized LLVM IR** in `rewrite-regression-work/ir_outputs/<name>.ll` (executed via LLVM `lli`) on the manifest-declared input cases.
 
-- **Samples:** 241/243 equivalent across all cases, 0 failing, 2 with no semantic cases
-- **Cases:** 2302/2302 equivalent overall
+- **Samples:** 244/246 equivalent across all cases, 0 failing, 2 with no semantic cases
+- **Cases:** 2332/2332 equivalent overall
 
 Regenerate after a re-lift:
 
@@ -21,8 +21,8 @@ python scripts\rewrite\generate_equivalence_reports.py
 | calc_cout | PASS | 4/4 | [calc_cout_report.md](calc_cout_report.md) |
 | calc_fib | PASS | 1/1 | [calc_fib_report.md](calc_fib_report.md) |
 | calc_grade | PASS | 11/11 | [calc_grade_report.md](calc_grade_report.md) |
-| calc_jumptable | PASS | 12/12 | [calc_jumptable_report.md](calc_jumptable_report.md) |
 | calc_jumptable_large | PASS | 10/10 | [calc_jumptable_large_report.md](calc_jumptable_large_report.md) |
+| calc_jumptable | PASS | 12/12 | [calc_jumptable_report.md](calc_jumptable_report.md) |
 | calc_mixed | PASS | 7/7 | [calc_mixed_report.md](calc_mixed_report.md) |
 | calc_sum_array | PASS | 1/1 | [calc_sum_array_report.md](calc_sum_array_report.md) |
 | calc_sum_to_n | PASS | 6/6 | [calc_sum_to_n_report.md](calc_sum_to_n_report.md) |
@@ -64,6 +64,7 @@ python scripts\rewrite\generate_equivalence_reports.py
 | vm_bittransitions_loop | PASS | 11/11 | [vm_bittransitions_loop_report.md](vm_bittransitions_loop_report.md) |
 | vm_branchy_loop | PASS | 8/8 | [vm_branchy_loop_report.md](vm_branchy_loop_report.md) |
 | vm_bswap64_loop | PASS | 10/10 | [vm_bswap64_loop_report.md](vm_bswap64_loop_report.md) |
+| vm_byte_andfold64_loop | PASS | 10/10 | [vm_byte_andfold64_loop_report.md](vm_byte_andfold64_loop_report.md) |
 | vm_byte_buffer_loop | PASS | 10/10 | [vm_byte_buffer_loop_report.md](vm_byte_buffer_loop_report.md) |
 | vm_byte_loop | PASS | 10/10 | [vm_byte_loop_report.md](vm_byte_loop_report.md) |
 | vm_bytecyc64_loop | PASS | 10/10 | [vm_bytecyc64_loop_report.md](vm_bytecyc64_loop_report.md) |
@@ -173,7 +174,7 @@ python scripts\rewrite\generate_equivalence_reports.py
 | vm_opcode64_loop | PASS | 10/10 | [vm_opcode64_loop_report.md](vm_opcode64_loop_report.md) |
 | vm_orsum_byte_idx64_loop | PASS | 10/10 | [vm_orsum_byte_idx64_loop_report.md](vm_orsum_byte_idx64_loop_report.md) |
 | vm_orxor_pair64_loop | PASS | 10/10 | [vm_orxor_pair64_loop_report.md](vm_orxor_pair64_loop_report.md) |
-| vm_outlined_wrapper_loop | **NA (no semantic cases declared)** | 0/0 | [vm_outlined_wrapper_loop_report.md](vm_outlined_wrapper_loop_report.md) |
+| vm_outlined_wrapper_loop | **NA** | 0/0 | [vm_outlined_wrapper_loop_report.md](vm_outlined_wrapper_loop_report.md) |
 | vm_pair_xormul_byte64_loop | PASS | 10/10 | [vm_pair_xormul_byte64_loop_report.md](vm_pair_xormul_byte64_loop_report.md) |
 | vm_pairmix64_loop | PASS | 10/10 | [vm_pairmix64_loop_report.md](vm_pairmix64_loop_report.md) |
 | vm_palindrome_loop | PASS | 14/14 | [vm_palindrome_loop_report.md](vm_palindrome_loop_report.md) |
@@ -213,6 +214,7 @@ python scripts\rewrite\generate_equivalence_reports.py
 | vm_short_array_loop | PASS | 10/10 | [vm_short_array_loop_report.md](vm_short_array_loop_report.md) |
 | vm_short_loop | PASS | 10/10 | [vm_short_loop_report.md](vm_short_loop_report.md) |
 | vm_signed_byterange64_loop | PASS | 10/10 | [vm_signed_byterange64_loop_report.md](vm_signed_byterange64_loop_report.md) |
+| vm_signed_dword_range64_loop | PASS | 10/10 | [vm_signed_dword_range64_loop_report.md](vm_signed_dword_range64_loop_report.md) |
 | vm_signed_dword_sum64_loop | PASS | 10/10 | [vm_signed_dword_sum64_loop_report.md](vm_signed_dword_sum64_loop_report.md) |
 | vm_signed_word_range64_loop | PASS | 10/10 | [vm_signed_word_range64_loop_report.md](vm_signed_word_range64_loop_report.md) |
 | vm_signed_word_sum64_loop | PASS | 10/10 | [vm_signed_word_sum64_loop_report.md](vm_signed_word_sum64_loop_report.md) |
@@ -241,9 +243,10 @@ python scripts\rewrite\generate_equivalence_reports.py
 | vm_vartrip_array_loop | PASS | 10/10 | [vm_vartrip_array_loop_report.md](vm_vartrip_array_loop_report.md) |
 | vm_window_loop | PASS | 11/11 | [vm_window_loop_report.md](vm_window_loop_report.md) |
 | vm_word_horner13_64_loop | PASS | 10/10 | [vm_word_horner13_64_loop_report.md](vm_word_horner13_64_loop_report.md) |
+| vm_word_orfold64_loop | PASS | 10/10 | [vm_word_orfold64_loop_report.md](vm_word_orfold64_loop_report.md) |
 | vm_word_range64_loop | PASS | 10/10 | [vm_word_range64_loop_report.md](vm_word_range64_loop_report.md) |
 | vm_word_xormul64_loop | PASS | 10/10 | [vm_word_xormul64_loop_report.md](vm_word_xormul64_loop_report.md) |
-| vm_wrapper_chain_loop | **NA (no semantic cases declared)** | 0/0 | [vm_wrapper_chain_loop_report.md](vm_wrapper_chain_loop_report.md) |
+| vm_wrapper_chain_loop | **NA** | 0/0 | [vm_wrapper_chain_loop_report.md](vm_wrapper_chain_loop_report.md) |
 | vm_xor_accumulator_loop | PASS | 8/8 | [vm_xor_accumulator_loop_report.md](vm_xor_accumulator_loop_report.md) |
 | vm_xor_shifted_self_byte64_loop | PASS | 10/10 | [vm_xor_shifted_self_byte64_loop_report.md](vm_xor_shifted_self_byte64_loop_report.md) |
 | vm_xorbytes64_loop | PASS | 10/10 | [vm_xorbytes64_loop_report.md](vm_xorbytes64_loop_report.md) |

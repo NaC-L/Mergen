@@ -1,14 +1,12 @@
 # vm_bswap64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_bswap64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_bswap64_loop.ll`
 - **Symbol:** `vm_bswap64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_bswap64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_bswap64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | x=0: zero stays zero |
-| 2 | RCX=1 | 1 | 1 | — | **no** | x=1, n=2: double bswap = identity |
-| 3 | RCX=2 | 144115188075855872 | 144115188075855872 | — | **no** | x=2, n=3: bswap once -> 0x0200...0 |
-| 4 | RCX=7 | 7 | 7 | — | **no** | x=7, n=8: even -> identity |
-| 5 | RCX=255 | 255 | 255 | — | **no** | x=0xFF, n=8: even -> identity |
-| 6 | RCX=51966 | 18359486830929248256 | 18359486830929248256 | — | **no** | x=0xCAFE, n=7 (odd) -> 0xFECA00..0 |
-| 7 | RCX=3405691582 | 13743577356411338752 | 13743577356411338752 | — | **no** | x=0xCAFEBABE, n=7 (odd) |
-| 8 | RCX=1311768467463790320 | 17356517385562371090 | 17356517385562371090 | — | **no** | 0x123...DEF0, n=1: bswap once |
-| 9 | RCX=18446744073709551615 | 18446744073709551615 | 18446744073709551615 | — | **no** | max u64: bswap fixed point |
-| 10 | RCX=11400714819323198485 | 11400714819323198485 | 11400714819323198485 | — | **no** | K (golden): n=6 even -> identity |
-
-## Failure detail
-
-### case 1: x=0: zero stays zero
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1, n=2: double bswap = identity
-
-- inputs: `RCX=1`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 3: x=2, n=3: bswap once -> 0x0200...0
-
-- inputs: `RCX=2`
-- manifest expected: `144115188075855872`
-- native: `144115188075855872`
-- lifted: `—`
-
-### case 4: x=7, n=8: even -> identity
-
-- inputs: `RCX=7`
-- manifest expected: `7`
-- native: `7`
-- lifted: `—`
-
-### case 5: x=0xFF, n=8: even -> identity
-
-- inputs: `RCX=255`
-- manifest expected: `255`
-- native: `255`
-- lifted: `—`
-
-### case 6: x=0xCAFE, n=7 (odd) -> 0xFECA00..0
-
-- inputs: `RCX=51966`
-- manifest expected: `18359486830929248256`
-- native: `18359486830929248256`
-- lifted: `—`
-
-### case 7: x=0xCAFEBABE, n=7 (odd)
-
-- inputs: `RCX=3405691582`
-- manifest expected: `13743577356411338752`
-- native: `13743577356411338752`
-- lifted: `—`
-
-### case 8: 0x123...DEF0, n=1: bswap once
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `17356517385562371090`
-- native: `17356517385562371090`
-- lifted: `—`
-
-### case 9: max u64: bswap fixed point
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `18446744073709551615`
-- native: `18446744073709551615`
-- lifted: `—`
-
-### case 10: K (golden): n=6 even -> identity
-
-- inputs: `RCX=11400714819323198485`
-- manifest expected: `11400714819323198485`
-- native: `11400714819323198485`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0: zero stays zero |
+| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1, n=2: double bswap = identity |
+| 3 | RCX=2 | 144115188075855872 | 144115188075855872 | 144115188075855872 | yes | x=2, n=3: bswap once -> 0x0200...0 |
+| 4 | RCX=7 | 7 | 7 | 7 | yes | x=7, n=8: even -> identity |
+| 5 | RCX=255 | 255 | 255 | 255 | yes | x=0xFF, n=8: even -> identity |
+| 6 | RCX=51966 | 18359486830929248256 | 18359486830929248256 | 18359486830929248256 | yes | x=0xCAFE, n=7 (odd) -> 0xFECA00..0 |
+| 7 | RCX=3405691582 | 13743577356411338752 | 13743577356411338752 | 13743577356411338752 | yes | x=0xCAFEBABE, n=7 (odd) |
+| 8 | RCX=1311768467463790320 | 17356517385562371090 | 17356517385562371090 | 17356517385562371090 | yes | 0x123...DEF0, n=1: bswap once |
+| 9 | RCX=18446744073709551615 | 18446744073709551615 | 18446744073709551615 | 18446744073709551615 | yes | max u64: bswap fixed point |
+| 10 | RCX=11400714819323198485 | 11400714819323198485 | 11400714819323198485 | 11400714819323198485 | yes | K (golden): n=6 even -> identity |
 
 ## Source
 
