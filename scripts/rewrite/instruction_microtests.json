@@ -616,6 +616,28 @@
       ]
     },
     {
+      "name": "vm_geometric_loop",
+      "symbol": "vm_geometric_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 254"] },
+        "phi i32",
+        "add i32",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0, "label": "target=1: no doubling" },
+        { "inputs": { "RCX": 1 },   "expected": 0, "label": "target=1" },
+        { "inputs": { "RCX": 2 },   "expected": 2, "label": "target=3: 1->2->4" },
+        { "inputs": { "RCX": 4 },   "expected": 3, "label": "target=5: 1->2->4->8" },
+        { "inputs": { "RCX": 8 },   "expected": 4, "label": "target=9" },
+        { "inputs": { "RCX": 15 },  "expected": 4, "label": "target=15" },
+        { "inputs": { "RCX": 16 },  "expected": 5, "label": "target=17" },
+        { "inputs": { "RCX": 64 },  "expected": 7, "label": "target=65" },
+        { "inputs": { "RCX": 128 }, "expected": 8, "label": "target=129" },
+        { "inputs": { "RCX": 255 }, "expected": 8, "label": "target=255" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
