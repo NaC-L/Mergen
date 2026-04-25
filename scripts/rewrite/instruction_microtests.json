@@ -1465,6 +1465,29 @@
       ]
     },
     {
+      "name": "vm_minabs_loop",
+      "symbol": "vm_minabs_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "call",
+        "select"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 128, "label": "limit=1, target=-128" },
+        { "inputs": { "RCX": 1 },     "expected": 128, "label": "limit=2, target=-128" },
+        { "inputs": { "RCX": 8 },     "expected": 128, "label": "limit=9, target=-128" },
+        { "inputs": { "RCX": 16 },    "expected": 127, "label": "0x10: limit=1, target=-127" },
+        { "inputs": { "RCX": 128 },   "expected": 120, "label": "0x80: limit=1, target=-120" },
+        { "inputs": { "RCX": 255 },   "expected": 113, "label": "0xFF: limit=16, target=-113" },
+        { "inputs": { "RCX": 2748 },  "expected": 4,   "label": "0xABC: limit=13, target=43" },
+        { "inputs": { "RCX": 3295 },  "expected": 1,   "label": "0xCDF: limit=16, target=77" },
+        { "inputs": { "RCX": 4660 },  "expected": 93,  "label": "0x1234: limit=5, target=-93" },
+        { "inputs": { "RCX": 65535 }, "expected": 3,   "label": "0xFFFF: limit=16, target=127" },
+        { "inputs": { "RCX": 2063 },  "expected": 0,   "label": "0x80F: limit=16, target=0; perfect i=0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
