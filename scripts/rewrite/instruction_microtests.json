@@ -1207,6 +1207,30 @@
       ]
     },
     {
+      "name": "vm_find2max_loop",
+      "symbol": "vm_find2max_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "icmp",
+        "shl",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },        "expected": 41,    "label": "limit=2, data=[0,0x29]" },
+        { "inputs": { "RCX": 1 },        "expected": 10323, "label": "limit=3" },
+        { "inputs": { "RCX": 2 },        "expected": 20601, "label": "limit=4" },
+        { "inputs": { "RCX": 7 },        "expected": 51953, "label": "limit=9" },
+        { "inputs": { "RCX": 170 },      "expected": 53752, "label": "0xAA" },
+        { "inputs": { "RCX": 255 },      "expected": 57599, "label": "0xFF" },
+        { "inputs": { "RCX": 85 },       "expected": 41969, "label": "0x55" },
+        { "inputs": { "RCX": 291 },      "expected": 29063, "label": "0x123" },
+        { "inputs": { "RCX": 4660 },     "expected": 37113, "label": "0x1234" },
+        { "inputs": { "RCX": 11259375 }, "expected": 61424, "label": "0xABCDEF" },
+        { "inputs": { "RCX": 204 },      "expected": 52453, "label": "0xCC" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
