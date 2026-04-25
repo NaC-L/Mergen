@@ -3263,6 +3263,26 @@
       ]
     },
     {
+      "name": "vm_digitprod64_loop",
+      "symbol": "vm_digitprod64_loop_target",
+      "patterns": [
+        "mul",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,         "label": "x=0: special-case 0" },
+        { "inputs": { "RCX": 5 },                    "expected": 5,         "label": "x=5: single digit" },
+        { "inputs": { "RCX": 12 },                   "expected": 2,         "label": "x=12: 1*2" },
+        { "inputs": { "RCX": 99 },                   "expected": 81,        "label": "x=99: 9*9" },
+        { "inputs": { "RCX": 100 },                  "expected": 0,         "label": "x=100: contains 0 digit" },
+        { "inputs": { "RCX": 123 },                  "expected": 6,         "label": "x=123: 1*2*3" },
+        { "inputs": { "RCX": 999 },                  "expected": 729,       "label": "x=999: 9^3" },
+        { "inputs": { "RCX": 255 },                  "expected": 50,        "label": "x=255: 2*5*5" },
+        { "inputs": { "RCX": 999999999 },            "expected": 387420489, "label": "x=10^9-1: 9^9" },
+        { "inputs": { "RCX": 51966 },                "expected": 1620,      "label": "x=0xCAFE=51966 dec" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
