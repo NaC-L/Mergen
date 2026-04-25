@@ -3083,6 +3083,26 @@
       ]
     },
     {
+      "name": "vm_trailingones64_loop",
+      "symbol": "vm_trailingones64_loop_target",
+      "patterns": [
+        "and",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,  "label": "x=0: 0 trailing ones" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,  "label": "x=1" },
+        { "inputs": { "RCX": 3 },                    "expected": 2,  "label": "x=3: 11" },
+        { "inputs": { "RCX": 7 },                    "expected": 3,  "label": "x=7: 111" },
+        { "inputs": { "RCX": 65534 },                "expected": 0,  "label": "x=0xFFFE: low bit clear" },
+        { "inputs": { "RCX": 65535 },                "expected": 16, "label": "x=0xFFFF: 16 ones" },
+        { "inputs": { "RCX": 51966 },                "expected": 0,  "label": "x=0xCAFE: low bit 0" },
+        { "inputs": { "RCX": 51967 },                "expected": 8,  "label": "x=0xCAFF: 8 trailing ones" },
+        { "inputs": { "RCX": 3405691583 },           "expected": 6,  "label": "x=0xCAFEBABF: 6 trailing ones" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 64, "label": "max u64: all 64 trailing ones" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
