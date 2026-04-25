@@ -2724,6 +2724,26 @@
       ]
     },
     {
+      "name": "vm_morton64_loop",
+      "symbol": "vm_morton64_loop_target",
+      "patterns": [
+        "or",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "x=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                   "label": "x=1: bit 0 stays at 0" },
+        { "inputs": { "RCX": 2 },                    "expected": 4,                   "label": "x=2: bit 1 -> bit 2" },
+        { "inputs": { "RCX": 3 },                    "expected": 5,                   "label": "x=3 = bit 0 + bit 1 -> 1+4 = 5" },
+        { "inputs": { "RCX": 255 },                  "expected": 21845,               "label": "x=0xFF -> 0x5555" },
+        { "inputs": { "RCX": 4294967295 },           "expected": 6148914691236517205, "label": "x=0xFFFFFFFF -> 0x5555555555555555 alternating" },
+        { "inputs": { "RCX": 51966 },                "expected": 1346655572,         "label": "x=0xCAFE -> 0x50445554" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 5783841641878275412, "label": "0xCAFEBABE" },
+        { "inputs": { "RCX": 2863311530 },           "expected": 4919131752989213764, "label": "0xAAAAAAAA -> 0x4444444444444444" },
+        { "inputs": { "RCX": 1431655765 },           "expected": 1229782938247303441, "label": "0x55555555 -> 0x1111111111111111" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
