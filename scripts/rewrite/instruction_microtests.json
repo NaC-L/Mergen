@@ -2944,6 +2944,26 @@
       ]
     },
     {
+      "name": "vm_hexdigits64_loop",
+      "symbol": "vm_hexdigits64_loop_target",
+      "patterns": [
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1,  "label": "x=0: special-case 1" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,  "label": "x=1" },
+        { "inputs": { "RCX": 15 },                   "expected": 1,  "label": "x=0xF: 1 nibble" },
+        { "inputs": { "RCX": 16 },                   "expected": 2,  "label": "x=0x10: 2 nibbles" },
+        { "inputs": { "RCX": 255 },                  "expected": 2,  "label": "x=0xFF" },
+        { "inputs": { "RCX": 4095 },                 "expected": 3,  "label": "x=0xFFF" },
+        { "inputs": { "RCX": 51966 },                "expected": 4,  "label": "x=0xCAFE" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 8,  "label": "x=0xCAFEBABE" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 16, "label": "max u64: 16 nibbles" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 16, "label": "K (golden, MSB set)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
