@@ -71,6 +71,8 @@
   lesson: even a single non-indexed `pc = rpc` indirect dispatch crashes the lifter (access violation, exit 0xC0000005) when invoked through PowerShell. The ret-to-stack-loaded-pc pattern is fundamentally unsupported regardless of stack depth. Removed.
 - experiment: vm_bubblesort_loop with adjacent compare-and-swap on a stack array
   lesson: even a single bubble pass (loop body conditionally writes TWO indexed stack-array slots) trips diagnostic 503 (BB budget exceeded). The lifter enumerates the swap-vs-no-swap path across every iteration. Comparison-driven update of a single accumulator (vm_minarray_loop) is fine; two-slot conditional writes inside a loop are not. Sample removed.
+- experiment: vm_tea_round_loop with TEA-style compound multi-state cross-update
+  lesson: lifter generates IR with the right shape (peeled loop with phi nodes) and pattern verification passes, but the lifted IR computes the WRONG value for some symbolic inputs (e.g. x=0x65501 with n=6: native+python both produce 37119, lifter returns a different value). Real lifter correctness bug for compound v0/v1 cross-update bodies. Sample removed.
 - experiment: vm_switch_dispatch_loop using `switch` for dispatch
   lesson: lifter collapsed the switch-dispatched VM to a constant -1 return; same class of limitation. Removed.
 - experiment: end-to-end rewrite regression via run_experiment
