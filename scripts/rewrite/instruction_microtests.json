@@ -2106,6 +2106,26 @@
       ]
     },
     {
+      "name": "vm_rotl64_loop",
+      "symbol": "vm_rotl64_loop_target",
+      "patterns": [
+        "or",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: zero stays zero" },
+        { "inputs": { "RCX": 1 },                    "expected": 4,                    "label": "x=1, amount=2, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "max u64: rotation invariant" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 1,                    "label": "x=2^63, amount=1: MSB->LSB" },
+        { "inputs": { "RCX": 51966 },                "expected": 18302628885633695946, "label": "x=0xCAFE, amount=31, n=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 17870283321459342058, "label": "0xCAFEBABE, amount=31, n=6" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 3771334343958392850,  "label": "0x123456789ABCDEF0, amount=17, n=8" },
+        { "inputs": { "RCX": 7 },                    "expected": 1792,                 "label": "x=7, amount=8, n=1: byte shift" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 7953307047391890910,  "label": "x=K (golden ratio), amount=22, n=1" },
+        { "inputs": { "RCX": 511 },                  "expected": 511,                  "label": "x=0x1FF, amount=32, n=8: rotation invariant for amount=32 since (lo<->hi) twice = identity but here 8 swaps = identity" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
