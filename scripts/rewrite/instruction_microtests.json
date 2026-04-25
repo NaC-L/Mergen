@@ -546,6 +546,29 @@
       ]
     },
     {
+      "name": "vm_rotate_loop",
+      "symbol": "vm_rotate_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "shl",
+        "lshr",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,   "label": "val=0,n=0" },
+        { "inputs": { "RCX": 1 },     "expected": 1,   "label": "val=1,n=0" },
+        { "inputs": { "RCX": 128 },   "expected": 128, "label": "val=0x80,n=0" },
+        { "inputs": { "RCX": 256 },   "expected": 0,   "label": "val=0,n=1" },
+        { "inputs": { "RCX": 384 },   "expected": 1,   "label": "val=0x80,n=1: rot left -> 1" },
+        { "inputs": { "RCX": 1281 },  "expected": 32,  "label": "val=1,n=5: rot left 5 -> 0x20" },
+        { "inputs": { "RCX": 1793 },  "expected": 128, "label": "val=1,n=7: rot left 7 -> 0x80" },
+        { "inputs": { "RCX": 1877 },  "expected": 170, "label": "val=0x55,n=7" },
+        { "inputs": { "RCX": 4095 },  "expected": 255, "label": "val=0xFF,n=7: any rotation" },
+        { "inputs": { "RCX": 1807 },  "expected": 135, "label": "val=0x0F,n=7" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
