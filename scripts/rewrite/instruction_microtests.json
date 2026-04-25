@@ -3880,6 +3880,27 @@
       ]
     },
     {
+      "name": "vm_xormul_byte_idx64_loop",
+      "symbol": "vm_xormul_byte_idx64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1 n=2: byte0=1 *1 ^ byte1=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,   "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,   "label": "x=7 n=8: only byte0=7" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,   "label": "x=8 n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 24,  "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 236, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,   "label": "all 0xFF: n=8 -> XOR of 0xFF*1..0xFF*8 cancels to 0 (sum of 1..8=36 even count)" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 8,   "label": "0x0102...0708: n=1 byte0=8 (matches x=8)" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 240, "label": "0x12345...EF0: n=1 byte0=0xF0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
