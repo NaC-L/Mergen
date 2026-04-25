@@ -69,6 +69,8 @@
   lesson: dispatcher reads next pc from a stack array; lifter cannot generalize the indirect dispatch and trips diagnostic 503 (basic-block budget exceeded, ~4087 blocks). Sample removed; revisit when loop generalization handles stack-indexed pc.
 - experiment: vm_subroutine_loop with single-int rpc slot (one-deep call/ret)
   lesson: even a single non-indexed `pc = rpc` indirect dispatch crashes the lifter (access violation, exit 0xC0000005) when invoked through PowerShell. The ret-to-stack-loaded-pc pattern is fundamentally unsupported regardless of stack depth. Removed.
+- experiment: vm_bubblesort_loop with adjacent compare-and-swap on a stack array
+  lesson: even a single bubble pass (loop body conditionally writes TWO indexed stack-array slots) trips diagnostic 503 (BB budget exceeded). The lifter enumerates the swap-vs-no-swap path across every iteration. Comparison-driven update of a single accumulator (vm_minarray_loop) is fine; two-slot conditional writes inside a loop are not. Sample removed.
 - experiment: vm_switch_dispatch_loop using `switch` for dispatch
   lesson: lifter collapsed the switch-dispatched VM to a constant -1 return; same class of limitation. Removed.
 - experiment: end-to-end rewrite regression via run_experiment
