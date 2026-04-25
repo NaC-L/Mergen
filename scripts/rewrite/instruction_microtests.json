@@ -805,6 +805,32 @@
       ]
     },
     {
+      "name": "vm_pcg_loop",
+      "symbol": "vm_pcg_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 254"] },
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "mul",
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 1,     "label": "n=0, state=1: out=1" },
+        { "inputs": { "RCX": 1 },     "expected": 1,     "label": "n=0, state=1" },
+        { "inputs": { "RCX": 256 },   "expected": 21,    "label": "n=1, state=1" },
+        { "inputs": { "RCX": 257 },   "expected": 21,    "label": "n=1, state=1 (low bit forced)" },
+        { "inputs": { "RCX": 512 },   "expected": 283,   "label": "n=2, state=1" },
+        { "inputs": { "RCX": 768 },   "expected": 3407,  "label": "n=3" },
+        { "inputs": { "RCX": 1280 },  "expected": 63470, "label": "n=5" },
+        { "inputs": { "RCX": 3841 },  "expected": 1993,  "label": "n=15, state=1" },
+        { "inputs": { "RCX": 4095 },  "expected": 44770, "label": "n=15, state=0xFF" },
+        { "inputs": { "RCX": 4660 },  "expected": 8554,  "label": "0x1234" },
+        { "inputs": { "RCX": 39030 }, "expected": 19508, "label": "0x9876" },
+        { "inputs": { "RCX": 43981 }, "expected": 21125, "label": "0xABCD" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
