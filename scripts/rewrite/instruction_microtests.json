@@ -2306,6 +2306,26 @@
       ]
     },
     {
+      "name": "vm_factorial64_loop",
+      "symbol": "vm_factorial64_loop_target",
+      "patterns": [
+        "mul",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 1,                    "label": "x=0, n=1: 1!=1" },
+        { "inputs": { "RCX": 1 },     "expected": 2,                    "label": "x=1, n=2: 2!=2" },
+        { "inputs": { "RCX": 4 },     "expected": 120,                  "label": "x=4, n=5: 5!=120" },
+        { "inputs": { "RCX": 9 },     "expected": 3628800,              "label": "x=9, n=10: 10!" },
+        { "inputs": { "RCX": 11 },    "expected": 479001600,            "label": "x=11, n=12: 12!" },
+        { "inputs": { "RCX": 19 },    "expected": 2432902008176640000,  "label": "x=19, n=20: 20! (last that fits u64)" },
+        { "inputs": { "RCX": 20 },    "expected": 14197454024290336768, "label": "x=20, n=21: 21! wraps mod 2^64" },
+        { "inputs": { "RCX": 25 },    "expected": 16877220553537093632, "label": "x=25, n=26: 26! wraps" },
+        { "inputs": { "RCX": 31 },    "expected": 12400865694432886784, "label": "x=0x1F, n=32 max: 32! wraps" },
+        { "inputs": { "RCX": 51966 }, "expected": 4999213071378415616,  "label": "x=0xCAFE, n=31" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
