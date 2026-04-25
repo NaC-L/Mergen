@@ -2126,6 +2126,26 @@
       ]
     },
     {
+      "name": "vm_popcount64_loop",
+      "symbol": "vm_popcount64_loop_target",
+      "patterns": [
+        "and",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,  "label": "x=0: trip count 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,  "label": "x=1" },
+        { "inputs": { "RCX": 7 },                    "expected": 3,  "label": "x=7: 3 bits" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 64, "label": "max u64: max trip count" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 1,  "label": "x=2^63: single high bit" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 22, "label": "0xCAFEBABE" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 32, "label": "0x123456789ABCDEF0" },
+        { "inputs": { "RCX": 12297829382473034410 }, "expected": 32, "label": "0xAAAA...: alternating high" },
+        { "inputs": { "RCX": 6148914691236517205 },  "expected": 32, "label": "0x5555...: alternating low" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 38, "label": "x=K (golden ratio)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
