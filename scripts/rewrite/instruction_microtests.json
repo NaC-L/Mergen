@@ -1419,6 +1419,29 @@
       ]
     },
     {
+      "name": "vm_nested_abs_loop",
+      "symbol": "vm_nested_abs_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 3"] },
+        "phi i32",
+        "call",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,    "label": "a=1, b=1, v=0" },
+        { "inputs": { "RCX": 16 },         "expected": 1,    "label": "0x10: a=1,b=1,v=1" },
+        { "inputs": { "RCX": 64 },         "expected": 4,    "label": "0x40: a=1,b=1,v=4" },
+        { "inputs": { "RCX": 119 },        "expected": 56,   "label": "0x77: a=4,b=2,v=7" },
+        { "inputs": { "RCX": 192 },        "expected": 12,   "label": "0xC0: a=1,b=1,v=12" },
+        { "inputs": { "RCX": 255 },        "expected": 206,  "label": "0xFF: a=4,b=4,v=15" },
+        { "inputs": { "RCX": 256 },        "expected": 16,   "label": "0x100: a=1,b=1,v=16" },
+        { "inputs": { "RCX": 2748 },       "expected": 714,  "label": "0xABC: a=1,b=4,v=171" },
+        { "inputs": { "RCX": 291 },        "expected": 36,   "label": "0x123: a=4,b=1,v=18" },
+        { "inputs": { "RCX": 65535 },      "expected": 4032, "label": "0xFFFF: a=4,b=4,v=255" },
+        { "inputs": { "RCX": 2004318071 }, "expected": 888,  "label": "0x77777777: a=4,b=2,v=119" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
