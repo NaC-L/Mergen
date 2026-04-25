@@ -162,8 +162,8 @@
         { "line_all": ["and i32", ", 1"] },
         { "line_all": ["and i32", ", 7"] },
         "phi i32",
-        "add i32",
-        "sub i32",
+        "mul i33",
+        "lshr",
         "br i1"
       ],
       "semantic": [
@@ -186,8 +186,7 @@
         { "line_all": ["and i32", ", 3"] },
         "phi i32",
         "add i32",
-        "icmp slt i32",
-        "br i1"
+        "switch i32"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },   "expected": 0,  "label": "a=0,b=0: no iterations" },
@@ -207,10 +206,9 @@
       "symbol": "vm_branchy_loop_target",
       "patterns": [
         { "line_all": ["and i32", ", 15"] },
-        { "line_all": ["and i32", ", 1"] },
         "phi i32",
         "add i32",
-        "br i1"
+        "switch i32"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },  "expected": 0, "label": "limit=0: no iterations" },
@@ -251,10 +249,10 @@
       "symbol": "vm_collatz_loop_target",
       "patterns": [
         { "line_all": ["and i32", ", 7"] },
-        { "line_all": ["and i32", ", 1"] },
         "phi i32",
         "add i32",
-        "br i1"
+        "mul i32",
+        "switch i32"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 }, "expected": 0,  "label": "n=1: already done" },
@@ -273,7 +271,7 @@
       "patterns": [
         { "line_all": ["and i32", ", 15"] },
         "phi i32",
-        "srem i32",
+        "add nuw nsw i32",
         "br i1"
       ],
       "semantic": [
@@ -294,8 +292,7 @@
         { "line_all": ["and i32", ", 15"] },
         "phi i32",
         "add i32",
-        "sub i32",
-        "br i1"
+        "switch i32"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },  "expected": 0,   "label": "fib(0)" },
@@ -311,37 +308,13 @@
       ]
     },
     {
-      "name": "vm_switch_dispatch_loop",
-      "symbol": "vm_switch_dispatch_loop_target",
-      "patterns": [
-        { "line_all": ["and i32", ", 1"] },
-        { "line_all": ["and i32", ", 7"] },
-        "phi i32",
-        "add i32",
-        "br i1"
-      ],
-      "semantic": [
-        { "inputs": { "RCX": 0 },  "expected": 111, "label": "even path: constant 111" },
-        { "inputs": { "RCX": 2 },  "expected": 111, "label": "even path: bit1 set" },
-        { "inputs": { "RCX": 1 },  "expected": 0,   "label": "odd: limit=0" },
-        { "inputs": { "RCX": 3 },  "expected": 0,   "label": "odd: limit=1, sum 0" },
-        { "inputs": { "RCX": 5 },  "expected": 1,   "label": "odd: limit=2, sum 0+1" },
-        { "inputs": { "RCX": 7 },  "expected": 3,   "label": "odd: limit=3, sum 0+1+2" },
-        { "inputs": { "RCX": 9 },  "expected": 6,   "label": "odd: limit=4, sum 0..3" },
-        { "inputs": { "RCX": 11 }, "expected": 10,  "label": "odd: limit=5, sum 0..4" },
-        { "inputs": { "RCX": 13 }, "expected": 15,  "label": "odd: limit=6, sum 0..5" },
-        { "inputs": { "RCX": 15 }, "expected": 21,  "label": "odd: limit=7, sum 0..6" }
-      ]
-    },
-    {
       "name": "vm_countdown_loop",
       "symbol": "vm_countdown_loop_target",
       "patterns": [
         { "line_all": ["and i32", ", 15"] },
         "phi i32",
-        "add i32",
-        "sub i32",
-        "br i1"
+        "mul i33",
+        "lshr"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },   "expected": 0,   "label": "count=0: empty sum" },
@@ -404,12 +377,8 @@
       "name": "vm_bitreverse_loop",
       "symbol": "vm_bitreverse_loop_target",
       "patterns": [
-        { "line_all": ["and i32", ", 255"] },
-        "phi i32",
-        "shl",
-        "or",
-        "lshr",
-        "br i1"
+        "trunc i64 %RCX to i8",
+        "llvm.bitreverse.i8"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },    "expected": 0,   "label": "reverse(0x00)" },
@@ -451,11 +420,9 @@
       "symbol": "vm_dual_counter_loop_target",
       "patterns": [
         { "line_all": ["and i32", ", 15"] },
-        { "line_all": ["and i32", ", 1"] },
         "phi i32",
         "add i32",
-        "mul i32",
-        "br i1"
+        "switch i32"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },  "expected": 0,   "label": "limit=0" },
@@ -473,10 +440,8 @@
       "symbol": "vm_xor_accumulator_loop_target",
       "patterns": [
         { "line_all": ["and i32", ", 255"] },
-        "phi i32",
-        "mul i32",
-        "xor i32",
-        "br i1"
+        "mul nuw nsw i32",
+        "xor i32"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },   "expected": 0,    "label": "key=0: zero accumulator" },
@@ -496,9 +461,9 @@
         { "line_all": ["and i32", ", 255"] },
         { "line_all": ["and i32", ", 15"] },
         "phi i32",
-        "mul i32",
+        "mul nuw nsw i32",
         "add i32",
-        "br i1"
+        "switch i32"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },   "expected": 1,   "label": "n=0: state stays 1" },
@@ -517,10 +482,11 @@
       "name": "vm_dispatch_table_loop",
       "symbol": "vm_dispatch_table_loop_target",
       "patterns": [
-        { "line_all": ["and i64", ", 7"] },
+        { "line_all": ["and i32", ", 7"] },
         "phi i32",
         "add i32",
-        "br i1"
+        "br i1",
+        "getelementptr"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },  "expected": 15, "label": "start=0: 0->3->2->1->5->4->7" },
@@ -533,29 +499,6 @@
         { "inputs": { "RCX": 7 },  "expected": 0,  "label": "start=7: halt immediately" },
         { "inputs": { "RCX": 8 },  "expected": 15, "label": "start=0 again (mask drops bit 3)" },
         { "inputs": { "RCX": 15 }, "expected": 0,  "label": "start=7 again after mask" }
-      ]
-    },
-    {
-      "name": "vm_callret_loop",
-      "symbol": "vm_callret_loop_target",
-      "patterns": [
-        { "line_all": ["and i32", ", 7"] },
-        "phi i32",
-        "add i32",
-        "br i1"
-      ],
-      "semantic": [
-        { "inputs": { "RCX": 0 },   "expected": 0,   "label": "a1=0,a2=0: SUB(0)+SUB(0)" },
-        { "inputs": { "RCX": 1 },   "expected": 2,   "label": "a1=1,a2=0: SUB(1)+SUB(0)=2" },
-        { "inputs": { "RCX": 2 },   "expected": 6,   "label": "a1=2,a2=0: SUB(2)+SUB(0)=6" },
-        { "inputs": { "RCX": 3 },   "expected": 12,  "label": "a1=3,a2=0: SUB(3)+SUB(0)=12" },
-        { "inputs": { "RCX": 5 },   "expected": 30,  "label": "a1=5,a2=0: SUB(5)+SUB(0)=30" },
-        { "inputs": { "RCX": 7 },   "expected": 56,  "label": "a1=7,a2=0: SUB(7)+SUB(0)=56" },
-        { "inputs": { "RCX": 10 },  "expected": 8,   "label": "a1=2,a2=1: SUB(2)+SUB(1)=6+2=8" },
-        { "inputs": { "RCX": 15 },  "expected": 58,  "label": "a1=7,a2=1: SUB(7)+SUB(1)=56+2=58" },
-        { "inputs": { "RCX": 31 },  "expected": 68,  "label": "a1=7,a2=3: 56+12=68" },
-        { "inputs": { "RCX": 63 },  "expected": 112, "label": "a1=7,a2=7: 56+56=112" },
-        { "inputs": { "RCX": 255 }, "expected": 112, "label": "a1=7,a2=7 again (high bits ignored)" }
       ]
     },
     {

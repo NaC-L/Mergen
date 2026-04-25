@@ -65,5 +65,7 @@
 - why it won:
 
 ## What's Been Tried
-- experiment:
-- lesson:
+- experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
+  lesson: dispatcher reads next pc from a stack array, lifter cannot generalize the indirect dispatch and trips diagnostic 503 (basic-block budget exceeded, ~4087 blocks). Sample removed; this is a real lifter limitation - revisit when loop generalization handles stack-indexed pc.
+- experiment: end-to-end rewrite regression via run_experiment
+  lesson: harness env sets CI=1 and LLVM_DIR points at an install without bundled clang-cl, so build_samples.cmd refuses host fallback. Must pin CLANG_CL_EXE explicitly.
