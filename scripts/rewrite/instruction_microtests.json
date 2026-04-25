@@ -1061,6 +1061,29 @@
       ]
     },
     {
+      "name": "vm_caesar_loop",
+      "symbol": "vm_caesar_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 31"] },
+        "add",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 92,  "label": "shift=0" },
+        { "inputs": { "RCX": 1 },     "expected": 100, "label": "shift=0, x=1: buf shifts up by 1 each" },
+        { "inputs": { "RCX": 256 },   "expected": 100, "label": "shift=1, x=0" },
+        { "inputs": { "RCX": 257 },   "expected": 108, "label": "shift=1, x=1" },
+        { "inputs": { "RCX": 264 },   "expected": 132, "label": "shift=1, x=8" },
+        { "inputs": { "RCX": 272 },   "expected": 100, "label": "shift=1, x=16" },
+        { "inputs": { "RCX": 768 },   "expected": 116, "label": "shift=3, x=0" },
+        { "inputs": { "RCX": 2581 },  "expected": 116, "label": "0xA15: shift=10, x=0x15" },
+        { "inputs": { "RCX": 3074 },  "expected": 108, "label": "0xC02: shift=12, x=2" },
+        { "inputs": { "RCX": 7936 },  "expected": 116, "label": "0x1F00: shift=31, x=0" },
+        { "inputs": { "RCX": 255 },   "expected": 116, "label": "0xFF: shift=0, x=0xFF" },
+        { "inputs": { "RCX": 4660 },  "expected": 140, "label": "0x1234" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
