@@ -66,6 +66,12 @@
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
-  lesson: dispatcher reads next pc from a stack array, lifter cannot generalize the indirect dispatch and trips diagnostic 503 (basic-block budget exceeded, ~4087 blocks). Sample removed; this is a real lifter limitation - revisit when loop generalization handles stack-indexed pc.
+  lesson: dispatcher reads next pc from a stack array; lifter cannot generalize the indirect dispatch and trips diagnostic 503 (basic-block budget exceeded, ~4087 blocks). Sample removed; revisit when loop generalization handles stack-indexed pc.
+- experiment: vm_switch_dispatch_loop using `switch` for dispatch
+  lesson: lifter collapsed the switch-dispatched VM to a constant -1 return; same class of limitation. Removed.
 - experiment: end-to-end rewrite regression via run_experiment
   lesson: harness env sets CI=1 and LLVM_DIR points at an install without bundled clang-cl, so build_samples.cmd refuses host fallback. Must pin CLANG_CL_EXE explicitly.
+- experiment: speculative IR patterns vs lifter-observed shapes
+  lesson: 13/18 first-pass VM patterns missed because the lifter heavily compresses dispatchers (if-else -> switch i32, fixed-trip loops unrolled or recognized as intrinsics like llvm.bitreverse.i8, triangular sums closed-form-solved into mul i33 + lshr i33). Patterns must be derived from lifted IR, not from source-level shape.
+- experiment: lli semantic check found undef for empty-loop inputs (limit=0) in branchy/collatz
+  lesson: lifter pseudo-stack promotion drops the entry-block init when the same slot is also written inside a dispatcher state. Fix is the dual_counter pattern: keep an explicit init dispatcher state on the entry-to-halt path. branchy needed `i=0; count=0;` inside BV_LOAD_LIMIT to thread `[ 0, %entry ]` through the loop phi instead of `[ undef, %entry ]`.

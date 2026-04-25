@@ -23,13 +23,10 @@ __declspec(noinline)
 int vm_collatz_loop_target(int x) {
     int n     = 0;
     int steps = 0;
-    int pc    = CV_INIT;
+    int pc    = CV_LOAD_N;
 
     while (1) {
-        if (pc == CV_INIT) {
-            steps = 0;
-            pc = CV_LOAD_N;
-        } else if (pc == CV_LOAD_N) {
+        if (pc == CV_LOAD_N) {
             n = (x & 7) + 1;
             pc = CV_CHECK_DONE;
         } else if (pc == CV_CHECK_DONE) {
