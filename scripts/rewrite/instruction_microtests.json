@@ -1557,6 +1557,38 @@
       ]
     },
     {
+      "name": "vm_imported_cttz_loop",
+      "symbol": "vm_imported_cttz_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "call",
+        "or",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 30, "label": "limit=1, x=0" },
+        { "inputs": { "RCX": 1 },          "expected": 4,  "label": "limit=2, x=1" },
+        { "inputs": { "RCX": 7 },          "expected": 8,  "label": "limit=8" },
+        { "inputs": { "RCX": 255 },        "expected": 7,  "label": "0xFF: limit=8" },
+        { "inputs": { "RCX": 256 },        "expected": 8,  "label": "0x100: limit=1" },
+        { "inputs": { "RCX": 51966 },      "expected": 7,  "label": "0xCAFE: limit=7" },
+        { "inputs": { "RCX": 43981 },      "expected": 6,  "label": "0xABCD: limit=6" },
+        { "inputs": { "RCX": 74565 },      "expected": 7,  "label": "0x12345: limit=6" },
+        { "inputs": { "RCX": -1 },         "expected": 7,  "label": "all F" },
+        { "inputs": { "RCX": -559038737 }, "expected": 7,  "label": "0xDEADBEEF" },
+        { "inputs": { "RCX": 128 },        "expected": 7,  "label": "0x80: limit=1" }
+      ]
+    },
+    {
+      "name": "vm_outlined_wrapper_loop",
+      "symbol": "vm_outlined_wrapper_loop_target",
+      "patterns": [
+        "call",
+        "add"
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
