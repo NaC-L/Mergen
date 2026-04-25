@@ -3422,6 +3422,27 @@
       ]
     },
     {
+      "name": "vm_byterange64_loop",
+      "symbol": "vm_byterange64_loop_target",
+      "patterns": [
+        "llvm.umax.i64",
+        "llvm.umin.i64",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "all zero bytes -> mx=mn=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1: n=(1&7)+1=2: bytes [1,0] -> mx=1 mn=0" },
+        { "inputs": { "RCX": 255 },                  "expected": 255, "label": "x=0xFF: n=8: byte0=255 rest=0" },
+        { "inputs": { "RCX": 128 },                  "expected": 0,   "label": "x=0x80: n=1: only byte0=0x80" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 0,   "label": "0x0102...0708: n=1: only byte0=8" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 0,   "label": "0x12345...EF0: n=1: only byte0=0xF0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 254, "label": "0xCAFEBABE: n=7: max=0xFE min=0" },
+        { "inputs": { "RCX": 16045690985374415566 }, "expected": 81,  "label": "0xDEADBEEFFEEDFACE: n=7: range across non-zero bytes" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,   "label": "all 0xFF: mx=mn=255" },
+        { "inputs": { "RCX": 9187201950435737471 },  "expected": 0,   "label": "0x7F*8: mx=mn=127" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
