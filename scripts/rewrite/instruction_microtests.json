@@ -660,6 +660,31 @@
       ]
     },
     {
+      "name": "vm_digitsum_loop",
+      "symbol": "vm_digitsum_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 65535"] },
+        "phi i32",
+        "add",
+        "udiv",
+        { "line_all": ["mul nsw i32", ", -10"] }
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,  "label": "n=0" },
+        { "inputs": { "RCX": 1 },     "expected": 1,  "label": "n=1" },
+        { "inputs": { "RCX": 9 },     "expected": 9,  "label": "n=9: single digit" },
+        { "inputs": { "RCX": 10 },    "expected": 1,  "label": "n=10: 1+0" },
+        { "inputs": { "RCX": 42 },    "expected": 6,  "label": "n=42: 4+2" },
+        { "inputs": { "RCX": 99 },    "expected": 18, "label": "n=99: 9+9" },
+        { "inputs": { "RCX": 255 },   "expected": 12, "label": "n=255: 2+5+5" },
+        { "inputs": { "RCX": 1234 },  "expected": 10, "label": "n=1234: 1+2+3+4" },
+        { "inputs": { "RCX": 9999 },  "expected": 36, "label": "n=9999: 4*9" },
+        { "inputs": { "RCX": 65535 }, "expected": 24, "label": "n=65535: 6+5+5+3+5" },
+        { "inputs": { "RCX": 65536 }, "expected": 0,  "label": "n=0 again (mask drops bit 16)" },
+        { "inputs": { "RCX": 12345 }, "expected": 15, "label": "n=12345: 1+2+3+4+5" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
