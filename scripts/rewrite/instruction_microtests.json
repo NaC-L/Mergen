@@ -3143,6 +3143,26 @@
       ]
     },
     {
+      "name": "vm_deinterleave64_loop",
+      "symbol": "vm_deinterleave64_loop_target",
+      "patterns": [
+        "or",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,                 "label": "x=0" },
+        { "inputs": { "RCX": 1 },          "expected": 1,                 "label": "x=1: bit 0 -> evens bit 0" },
+        { "inputs": { "RCX": 2 },          "expected": 4294967296,        "label": "x=2: bit 1 -> odds bit 0 -> 1<<32" },
+        { "inputs": { "RCX": 3 },          "expected": 4294967297,        "label": "x=3: both bit 0 of evens and odds" },
+        { "inputs": { "RCX": 2863311530 }, "expected": 281470681743360,   "label": "x=0xAAAAAAAA: all to odds, evens=0" },
+        { "inputs": { "RCX": 1431655765 }, "expected": 65535,             "label": "x=0x55555555: all to evens, odds=0" },
+        { "inputs": { "RCX": 4294967295 }, "expected": 281470681808895,   "label": "x=0xFFFFFFFF: 0xFFFF in both halves" },
+        { "inputs": { "RCX": 3405691582 }, "expected": 211101937602118,   "label": "x=0xCAFEBABE" },
+        { "inputs": { "RCX": 2654435769 }, "expected": 199484051056597,   "label": "x=0x9E3779B9" },
+        { "inputs": { "RCX": 305419896 },  "expected": 22084721854188,    "label": "x=0x12345678" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
