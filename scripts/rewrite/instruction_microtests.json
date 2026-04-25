@@ -4520,6 +4520,27 @@
       ]
     },
     {
+      "name": "vm_word_range64_loop",
+      "symbol": "vm_word_range64_loop_target",
+      "patterns": [
+        "llvm.umax.i64",
+        "llvm.umin.i64",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "all zero -> mx=mn=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1 n=2: words [1,0] -> mx=1 mn=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,     "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,     "label": "x=3 n=4: words [3,0,0,0] -> 3-0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 51966, "label": "0xCAFEBABE: n=3 words BABE,CAFE,0 -> max=0xCAFE" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 57005, "label": "0xDEADBEEF: n=4 words BEEF,DEAD,0,0 -> max=0xDEAD" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,     "label": "all 0xFF: mx=mn=0xFFFF" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 0,     "label": "0x0102...0708: n=1 single word" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 0,     "label": "0x12345...EF0: n=1 single word" },
+        { "inputs": { "RCX": 18364758544493064720 }, "expected": 0,     "label": "0xFEDCBA9876543210: n=1 single word" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
