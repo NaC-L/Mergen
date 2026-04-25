@@ -5634,6 +5634,27 @@
       ]
     },
     {
+      "name": "vm_word_sge_zero_count64_loop",
+      "symbol": "vm_word_sge_zero_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1, "label": "x=0 n=1 word=0 -> 1" },
+        { "inputs": { "RCX": 1 },                    "expected": 2, "label": "x=1 n=2 [+1,0] both >=0" },
+        { "inputs": { "RCX": 32768 },                "expected": 0, "label": "0x8000 n=1 word=-32768 not >=0" },
+        { "inputs": { "RCX": 32767 },                "expected": 4, "label": "0x7FFF n=4 [+32767,0,0,0] all >=0" },
+        { "inputs": { "RCX": 65535 },                "expected": 3, "label": "0xFFFF n=4 [-1,0,0,0] -> 3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE n=3 -> 1 nonneg (the 0)" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2, "label": "0xDEADBEEF n=4 -> 2 zero pads" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFFFF n=4 all -1" },
+        { "inputs": { "RCX": 9223231297218904063 },  "expected": 4, "label": "0x7FFF7FFF7FFF7FFF n=4 all +32767" },
+        { "inputs": { "RCX": 9223512776490680319 },  "expected": 0, "label": "0x800080008000FFFF n=4 all neg" },
+        { "inputs": { "RCX": 9223090570467934211 },  "expected": 3, "label": "0x7FFF0001FFFF0003 n=4 [+3,-1,+1,+32767] -> 3" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
