@@ -1941,6 +1941,29 @@
       ]
     },
     {
+      "name": "vm_mixed_width_array_loop",
+      "symbol": "vm_mixed_width_array_loop_target",
+      "patterns": [
+        "sext i16",
+        "sext i8",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 12,         "label": "seed=0: only constant adds" },
+        { "inputs": { "RCX": 1 },          "expected": 30,         "label": "seed=1" },
+        { "inputs": { "RCX": 5 },          "expected": 102,        "label": "seed=5" },
+        { "inputs": { "RCX": 10 },         "expected": 192,        "label": "seed=10" },
+        { "inputs": { "RCX": 100 },        "expected": 1812,       "label": "seed=100" },
+        { "inputs": { "RCX": 1000 },       "expected": 13916,      "label": "seed=1000" },
+        { "inputs": { "RCX": 10000 },      "expected": 140076,     "label": "seed=10000: i8 wraps in c[]" },
+        { "inputs": { "RCX": 32768 },      "expected": 196620,     "label": "seed=0x8000: i16 wraps to negative in b[]" },
+        { "inputs": { "RCX": 40000 },      "expected": 298124,     "label": "seed=40000: both b[] and c[] wrap" },
+        { "inputs": { "RCX": 2147483647 }, "expected": 4294967290, "label": "INT_MAX" },
+        { "inputs": { "RCX": 4294967295 }, "expected": 4294967290, "label": "-1 u32" },
+        { "inputs": { "RCX": 3405691582 }, "expected": 3992073576, "label": "0xCAFEBABE" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
