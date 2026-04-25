@@ -1302,6 +1302,30 @@
       ]
     },
     {
+      "name": "vm_stride_loop",
+      "symbol": "vm_stride_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "add",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },         "expected": 0,   "label": "limit=1, data=[0]" },
+        { "inputs": { "RCX": 1 },         "expected": 1,   "label": "limit=2: only data[0]" },
+        { "inputs": { "RCX": 2 },         "expected": 184, "label": "limit=3: data[0]+data[2]" },
+        { "inputs": { "RCX": 7 },         "expected": 324, "label": "limit=8: data[0,2,4,6]" },
+        { "inputs": { "RCX": 170 },       "expected": 200, "label": "0xAA: limit=3" },
+        { "inputs": { "RCX": 85 },        "expected": 371, "label": "0x55: limit=6" },
+        { "inputs": { "RCX": 255 },       "expected": 708, "label": "0xFF: limit=8" },
+        { "inputs": { "RCX": 291 },       "expected": 186, "label": "0x123: limit=4" },
+        { "inputs": { "RCX": 74565 },     "expected": 355, "label": "0x12345: limit=6" },
+        { "inputs": { "RCX": 16777215 },  "expected": 708, "label": "0xFFFFFF: limit=8" },
+        { "inputs": { "RCX": 11259375 },  "expected": 708, "label": "0xABCDEF: limit=8" },
+        { "inputs": { "RCX": 192 },       "expected": 192, "label": "0xC0: limit=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
