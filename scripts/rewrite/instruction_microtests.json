@@ -3123,6 +3123,26 @@
       ]
     },
     {
+      "name": "vm_prefixxor64_loop",
+      "symbol": "vm_prefixxor64_loop_target",
+      "patterns": [
+        "xor",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 72340172838076673,   "label": "x=1: prefix-xor propagates 0x01 through all 8 bytes -> 0x0101010101010101" },
+        { "inputs": { "RCX": 255 },                  "expected": 18446744073709551615, "label": "x=0xFF: 0xFF in all bytes" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 579006156283383560,   "label": "x=0x0102...0708 known-trace" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3472328296240907454,  "label": "x=0xCAFEBABE" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 5108812202782448,    "label": "0x123456789ABCDEF0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 71777214294589695,   "label": "max u64: alternating prefix" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 3867357213934971157,  "label": "K (golden)" },
+        { "inputs": { "RCX": 51966 },                "expected": 3761688987579987198,  "label": "x=0xCAFE" },
+        { "inputs": { "RCX": 12249977906276641280 }, "expected": 48037663028718080,    "label": "0xAA00AA00AA00AA00" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
