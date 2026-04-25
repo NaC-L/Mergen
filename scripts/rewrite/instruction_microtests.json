@@ -4583,6 +4583,27 @@
       ]
     },
     {
+      "name": "vm_signed_dword_range64_loop",
+      "symbol": "vm_signed_dword_range64_loop_target",
+      "patterns": [
+        "icmp slt",
+        "select",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1 n=2: dwords [+1,0]" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 559038737,  "label": "0xDEADBEEF n=2: dwords [-559038737, 0]" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,          "label": "all 0xFF: mx=mn=-1" },
+        { "inputs": { "RCX": 2147483648 },           "expected": 0,          "label": "x=0x80000000 n=1: only one dword" },
+        { "inputs": { "RCX": 2147483647 },           "expected": 2147483647, "label": "x=0x7FFFFFFF n=2: dwords [+max, 0]" },
+        { "inputs": { "RCX": 6442450943 },           "expected": 2147483646, "label": "0x17FFFFFFF n=2: dwords [+max, +1]" },
+        { "inputs": { "RCX": 9223372032559808513 }, "expected": 2147483646, "label": "0x7FFFFFFF00000001 n=2: dwords [+1, +max]" },
+        { "inputs": { "RCX": 9223372041149743103 }, "expected": 2147483647, "label": "0x80000000FFFFFFFF n=2: dwords [-1, -2^31]" },
+        { "inputs": { "RCX": 18446744071562067969 }, "expected": 2147483646, "label": "0xFFFFFFFF80000001 n=2: dwords [-max+1, -1]" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
