@@ -3163,6 +3163,26 @@
       ]
     },
     {
+      "name": "vm_base7sum64_loop",
+      "symbol": "vm_base7sum64_loop_target",
+      "patterns": [
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,  "label": "x=0: skip loop" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,  "label": "x=1: 1 in base 7" },
+        { "inputs": { "RCX": 7 },                    "expected": 1,  "label": "x=7: 10 in base 7, sum=1" },
+        { "inputs": { "RCX": 48 },                   "expected": 12, "label": "x=48: 66 in base 7, sum=12" },
+        { "inputs": { "RCX": 49 },                   "expected": 1,  "label": "x=49: 100 in base 7" },
+        { "inputs": { "RCX": 255 },                  "expected": 9,  "label": "x=0xFF: 513 in base 7" },
+        { "inputs": { "RCX": 51966 },                "expected": 18, "label": "x=0xCAFE" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 40, "label": "x=0xCAFEBABE" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 57, "label": "max u64" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 61, "label": "K (golden)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
