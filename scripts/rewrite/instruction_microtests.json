@@ -876,6 +876,29 @@
       ]
     },
     {
+      "name": "vm_zigzag_loop",
+      "symbol": "vm_zigzag_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "add",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0,          "label": "limit=0" },
+        { "inputs": { "RCX": 1 },   "expected": 0,          "label": "limit=1: 0" },
+        { "inputs": { "RCX": 2 },   "expected": 4294967295, "label": "limit=2: -1 unsigned" },
+        { "inputs": { "RCX": 4 },   "expected": 4294967294, "label": "limit=4: -2 unsigned" },
+        { "inputs": { "RCX": 5 },   "expected": 2,          "label": "limit=5: 2" },
+        { "inputs": { "RCX": 10 },  "expected": 4294967291, "label": "limit=10: -5 unsigned" },
+        { "inputs": { "RCX": 11 },  "expected": 5,          "label": "limit=11: 5" },
+        { "inputs": { "RCX": 50 },  "expected": 4294967271, "label": "limit=50: -25 unsigned" },
+        { "inputs": { "RCX": 100 }, "expected": 4294967246, "label": "limit=100: -50 unsigned" },
+        { "inputs": { "RCX": 200 }, "expected": 4294967196, "label": "limit=200: -100 unsigned" },
+        { "inputs": { "RCX": 255 }, "expected": 127,        "label": "limit=255: 127" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
