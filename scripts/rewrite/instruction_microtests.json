@@ -5309,6 +5309,26 @@
       ]
     },
     {
+      "name": "vm_word_lt_thresh_count64_loop",
+      "symbol": "vm_word_lt_thresh_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1, "label": "x=0 n=1: word=0 < 0x4000" },
+        { "inputs": { "RCX": 1 },                    "expected": 2, "label": "x=1 n=2: words [1,0] both < 0x4000" },
+        { "inputs": { "RCX": 2 },                    "expected": 3, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 4, "label": "x=3 n=4: 4 words [3,0,0,0] all < 0x4000" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE: n=3 words BABE,CAFE,0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2, "label": "0xDEADBEEF: n=4 words BEEF,DEAD,0,0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFF: all 0xFFFF >= 0x4000" },
+        { "inputs": { "RCX": 3458817291183992832 }, "expected": 1, "label": "0x3000300030003000 n=1: low word 0x3000 < 0x4000" },
+        { "inputs": { "RCX": 4611756388245323776 }, "expected": 0, "label": "0x4000400040004000 n=1: low word=0x4000 NOT strictly <" },
+        { "inputs": { "RCX": 305419896 },            "expected": 0, "label": "0x12345678 n=1: low word=0x5678 >= 0x4000" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
