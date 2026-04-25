@@ -1231,6 +1231,30 @@
       ]
     },
     {
+      "name": "vm_ctz_loop",
+      "symbol": "vm_ctz_loop_target",
+      "patterns": [
+        "phi i32",
+        "and",
+        "lshr",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 32, "label": "v=0: cap at 32" },
+        { "inputs": { "RCX": 1 },          "expected": 0,  "label": "v=1: 0 trailing zeros" },
+        { "inputs": { "RCX": 2 },          "expected": 1,  "label": "v=2" },
+        { "inputs": { "RCX": 4 },          "expected": 2,  "label": "v=4" },
+        { "inputs": { "RCX": 7 },          "expected": 0,  "label": "v=7: low bit set" },
+        { "inputs": { "RCX": 256 },        "expected": 8,  "label": "v=0x100" },
+        { "inputs": { "RCX": 512 },        "expected": 9,  "label": "v=0x200" },
+        { "inputs": { "RCX": 65535 },      "expected": 0,  "label": "0xFFFF: low bit set" },
+        { "inputs": { "RCX": 49152 },      "expected": 14, "label": "0xC000" },
+        { "inputs": { "RCX": -2147483648 }, "expected": 31, "label": "0x80000000: only top bit" },
+        { "inputs": { "RCX": -8 },         "expected": 3,  "label": "0xFFFFFFF8: low 3 zeros" },
+        { "inputs": { "RCX": 65536 },      "expected": 16, "label": "0x10000" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
