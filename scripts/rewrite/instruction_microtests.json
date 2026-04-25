@@ -1779,6 +1779,28 @@
       ]
     },
     {
+      "name": "vm_reverse_array_loop",
+      "symbol": "vm_reverse_array_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "add",
+        "shl",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 7,   "label": "seed=0: buf=[0..7] -> rev=[7..0] -> 7|(0<<4)" },
+        { "inputs": { "RCX": 1 },     "expected": 24,  "label": "seed=1" },
+        { "inputs": { "RCX": 5 },     "expected": 92,  "label": "seed=5" },
+        { "inputs": { "RCX": 7 },     "expected": 126, "label": "seed=7" },
+        { "inputs": { "RCX": 8 },     "expected": 143, "label": "seed=8" },
+        { "inputs": { "RCX": 18 },    "expected": 41,  "label": "0x12: seed=2" },
+        { "inputs": { "RCX": 171 },   "expected": 178, "label": "0xAB: seed=11" },
+        { "inputs": { "RCX": 255 },   "expected": 246, "label": "0xFF: seed=15" },
+        { "inputs": { "RCX": 256 },   "expected": 7,   "label": "0x100: seed=0 (mask)" },
+        { "inputs": { "RCX": 51966 }, "expected": 229, "label": "0xCAFE: seed=14" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
