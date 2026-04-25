@@ -2406,6 +2406,26 @@
       ]
     },
     {
+      "name": "vm_clz64_loop",
+      "symbol": "vm_clz64_loop_target",
+      "patterns": [
+        "shl",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 64, "label": "x=0: special-case 64" },
+        { "inputs": { "RCX": 1 },                    "expected": 63, "label": "x=1: 63 leading zeros (max trip)" },
+        { "inputs": { "RCX": 2 },                    "expected": 62, "label": "x=2: 62" },
+        { "inputs": { "RCX": 128 },                  "expected": 56, "label": "x=0x80: 56" },
+        { "inputs": { "RCX": 65536 },                "expected": 47, "label": "x=0x10000: 47" },
+        { "inputs": { "RCX": 4294967296 },           "expected": 31, "label": "x=2^32: 31" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 0,  "label": "x=2^63: 0 (MSB set)" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 32, "label": "x=0xCAFEBABE: 32" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,  "label": "max u64: 0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 0,  "label": "x=K (golden, MSB set): 0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
