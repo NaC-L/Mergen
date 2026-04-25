@@ -502,6 +502,28 @@
       ]
     },
     {
+      "name": "vm_hamming_loop",
+      "symbol": "vm_hamming_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "add",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },    "expected": 0, "label": "a=0,b=0: hamming 0" },
+        { "inputs": { "RCX": 18 },   "expected": 2, "label": "a=2,b=1: hamming 2" },
+        { "inputs": { "RCX": 51 },   "expected": 0, "label": "a=3,b=3: hamming 0" },
+        { "inputs": { "RCX": 85 },   "expected": 0, "label": "a=5,b=5: hamming 0" },
+        { "inputs": { "RCX": 170 },  "expected": 0, "label": "a=10,b=10: hamming 0" },
+        { "inputs": { "RCX": 240 },  "expected": 4, "label": "a=0,b=15: hamming 4" },
+        { "inputs": { "RCX": 255 },  "expected": 0, "label": "a=15,b=15: hamming 0" },
+        { "inputs": { "RCX": 1 },    "expected": 1, "label": "a=1,b=0: hamming 1" },
+        { "inputs": { "RCX": 7 },    "expected": 3, "label": "a=7,b=0: hamming 3" },
+        { "inputs": { "RCX": 128 },  "expected": 1, "label": "a=0,b=8: hamming 1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
