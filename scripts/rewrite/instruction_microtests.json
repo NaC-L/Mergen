@@ -156,6 +156,74 @@
       ]
     },
     {
+      "name": "vm_register_loop",
+      "symbol": "vm_register_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 1"] },
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "add i32",
+        "sub i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 40, "label": "even path: constant handler" },
+        { "inputs": { "RCX": 2 },  "expected": 40, "label": "even path: constant handler (bit1 set)" },
+        { "inputs": { "RCX": 1 },  "expected": 0,  "label": "odd path: limit=0, empty loop" },
+        { "inputs": { "RCX": 3 },  "expected": 0,  "label": "odd path: limit=1, loop body adds 0" },
+        { "inputs": { "RCX": 5 },  "expected": 1,  "label": "odd path: limit=2, sum 0+1" },
+        { "inputs": { "RCX": 7 },  "expected": 3,  "label": "odd path: limit=3, sum 0+1+2" },
+        { "inputs": { "RCX": 9 },  "expected": 6,  "label": "odd path: limit=4, sum 0..3" },
+        { "inputs": { "RCX": 11 }, "expected": 10, "label": "odd path: limit=5, sum 0..4" },
+        { "inputs": { "RCX": 13 }, "expected": 15, "label": "odd path: limit=6, sum 0..5" },
+        { "inputs": { "RCX": 15 }, "expected": 21, "label": "odd path: limit=7, sum 0..6" }
+      ]
+    },
+    {
+      "name": "vm_nested_loop",
+      "symbol": "vm_nested_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 3"] },
+        "phi i32",
+        "add i32",
+        "icmp slt i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0,  "label": "a=0,b=0: no iterations" },
+        { "inputs": { "RCX": 1 },   "expected": 0,  "label": "a=1,b=0: inner never runs" },
+        { "inputs": { "RCX": 2 },   "expected": 0,  "label": "a=2,b=0: inner never runs" },
+        { "inputs": { "RCX": 4 },   "expected": 0,  "label": "a=0,b=1: outer never runs" },
+        { "inputs": { "RCX": 5 },   "expected": 0,  "label": "a=1,b=1: one cell, 0+0" },
+        { "inputs": { "RCX": 7 },   "expected": 3,  "label": "a=3,b=1: 0+1+2" },
+        { "inputs": { "RCX": 10 },  "expected": 4,  "label": "a=2,b=2: (0+1)+(1+2)=4" },
+        { "inputs": { "RCX": 11 },  "expected": 9,  "label": "a=3,b=2: 1+3+5=9" },
+        { "inputs": { "RCX": 15 },  "expected": 18, "label": "a=3,b=3: 3+6+9=18" },
+        { "inputs": { "RCX": 255 }, "expected": 18, "label": "high bits ignored: a=3,b=3" }
+      ]
+    },
+    {
+      "name": "vm_branchy_loop",
+      "symbol": "vm_branchy_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        { "line_all": ["and i32", ", 1"] },
+        "phi i32",
+        "add i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 0, "label": "limit=0: no iterations" },
+        { "inputs": { "RCX": 1 },  "expected": 0, "label": "limit=1: only i=0 (even)" },
+        { "inputs": { "RCX": 2 },  "expected": 1, "label": "limit=2: i=1 is odd" },
+        { "inputs": { "RCX": 5 },  "expected": 2, "label": "limit=5: odds {1,3}" },
+        { "inputs": { "RCX": 10 }, "expected": 5, "label": "limit=10: odds {1,3,5,7,9}" },
+        { "inputs": { "RCX": 15 }, "expected": 7, "label": "limit=15: odds 1..13" },
+        { "inputs": { "RCX": 16 }, "expected": 0, "label": "limit=0 (mask drops bit 4)" },
+        { "inputs": { "RCX": 31 }, "expected": 7, "label": "limit=15 again after mask" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
