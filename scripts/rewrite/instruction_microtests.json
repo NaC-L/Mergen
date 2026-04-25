@@ -2226,6 +2226,26 @@
       ]
     },
     {
+      "name": "vm_isqrt64_loop",
+      "symbol": "vm_isqrt64_loop_target",
+      "patterns": [
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "isqrt(0)=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "isqrt(1)=1" },
+        { "inputs": { "RCX": 4 },                    "expected": 2,          "label": "isqrt(4)=2" },
+        { "inputs": { "RCX": 10 },                   "expected": 3,          "label": "isqrt(10)=3 (floor)" },
+        { "inputs": { "RCX": 10000 },                "expected": 100,        "label": "isqrt(10000)=100" },
+        { "inputs": { "RCX": 100000000 },            "expected": 10000,      "label": "isqrt(1e8)=10000" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4294967295, "label": "isqrt(max u64) = 2^32-1" },
+        { "inputs": { "RCX": 4611686018427387904 },  "expected": 2147483648, "label": "isqrt(2^62) = 2^31" },
+        { "inputs": { "RCX": 4294967296 },           "expected": 65536,      "label": "isqrt(2^32) = 2^16" },
+        { "inputs": { "RCX": 12345678901234 },        "expected": 3513641,    "label": "isqrt(1.234e13)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
