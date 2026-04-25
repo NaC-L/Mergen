@@ -2166,6 +2166,26 @@
       ]
     },
     {
+      "name": "vm_collatz64_loop",
+      "symbol": "vm_collatz64_loop_target",
+      "patterns": [
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 1 },                    "expected": 0,   "label": "x=1: zero steps" },
+        { "inputs": { "RCX": 2 },                    "expected": 1,   "label": "x=2: one halving" },
+        { "inputs": { "RCX": 3 },                    "expected": 7,   "label": "x=3: 7 steps" },
+        { "inputs": { "RCX": 6 },                    "expected": 8,   "label": "x=6: 8 steps" },
+        { "inputs": { "RCX": 27 },                   "expected": 111, "label": "x=27: classic 111-step Collatz" },
+        { "inputs": { "RCX": 51966 },                "expected": 171, "label": "x=0xCAFE" },
+        { "inputs": { "RCX": 4294967296 },           "expected": 32,  "label": "x=2^32: 32 halvings" },
+        { "inputs": { "RCX": 18446744073709551614 }, "expected": 618, "label": "max u64 - 1: 618 steps incl. mul-wrap" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 63,  "label": "x=2^63: 63 halvings" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 414, "label": "x=K (golden ratio): 414 steps" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
