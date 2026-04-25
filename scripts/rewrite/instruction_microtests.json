@@ -3693,6 +3693,27 @@
       ]
     },
     {
+      "name": "vm_zigzag_step64_loop",
+      "symbol": "vm_zigzag_step64_loop_target",
+      "patterns": [
+        "ashr",
+        "xor",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1: zigzag(0)=0, then s steps but loop ends" },
+        { "inputs": { "RCX": 1 },                    "expected": 14092058508772706261, "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 4354685564936845357,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 16390740445785211241, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 16,                   "label": "x=8 n=1: zigzag(8)=16 (positive doubled)" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 18446744073709551615, "label": "x=2^63 n=1: zigzag(2^63)=2^64-1 (most negative)" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 4354685571748228515,  "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 16045690985374415566 }, "expected": 11212795369531457850, "label": "0xDEADBEEFFEEDFACE: n=7 high-bit set initial" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 16390740445785211212, "label": "all 0xFF: n=8 zigzag(-1)=1 first iter" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 145247719580765712,   "label": "0x0102...0708: n=1 zigzag(positive)=2x" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
