@@ -2085,6 +2085,27 @@
       ]
     },
     {
+      "name": "vm_dual_i64_loop",
+      "symbol": "vm_dual_i64_loop_target",
+      "patterns": [
+        "add",
+        "mul",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0,                    "RDX": 0 },                    "expected": 0,                    "label": "x=0, y=0" },
+        { "inputs": { "RCX": 1,                    "RDX": 2 },                    "expected": 15,                   "label": "x=1, y=2, n=2" },
+        { "inputs": { "RCX": 51966,                "RDX": 47806 },                "expected": 17848445641019346730, "label": "x=0xCAFE, y=0xBABE" },
+        { "inputs": { "RCX": 18446744073709551615, "RDX": 1 },                    "expected": 18446744073709551606, "label": "x=max u64 (n=8), y=1: linear" },
+        { "inputs": { "RCX": 1,                    "RDX": 18446744073709551615 }, "expected": 18446744073709551614, "label": "x=1 (n=2), y=max u64" },
+        { "inputs": { "RCX": 1311768467463790320,   "RDX": 18364758544493064720 }, "expected": 9002574064070388976,  "label": "0x123..F0, 0xFEDC..10" },
+        { "inputs": { "RCX": 7,                    "RDX": 11 },                   "expected": 2722357788,           "label": "x=7, y=11, n=8" },
+        { "inputs": { "RCX": 65537,                "RDX": 65537 },                "expected": 4295163906,           "label": "both 0x10001, n=2" },
+        { "inputs": { "RCX": 9223372036854775808,   "RDX": 9223372036854775808 },   "expected": 9223372036854775808,  "label": "both 2^63" },
+        { "inputs": { "RCX": 3,                    "RDX": 11400714819323198485 },  "expected": 11583513995942334250, "label": "x=3, y=K (golden ratio), n=4" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
