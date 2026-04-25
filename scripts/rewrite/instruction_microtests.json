@@ -3672,6 +3672,27 @@
       ]
     },
     {
+      "name": "vm_fmix_chain64_loop",
+      "symbol": "vm_fmix_chain64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: r stays 0 across all iters" },
+        { "inputs": { "RCX": 1 },                    "expected": 898201889658528104,   "label": "x=1 n=2: two fmix rounds" },
+        { "inputs": { "RCX": 2 },                    "expected": 8693572102153751765,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 3494767213575592779,  "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 5092388815683068117,  "label": "x=8 n=1: single fmix round" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 9387636944915422948,  "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1268616178070044434,  "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 2909846994098041682,  "label": "all 0xFF: n=8" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 15109312571383956947, "label": "0x0102...0708: n=1 single round" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1781385183969690537,  "label": "0x12345...EF0: n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
