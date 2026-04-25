@@ -288,6 +288,73 @@
       ]
     },
     {
+      "name": "vm_fibonacci_loop",
+      "symbol": "vm_fibonacci_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "add i32",
+        "sub i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 0,   "label": "fib(0)" },
+        { "inputs": { "RCX": 1 },  "expected": 1,   "label": "fib(1)" },
+        { "inputs": { "RCX": 2 },  "expected": 1,   "label": "fib(2)" },
+        { "inputs": { "RCX": 3 },  "expected": 2,   "label": "fib(3)" },
+        { "inputs": { "RCX": 5 },  "expected": 5,   "label": "fib(5)" },
+        { "inputs": { "RCX": 7 },  "expected": 13,  "label": "fib(7)" },
+        { "inputs": { "RCX": 10 }, "expected": 55,  "label": "fib(10)" },
+        { "inputs": { "RCX": 12 }, "expected": 144, "label": "fib(12)" },
+        { "inputs": { "RCX": 15 }, "expected": 610, "label": "fib(15)" },
+        { "inputs": { "RCX": 16 }, "expected": 0,   "label": "fib(0) again (mask drops bit 4)" }
+      ]
+    },
+    {
+      "name": "vm_switch_dispatch_loop",
+      "symbol": "vm_switch_dispatch_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 1"] },
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "add i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 111, "label": "even path: constant 111" },
+        { "inputs": { "RCX": 2 },  "expected": 111, "label": "even path: bit1 set" },
+        { "inputs": { "RCX": 1 },  "expected": 0,   "label": "odd: limit=0" },
+        { "inputs": { "RCX": 3 },  "expected": 0,   "label": "odd: limit=1, sum 0" },
+        { "inputs": { "RCX": 5 },  "expected": 1,   "label": "odd: limit=2, sum 0+1" },
+        { "inputs": { "RCX": 7 },  "expected": 3,   "label": "odd: limit=3, sum 0+1+2" },
+        { "inputs": { "RCX": 9 },  "expected": 6,   "label": "odd: limit=4, sum 0..3" },
+        { "inputs": { "RCX": 11 }, "expected": 10,  "label": "odd: limit=5, sum 0..4" },
+        { "inputs": { "RCX": 13 }, "expected": 15,  "label": "odd: limit=6, sum 0..5" },
+        { "inputs": { "RCX": 15 }, "expected": 21,  "label": "odd: limit=7, sum 0..6" }
+      ]
+    },
+    {
+      "name": "vm_countdown_loop",
+      "symbol": "vm_countdown_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "add i32",
+        "sub i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0,   "label": "count=0: empty sum" },
+        { "inputs": { "RCX": 1 },   "expected": 1,   "label": "count=1: T(1)" },
+        { "inputs": { "RCX": 2 },   "expected": 3,   "label": "count=2: T(2)" },
+        { "inputs": { "RCX": 5 },   "expected": 15,  "label": "count=5: T(5)" },
+        { "inputs": { "RCX": 10 },  "expected": 55,  "label": "count=10: T(10)" },
+        { "inputs": { "RCX": 15 },  "expected": 120, "label": "count=15: T(15)" },
+        { "inputs": { "RCX": 16 },  "expected": 0,   "label": "count=0 again (mask drops bit 4)" },
+        { "inputs": { "RCX": 255 }, "expected": 120, "label": "count=15 again after mask" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
