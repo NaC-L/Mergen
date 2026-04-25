@@ -736,6 +736,28 @@
       ]
     },
     {
+      "name": "vm_classify_loop",
+      "symbol": "vm_classify_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },        "expected": 10,  "label": "n=1, v=-7: 1 neg" },
+        { "inputs": { "RCX": 1 },        "expected": 20,  "label": "n=2, all neg" },
+        { "inputs": { "RCX": 7 },        "expected": 71,  "label": "n=8, 1 zero + 7 neg" },
+        { "inputs": { "RCX": 8 },        "expected": 100, "label": "n=1, v=1: 1 pos" },
+        { "inputs": { "RCX": 119 },      "expected": 62,  "label": "n=8, 6 neg + 2 zero" },
+        { "inputs": { "RCX": 136 },      "expected": 100, "label": "n=1, v=1" },
+        { "inputs": { "RCX": 240 },      "expected": 10,  "label": "n=1, v=-7" },
+        { "inputs": { "RCX": 255 },      "expected": 260, "label": "n=8, 2 pos + 6 neg" },
+        { "inputs": { "RCX": 291 },      "expected": 40,  "label": "n=4, all neg" },
+        { "inputs": { "RCX": 11259375 }, "expected": 620, "label": "0xABCDEF: n=8, 6 pos + 2 neg" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
