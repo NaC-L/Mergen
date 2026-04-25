@@ -3283,6 +3283,26 @@
       ]
     },
     {
+      "name": "vm_revdecimal64_loop",
+      "symbol": "vm_revdecimal64_loop_target",
+      "patterns": [
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: skip loop" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1" },
+        { "inputs": { "RCX": 10 },                   "expected": 1,                    "label": "x=10 -> 1 (trailing zero stripped)" },
+        { "inputs": { "RCX": 100 },                  "expected": 1,                    "label": "x=100 -> 1" },
+        { "inputs": { "RCX": 123 },                  "expected": 321,                  "label": "x=123 -> 321" },
+        { "inputs": { "RCX": 12345 },                "expected": 54321,                "label": "x=12345 -> 54321" },
+        { "inputs": { "RCX": 1000000000 },           "expected": 1,                    "label": "x=10^9 -> 1" },
+        { "inputs": { "RCX": 1234567890 },           "expected": 987654321,            "label": "x=1234567890 -> 987654321" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 14722102589625661249, "label": "max u64 reversed (wraps)" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 3148900170713045563,  "label": "K (golden) reversed (wraps)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
