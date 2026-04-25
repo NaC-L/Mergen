@@ -4943,6 +4943,26 @@
       ]
     },
     {
+      "name": "vm_bit_and_self_shift_up64_loop",
+      "symbol": "vm_bit_and_self_shift_up64_loop_target",
+      "patterns": [
+        "and",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                    "label": "x=1: isolated bit" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,                    "label": "x=2: isolated bit" },
+        { "inputs": { "RCX": 7 },                    "expected": 0,                    "label": "x=7 n=8: 3-run gone" },
+        { "inputs": { "RCX": 8 },                    "expected": 0,                    "label": "x=8 n=1: 8 & 16 = 0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 0,                    "label": "0xCAFEBABE: max run=7, n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 0,                    "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551360, "label": "all 0xFF n=8: shrink from low end -> high 56-1 mask" },
+        { "inputs": { "RCX": 255 },                  "expected": 0,                    "label": "0xFF n=8: 8-run gone" },
+        { "inputs": { "RCX": 17361641481138401520 }, "expected": 16204198715729174752, "label": "0xF0F0F0F0F0F0F0F0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
