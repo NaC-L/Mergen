@@ -3403,6 +3403,25 @@
       ]
     },
     {
+      "name": "vm_bytemax64_loop",
+      "symbol": "vm_bytemax64_loop_target",
+      "patterns": [
+        "llvm.umax.i64"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "all zero bytes" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1: max byte=1" },
+        { "inputs": { "RCX": 255 },                  "expected": 255, "label": "x=0xFF: max byte=255" },
+        { "inputs": { "RCX": 128 },                  "expected": 128, "label": "x=0x80: max byte=128" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 8,   "label": "0x0102...0708: n=(8&7)+1=1: only byte0=8 visible" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 240, "label": "0x12345...EF0: n=1: byte0=0xF0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 254, "label": "0xCAFEBABE: n=7: max=0xFE" },
+        { "inputs": { "RCX": 16045690985374415566 }, "expected": 254, "label": "0xDEADBEEFFEEDFACE: n=7" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 255, "label": "all 0xFF: max=255" },
+        { "inputs": { "RCX": 65280 },                "expected": 0,   "label": "0xFF00: n=1: byte0=0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
