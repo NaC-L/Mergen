@@ -425,6 +425,71 @@
       ]
     },
     {
+      "name": "vm_search_loop",
+      "symbol": "vm_search_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "icmp eq i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 8, "label": "target=1: not in table" },
+        { "inputs": { "RCX": 2 },  "expected": 0, "label": "target=3: index 0" },
+        { "inputs": { "RCX": 6 },  "expected": 1, "label": "target=7: index 1" },
+        { "inputs": { "RCX": 10 }, "expected": 2, "label": "target=11: index 2" },
+        { "inputs": { "RCX": 12 }, "expected": 3, "label": "target=13: index 3" },
+        { "inputs": { "RCX": 22 }, "expected": 1, "label": "target=7 again after mask: index 1" },
+        { "inputs": { "RCX": 28 }, "expected": 3, "label": "target=13 again after mask: index 3" },
+        { "inputs": { "RCX": 4 },  "expected": 8, "label": "target=5: not in table" },
+        { "inputs": { "RCX": 15 }, "expected": 8, "label": "target=16: not in table" },
+        { "inputs": { "RCX": 16 }, "expected": 8, "label": "target=1 again (mask drops bit 4)" }
+      ]
+    },
+    {
+      "name": "vm_dual_counter_loop",
+      "symbol": "vm_dual_counter_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        { "line_all": ["and i32", ", 1"] },
+        "phi i32",
+        "add i32",
+        "mul i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 0,   "label": "limit=0" },
+        { "inputs": { "RCX": 1 },  "expected": 100, "label": "limit=1: 1 even, 0 odd" },
+        { "inputs": { "RCX": 2 },  "expected": 101, "label": "limit=2: 1 even, 1 odd" },
+        { "inputs": { "RCX": 5 },  "expected": 302, "label": "limit=5: 3 even, 2 odd" },
+        { "inputs": { "RCX": 8 },  "expected": 404, "label": "limit=8: 4 even, 4 odd" },
+        { "inputs": { "RCX": 10 }, "expected": 505, "label": "limit=10: 5 even, 5 odd" },
+        { "inputs": { "RCX": 15 }, "expected": 807, "label": "limit=15: 8 even, 7 odd" },
+        { "inputs": { "RCX": 16 }, "expected": 0,   "label": "limit=0 again (mask drops bit 4)" }
+      ]
+    },
+    {
+      "name": "vm_xor_accumulator_loop",
+      "symbol": "vm_xor_accumulator_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "mul i32",
+        "xor i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0,    "label": "key=0: zero accumulator" },
+        { "inputs": { "RCX": 1 },   "expected": 0,    "label": "key=1: 1^2^3^4^5^6^7=0" },
+        { "inputs": { "RCX": 2 },   "expected": 0,    "label": "key=2: doubled bitstring still cancels" },
+        { "inputs": { "RCX": 3 },   "expected": 8,    "label": "key=3: nontrivial" },
+        { "inputs": { "RCX": 5 },   "expected": 48,   "label": "key=5" },
+        { "inputs": { "RCX": 7 },   "expected": 56,   "label": "key=7" },
+        { "inputs": { "RCX": 15 },  "expected": 120,  "label": "key=15" },
+        { "inputs": { "RCX": 255 }, "expected": 2040, "label": "key=0xFF: large products" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
