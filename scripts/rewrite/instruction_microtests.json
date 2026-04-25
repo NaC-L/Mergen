@@ -3525,6 +3525,27 @@
       ]
     },
     {
+      "name": "vm_pairmix64_loop",
+      "symbol": "vm_pairmix64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 11400714817199506411, "label": "x=0 a=0 b=~0=2^64-1, n=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 9496910160436887952,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 13335559338594189060, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 13181390628882692613, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 10372713003427668803, "label": "x=8 n=1: single mix" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 714003545971723073,   "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 7744200973065003010, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4419430230336777449, "label": "all 0xFF: a=~0 b=0 inverted" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 7454008459040324155, "label": "0x12345...EF0: n=1 single mix" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 2177342780344730603, "label": "x=2^63: n=1 high-bit only" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
