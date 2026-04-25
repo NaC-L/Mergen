@@ -1863,6 +1863,26 @@
       ]
     },
     {
+      "name": "vm_ushort_array_loop",
+      "symbol": "vm_ushort_array_loop_target",
+      "patterns": [
+        "zext i16",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 2800,   "label": "seed=0" },
+        { "inputs": { "RCX": 1 },          "expected": 2808,   "label": "seed=1" },
+        { "inputs": { "RCX": 100 },        "expected": 3600,   "label": "seed=100" },
+        { "inputs": { "RCX": 1000 },       "expected": 10800,  "label": "seed=1000" },
+        { "inputs": { "RCX": 32768 },      "expected": 264944, "label": "seed=0x8000: high bit" },
+        { "inputs": { "RCX": 65000 },      "expected": 391728, "label": "0xFDE8: u16 wrap on i=6,7" },
+        { "inputs": { "RCX": 65535 },      "expected": 68328,  "label": "0xFFFF: max seed" },
+        { "inputs": { "RCX": 51966 },      "expected": 418528, "label": "0xCAFE" },
+        { "inputs": { "RCX": 74565 },      "expected": 75032,  "label": "0x12345: high bits ignored" },
+        { "inputs": { "RCX": 4294901761 }, "expected": 2808,   "label": "0xFFFF0001: only low 16 used" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
