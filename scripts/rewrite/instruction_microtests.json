@@ -2844,6 +2844,26 @@
       ]
     },
     {
+      "name": "vm_choosemax64_loop",
+      "symbol": "vm_choosemax64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0, n=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 10,                   "label": "x=1, n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 59,                   "label": "x=2, n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 47563,                "label": "x=7, n=8" },
+        { "inputs": { "RCX": 15 },                   "expected": 656462487,            "label": "x=15, n=16 max" },
+        { "inputs": { "RCX": 255 },                  "expected": 10987675527,          "label": "x=0xFF, n=16" },
+        { "inputs": { "RCX": 51966 },                "expected": 745658888381,         "label": "x=0xCAFE, n=15" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 48867951784388093,    "label": "x=0xCAFEBABE, n=15" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551493, "label": "max u64, n=16: wraps and opt2 wins many iters" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 15755400384260043894, "label": "K (golden), n=6" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
