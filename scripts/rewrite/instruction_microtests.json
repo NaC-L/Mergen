@@ -3756,6 +3756,26 @@
       ]
     },
     {
+      "name": "vm_negstep64_loop",
+      "symbol": "vm_negstep64_loop_target",
+      "patterns": [
+        "sub",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1: r=-0+0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: r=0+1=1; r=-1+2=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,                    "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 4,                    "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,                    "label": "x=8 n=1: r=0+8=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405691585,           "label": "0xCAFEBABE: n=7 odd trip leaves r near s+offset" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 4,                    "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4,                    "label": "all 0xFF n=8: telescoping cancels to small constant" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 72623859790382856,    "label": "0x0102...0708: n=1 single iter" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1311768467463790320, "label": "0x12345...EF0: n=1 single iter" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
