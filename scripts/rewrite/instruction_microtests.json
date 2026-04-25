@@ -3546,6 +3546,27 @@
       ]
     },
     {
+      "name": "vm_fnv1a64_loop",
+      "symbol": "vm_fnv1a64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 12638153115695167455, "label": "x=0 n=1: hash of one zero byte" },
+        { "inputs": { "RCX": 1 },                    "expected": 589727492704079044,   "label": "x=1 n=2: bytes [1,0]" },
+        { "inputs": { "RCX": 2 },                    "expected": 16906521902298639629, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 5465015992139406178,  "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 12638161911788193143, "label": "x=8 n=1: hash of byte 0x08" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 4118356257163980823,  "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 8436364122023583835,  "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 10157053723145373757, "label": "all 0xFF: 8 bytes of 0xFF" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 12638346629741732591, "label": "0x12345...EF0: n=1 byte 0xF0" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 12638161911788193143, "label": "0x0102...0708: n=1 byte 0x08 (matches x=8)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
