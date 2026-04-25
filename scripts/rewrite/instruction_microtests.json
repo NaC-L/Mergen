@@ -2186,6 +2186,26 @@
       ]
     },
     {
+      "name": "vm_fibonacci64_loop",
+      "symbol": "vm_fibonacci64_loop_target",
+      "patterns": [
+        "add",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 14627333968688430831, "label": "x=0, trip=1: a=0, b=K_INIT" },
+        { "inputs": { "RCX": 1 },                    "expected": 10807923863667310045, "label": "x=1, trip=2" },
+        { "inputs": { "RCX": 5 },                    "expected": 5687900855854084618,  "label": "x=5, trip=6" },
+        { "inputs": { "RCX": 10 },                   "expected": 3407267088245154890,  "label": "x=10, trip=11" },
+        { "inputs": { "RCX": 15 },                   "expected": 6274350679131682101,  "label": "x=15, trip=16" },
+        { "inputs": { "RCX": 31 },                   "expected": 16253303666571051899, "label": "x=31, trip=32" },
+        { "inputs": { "RCX": 63 },                   "expected": 2638045729306583957,  "label": "x=63, trip=64 max" },
+        { "inputs": { "RCX": 51966 },                "expected": 5669525655922824359,  "label": "x=0xCAFE, trip=63" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 4673146425386425063,  "label": "x=0xCAFEBABE, trip=63" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 15808806811648464405, "label": "max u64, trip=64" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
