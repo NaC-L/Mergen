@@ -1611,6 +1611,14 @@
       ]
     },
     {
+      "name": "vm_wrapper_chain_loop",
+      "symbol": "vm_wrapper_chain_loop_target",
+      "patterns": [
+        "call",
+        "add"
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
