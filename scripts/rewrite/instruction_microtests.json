@@ -5247,6 +5247,27 @@
       ]
     },
     {
+      "name": "vm_byte_clamp_sum64_loop",
+      "symbol": "vm_byte_clamp_sum64_loop_target",
+      "patterns": [
+        "llvm.umax.i64",
+        "llvm.umin.i64",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 64,   "label": "x=0 n=1: clamp 0->0x40" },
+        { "inputs": { "RCX": 1 },                    "expected": 128,  "label": "x=1 n=2: 64+64" },
+        { "inputs": { "RCX": 7 },                    "expected": 512,  "label": "x=7 n=8: 8*64" },
+        { "inputs": { "RCX": 8 },                    "expected": 64,   "label": "x=8 n=1: clamp 8->0x40" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 704, "label": "0xCAFEBABE: n=7 mix" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 768, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1024, "label": "all 0xFF: clamp to 0x80, 8*128=1024" },
+        { "inputs": { "RCX": 64 },                   "expected": 64,   "label": "x=0x40 n=1: clamp passes" },
+        { "inputs": { "RCX": 128 },                  "expected": 128,  "label": "x=0x80 n=1: clamp passes" },
+        { "inputs": { "RCX": 127 },                  "expected": 575, "label": "x=0x7F n=8: byte0=0x7F clamps to 0x7F (in range), rest 0->0x40 -> 127+7*64=575" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
