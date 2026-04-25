@@ -2525,6 +2525,26 @@
       ]
     },
     {
+      "name": "vm_tribonacci64_loop",
+      "symbol": "vm_tribonacci64_loop_target",
+      "patterns": [
+        "add",
+        "phi"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 3405691581,           "label": "x=0, n=1: a+b+c = 0+max+0xCAFEBABE" },
+        { "inputs": { "RCX": 1 },                    "expected": 6811383163,           "label": "x=1, n=2" },
+        { "inputs": { "RCX": 5 },                    "expected": 81736597841,          "label": "x=5, n=6" },
+        { "inputs": { "RCX": 15 },                   "expected": 36130981799577,       "label": "x=15, n=16 max" },
+        { "inputs": { "RCX": 255 },                  "expected": 36130979858729,       "label": "x=0xFF, n=16" },
+        { "inputs": { "RCX": 51966 },                "expected": 19643830442345,       "label": "x=0xCAFE, n=15" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446738267005399465, "label": "x=0xCAFEBABE: c-init = 0 (xor self)" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1311768466214249549,  "label": "x=0x123...DEF0, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446707942727541801, "label": "max u64, n=16" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 9344711213309311841,  "label": "x=K (golden ratio), n=6" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
