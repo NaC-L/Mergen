@@ -2045,6 +2045,26 @@
       ]
     },
     {
+      "name": "vm_i64_return_loop",
+      "symbol": "vm_i64_return_loop_target",
+      "patterns": [
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0, n=1: zero state stays zero" },
+        { "inputs": { "RCX": 1 },                    "expected": 16088033396387240378, "label": "x=1, n=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 17772545941868383875, "label": "x=7, n=8 max" },
+        { "inputs": { "RCX": 255 },                  "expected": 10714506007073860731, "label": "x=0xFF, n=8" },
+        { "inputs": { "RCX": 51966 },                "expected": 17920236122590421895, "label": "x=0xCAFE, n=7" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 11342307580973665351, "label": "x=0xCAFEBABE, n=7" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 14500037712827550128, "label": "x=0x123456789ABCDEF0, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 13834830826346695547, "label": "max u64, n=8" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 9223372036854775808,  "label": "x=0x8000_0000_0000_0000, n=1: K*2^63 wraps to 0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 1102746351861860268,  "label": "x=K (golden ratio), n=6" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
