@@ -2386,6 +2386,26 @@
       ]
     },
     {
+      "name": "vm_cttz64_loop",
+      "symbol": "vm_cttz64_loop_target",
+      "patterns": [
+        "and",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 64, "label": "x=0: special-case 64" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,  "label": "x=1: 0 trailing zeros" },
+        { "inputs": { "RCX": 2 },                    "expected": 1,  "label": "x=2: 1" },
+        { "inputs": { "RCX": 4 },                    "expected": 2,  "label": "x=4: 2" },
+        { "inputs": { "RCX": 8 },                    "expected": 3,  "label": "x=8: 3" },
+        { "inputs": { "RCX": 4294967296 },           "expected": 32, "label": "x=2^32: 32" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 63, "label": "x=2^63: 63 (max)" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1,  "label": "x=0xCAFEBABE: 1" },
+        { "inputs": { "RCX": 18446744073709551614 }, "expected": 1,  "label": "x=max-1: 1" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 0,  "label": "x=K (golden): 0 (odd)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
