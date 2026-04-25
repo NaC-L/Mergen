@@ -1,12 +1,14 @@
 # vm_clz64_loop - original vs lifted equivalence
 
-- **Verdict:** PASS
-- **Cases:** 10/10 equivalent
+- **Verdict:** FAIL (10/10)
+- **Cases:** 0/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_clz64_loop.c`
-- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_clz64_loop.ll`
+- **Lifted IR:** _(missing)_
 - **Symbol:** `vm_clz64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_clz64_loop_eq.exe`
-- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
+
+**Diagnostics:**
+- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_clz64_loop.ll
 
 ## Equivalence (native vs lifted)
 
@@ -14,16 +16,88 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 64 | 64 | 64 | yes | x=0: special-case 64 |
-| 2 | RCX=1 | 63 | 63 | 63 | yes | x=1: 63 leading zeros (max trip) |
-| 3 | RCX=2 | 62 | 62 | 62 | yes | x=2: 62 |
-| 4 | RCX=128 | 56 | 56 | 56 | yes | x=0x80: 56 |
-| 5 | RCX=65536 | 47 | 47 | 47 | yes | x=0x10000: 47 |
-| 6 | RCX=4294967296 | 31 | 31 | 31 | yes | x=2^32: 31 |
-| 7 | RCX=9223372036854775808 | 0 | 0 | 0 | yes | x=2^63: 0 (MSB set) |
-| 8 | RCX=3405691582 | 32 | 32 | 32 | yes | x=0xCAFEBABE: 32 |
-| 9 | RCX=18446744073709551615 | 0 | 0 | 0 | yes | max u64: 0 |
-| 10 | RCX=11400714819323198485 | 0 | 0 | 0 | yes | x=K (golden, MSB set): 0 |
+| 1 | RCX=0 | 64 | 64 | — | **no** | x=0: special-case 64 |
+| 2 | RCX=1 | 63 | 63 | — | **no** | x=1: 63 leading zeros (max trip) |
+| 3 | RCX=2 | 62 | 62 | — | **no** | x=2: 62 |
+| 4 | RCX=128 | 56 | 56 | — | **no** | x=0x80: 56 |
+| 5 | RCX=65536 | 47 | 47 | — | **no** | x=0x10000: 47 |
+| 6 | RCX=4294967296 | 31 | 31 | — | **no** | x=2^32: 31 |
+| 7 | RCX=9223372036854775808 | 0 | 0 | — | **no** | x=2^63: 0 (MSB set) |
+| 8 | RCX=3405691582 | 32 | 32 | — | **no** | x=0xCAFEBABE: 32 |
+| 9 | RCX=18446744073709551615 | 0 | 0 | — | **no** | max u64: 0 |
+| 10 | RCX=11400714819323198485 | 0 | 0 | — | **no** | x=K (golden, MSB set): 0 |
+
+## Failure detail
+
+### case 1: x=0: special-case 64
+
+- inputs: `RCX=0`
+- manifest expected: `64`
+- native: `64`
+- lifted: `—`
+
+### case 2: x=1: 63 leading zeros (max trip)
+
+- inputs: `RCX=1`
+- manifest expected: `63`
+- native: `63`
+- lifted: `—`
+
+### case 3: x=2: 62
+
+- inputs: `RCX=2`
+- manifest expected: `62`
+- native: `62`
+- lifted: `—`
+
+### case 4: x=0x80: 56
+
+- inputs: `RCX=128`
+- manifest expected: `56`
+- native: `56`
+- lifted: `—`
+
+### case 5: x=0x10000: 47
+
+- inputs: `RCX=65536`
+- manifest expected: `47`
+- native: `47`
+- lifted: `—`
+
+### case 6: x=2^32: 31
+
+- inputs: `RCX=4294967296`
+- manifest expected: `31`
+- native: `31`
+- lifted: `—`
+
+### case 7: x=2^63: 0 (MSB set)
+
+- inputs: `RCX=9223372036854775808`
+- manifest expected: `0`
+- native: `0`
+- lifted: `—`
+
+### case 8: x=0xCAFEBABE: 32
+
+- inputs: `RCX=3405691582`
+- manifest expected: `32`
+- native: `32`
+- lifted: `—`
+
+### case 9: max u64: 0
+
+- inputs: `RCX=18446744073709551615`
+- manifest expected: `0`
+- native: `0`
+- lifted: `—`
+
+### case 10: x=K (golden, MSB set): 0
+
+- inputs: `RCX=11400714819323198485`
+- manifest expected: `0`
+- native: `0`
+- lifted: `—`
 
 ## Source
 
