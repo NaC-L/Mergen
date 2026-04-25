@@ -2904,6 +2904,26 @@
       ]
     },
     {
+      "name": "vm_splitmix64_loop",
+      "symbol": "vm_splitmix64_loop_target",
+      "patterns": [
+        "xor",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 16294208416658607535, "label": "x=0, n=1: first SplitMix64 output" },
+        { "inputs": { "RCX": 1 },                    "expected": 13757245211066428519, "label": "x=1, n=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 6051947643683389182,  "label": "x=7, n=8 max" },
+        { "inputs": { "RCX": 255 },                  "expected": 3595160614358814015,  "label": "x=0xFF, n=8" },
+        { "inputs": { "RCX": 51966 },                "expected": 18335744145558701823, "label": "x=0xCAFE, n=7" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 40956773586522747,    "label": "x=0xCAFEBABE, n=7" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1592342178222199016,  "label": "0x123...DEF0, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4638043754431676516,  "label": "max u64, n=8" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 3207296026000306913,  "label": "K (golden), n=6" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 12901208535622949722, "label": "0xDEADBEEF, n=8" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
