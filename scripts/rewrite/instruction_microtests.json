@@ -2744,6 +2744,26 @@
       ]
     },
     {
+      "name": "vm_xorbytes64_loop",
+      "symbol": "vm_xorbytes64_loop_target",
+      "patterns": [
+        "xor",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "x=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1: only low byte" },
+        { "inputs": { "RCX": 255 },                  "expected": 255, "label": "x=0xFF: low byte = 0xFF" },
+        { "inputs": { "RCX": 51966 },                "expected": 52,  "label": "x=0xCAFE: 0xFE^0xCA=0x34" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 48,  "label": "0xCAFEBABE" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 0,   "label": "0x123456789ABCDEF0: bytes XOR cancel" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,   "label": "max u64: 8x0xFF cancel" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 53,  "label": "K (golden)" },
+        { "inputs": { "RCX": 170 },                  "expected": 170, "label": "x=0xAA: only low byte" },
+        { "inputs": { "RCX": 71777214294589695 },    "expected": 0,   "label": "0x00FF00FF00FF00FF: 4x0xFF cancel" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
