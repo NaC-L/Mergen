@@ -1,12 +1,14 @@
 # vm_condsum64_loop - original vs lifted equivalence
 
-- **Verdict:** PASS
-- **Cases:** 10/10 equivalent
+- **Verdict:** FAIL (10/10)
+- **Cases:** 0/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_condsum64_loop.c`
 - **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_condsum64_loop.ll`
 - **Symbol:** `vm_condsum64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_condsum64_loop_eq.exe`
-- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
+
+**Diagnostics:**
+- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_condsum64_loop.ll
 
 ## Equivalence (native vs lifted)
 
@@ -14,16 +16,88 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0, n=1: val=0 even, no accumulate |
-| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1, n=2 |
-| 3 | RCX=2 | 11400714819323198487 | 11400714819323198487 | 11400714819323198487 | yes | x=2, n=3 |
-| 4 | RCX=31 | 6053433728553997728 | 6053433728553997728 | 6053433728553997728 | yes | x=0x1F, n=32 max |
-| 5 | RCX=255 | 6053433728554001312 | 6053433728554001312 | 6053433728554001312 | yes | x=0xFF, n=32 |
-| 6 | RCX=51966 | 1063408102092763991 | 1063408102092763991 | 1063408102092763991 | yes | 0xCAFE, n=31 |
-| 7 | RCX=3405691582 | 1063408153177358231 | 1063408153177358231 | 1063408153177358231 | yes | 0xCAFEBABE, n=31 |
-| 8 | RCX=1311768467463790320 | 2270133228012960960 | 2270133228012960960 | 2270133228012960960 | yes | 0x123...DEF0, n=17 |
-| 9 | RCX=18446744073709551615 | 6053433728553997216 | 6053433728553997216 | 6053433728553997216 | yes | max u64, n=32 |
-| 10 | RCX=11400714819323198485 | 14427431683600197101 | 14427431683600197101 | 14427431683600197101 | yes | K (golden), n=22 |
+| 1 | RCX=0 | 0 | 0 | — | **no** | x=0, n=1: val=0 even, no accumulate |
+| 2 | RCX=1 | 1 | 1 | — | **no** | x=1, n=2 |
+| 3 | RCX=2 | 11400714819323198487 | 11400714819323198487 | — | **no** | x=2, n=3 |
+| 4 | RCX=31 | 6053433728553997728 | 6053433728553997728 | — | **no** | x=0x1F, n=32 max |
+| 5 | RCX=255 | 6053433728554001312 | 6053433728554001312 | — | **no** | x=0xFF, n=32 |
+| 6 | RCX=51966 | 1063408102092763991 | 1063408102092763991 | — | **no** | 0xCAFE, n=31 |
+| 7 | RCX=3405691582 | 1063408153177358231 | 1063408153177358231 | — | **no** | 0xCAFEBABE, n=31 |
+| 8 | RCX=1311768467463790320 | 2270133228012960960 | 2270133228012960960 | — | **no** | 0x123...DEF0, n=17 |
+| 9 | RCX=18446744073709551615 | 6053433728553997216 | 6053433728553997216 | — | **no** | max u64, n=32 |
+| 10 | RCX=11400714819323198485 | 14427431683600197101 | 14427431683600197101 | — | **no** | K (golden), n=22 |
+
+## Failure detail
+
+### case 1: x=0, n=1: val=0 even, no accumulate
+
+- inputs: `RCX=0`
+- manifest expected: `0`
+- native: `0`
+- lifted: `—`
+
+### case 2: x=1, n=2
+
+- inputs: `RCX=1`
+- manifest expected: `1`
+- native: `1`
+- lifted: `—`
+
+### case 3: x=2, n=3
+
+- inputs: `RCX=2`
+- manifest expected: `11400714819323198487`
+- native: `11400714819323198487`
+- lifted: `—`
+
+### case 4: x=0x1F, n=32 max
+
+- inputs: `RCX=31`
+- manifest expected: `6053433728553997728`
+- native: `6053433728553997728`
+- lifted: `—`
+
+### case 5: x=0xFF, n=32
+
+- inputs: `RCX=255`
+- manifest expected: `6053433728554001312`
+- native: `6053433728554001312`
+- lifted: `—`
+
+### case 6: 0xCAFE, n=31
+
+- inputs: `RCX=51966`
+- manifest expected: `1063408102092763991`
+- native: `1063408102092763991`
+- lifted: `—`
+
+### case 7: 0xCAFEBABE, n=31
+
+- inputs: `RCX=3405691582`
+- manifest expected: `1063408153177358231`
+- native: `1063408153177358231`
+- lifted: `—`
+
+### case 8: 0x123...DEF0, n=17
+
+- inputs: `RCX=1311768467463790320`
+- manifest expected: `2270133228012960960`
+- native: `2270133228012960960`
+- lifted: `—`
+
+### case 9: max u64, n=32
+
+- inputs: `RCX=18446744073709551615`
+- manifest expected: `6053433728553997216`
+- native: `6053433728553997216`
+- lifted: `—`
+
+### case 10: K (golden), n=22
+
+- inputs: `RCX=11400714819323198485`
+- manifest expected: `14427431683600197101`
+- native: `14427431683600197101`
+- lifted: `—`
 
 ## Source
 

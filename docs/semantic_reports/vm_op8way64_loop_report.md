@@ -1,12 +1,14 @@
 # vm_op8way64_loop - original vs lifted equivalence
 
-- **Verdict:** PASS
-- **Cases:** 10/10 equivalent
+- **Verdict:** FAIL (10/10)
+- **Cases:** 0/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_op8way64_loop.c`
-- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_op8way64_loop.ll`
+- **Lifted IR:** _(missing)_
 - **Symbol:** `vm_op8way64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_op8way64_loop_eq.exe`
-- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
+
+**Diagnostics:**
+- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_op8way64_loop.ll
 
 ## Equivalence (native vs lifted)
 
@@ -14,16 +16,88 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 1 | 1 | 1 | yes | x=0, n=1, op=0: s=0+1=1 |
-| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1, n=2: op=1 then op=0 |
-| 3 | RCX=7 | 7 | 7 | 7 | yes | x=7, n=8 |
-| 4 | RCX=15 | 14 | 14 | 14 | yes | x=0xF, n=16 |
-| 5 | RCX=51966 | 17870283321406128133 | 17870283321406128133 | 17870283321406128133 | yes | x=0xCAFE, n=15 |
-| 6 | RCX=3405691582 | 17328725466221477723 | 17328725466221477723 | 17328725466221477723 | yes | x=0xCAFEBABE, n=15 |
-| 7 | RCX=1311768467463790320 | 1 | 1 | 1 | yes | 0x123...DEF0, n=1, op=0 |
-| 8 | RCX=18446744073709551615 | 0 | 0 | 0 | yes | max u64, n=16: every op=7 -> s ^= s>>5 |
-| 9 | RCX=11400714819323198485 | 3558795033804543995 | 3558795033804543995 | 3558795033804543995 | yes | K (golden), n=6 |
-| 10 | RCX=6172840429334713770 | 32 | 32 | 32 | yes | 0x55AA55AA55AA55AA, n=11 |
+| 1 | RCX=0 | 1 | 1 | — | **no** | x=0, n=1, op=0: s=0+1=1 |
+| 2 | RCX=1 | 1 | 1 | — | **no** | x=1, n=2: op=1 then op=0 |
+| 3 | RCX=7 | 7 | 7 | — | **no** | x=7, n=8 |
+| 4 | RCX=15 | 14 | 14 | — | **no** | x=0xF, n=16 |
+| 5 | RCX=51966 | 17870283321406128133 | 17870283321406128133 | — | **no** | x=0xCAFE, n=15 |
+| 6 | RCX=3405691582 | 17328725466221477723 | 17328725466221477723 | — | **no** | x=0xCAFEBABE, n=15 |
+| 7 | RCX=1311768467463790320 | 1 | 1 | — | **no** | 0x123...DEF0, n=1, op=0 |
+| 8 | RCX=18446744073709551615 | 0 | 0 | — | **no** | max u64, n=16: every op=7 -> s ^= s>>5 |
+| 9 | RCX=11400714819323198485 | 3558795033804543995 | 3558795033804543995 | — | **no** | K (golden), n=6 |
+| 10 | RCX=6172840429334713770 | 32 | 32 | — | **no** | 0x55AA55AA55AA55AA, n=11 |
+
+## Failure detail
+
+### case 1: x=0, n=1, op=0: s=0+1=1
+
+- inputs: `RCX=0`
+- manifest expected: `1`
+- native: `1`
+- lifted: `—`
+
+### case 2: x=1, n=2: op=1 then op=0
+
+- inputs: `RCX=1`
+- manifest expected: `1`
+- native: `1`
+- lifted: `—`
+
+### case 3: x=7, n=8
+
+- inputs: `RCX=7`
+- manifest expected: `7`
+- native: `7`
+- lifted: `—`
+
+### case 4: x=0xF, n=16
+
+- inputs: `RCX=15`
+- manifest expected: `14`
+- native: `14`
+- lifted: `—`
+
+### case 5: x=0xCAFE, n=15
+
+- inputs: `RCX=51966`
+- manifest expected: `17870283321406128133`
+- native: `17870283321406128133`
+- lifted: `—`
+
+### case 6: x=0xCAFEBABE, n=15
+
+- inputs: `RCX=3405691582`
+- manifest expected: `17328725466221477723`
+- native: `17328725466221477723`
+- lifted: `—`
+
+### case 7: 0x123...DEF0, n=1, op=0
+
+- inputs: `RCX=1311768467463790320`
+- manifest expected: `1`
+- native: `1`
+- lifted: `—`
+
+### case 8: max u64, n=16: every op=7 -> s ^= s>>5
+
+- inputs: `RCX=18446744073709551615`
+- manifest expected: `0`
+- native: `0`
+- lifted: `—`
+
+### case 9: K (golden), n=6
+
+- inputs: `RCX=11400714819323198485`
+- manifest expected: `3558795033804543995`
+- native: `3558795033804543995`
+- lifted: `—`
+
+### case 10: 0x55AA55AA55AA55AA, n=11
+
+- inputs: `RCX=6172840429334713770`
+- manifest expected: `32`
+- native: `32`
+- lifted: `—`
 
 ## Source
 

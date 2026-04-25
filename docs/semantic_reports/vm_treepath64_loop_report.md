@@ -1,12 +1,14 @@
 # vm_treepath64_loop - original vs lifted equivalence
 
-- **Verdict:** PASS
-- **Cases:** 10/10 equivalent
+- **Verdict:** FAIL (10/10)
+- **Cases:** 0/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_treepath64_loop.c`
-- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_treepath64_loop.ll`
+- **Lifted IR:** _(missing)_
 - **Symbol:** `vm_treepath64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_treepath64_loop_eq.exe`
-- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
+
+**Diagnostics:**
+- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_treepath64_loop.ll
 
 ## Equivalence (native vs lifted)
 
@@ -14,16 +16,88 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0, n=1, bit0=0: s = 0*2 = 0 |
-| 2 | RCX=1 | 2 | 2 | 2 | yes | x=1, n=2: bit0=1 then bit1=0 -> 1 then 2 |
-| 3 | RCX=7 | 416 | 416 | 416 | yes | x=7, n=8: 3 set bits low |
-| 4 | RCX=63 | 12682136550675316736 | 12682136550675316736 | 12682136550675316736 | yes | x=0x3F, n=64: 6 set bits low + 58 high zeros |
-| 5 | RCX=64 | 0 | 0 | 0 | yes | x=0x40, n=1: bit0=0 |
-| 6 | RCX=255 | 14987979559889010688 | 14987979559889010688 | 14987979559889010688 | yes | x=0xFF, n=64: 8 set bits low |
-| 7 | RCX=51966 | 14927180964919508992 | 14927180964919508992 | 14927180964919508992 | yes | x=0xCAFE, n=63 |
-| 8 | RCX=3405691582 | 17133061565256302592 | 17133061565256302592 | 17133061565256302592 | yes | x=0xCAFEBABE, n=63 |
-| 9 | RCX=18446744073709551615 | 13589915092710809216 | 13589915092710809216 | 13589915092710809216 | yes | max u64, n=64: 3*x+1 every iter wraps mod 2^64 |
-| 10 | RCX=11400714819323198485 | 96332860 | 96332860 | 96332860 | yes | K (golden), n=22 |
+| 1 | RCX=0 | 0 | 0 | — | **no** | x=0, n=1, bit0=0: s = 0*2 = 0 |
+| 2 | RCX=1 | 2 | 2 | — | **no** | x=1, n=2: bit0=1 then bit1=0 -> 1 then 2 |
+| 3 | RCX=7 | 416 | 416 | — | **no** | x=7, n=8: 3 set bits low |
+| 4 | RCX=63 | 12682136550675316736 | 12682136550675316736 | — | **no** | x=0x3F, n=64: 6 set bits low + 58 high zeros |
+| 5 | RCX=64 | 0 | 0 | — | **no** | x=0x40, n=1: bit0=0 |
+| 6 | RCX=255 | 14987979559889010688 | 14987979559889010688 | — | **no** | x=0xFF, n=64: 8 set bits low |
+| 7 | RCX=51966 | 14927180964919508992 | 14927180964919508992 | — | **no** | x=0xCAFE, n=63 |
+| 8 | RCX=3405691582 | 17133061565256302592 | 17133061565256302592 | — | **no** | x=0xCAFEBABE, n=63 |
+| 9 | RCX=18446744073709551615 | 13589915092710809216 | 13589915092710809216 | — | **no** | max u64, n=64: 3*x+1 every iter wraps mod 2^64 |
+| 10 | RCX=11400714819323198485 | 96332860 | 96332860 | — | **no** | K (golden), n=22 |
+
+## Failure detail
+
+### case 1: x=0, n=1, bit0=0: s = 0*2 = 0
+
+- inputs: `RCX=0`
+- manifest expected: `0`
+- native: `0`
+- lifted: `—`
+
+### case 2: x=1, n=2: bit0=1 then bit1=0 -> 1 then 2
+
+- inputs: `RCX=1`
+- manifest expected: `2`
+- native: `2`
+- lifted: `—`
+
+### case 3: x=7, n=8: 3 set bits low
+
+- inputs: `RCX=7`
+- manifest expected: `416`
+- native: `416`
+- lifted: `—`
+
+### case 4: x=0x3F, n=64: 6 set bits low + 58 high zeros
+
+- inputs: `RCX=63`
+- manifest expected: `12682136550675316736`
+- native: `12682136550675316736`
+- lifted: `—`
+
+### case 5: x=0x40, n=1: bit0=0
+
+- inputs: `RCX=64`
+- manifest expected: `0`
+- native: `0`
+- lifted: `—`
+
+### case 6: x=0xFF, n=64: 8 set bits low
+
+- inputs: `RCX=255`
+- manifest expected: `14987979559889010688`
+- native: `14987979559889010688`
+- lifted: `—`
+
+### case 7: x=0xCAFE, n=63
+
+- inputs: `RCX=51966`
+- manifest expected: `14927180964919508992`
+- native: `14927180964919508992`
+- lifted: `—`
+
+### case 8: x=0xCAFEBABE, n=63
+
+- inputs: `RCX=3405691582`
+- manifest expected: `17133061565256302592`
+- native: `17133061565256302592`
+- lifted: `—`
+
+### case 9: max u64, n=64: 3*x+1 every iter wraps mod 2^64
+
+- inputs: `RCX=18446744073709551615`
+- manifest expected: `13589915092710809216`
+- native: `13589915092710809216`
+- lifted: `—`
+
+### case 10: K (golden), n=22
+
+- inputs: `RCX=11400714819323198485`
+- manifest expected: `96332860`
+- native: `96332860`
+- lifted: `—`
 
 ## Source
 
