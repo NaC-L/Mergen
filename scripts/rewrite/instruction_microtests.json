@@ -2286,6 +2286,26 @@
       ]
     },
     {
+      "name": "vm_lfsr64_loop",
+      "symbol": "vm_lfsr64_loop_target",
+      "patterns": [
+        "xor",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 9223372036854775808,  "label": "x=0: state=1, n=1: bit=1 shifted to MSB" },
+        { "inputs": { "RCX": 1 },                    "expected": 4611686018427387904,  "label": "x=1, n=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 288230376151711744,   "label": "x=7, n=8" },
+        { "inputs": { "RCX": 15 },                   "expected": 2533274790395904,     "label": "x=0xF, n=16 max" },
+        { "inputs": { "RCX": 51966 },                "expected": 8421731303182827521,  "label": "x=0xCAFE, n=15" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 13130244713598785021, "label": "x=0xCAFEBABE, n=15" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 655884233731895160,   "label": "0x123...DEF0, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 281474976710655,       "label": "max u64, n=16: clears top 16 bits" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 8248586701299853808,  "label": "x=K (golden), n=6" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 984880943510642349,   "label": "x=0xDEADBEEF, n=16" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
