@@ -4664,6 +4664,26 @@
       ]
     },
     {
+      "name": "vm_word_andfold64_loop",
+      "symbol": "vm_word_andfold64_loop_target",
+      "patterns": [
+        "and",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "x=0 n=1: 0xFFFF & 0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,     "label": "x=1 n=2: word=1; 1&0=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,     "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 0,     "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 0,     "label": "0xCAFEBABE: n=3 high word=0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 0,     "label": "0xDEADBEEF: n=4 high word=0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 65535, "label": "all 0xFF: r stays 0xFFFF" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 1800,  "label": "0x0102...0708: n=1 word=0x0708" },
+        { "inputs": { "RCX": 18364758544493064720 }, "expected": 12816, "label": "0xFEDCBA9876543210: n=1 word=0x3210" },
+        { "inputs": { "RCX": 18446744073709551608 }, "expected": 65528, "label": "0xFFFFFFFFFFFFFFF8: n=1 word=0xFFF8=65528" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
