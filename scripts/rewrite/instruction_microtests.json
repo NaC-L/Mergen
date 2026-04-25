@@ -4293,6 +4293,26 @@
       ]
     },
     {
+      "name": "vm_dynlshr_accum_byte64_loop",
+      "symbol": "vm_dynlshr_accum_byte64_loop_target",
+      "patterns": [
+        "lshr",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 9223372036854775807, "label": "x=0 n=1: r=~0 >> 1 ^ 0 = 2^63-1" },
+        { "inputs": { "RCX": 1 },                    "expected": 2305843009213693951, "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 288230376151711743,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 268435455,           "label": "x=7 n=8: cumulative right shift 36 bits" },
+        { "inputs": { "RCX": 8 },                    "expected": 9223372036854775799, "label": "x=8 n=1: ~0>>1 ^ 8 = (2^63-1) ^ 8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 68719476735,         "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 268435455,           "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 268435200,           "label": "all 0xFF n=8: cumulative shift collapses then XOR 0xFF stack" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 9223372036854775799, "label": "0x0102...0708: n=1 byte0=8 (matches x=8)" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 9223372036854775567, "label": "0x12345...EF0: n=1 byte0=0xF0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
