@@ -524,6 +524,28 @@
       ]
     },
     {
+      "name": "vm_lfsr_loop",
+      "symbol": "vm_lfsr_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },       "expected": 1,   "label": "n=0: state=seed=1" },
+        { "inputs": { "RCX": 1 },       "expected": 1,   "label": "n=0, seed forced to 1" },
+        { "inputs": { "RCX": 256 },     "expected": 184, "label": "n=1, seed=1: 1 -> 0xB8" },
+        { "inputs": { "RCX": 257 },     "expected": 184, "label": "n=1, seed=1 again" },
+        { "inputs": { "RCX": 128 },     "expected": 129, "label": "n=0, seed=0x81" },
+        { "inputs": { "RCX": 129 },     "expected": 129, "label": "n=0, seed=0x81 (lsb forced)" },
+        { "inputs": { "RCX": 512 },     "expected": 92,  "label": "n=2, seed=1: 1 -> 0xB8 -> 0x5C" },
+        { "inputs": { "RCX": 1280 },    "expected": 179, "label": "n=5, seed=1" },
+        { "inputs": { "RCX": 4095 },    "expected": 117, "label": "n=15, seed=0xFF" },
+        { "inputs": { "RCX": 4660 },    "expected": 81,  "label": "n=2, seed=0x35" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
