@@ -1350,6 +1350,29 @@
       ]
     },
     {
+      "name": "vm_window_loop",
+      "symbol": "vm_window_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 165, "label": "limit=3, data=[0,0x37,0x6E]" },
+        { "inputs": { "RCX": 1 },     "expected": 329, "label": "limit=4" },
+        { "inputs": { "RCX": 7 },     "expected": 557, "label": "limit=10" },
+        { "inputs": { "RCX": 170 },   "expected": 523, "label": "0xAA: limit=5" },
+        { "inputs": { "RCX": 255 },   "expected": 600, "label": "0xFF: limit=10" },
+        { "inputs": { "RCX": 85 },    "expected": 447, "label": "0x55: limit=8" },
+        { "inputs": { "RCX": 291 },   "expected": 466, "label": "0x123: limit=6" },
+        { "inputs": { "RCX": 4660 },  "expected": 467, "label": "0x1234: limit=7" },
+        { "inputs": { "RCX": 196 },   "expected": 609, "label": "0xC4: limit=7" },
+        { "inputs": { "RCX": 128 },   "expected": 549, "label": "0x80: limit=3" },
+        { "inputs": { "RCX": 55 },    "expected": 541, "label": "0x37: limit=10" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
