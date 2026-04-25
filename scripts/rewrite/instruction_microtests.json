@@ -1373,6 +1373,30 @@
       ]
     },
     {
+      "name": "vm_4state_loop",
+      "symbol": "vm_4state_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "add",
+        "xor",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,   "label": "n=0" },
+        { "inputs": { "RCX": 256 },   "expected": 7,   "label": "n=1: state0 add 7" },
+        { "inputs": { "RCX": 512 },   "expected": 93,  "label": "n=2: add+xor" },
+        { "inputs": { "RCX": 768 },   "expected": 23,  "label": "n=3: add+xor+mul" },
+        { "inputs": { "RCX": 1024 },  "expected": 12,  "label": "n=4: full cycle" },
+        { "inputs": { "RCX": 1280 },  "expected": 19,  "label": "n=5" },
+        { "inputs": { "RCX": 2048 },  "expected": 208, "label": "n=8: two full cycles" },
+        { "inputs": { "RCX": 3840 },  "expected": 235, "label": "n=15" },
+        { "inputs": { "RCX": 66 },    "expected": 66,  "label": "v=0x42, n=0" },
+        { "inputs": { "RCX": 4660 },  "expected": 97,  "label": "0x1234" },
+        { "inputs": { "RCX": 43981 }, "expected": 254, "label": "0xABCD" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
