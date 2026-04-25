@@ -3901,6 +3901,27 @@
       ]
     },
     {
+      "name": "vm_signedxor_byte_idx64_loop",
+      "symbol": "vm_signedxor_byte_idx64_loop_target",
+      "patterns": [
+        "sext",
+        "mul",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: byte0=+1*1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,                    "label": "x=2 n=3: byte0=+2*1" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,                    "label": "x=7 n=8: only byte0=7 contributes" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,                    "label": "x=8 n=1: byte0=+8*1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 24,                   "label": "0xCAFEBABE: n=7 - high bits cancel pairwise" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 236,                  "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,                    "label": "all 0xFF: 8 sext(-1)*counters - high-bit fold cancels" },
+        { "inputs": { "RCX": 9259542125412876287 },  "expected": 0,                    "label": "0x80808080FFFFFFFF: 8 mixed signed bytes XOR cancel" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 18446744073709551600, "label": "0x12345...EF0: n=1 sext(0xF0)*1=-16 -> 2^64-16 (DIFFERENT from unsigned 240)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
