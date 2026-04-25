@@ -4231,6 +4231,26 @@
       ]
     },
     {
+      "name": "vm_lcg_ansi_chain64_loop",
+      "symbol": "vm_lcg_ansi_chain64_loop_target",
+      "patterns": [
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 12345,                "label": "x=0 n=1: 0*A+12345=12345" },
+        { "inputs": { "RCX": 1 },                    "expected": 1217759518843121895, "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 13429379559266951497, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 15269757630230227199, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8828134305,           "label": "x=8 n=1: 8*A+12345" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 5394996920446395057,  "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 7100797012767448295,  "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 14013565258359107575, "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 7289336239468420769,  "label": "0x0102...0708: n=1 single LCG step" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 3689348795830123625,  "label": "0x12345...EF0: n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
