@@ -3818,6 +3818,26 @@
       ]
     },
     {
+      "name": "vm_dyn_ashr64_loop",
+      "symbol": "vm_dyn_ashr64_loop_target",
+      "patterns": [
+        "ashr",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1 n=2: byte0=1 xor byte1=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,   "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 5,   "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,   "label": "x=8 n=1: byte0 of x" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 141, "label": "0xCAFEBABE: n=7 mixed shifts" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 97,  "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,   "label": "all 0xFF: ashr fills 1s; 8 xor of 0xFF cancel to 0" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 0,   "label": "x=2^63 n=1: byte0=0 single iter (high bit only)" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 240, "label": "0x12345...EF0: n=1 byte0=0xF0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
