@@ -920,6 +920,29 @@
       ]
     },
     {
+      "name": "vm_bittransitions_loop",
+      "symbol": "vm_bittransitions_loop_target",
+      "patterns": [
+        "add nuw nsw i32",
+        "xor i32",
+        "lshr i32",
+        "and i32"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,  "label": "all zeros" },
+        { "inputs": { "RCX": 1 },     "expected": 1,  "label": "single bit set" },
+        { "inputs": { "RCX": 2 },     "expected": 2,  "label": "bit 1 set" },
+        { "inputs": { "RCX": 65535 }, "expected": 0,  "label": "all 16 bits same: 0 transitions" },
+        { "inputs": { "RCX": 21845 }, "expected": 15, "label": "0x5555 alternating: 15 transitions" },
+        { "inputs": { "RCX": 43690 }, "expected": 15, "label": "0xAAAA alternating" },
+        { "inputs": { "RCX": 52428 }, "expected": 7,  "label": "0xCCCC: 2-bit blocks" },
+        { "inputs": { "RCX": 3855 },  "expected": 3,  "label": "0x0F0F: 4-bit blocks" },
+        { "inputs": { "RCX": 61680 }, "expected": 3,  "label": "0xF0F0: 4-bit blocks" },
+        { "inputs": { "RCX": 65280 }, "expected": 1,  "label": "0xFF00: single transition" },
+        { "inputs": { "RCX": 4660 },  "expected": 8,  "label": "0x1234" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
