@@ -2664,6 +2664,26 @@
       ]
     },
     {
+      "name": "vm_nibrev64_loop",
+      "symbol": "vm_nibrev64_loop_target",
+      "patterns": [
+        "or",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1, n=2 even -> identity" },
+        { "inputs": { "RCX": 15 },                   "expected": 15,                   "label": "x=0xF, n=8 even -> identity" },
+        { "inputs": { "RCX": 51966 },                "expected": 17270178671059009536, "label": "x=0xCAFE, n=7 odd -> 0xEFAC0...0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 16981930341944000512, "label": "x=0xCAFEBABE, n=7 odd" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1147797409030816545,  "label": "0x123456789ABCDEF0, n=1 -> 0x0FEDCBA987654321" },
+        { "inputs": { "RCX": 1147797409030816545 },  "expected": 1147797409030816545,  "label": "already-reversed input, n=2 even -> identity" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "max u64: nibble-rev fixed point" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 11400714819323198485, "label": "K (golden), n=6 even -> identity" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928559,           "label": "x=0xDEADBEEF, n=8 even -> identity" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
