@@ -5003,6 +5003,26 @@
       ]
     },
     {
+      "name": "vm_isolate_low_bit64_loop",
+      "symbol": "vm_isolate_low_bit64_loop_target",
+      "patterns": [
+        "and",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1: lowest bit=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,   "label": "x=2: lowest bit=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 1,   "label": "x=7: lowest set bit=1" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,   "label": "x=8: lowest=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 2,   "label": "0xCAFEBABE: lowest set bit at pos 1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1,   "label": "0xDEADBEEF: lowest=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1,   "label": "all 0xFF: lowest=1" },
+        { "inputs": { "RCX": 256 },                  "expected": 256, "label": "0x100: lowest=256" },
+        { "inputs": { "RCX": 128 },                  "expected": 128, "label": "0x80: lowest=128" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
