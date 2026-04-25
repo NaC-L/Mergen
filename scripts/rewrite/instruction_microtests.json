@@ -3609,6 +3609,27 @@
       ]
     },
     {
+      "name": "vm_nibrev_window64_loop",
+      "symbol": "vm_nibrev_window64_loop_target",
+      "patterns": [
+        "shl",
+        "or",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "all zero" },
+        { "inputs": { "RCX": 1 },                    "expected": 16,         "label": "x=1 n=2: nibbles [1,0] -> 0x10" },
+        { "inputs": { "RCX": 2 },                    "expected": 512,        "label": "x=2 n=3: nibbles [2,0,0] -> 0x200" },
+        { "inputs": { "RCX": 7 },                    "expected": 1879048192, "label": "x=7 n=8: nibble 7 ends up at high pos -> 0x70000000" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,          "label": "x=8 n=1: r=low nibble=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 247119610,  "label": "0xCAFEBABE: n=7 nibble-rev of low 28 bits" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 4276869869, "label": "0xDEADBEEF: n=8 full 32-bit nibble reverse" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4294967295, "label": "all 0xFF: n=8 -> 0xFFFFFFFF (8 nibbles of 0xF)" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 8,          "label": "0x0102...0708: n=1 low nibble=8 (matches x=8)" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 0,          "label": "0x12345...EF0: n=1 low nibble=0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
