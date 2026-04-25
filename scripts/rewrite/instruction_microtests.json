@@ -3323,6 +3323,26 @@
       ]
     },
     {
+      "name": "vm_trailzeros_factorial64_loop",
+      "symbol": "vm_trailzeros_factorial64_loop_target",
+      "patterns": [
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "n=0: 0 trailing zeros (0!=1)" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                   "label": "n=1: 1!=1" },
+        { "inputs": { "RCX": 4 },                    "expected": 0,                   "label": "n=4: 4!=24, 0 trailing zeros" },
+        { "inputs": { "RCX": 5 },                    "expected": 1,                   "label": "n=5: 5!=120, 1 trailing zero" },
+        { "inputs": { "RCX": 10 },                   "expected": 2,                   "label": "n=10: 10! has 2" },
+        { "inputs": { "RCX": 24 },                   "expected": 4,                   "label": "n=24: 24! has 4" },
+        { "inputs": { "RCX": 25 },                   "expected": 6,                   "label": "n=25: jump from 4 to 6 at 25" },
+        { "inputs": { "RCX": 100 },                  "expected": 24,                  "label": "n=100: 100! has 24" },
+        { "inputs": { "RCX": 1000 },                 "expected": 249,                 "label": "n=1000: 1000! has 249" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4611686018427387890, "label": "max u64: ~floor(n/4)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
