@@ -1883,6 +1883,26 @@
       ]
     },
     {
+      "name": "vm_sbyte_array_loop",
+      "symbol": "vm_sbyte_array_loop_target",
+      "patterns": [
+        "sext i8",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,          "label": "seed=0" },
+        { "inputs": { "RCX": 1 },     "expected": 56,         "label": "seed=1: arithmetic seq sum" },
+        { "inputs": { "RCX": 2 },     "expected": 112,        "label": "seed=2" },
+        { "inputs": { "RCX": 5 },     "expected": 280,        "label": "seed=5" },
+        { "inputs": { "RCX": 10 },    "expected": 560,        "label": "seed=10" },
+        { "inputs": { "RCX": 20 },    "expected": 4294967136, "label": "seed=20: i8 wrap on high indices (-160 u32)" },
+        { "inputs": { "RCX": 127 },   "expected": 456,        "label": "seed=0x7F: max positive" },
+        { "inputs": { "RCX": 128 },   "expected": 4294966272, "label": "seed=-128 (-1024 u32)" },
+        { "inputs": { "RCX": 255 },   "expected": 4294967240, "label": "seed=-1 (-56 u32)" },
+        { "inputs": { "RCX": 51966 }, "expected": 4294967184, "label": "0xCAFE: low byte 0xFE -> seed=-2 (-112 u32)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
