@@ -3859,6 +3859,27 @@
       ]
     },
     {
+      "name": "vm_notand_chain64_loop",
+      "symbol": "vm_notand_chain64_loop_target",
+      "patterns": [
+        "and",
+        "xor",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: r stays 0 (NOT AND 0 = 0; xor i<<3 keeps in low bits but r=0&0)" },
+        { "inputs": { "RCX": 1 },                    "expected": 9,                    "label": "x=1 n=2: trace through 2 iters" },
+        { "inputs": { "RCX": 2 },                    "expected": 16,                   "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 63,                   "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 0,                    "label": "x=8 n=1: (~8)&8=0; xor 0=0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 56,                   "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928575,           "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "all 0xFF: ~r is single-bit, AND with all-1 keeps it; eight xor i<<3 over [0..56] flips 8 bytes" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 0,                    "label": "0x0102...0708: n=1 single iter" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 0,                    "label": "0x12345...EF0: n=1 single iter (~x)&x=0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
