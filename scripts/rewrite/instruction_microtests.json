@@ -3484,6 +3484,26 @@
       ]
     },
     {
+      "name": "vm_xorrot64_loop",
+      "symbol": "vm_xorrot64_loop_target",
+      "patterns": [
+        "xor",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: r stays 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 11400714819323198487, "label": "x=1 n=2: r=0^1=1; s=GR+1; r=1^s" },
+        { "inputs": { "RCX": 2 },                    "expected": 6976393091583301537,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 17407523668071694152, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,                    "label": "x=8 n=1: r=0^8=8 (one iter)" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 17382597892840588897, "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 12486367075188079128, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18065629430272941624, "label": "all 0xFF: n=8 LCG steps" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1311768467463790320, "label": "0x12345...EF0: n=1: r=x (only one xor)" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 9223372036854775808, "label": "x=2^63: n=1: r=2^63" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
