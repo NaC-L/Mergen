@@ -5187,6 +5187,26 @@
       ]
     },
     {
+      "name": "vm_byte_signed_lt_count64_loop",
+      "symbol": "vm_byte_signed_lt_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0: byte0=0, sext=0, not <0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0, "label": "x=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 0, "label": "x=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 0, "label": "x=7" },
+        { "inputs": { "RCX": 8 },                    "expected": 0, "label": "x=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 4, "label": "0xCAFEBABE: 4 high-bit bytes" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 4, "label": "0xDEADBEEF" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 8, "label": "all 0xFF: 8 high-bit-set" },
+        { "inputs": { "RCX": 9187201950435737471 }, "expected": 0, "label": "0x7F*8: all 0x7F (high bit clear)" },
+        { "inputs": { "RCX": 9259542125412876287 }, "expected": 8, "label": "0x80808080FFFFFFFF n=8: all 8 bytes high-bit-set" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
