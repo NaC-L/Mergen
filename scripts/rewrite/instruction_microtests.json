@@ -638,6 +638,28 @@
       ]
     },
     {
+      "name": "vm_polynomial_loop",
+      "symbol": "vm_polynomial_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "mul nuw nsw i32",
+        "add nuw nsw i32",
+        "zext nneg i32"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 10,  "label": "t=1: p(1)=10" },
+        { "inputs": { "RCX": 1 },  "expected": 26,  "label": "t=2: p(2)=26" },
+        { "inputs": { "RCX": 2 },  "expected": 58,  "label": "t=3: p(3)=58" },
+        { "inputs": { "RCX": 3 },  "expected": 112, "label": "t=4: p(4)=112" },
+        { "inputs": { "RCX": 4 },  "expected": 194, "label": "t=5: p(5)=194" },
+        { "inputs": { "RCX": 5 },  "expected": 310, "label": "t=6: p(6)=310" },
+        { "inputs": { "RCX": 6 },  "expected": 466, "label": "t=7: p(7)=466" },
+        { "inputs": { "RCX": 7 },  "expected": 668, "label": "t=8: p(8)=668" },
+        { "inputs": { "RCX": 8 },  "expected": 10,  "label": "t=1 again (mask drops bit 3)" },
+        { "inputs": { "RCX": 15 }, "expected": 668, "label": "t=8 again after mask" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
