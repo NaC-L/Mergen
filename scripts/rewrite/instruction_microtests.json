@@ -3044,6 +3044,26 @@
       ]
     },
     {
+      "name": "vm_pdepslow64_loop",
+      "symbol": "vm_pdepslow64_loop_target",
+      "patterns": [
+        "and",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "x=0: src=0, mask=1, no bits set" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1: src=1, mask=1, deposit bit 0" },
+        { "inputs": { "RCX": 15 },                   "expected": 1,          "label": "x=0xF: src=0xF, mask=1, only bit 0 fits" },
+        { "inputs": { "RCX": 255 },                  "expected": 1,          "label": "x=0xFF: mask=1, only bit 0" },
+        { "inputs": { "RCX": 1095216660735 },        "expected": 255,        "label": "src=0xFF, mask=0xFF: identity-like" },
+        { "inputs": { "RCX": 4294967297 },           "expected": 1,          "label": "src=1, mask=1" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 1119269551, "label": "0xCAFEBABEDEADBEEF" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4294967295, "label": "max u64: src=max32 deposited at all 32 mask positions" },
+        { "inputs": { "RCX": 51966 },                "expected": 0,          "label": "x=0xCAFE: src=0xCAFE, mask=1 (high zero), bit 0 of src is 0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 2285306001, "label": "K (golden)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
