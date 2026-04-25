@@ -4904,6 +4904,25 @@
       ]
     },
     {
+      "name": "vm_bit_xor_self_shift_up64_loop",
+      "symbol": "vm_bit_xor_self_shift_up64_loop_target",
+      "patterns": [
+        "xor",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                  "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 5,                  "label": "x=1 n=2: 1^2=3; 3^6=5" },
+        { "inputs": { "RCX": 2 },                    "expected": 30,                 "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 1799,               "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 24,                 "label": "x=8 n=1: 8^16=24" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 300979321962,       "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 955413385711,       "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 255,                "label": "all 0xFF: collapses to low byte" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 3917281245171901200, "label": "0x12345...EF0: n=1 single iter" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
