@@ -1,14 +1,12 @@
 # vm_signed_word_sum64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_signed_word_sum64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_signed_word_sum64_loop.ll`
 - **Symbol:** `vm_signed_word_sum64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_signed_word_sum64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_signed_word_sum64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | all zero -> 0 |
-| 2 | RCX=1 | 1 | 1 | — | **no** | x=1 n=2: word=1 +0 |
-| 3 | RCX=2 | 2 | 2 | — | **no** | x=2 n=3 |
-| 4 | RCX=3 | 3 | 3 | — | **no** | x=3 n=4: 3 + 0+0+0 |
-| 5 | RCX=3405691582 | 18446744073709520316 | 18446744073709520316 | — | **no** | 0xCAFEBABE: n=3 mixed-sign words |
-| 6 | RCX=3735928559 | 18446744073709526428 | 18446744073709526428 | — | **no** | 0xDEADBEEF: n=4 mostly negative words |
-| 7 | RCX=18446744073709551615 | 18446744073709551612 | 18446744073709551612 | — | **no** | all 0xFF n=4: 4 sext(-1) -> -4 in u64 |
-| 8 | RCX=72623859790382856 | 1800 | 1800 | — | **no** | 0x0102...0708: n=1 word=0x0708=+1800 |
-| 9 | RCX=1311768467463790320 | 18446744073709543152 | 18446744073709543152 | — | **no** | 0x12345...EF0: n=1 word=0xDEF0 sext negative |
-| 10 | RCX=2147516416 | 18446744073709518848 | 18446744073709518848 | — | **no** | 0x80008000: n=1 lower word=0x8000=-32768 |
-
-## Failure detail
-
-### case 1: all zero -> 0
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1 n=2: word=1 +0
-
-- inputs: `RCX=1`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 3: x=2 n=3
-
-- inputs: `RCX=2`
-- manifest expected: `2`
-- native: `2`
-- lifted: `—`
-
-### case 4: x=3 n=4: 3 + 0+0+0
-
-- inputs: `RCX=3`
-- manifest expected: `3`
-- native: `3`
-- lifted: `—`
-
-### case 5: 0xCAFEBABE: n=3 mixed-sign words
-
-- inputs: `RCX=3405691582`
-- manifest expected: `18446744073709520316`
-- native: `18446744073709520316`
-- lifted: `—`
-
-### case 6: 0xDEADBEEF: n=4 mostly negative words
-
-- inputs: `RCX=3735928559`
-- manifest expected: `18446744073709526428`
-- native: `18446744073709526428`
-- lifted: `—`
-
-### case 7: all 0xFF n=4: 4 sext(-1) -> -4 in u64
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `18446744073709551612`
-- native: `18446744073709551612`
-- lifted: `—`
-
-### case 8: 0x0102...0708: n=1 word=0x0708=+1800
-
-- inputs: `RCX=72623859790382856`
-- manifest expected: `1800`
-- native: `1800`
-- lifted: `—`
-
-### case 9: 0x12345...EF0: n=1 word=0xDEF0 sext negative
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `18446744073709543152`
-- native: `18446744073709543152`
-- lifted: `—`
-
-### case 10: 0x80008000: n=1 lower word=0x8000=-32768
-
-- inputs: `RCX=2147516416`
-- manifest expected: `18446744073709518848`
-- native: `18446744073709518848`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | all zero -> 0 |
+| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1 n=2: word=1 +0 |
+| 3 | RCX=2 | 2 | 2 | 2 | yes | x=2 n=3 |
+| 4 | RCX=3 | 3 | 3 | 3 | yes | x=3 n=4: 3 + 0+0+0 |
+| 5 | RCX=3405691582 | 18446744073709520316 | 18446744073709520316 | 18446744073709520316 | yes | 0xCAFEBABE: n=3 mixed-sign words |
+| 6 | RCX=3735928559 | 18446744073709526428 | 18446744073709526428 | 18446744073709526428 | yes | 0xDEADBEEF: n=4 mostly negative words |
+| 7 | RCX=18446744073709551615 | 18446744073709551612 | 18446744073709551612 | 18446744073709551612 | yes | all 0xFF n=4: 4 sext(-1) -> -4 in u64 |
+| 8 | RCX=72623859790382856 | 1800 | 1800 | 1800 | yes | 0x0102...0708: n=1 word=0x0708=+1800 |
+| 9 | RCX=1311768467463790320 | 18446744073709543152 | 18446744073709543152 | 18446744073709543152 | yes | 0x12345...EF0: n=1 word=0xDEF0 sext negative |
+| 10 | RCX=2147516416 | 18446744073709518848 | 18446744073709518848 | 18446744073709518848 | yes | 0x80008000: n=1 lower word=0x8000=-32768 |
 
 ## Source
 

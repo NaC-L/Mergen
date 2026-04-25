@@ -1,14 +1,12 @@
 # vm_word_horner13_64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_word_horner13_64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_word_horner13_64_loop.ll`
 - **Symbol:** `vm_word_horner13_64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_word_horner13_64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_word_horner13_64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | all zero -> 0 |
-| 2 | RCX=1 | 13 | 13 | — | **no** | x=1 n=2: 0*13+1=1; 1*13+0=13 |
-| 3 | RCX=2 | 338 | 338 | — | **no** | x=2 n=3: 2 -> 26 -> 338 |
-| 4 | RCX=3 | 6591 | 6591 | — | **no** | x=3 n=4: chain over 4 zero-padded iters |
-| 5 | RCX=3405691582 | 8754772 | 8754772 | — | **no** | 0xCAFEBABE: n=3 words (BABE,CAFE,0) |
-| 6 | RCX=3735928559 | 117021008 | 117021008 | — | **no** | 0xDEADBEEF: n=4 |
-| 7 | RCX=18446744073709551615 | 155973300 | 155973300 | — | **no** | all 0xFF n=4 |
-| 8 | RCX=72623859790382856 | 1800 | 1800 | — | **no** | 0x0102...0708: n=1 word=0x0708=1800 |
-| 9 | RCX=1311768467463790320 | 57072 | 57072 | — | **no** | 0x12345...EF0: n=1 word=0xDEF0 |
-| 10 | RCX=18364758544493064720 | 12816 | 12816 | — | **no** | 0xFEDCBA9876543210: n=1 word=0x3210 |
-
-## Failure detail
-
-### case 1: all zero -> 0
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1 n=2: 0*13+1=1; 1*13+0=13
-
-- inputs: `RCX=1`
-- manifest expected: `13`
-- native: `13`
-- lifted: `—`
-
-### case 3: x=2 n=3: 2 -> 26 -> 338
-
-- inputs: `RCX=2`
-- manifest expected: `338`
-- native: `338`
-- lifted: `—`
-
-### case 4: x=3 n=4: chain over 4 zero-padded iters
-
-- inputs: `RCX=3`
-- manifest expected: `6591`
-- native: `6591`
-- lifted: `—`
-
-### case 5: 0xCAFEBABE: n=3 words (BABE,CAFE,0)
-
-- inputs: `RCX=3405691582`
-- manifest expected: `8754772`
-- native: `8754772`
-- lifted: `—`
-
-### case 6: 0xDEADBEEF: n=4
-
-- inputs: `RCX=3735928559`
-- manifest expected: `117021008`
-- native: `117021008`
-- lifted: `—`
-
-### case 7: all 0xFF n=4
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `155973300`
-- native: `155973300`
-- lifted: `—`
-
-### case 8: 0x0102...0708: n=1 word=0x0708=1800
-
-- inputs: `RCX=72623859790382856`
-- manifest expected: `1800`
-- native: `1800`
-- lifted: `—`
-
-### case 9: 0x12345...EF0: n=1 word=0xDEF0
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `57072`
-- native: `57072`
-- lifted: `—`
-
-### case 10: 0xFEDCBA9876543210: n=1 word=0x3210
-
-- inputs: `RCX=18364758544493064720`
-- manifest expected: `12816`
-- native: `12816`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | all zero -> 0 |
+| 2 | RCX=1 | 13 | 13 | 13 | yes | x=1 n=2: 0*13+1=1; 1*13+0=13 |
+| 3 | RCX=2 | 338 | 338 | 338 | yes | x=2 n=3: 2 -> 26 -> 338 |
+| 4 | RCX=3 | 6591 | 6591 | 6591 | yes | x=3 n=4: chain over 4 zero-padded iters |
+| 5 | RCX=3405691582 | 8754772 | 8754772 | 8754772 | yes | 0xCAFEBABE: n=3 words (BABE,CAFE,0) |
+| 6 | RCX=3735928559 | 117021008 | 117021008 | 117021008 | yes | 0xDEADBEEF: n=4 |
+| 7 | RCX=18446744073709551615 | 155973300 | 155973300 | 155973300 | yes | all 0xFF n=4 |
+| 8 | RCX=72623859790382856 | 1800 | 1800 | 1800 | yes | 0x0102...0708: n=1 word=0x0708=1800 |
+| 9 | RCX=1311768467463790320 | 57072 | 57072 | 57072 | yes | 0x12345...EF0: n=1 word=0xDEF0 |
+| 10 | RCX=18364758544493064720 | 12816 | 12816 | 12816 | yes | 0xFEDCBA9876543210: n=1 word=0x3210 |
 
 ## Source
 

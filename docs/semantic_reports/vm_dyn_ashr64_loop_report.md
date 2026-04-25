@@ -1,9 +1,9 @@
 # vm_dyn_ashr64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (1/10)
-- **Cases:** 9/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_dyn_ashr64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_dyn_ashr64_loop.ll`
 - **Symbol:** `vm_dyn_ashr64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_dyn_ashr64_loop_eq.exe`
 - **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
@@ -21,19 +21,9 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 | 5 | RCX=8 | 8 | 8 | 8 | yes | x=8 n=1: byte0 of x |
 | 6 | RCX=3405691582 | 141 | 141 | 141 | yes | 0xCAFEBABE: n=7 mixed shifts |
 | 7 | RCX=3735928559 | 97 | 97 | 97 | yes | 0xDEADBEEF: n=8 |
-| 8 | RCX=18446744073709551615 | 0 | 0 | _err: lli exited 1: C:\Users\Yusuf\Desktop\mergenrewrite\llvm18-install\bin\lli.exe: lli: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_dyn_ashr64_loop_eq.ll: error: Could not open input file_ | **no** | all 0xFF: ashr fills 1s; 8 xor of 0xFF cancel to 0 |
+| 8 | RCX=18446744073709551615 | 0 | 0 | 0 | yes | all 0xFF: ashr fills 1s; 8 xor of 0xFF cancel to 0 |
 | 9 | RCX=9223372036854775808 | 0 | 0 | 0 | yes | x=2^63 n=1: byte0=0 single iter (high bit only) |
 | 10 | RCX=1311768467463790320 | 240 | 240 | 240 | yes | 0x12345...EF0: n=1 byte0=0xF0 |
-
-## Failure detail
-
-### case 8: all 0xFF: ashr fills 1s; 8 xor of 0xFF cancel to 0
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-- lifted error: `lli exited 1: C:\Users\Yusuf\Desktop\mergenrewrite\llvm18-install\bin\lli.exe: lli: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_dyn_ashr64_loop_eq.ll: error: Could not open input file`
 
 ## Source
 
