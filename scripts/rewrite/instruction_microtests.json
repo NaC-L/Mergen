@@ -4272,6 +4272,27 @@
       ]
     },
     {
+      "name": "vm_dynshl_accum_byte64_loop",
+      "symbol": "vm_dynshl_accum_byte64_loop_target",
+      "patterns": [
+        "shl",
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,             "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 4,             "label": "x=1 n=2: (0<<1)+1=1; (1<<2)+0=4" },
+        { "inputs": { "RCX": 2 },                    "expected": 64,            "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 240518168576, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,             "label": "x=8 n=1: (0<<1)+8=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 32860798976,   "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 10044720545792, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 11243626725375, "label": "all 0xFF n=8: cumulative shift 36 bits + 0xFF bytes" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 8,             "label": "0x0102...0708: n=1 byte0=8" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 240,           "label": "0x12345...EF0: n=1 byte0=0xF0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
