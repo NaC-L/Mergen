@@ -712,6 +712,30 @@
       ]
     },
     {
+      "name": "vm_minarray_loop",
+      "symbol": "vm_minarray_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,   "label": "limit=1, data=[0]" },
+        { "inputs": { "RCX": 1 },     "expected": 1,   "label": "limit=2, data=[1,14]" },
+        { "inputs": { "RCX": 2 },     "expected": 2,   "label": "limit=3, data=[2,15,28]" },
+        { "inputs": { "RCX": 7 },     "expected": 7,   "label": "limit=8, full array" },
+        { "inputs": { "RCX": 16 },    "expected": 16,  "label": "limit=1, data=[16]" },
+        { "inputs": { "RCX": 66 },    "expected": 66,  "label": "limit=3, data=[66,79,92]" },
+        { "inputs": { "RCX": 128 },   "expected": 128, "label": "limit=1, data=[128]" },
+        { "inputs": { "RCX": 200 },   "expected": 200, "label": "limit=1, data=[200]" },
+        { "inputs": { "RCX": 255 },   "expected": 12,  "label": "limit=8, wraparound puts 12 in middle" },
+        { "inputs": { "RCX": 256 },   "expected": 0,   "label": "limit=1, data=[0] (mask drops bit 8)" },
+        { "inputs": { "RCX": 2748 },  "expected": 188, "label": "limit=5, data starting at 188" },
+        { "inputs": { "RCX": 3840 },  "expected": 0,   "label": "limit=1, data=[0] (low byte 0)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
