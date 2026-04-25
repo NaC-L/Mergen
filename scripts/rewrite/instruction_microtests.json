@@ -5289,6 +5289,26 @@
       ]
     },
     {
+      "name": "vm_byte_increase_count64_loop",
+      "symbol": "vm_byte_increase_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 n=1: byte0=0 not > prev=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0, "label": "x=1 n=2: bytes [1,0] - 1 not > 1, 0 not > 1" },
+        { "inputs": { "RCX": 2 },                    "expected": 0, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 0, "label": "x=7 n=8: only byte0=7 then zeros decreasing" },
+        { "inputs": { "RCX": 8 },                    "expected": 0, "label": "x=8 n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE: n=7 one increase pos" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFF: all equal, no increases" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 0, "label": "0x0102...0708: n=1 single byte" },
+        { "inputs": { "RCX": 9255003132036915231 }, "expected": 7, "label": "0x807060504030201F n=8: bytes 1F,20,30,...,80 strictly increasing 7 times" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
