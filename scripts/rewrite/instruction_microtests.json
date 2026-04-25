@@ -1589,6 +1589,28 @@
       ]
     },
     {
+      "name": "vm_imported_rotl_loop",
+      "symbol": "vm_imported_rotl_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "call",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,          "label": "limit=1, x=0" },
+        { "inputs": { "RCX": 1 },          "expected": 1352,       "label": "limit=2, x=1" },
+        { "inputs": { "RCX": 7 },          "expected": 1045112,    "label": "limit=8, x=7" },
+        { "inputs": { "RCX": 255 },        "expected": 981688,     "label": "0xFF: limit=8" },
+        { "inputs": { "RCX": 256 },        "expected": 2048,       "label": "0x100: limit=1" },
+        { "inputs": { "RCX": 51966 },      "expected": 52820320,   "label": "0xCAFE: limit=7" },
+        { "inputs": { "RCX": 43981 },      "expected": 22020552,   "label": "0xABCD: limit=6" },
+        { "inputs": { "RCX": 74565 },      "expected": 37530632,   "label": "0x12345: limit=6" },
+        { "inputs": { "RCX": -1 },         "expected": 4293921448, "label": "all F" },
+        { "inputs": { "RCX": -559038737 }, "expected": 2021747745, "label": "0xDEADBEEF" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],

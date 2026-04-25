@@ -17,6 +17,8 @@
 ## Files in Scope
 - testcases/rewrite_smoke/
 - scripts/rewrite/instruction_microtests.json
+- scripts/rewrite/generate_semantic_reports.py
+- docs/semantic_reports/
 
 ## Off Limits
 - lifter/
