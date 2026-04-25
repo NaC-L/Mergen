@@ -2924,6 +2924,26 @@
       ]
     },
     {
+      "name": "vm_rotchoice64_loop",
+      "symbol": "vm_rotchoice64_loop_target",
+      "patterns": [
+        "or",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1152921504606846976,  "label": "x=1, n=2: bit0=1 rotl7, bit1=0 rotr11" },
+        { "inputs": { "RCX": 15 },                   "expected": 251658240,            "label": "x=0xF, n=16" },
+        { "inputs": { "RCX": 51966 },                "expected": 1702821888,           "label": "x=0xCAFE, n=15" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 111597701758976,      "label": "x=0xCAFEBABE, n=15" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 15997426388367005595, "label": "0x123...DEF0, n=1: bit0=0 rotr11" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "max u64: rotation invariant" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 13932417025098380455, "label": "K (golden), n=6" },
+        { "inputs": { "RCX": 170 },                  "expected": 5570560,              "label": "x=0xAA, n=11" },
+        { "inputs": { "RCX": 85 },                   "expected": 382805968326492160,   "label": "x=0x55, n=6" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
