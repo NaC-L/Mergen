@@ -5469,6 +5469,26 @@
       ]
     },
     {
+      "name": "vm_dword_uge_thresh_count64_loop",
+      "symbol": "vm_dword_uge_thresh_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 n=1 dword=0 < 0x80000000" },
+        { "inputs": { "RCX": 1 },                    "expected": 0, "label": "x=1 n=2 [1,0]" },
+        { "inputs": { "RCX": 2147483648 },           "expected": 1, "label": "0x80000000 n=1 dword=0x80000000" },
+        { "inputs": { "RCX": 2147483647 },           "expected": 0, "label": "0x7FFFFFFF n=2 [0x7FFFFFFF,0]" },
+        { "inputs": { "RCX": 4294967295 },           "expected": 1, "label": "0xFFFFFFFF n=2 [0xFFFFFFFF,0] -> 1" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 0, "label": "0x8000000000000000 n=1 dword=0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 2, "label": "all 0xFFFFFFFF n=2 both qualify" },
+        { "inputs": { "RCX": 9223372039002259454 },  "expected": 0, "label": "0x800000007FFFFFFE n=1 dword=0x7FFFFFFE" },
+        { "inputs": { "RCX": 9223372043297226751 },  "expected": 1, "label": "0x800000017FFFFFFF n=2 [0x7FFFFFFF,0x80000001]" },
+        { "inputs": { "RCX": 18446744067267100673 }, "expected": 2, "label": "0xFFFFFFFE80000001 n=2 both >= 0x80000000" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
