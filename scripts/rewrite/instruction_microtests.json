@@ -4251,6 +4251,27 @@
       ]
     },
     {
+      "name": "vm_bytesq_idx_sum64_loop",
+      "symbol": "vm_bytesq_idx_sum64_loop_target",
+      "patterns": [
+        "mul",
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1 n=2: 1*1*1=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,     "label": "x=2 n=3: 2*1=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,     "label": "x=7 n=8: only byte0=7 -> 7*1=7" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,     "label": "x=8 n=1: 8*1*1=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 6452,  "label": "0xCAFEBABE: n=7 sum of byte*counter^2" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 6108,  "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 52020, "label": "all 0xFF n=8: 0xFF*204=52020" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 8,     "label": "0x0102...0708: n=1 byte0=8" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 240,   "label": "0x12345...EF0: n=1 byte0=240" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
