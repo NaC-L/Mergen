@@ -3383,6 +3383,26 @@
       ]
     },
     {
+      "name": "vm_signedbytesum64_loop",
+      "symbol": "vm_signedbytesum64_loop_target",
+      "patterns": [
+        "add",
+        "sext"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero bytes" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1: sext(1)=+1" },
+        { "inputs": { "RCX": 255 },                  "expected": 18446744073709551615, "label": "x=0xFF: sext(0xFF)=-1" },
+        { "inputs": { "RCX": 128 },                  "expected": 18446744073709551488, "label": "x=0x80: sext(0x80)=-128" },
+        { "inputs": { "RCX": 9259542123273814144 },  "expected": 18446744073709551488, "label": "0x80*8: -128*1=-128 (n=1)" },
+        { "inputs": { "RCX": 9187201950435737471 },  "expected": 1016,                 "label": "0x7F*8: +127*8=1016 (n=8)" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 8,                    "label": "0x0102030405060708: 8+7+...+1=36? n=(8&7)+1=1: just byte0=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744073709551424, "label": "0xCAFEBABE: n=(0xBE&7)+1=7" },
+        { "inputs": { "RCX": 16045690985374415566 }, "expected": 18446744073709551373, "label": "0xDEADBEEFFEEDFACE: n=7" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551608, "label": "all 0xFF: -1*8=-8" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
