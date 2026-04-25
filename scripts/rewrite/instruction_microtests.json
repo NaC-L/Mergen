@@ -4417,6 +4417,27 @@
       ]
     },
     {
+      "name": "vm_word_xormul64_loop",
+      "symbol": "vm_word_xormul64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1 n=2: w=1, 1^1=1; w=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 4,          "label": "x=2 n=3: 2*2=4" },
+        { "inputs": { "RCX": 3 },                    "expected": 9,          "label": "x=3 n=4: 3*3=9" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 684552448,  "label": "0xCAFEBABE: n=3 words (BABE,CAFE,0)" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1339499464, "label": "0xDEADBEEF: n=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,          "label": "all 0xFF: 4 XOR of 0xFFFE0001 cancel pairwise" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 3240000,    "label": "0x0102...0708: n=1 word=0x0708 squared" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 3257213184, "label": "0x12345...EF0: n=1 word=0xDEF0 squared" },
+        { "inputs": { "RCX": 18364758544493064720 }, "expected": 164249856,  "label": "0xFEDCBA9876543210: n=1 word=0x3210 squared" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
