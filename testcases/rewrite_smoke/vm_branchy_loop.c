@@ -22,14 +22,12 @@ int vm_branchy_loop_target(int x) {
     int count  = 0;
     int limit  = 0;
     int parity = 0;
-    int pc     = BV_INIT;
+    int pc     = BV_LOAD_LIMIT;
 
     while (1) {
-        if (pc == BV_INIT) {
+        if (pc == BV_LOAD_LIMIT) {
             i = 0;
             count = 0;
-            pc = BV_LOAD_LIMIT;
-        } else if (pc == BV_LOAD_LIMIT) {
             limit = x & 0xF;
             pc = BV_CHECK_LIMIT;
         } else if (pc == BV_CHECK_LIMIT) {
