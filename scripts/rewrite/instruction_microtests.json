@@ -2804,6 +2804,26 @@
       ]
     },
     {
+      "name": "vm_crc64_loop",
+      "symbol": "vm_crc64_loop_target",
+      "patterns": [
+        "xor",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 14514072000185962306, "label": "x=0: crc init=1, n=1, single CRC step" },
+        { "inputs": { "RCX": 1 },                    "expected": 7257036000092981153,  "label": "x=1, n=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 4357999468653093127,  "label": "x=7, n=8 max" },
+        { "inputs": { "RCX": 255 },                  "expected": 16189773752444600153, "label": "x=0xFF, n=8" },
+        { "inputs": { "RCX": 51966 },                "expected": 6017914993561854371,  "label": "0xCAFE, n=7" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 11164346891378004481, "label": "0xCAFEBABE, n=7" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 13868409170423275578, "label": "0x123...DEF0, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 16164085970585043110, "label": "max u64, n=8" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 6955128548432713259,  "label": "K (golden), n=6" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 11328242235717907630, "label": "0xDEADBEEF, n=8" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
