@@ -5369,6 +5369,26 @@
       ]
     },
     {
+      "name": "vm_word_eq_first_count64_loop",
+      "symbol": "vm_word_eq_first_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1, "label": "x=0 n=1 first=0 -> 1" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2 first=1 words [1,0]" },
+        { "inputs": { "RCX": 562958543486978 },      "expected": 3, "label": "0x0002000200020002 n=3 all 3 words=0x0002" },
+        { "inputs": { "RCX": 844437815230467 },      "expected": 4, "label": "0x0003000300030003 n=4 all 4 words=0x0003" },
+        { "inputs": { "RCX": 14627128642878963715 }, "expected": 1, "label": "0xCAFE0000BABE0003 n=4 first=0x0003 only 1 match" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4, "label": "all 0xFFFF n=4 all match" },
+        { "inputs": { "RCX": 16045690981402826359 }, "expected": 1, "label": "0xDEADBEEF12345677 n=4 only first matches" },
+        { "inputs": { "RCX": 2863267841 },           "expected": 1, "label": "0xAAAA0001 n=2 first=0x0001 only first matches" },
+        { "inputs": { "RCX": 3203391149 },           "expected": 1, "label": "0xBEEFDEAD n=2 first=0xDEAD only first matches" },
+        { "inputs": { "RCX": 12379739850550389707 }, "expected": 1, "label": "0xABCDABCDABCDABCB n=4 first=0xABCB only first matches" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
