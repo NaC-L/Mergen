@@ -2505,6 +2505,26 @@
       ]
     },
     {
+      "name": "vm_sdiv64_loop",
+      "symbol": "vm_sdiv64_loop_target",
+      "patterns": [
+        "udiv",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,  "label": "x=0: 0 trips (val !> 0)" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,  "label": "x=1, div=3: 1/3=0 -> 1 trip" },
+        { "inputs": { "RCX": 10 },                   "expected": 2,  "label": "x=10, div=4: 10->2->0" },
+        { "inputs": { "RCX": 100 },                  "expected": 3,  "label": "x=100, div=6: 100->16->2->0" },
+        { "inputs": { "RCX": 1000 },                 "expected": 10, "label": "x=1000, div=2: log2(1000)+1" },
+        { "inputs": { "RCX": 51966 },                "expected": 6,  "label": "x=0xCAFE, div=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 11, "label": "x=0xCAFEBABE, div=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,  "label": "max u64 -> -1 signed: 0 trips" },
+        { "inputs": { "RCX": 9223372036854775807 },  "expected": 20, "label": "INT64_MAX, div=9" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 61, "label": "0x123...DEF0, div=2" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
