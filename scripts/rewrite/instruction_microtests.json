@@ -3504,6 +3504,27 @@
       ]
     },
     {
+      "name": "vm_murmurstep64_loop",
+      "symbol": "vm_murmurstep64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: r stays 0 across all iters" },
+        { "inputs": { "RCX": 1 },                    "expected": 16237101979728681738, "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 3670974481092230487,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 16837481081947835590, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 3829533694005028578,  "label": "x=8 n=1: single mix step" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 11802856771386320092, "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 405753185601952549,   "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1969287684811156063,  "label": "all 0xFF: n=8" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 3766175085560748344,  "label": "0x12345...EF0: n=1" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 9223372036854841344,  "label": "x=2^63: high bit folds via lshr 47" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
