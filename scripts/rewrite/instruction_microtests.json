@@ -2545,6 +2545,25 @@
       ]
     },
     {
+      "name": "vm_abs64_loop",
+      "symbol": "vm_abs64_loop_target",
+      "patterns": [
+        "sub",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0, n=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 8,                    "label": "x=1, n=2" },
+        { "inputs": { "RCX": 5 },                    "expected": 3466,                 "label": "x=5, n=6" },
+        { "inputs": { "RCX": 9223372036854775807 },  "expected": 9223372036854767611, "label": "INT64_MAX, n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4925,                 "label": "x=-1 (signed), n=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 7448247489291,        "label": "x=0xCAFEBABE, n=7" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 3935305402391370960, "label": "x=0x123...DEF0, n=1: single trip" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 10086270117313468510, "label": "K (golden, signed-negative), n=6" },
+        { "inputs": { "RCX": 57005 },                "expected": 41556466,             "label": "x=0xDEAD, n=6" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
