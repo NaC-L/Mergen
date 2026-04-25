@@ -3103,6 +3103,26 @@
       ]
     },
     {
+      "name": "vm_maxrun64_loop",
+      "symbol": "vm_maxrun64_loop_target",
+      "patterns": [
+        "and",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,  "label": "x=0: no 1-bits" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,  "label": "x=1: single 1-bit" },
+        { "inputs": { "RCX": 255 },                  "expected": 8,  "label": "x=0xFF: 8 consecutive" },
+        { "inputs": { "RCX": 4080 },                 "expected": 8,  "label": "x=0x0FF0: 8 in middle" },
+        { "inputs": { "RCX": 16777215 },             "expected": 24, "label": "x=0xFFFFFF: 24-run at low" },
+        { "inputs": { "RCX": 51966 },                "expected": 7,  "label": "x=0xCAFE: 0xFE has 7 consec ones" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 7,  "label": "x=0xCAFEBABE: max run 7" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 64, "label": "max u64: all 64" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 7,  "label": "K (golden): 7" },
+        { "inputs": { "RCX": 12297829382473034410 }, "expected": 1,  "label": "0xAAAA...AAAA: alternating, max 1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
