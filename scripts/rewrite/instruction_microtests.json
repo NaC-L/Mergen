@@ -2266,6 +2266,26 @@
       ]
     },
     {
+      "name": "vm_horner64_loop",
+      "symbol": "vm_horner64_loop_target",
+      "patterns": [
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: zero state" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1, n=2, p=1: linear" },
+        { "inputs": { "RCX": 255 },                  "expected": 255,                  "label": "x=0xFF, n=8, p=1: 0xFF*1^7" },
+        { "inputs": { "RCX": 511 },                  "expected": 32704,                "label": "x=0x1FF, n=8, p=2" },
+        { "inputs": { "RCX": 51966 },                "expected": 17844649336662652,    "label": "x=0xCAFE, n=7, p=0xCB" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 8167467842758312,     "label": "x=0xCAFEBABE, n=7, p=0xBC" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 240,                  "label": "x=0x123...DEF0, n=1, p=0xDF" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "max u64, n=8, p=0x100: telescope wraps" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 671289116996,         "label": "x=K (golden), n=6, p=0x7D" },
+        { "inputs": { "RCX": 21930 },                "expected": 1264630,              "label": "x=0x55AA, n=3, p=0x56" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
