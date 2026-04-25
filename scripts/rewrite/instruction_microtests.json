@@ -2564,6 +2564,26 @@
       ]
     },
     {
+      "name": "vm_smax64_loop",
+      "symbol": "vm_smax64_loop_target",
+      "patterns": [
+        "icmp",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0, n=1: max stays at val=0 (INT64_MIN beats nothing)" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1, n=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 8709371129873690707, "label": "x=7, n=8" },
+        { "inputs": { "RCX": 31 },                   "expected": 8709371129873690699, "label": "x=0x1F, n=32 max" },
+        { "inputs": { "RCX": 255 },                  "expected": 8709371129873690795, "label": "x=0xFF, n=32" },
+        { "inputs": { "RCX": 51966 },                "expected": 8709371129873644202, "label": "x=0xCAFE, n=31" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 8709371126563162858, "label": "x=0xCAFEBABE, n=31" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 9102032882310693530, "label": "max u64 (signed -1), n=32" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 8695855810279968268, "label": "0x123...DEF0, n=17" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 9025462342794460485, "label": "K (golden), n=22" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
