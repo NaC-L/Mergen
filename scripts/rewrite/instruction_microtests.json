@@ -569,6 +569,31 @@
       ]
     },
     {
+      "name": "vm_powermod_loop",
+      "symbol": "vm_powermod_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "mul",
+        "urem",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 1,  "label": "exp=0: result 1" },
+        { "inputs": { "RCX": 18 },    "expected": 3,  "label": "base=3, exp=1" },
+        { "inputs": { "RCX": 33 },    "expected": 4,  "label": "base=2, exp=2" },
+        { "inputs": { "RCX": 50 },    "expected": 1,  "label": "base=3, exp=3: 27%13=1" },
+        { "inputs": { "RCX": 83 },    "expected": 10, "label": "base=4, exp=5" },
+        { "inputs": { "RCX": 153 },   "expected": 12, "label": "base=10, exp=9" },
+        { "inputs": { "RCX": 171 },   "expected": 1,  "label": "base=12, exp=10" },
+        { "inputs": { "RCX": 255 },   "expected": 1,  "label": "base=16->3, exp=15" },
+        { "inputs": { "RCX": 1110 },  "expected": 8,  "label": "base=7, exp=69" },
+        { "inputs": { "RCX": 2748 },  "expected": 0,  "label": "base=13->0: any exp>0 is 0" },
+        { "inputs": { "RCX": 4095 },  "expected": 1,  "label": "base=16->3, exp=255" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
