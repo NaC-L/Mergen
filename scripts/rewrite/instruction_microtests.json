@@ -5147,6 +5147,26 @@
       ]
     },
     {
+      "name": "vm_byte_lt_thresh_count64_loop",
+      "symbol": "vm_byte_lt_thresh_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1, "label": "x=0 n=1: byte0=0 < 0x80" },
+        { "inputs": { "RCX": 1 },                    "expected": 2, "label": "x=1 n=2: bytes [1,0] both < 0x80" },
+        { "inputs": { "RCX": 2 },                    "expected": 3, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 8, "label": "x=7 n=8: 7 + 7 zero bytes all < 0x80" },
+        { "inputs": { "RCX": 8 },                    "expected": 1, "label": "x=8 n=1: 1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3, "label": "0xCAFEBABE: n=7 mixed" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 4, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFF: all >= 0x80" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 1, "label": "0x0102...0708: n=1 byte0=8" },
+        { "inputs": { "RCX": 9259542125412876287 }, "expected": 0, "label": "0x80808080FFFFFFFF n=8: 4 of 0x80, 4 of 0xFF, all >= 0x80" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
