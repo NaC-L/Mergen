@@ -1326,6 +1326,30 @@
       ]
     },
     {
+      "name": "vm_runlmax_loop",
+      "symbol": "vm_runlmax_loop_target",
+      "patterns": [
+        "add",
+        "and",
+        "icmp",
+        "select"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,  "label": "all zero" },
+        { "inputs": { "RCX": 1 },     "expected": 1,  "label": "single bit" },
+        { "inputs": { "RCX": 3 },     "expected": 2,  "label": "0x03: pair" },
+        { "inputs": { "RCX": 255 },   "expected": 8,  "label": "0xFF: 8 ones" },
+        { "inputs": { "RCX": 65535 }, "expected": 16, "label": "all 16 ones" },
+        { "inputs": { "RCX": 61680 }, "expected": 4, "label": "0xF0F0: max run 4" },
+        { "inputs": { "RCX": 85 },    "expected": 1, "label": "0x55: alternating" },
+        { "inputs": { "RCX": 102 },   "expected": 2, "label": "0x66: max 2" },
+        { "inputs": { "RCX": 504 },   "expected": 6, "label": "0x1F8: max 6" },
+        { "inputs": { "RCX": 4660 },  "expected": 2, "label": "0x1234" },
+        { "inputs": { "RCX": 52428 }, "expected": 2, "label": "0xCCCC: pairs" },
+        { "inputs": { "RCX": 32769 }, "expected": 1, "label": "0x8001: two isolated" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
