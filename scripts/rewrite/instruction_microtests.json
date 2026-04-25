@@ -3183,6 +3183,26 @@
       ]
     },
     {
+      "name": "vm_bytematch64_loop",
+      "symbol": "vm_bytematch64_loop_target",
+      "patterns": [
+        "and",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 7, "label": "x=0: target=0, all 7 lower bytes match" },
+        { "inputs": { "RCX": 72340172838076673 },    "expected": 7, "label": "0x0101...01: target=1, all match" },
+        { "inputs": { "RCX": 18374686479671623680 }, "expected": 0, "label": "0xFF00...00: target=0xFF, none match" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 7, "label": "max u64: target=0xFF, all match" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3, "label": "0xCAFEBABE: target=0, lower 3 bytes are 0" },
+        { "inputs": { "RCX": 14627333941892939776 }, "expected": 0, "label": "0xCAFE000000000000: target=0xCA, none match" },
+        { "inputs": { "RCX": 1302123111085380351 },  "expected": 6, "label": "0x12121212121212FF: target=0x12, 6 match" },
+        { "inputs": { "RCX": 12249988016147062528 }, "expected": 0, "label": "0xAA00BB00CC00DD00: target=0xAA, none" },
+        { "inputs": { "RCX": 18399425019007729919 }, "expected": 1, "label": "0xFF5555555555AAFF: target=0xFF, 1 match (low)" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 0, "label": "K (golden): target=0x9E, none match" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
