@@ -3303,6 +3303,26 @@
       ]
     },
     {
+      "name": "vm_decsum64_loop",
+      "symbol": "vm_decsum64_loop_target",
+      "patterns": [
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "x=0: skip loop" },
+        { "inputs": { "RCX": 5 },                    "expected": 5,   "label": "x=5" },
+        { "inputs": { "RCX": 99 },                   "expected": 18,  "label": "x=99" },
+        { "inputs": { "RCX": 999 },                  "expected": 27,  "label": "x=999" },
+        { "inputs": { "RCX": 12345 },                "expected": 15,  "label": "x=12345" },
+        { "inputs": { "RCX": 1234567890 },           "expected": 45,  "label": "1+2+...+9+0" },
+        { "inputs": { "RCX": 9999999999999999999 },  "expected": 171, "label": "19 nines" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 87,  "label": "max u64" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 79,  "label": "K (golden)" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 43,  "label": "x=0xCAFEBABE = 3405691582 dec" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
