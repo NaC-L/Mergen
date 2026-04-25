@@ -943,6 +943,29 @@
       ]
     },
     {
+      "name": "vm_piecewise_loop",
+      "symbol": "vm_piecewise_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,   "label": "v=0, n=0" },
+        { "inputs": { "RCX": 256 },   "expected": 0,   "label": "v=0, n=1: 0*2=0" },
+        { "inputs": { "RCX": 257 },   "expected": 2,   "label": "v=1, n=1: 1*2=2" },
+        { "inputs": { "RCX": 306 },   "expected": 80,  "label": "v=50, n=1: 50+30=80" },
+        { "inputs": { "RCX": 456 },   "expected": 100, "label": "v=200, n=1: 200-100=100" },
+        { "inputs": { "RCX": 768 },   "expected": 0,   "label": "v=0, n=3" },
+        { "inputs": { "RCX": 1315 },  "expected": 190, "label": "0x523: v=35, n=5" },
+        { "inputs": { "RCX": 1801 },  "expected": 192, "label": "0x709: v=9, n=7" },
+        { "inputs": { "RCX": 3967 },  "expected": 187, "label": "0xF7F: v=127, n=15" },
+        { "inputs": { "RCX": 4095 },  "expected": 185, "label": "0xFFF: v=255, n=15" },
+        { "inputs": { "RCX": 16 },    "expected": 16,  "label": "v=16, n=0: unchanged" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
