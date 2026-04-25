@@ -2824,6 +2824,26 @@
       ]
     },
     {
+      "name": "vm_xorshrink64_loop",
+      "symbol": "vm_xorshrink64_loop_target",
+      "patterns": [
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: stays 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1: shift-1 of 1 = 0, ^0 = 1; stays 1" },
+        { "inputs": { "RCX": 255 },                  "expected": 255,                  "label": "x=0xFF, n=8: converges to 0xFF" },
+        { "inputs": { "RCX": 51966 },                "expected": 35879,                "label": "x=0xCAFE, n=7 -> 0x8C27" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 2351400952,         "label": "x=0xCAFEBABE, n=7" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1958640622585950600, "label": "0x123...DEF0, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18374686479671623680, "label": "max u64, n=8 -> 0xFF00...0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 12835555438163488033, "label": "K (golden), n=6" },
+        { "inputs": { "RCX": 170 },                  "expected": 192,                  "label": "x=0xAA, n=3 -> 0xC0" },
+        { "inputs": { "RCX": 85 },                   "expected": 68,                   "label": "x=0x55, n=6 -> 0x44" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
