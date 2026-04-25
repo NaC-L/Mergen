@@ -3964,6 +3964,26 @@
       ]
     },
     {
+      "name": "vm_byteprod64_loop",
+      "symbol": "vm_byteprod64_loop_target",
+      "patterns": [
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1: 1*0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                    "label": "x=1 n=2: 1*1=1; 1*0=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,                    "label": "x=2 n=3: byte0=2 then 0,0 -> 0" },
+        { "inputs": { "RCX": 7 },                    "expected": 0,                    "label": "x=7 n=8: only byte0=7 nonzero, then 0" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,                    "label": "x=8 n=1: 1*8=8 (no zero byte to wreck)" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 0,                    "label": "0xCAFEBABE: n=7 high bytes are 0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 0,                    "label": "0xDEADBEEF: n=8 high bytes are 0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 17878103347812890625, "label": "all 0xFF: 0xFF^8 mod 2^64" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 8,                    "label": "0x0102...0708: n=1 byte0=8" },
+        { "inputs": { "RCX": 144965140780024580 },   "expected": 1512,                 "label": "0x0203...0304: n=5 -> 4*3*2*9*7=1512" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
