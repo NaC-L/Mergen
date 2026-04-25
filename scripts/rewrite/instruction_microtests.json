@@ -4923,6 +4923,26 @@
       ]
     },
     {
+      "name": "vm_bit_and_self_shift_down64_loop",
+      "symbol": "vm_bit_and_self_shift_down64_loop_target",
+      "patterns": [
+        "and",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                  "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                  "label": "x=1: isolated bit, shrinks to 0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,                  "label": "x=2: isolated bit" },
+        { "inputs": { "RCX": 7 },                    "expected": 0,                  "label": "x=7: 3-bit run, after 8 iters gone" },
+        { "inputs": { "RCX": 8 },                    "expected": 0,                  "label": "x=8: isolated" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 0,                  "label": "0xCAFEBABE: max run=7, n=7 shrinks all to 0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 0,                  "label": "0xDEADBEEF: max run=7, n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 72057594037927935, "label": "all 0xFF n=8: 64 1s shrink to 64-8=56-bit mask" },
+        { "inputs": { "RCX": 255 },                  "expected": 0,                  "label": "0xFF n=8: 8-run shrinks to 0 after 8 iters" },
+        { "inputs": { "RCX": 17361641481138401520 }, "expected": 8102099357864587376, "label": "0xF0F0F0F0F0F0F0F0: paired runs survive partially" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
