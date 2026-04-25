@@ -2346,6 +2346,26 @@
       ]
     },
     {
+      "name": "vm_xorshift64_loop",
+      "symbol": "vm_xorshift64_loop_target",
+      "patterns": [
+        "xor",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1082269761,           "label": "x=0: state init=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 1152992998833853505,  "label": "x=1, n=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 11855148856360355748, "label": "x=7, n=8 max" },
+        { "inputs": { "RCX": 255 },                  "expected": 16011667717177914820, "label": "x=0xFF, n=8" },
+        { "inputs": { "RCX": 51966 },                "expected": 2924436104009635916,  "label": "x=0xCAFE, n=7" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 13109524460698099542, "label": "x=0xCAFEBABE, n=7" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 18338672410791262988, "label": "0x123...DEF0, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 16429531919753378102, "label": "max u64, n=8" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 10885233071271705465, "label": "x=K (golden), n=6" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 7170143391515948286,  "label": "x=0xDEADBEEF, n=8" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
