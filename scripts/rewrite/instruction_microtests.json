@@ -2684,6 +2684,26 @@
       ]
     },
     {
+      "name": "vm_nested64_loop",
+      "symbol": "vm_nested64_loop_target",
+      "patterns": [
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0, a=1,b=1,s=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 962,                  "label": "x=1, a=2,b=1" },
+        { "inputs": { "RCX": 7 },                    "expected": 5971184918795,        "label": "x=7, a=8,b=1" },
+        { "inputs": { "RCX": 255 },                  "expected": 10894761712370600223, "label": "x=0xFF, a=8,b=8 (max 64)" },
+        { "inputs": { "RCX": 51966 },                "expected": 10483213562186932506, "label": "x=0xCAFE, a=7,b=8 (56 iters)" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 17568069125822042330, "label": "0xCAFEBABE, a=7,b=8" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 81985057741989747,   "label": "0x123...DEF0, a=1,b=7" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 5597661801495414815,  "label": "max u64, a=8,b=8" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 12085406143598956766, "label": "K (golden), a=6,b=3 (18 iters)" },
+        { "inputs": { "RCX": 127 },                  "expected": 17469583793787783327, "label": "x=0x7F, a=8,b=8" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
