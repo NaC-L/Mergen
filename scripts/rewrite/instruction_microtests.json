@@ -1035,6 +1035,32 @@
       ]
     },
     {
+      "name": "vm_palindrome_loop",
+      "symbol": "vm_palindrome_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "icmp",
+        "and",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },    "expected": 1, "label": "0x00 palindrome" },
+        { "inputs": { "RCX": 1 },    "expected": 0, "label": "0x01 not palindrome" },
+        { "inputs": { "RCX": 24 },   "expected": 1, "label": "0x18 palindrome (00011000)" },
+        { "inputs": { "RCX": 36 },   "expected": 1, "label": "0x24 palindrome (00100100)" },
+        { "inputs": { "RCX": 66 },   "expected": 1, "label": "0x42 palindrome (01000010)" },
+        { "inputs": { "RCX": 85 },   "expected": 0, "label": "0x55 not palindrome" },
+        { "inputs": { "RCX": 102 },  "expected": 1, "label": "0x66 palindrome (01100110)" },
+        { "inputs": { "RCX": 129 },  "expected": 1, "label": "0x81 palindrome (10000001)" },
+        { "inputs": { "RCX": 153 },  "expected": 1, "label": "0x99 palindrome (10011001)" },
+        { "inputs": { "RCX": 195 },  "expected": 1, "label": "0xC3 palindrome (11000011)" },
+        { "inputs": { "RCX": 231 },  "expected": 1, "label": "0xE7 palindrome (11100111)" },
+        { "inputs": { "RCX": 255 },  "expected": 1, "label": "0xFF palindrome" },
+        { "inputs": { "RCX": 256 },  "expected": 1, "label": "0x00 again (mask drops bit 8)" },
+        { "inputs": { "RCX": 394 },  "expected": 0, "label": "0x18A: low byte 0x8A not palindrome" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
