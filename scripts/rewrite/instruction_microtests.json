@@ -3223,6 +3223,26 @@
       ]
     },
     {
+      "name": "vm_byteparity64_loop",
+      "symbol": "vm_byteparity64_loop_target",
+      "patterns": [
+        "xor",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "x=0: all bytes parity 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1: low byte parity=1" },
+        { "inputs": { "RCX": 255 },                  "expected": 0,   "label": "x=0xFF: 8 bits set, parity even=0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 6,   "label": "x=0xCAFEBABE" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 211, "label": "x=0x0102030405060708" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 101, "label": "0xCAFEBABEDEADBEEF" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,   "label": "max u64: all bytes 0xFF parity 0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 255, "label": "K (golden): all bytes parity 1" },
+        { "inputs": { "RCX": 12297829382473034410 }, "expected": 0,   "label": "0xAAAA...: all bytes 0xAA parity 0" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 68,  "label": "0x123456789ABCDEF0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
