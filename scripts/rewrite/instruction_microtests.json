@@ -1757,6 +1757,28 @@
       ]
     },
     {
+      "name": "vm_short_loop",
+      "symbol": "vm_short_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,     "label": "limit=0, state=0" },
+        { "inputs": { "RCX": 1 },          "expected": 1,     "label": "limit=0, state=1" },
+        { "inputs": { "RCX": 65536 },      "expected": 0,     "label": "0x10000: limit=1, state=0" },
+        { "inputs": { "RCX": 131073 },     "expected": 52,    "label": "0x20001: limit=2, state=1" },
+        { "inputs": { "RCX": 196608 },     "expected": 27,    "label": "0x30000: limit=3, state=0" },
+        { "inputs": { "RCX": 458752 },     "expected": 3089,  "label": "0x70000: limit=7, state=0" },
+        { "inputs": { "RCX": 51966 },      "expected": 4294953726, "label": "0xCAFE: state -13570 zext to u32" },
+        { "inputs": { "RCX": 16829182 },   "expected": 4294953726, "label": "0x100CAFE: limit=0" },
+        { "inputs": { "RCX": 74565 },      "expected": 4294964963, "label": "0x12345: state -2333 zext" },
+        { "inputs": { "RCX": -2147483648 }, "expected": 0,     "label": "0x80000000: limit=0, state=0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
