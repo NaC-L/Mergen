@@ -594,6 +594,28 @@
       ]
     },
     {
+      "name": "vm_saturating_loop",
+      "symbol": "vm_saturating_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "phi i32",
+        "add i32",
+        "select"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0,   "label": "n=0" },
+        { "inputs": { "RCX": 1 },   "expected": 0,   "label": "n=1" },
+        { "inputs": { "RCX": 2 },   "expected": 1,   "label": "n=2" },
+        { "inputs": { "RCX": 5 },   "expected": 10,  "label": "n=5: 0+1+2+3+4" },
+        { "inputs": { "RCX": 10 },  "expected": 45,  "label": "n=10: 0..9 sum 45" },
+        { "inputs": { "RCX": 14 },  "expected": 91,  "label": "n=14: just below clamp" },
+        { "inputs": { "RCX": 15 },  "expected": 100, "label": "n=15: 105 -> clamp" },
+        { "inputs": { "RCX": 20 },  "expected": 100, "label": "n=20: clamped" },
+        { "inputs": { "RCX": 128 }, "expected": 100, "label": "n=128: clamped" },
+        { "inputs": { "RCX": 255 }, "expected": 100, "label": "n=255: clamped" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
