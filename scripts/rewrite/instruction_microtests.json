@@ -2004,6 +2004,26 @@
       ]
     },
     {
+      "name": "vm_three_input_loop",
+      "symbol": "vm_three_input_loop_target",
+      "patterns": [
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0,          "RDX": 0,          "R8": 0 },          "expected": 0,          "label": "all zero" },
+        { "inputs": { "RCX": 1,          "RDX": 0,          "R8": 2 },          "expected": 4,          "label": "x=1, n=2, doubling" },
+        { "inputs": { "RCX": 0,          "RDX": 1,          "R8": 0 },          "expected": 1,          "label": "y=1, z=0: collapses to y" },
+        { "inputs": { "RCX": 5,          "RDX": 7,          "R8": 11 },         "expected": 10097897,   "label": "x=5, y=7, z=11" },
+        { "inputs": { "RCX": 15,         "RDX": 1,          "R8": 1 },          "expected": 31,         "label": "x=0xF (n=16), z=1: linear" },
+        { "inputs": { "RCX": 51966,      "RDX": 47806,      "R8": 57005 },      "expected": 295439328,  "label": "0xCAFE,0xBABE,0xDEAD" },
+        { "inputs": { "RCX": 4294967295, "RDX": 4294967295, "R8": 4294967295 }, "expected": 4294967295, "label": "all -1: cycles" },
+        { "inputs": { "RCX": 65537,      "RDX": 65537,      "R8": 65537 },      "expected": 393219,     "label": "x=0x10001 (n=2)" },
+        { "inputs": { "RCX": 7,          "RDX": 3,          "R8": 5 },          "expected": 3027343,    "label": "x=7, n=8" },
+        { "inputs": { "RCX": 2147483648, "RDX": 1431655765, "R8": 3 },          "expected": 3579139413, "label": "x=0x80000000, n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
