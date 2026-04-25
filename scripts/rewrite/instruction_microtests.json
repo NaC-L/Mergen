@@ -1801,6 +1801,27 @@
       ]
     },
     {
+      "name": "vm_2d_loop",
+      "symbol": "vm_2d_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 1212, "label": "seed=0: diag=0+4+8=12, anti=2+4+6=12" },
+        { "inputs": { "RCX": 1 },     "expected": 1515, "label": "seed=1" },
+        { "inputs": { "RCX": 5 },     "expected": 2727, "label": "seed=5" },
+        { "inputs": { "RCX": 7 },     "expected": 3333, "label": "seed=7" },
+        { "inputs": { "RCX": 10 },    "expected": 4242, "label": "0xA" },
+        { "inputs": { "RCX": 15 },    "expected": 5757, "label": "0xF" },
+        { "inputs": { "RCX": 16 },    "expected": 1212, "label": "0x10: seed=0 (mask)" },
+        { "inputs": { "RCX": 51966 }, "expected": 5454, "label": "0xCAFE: seed=14" },
+        { "inputs": { "RCX": 74565 }, "expected": 2727, "label": "0x12345: seed=5" },
+        { "inputs": { "RCX": 43981 }, "expected": 5151, "label": "0xABCD: seed=13" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
