@@ -224,6 +224,70 @@
       ]
     },
     {
+      "name": "vm_factorial_loop",
+      "symbol": "vm_factorial_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "mul i32",
+        "add i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 1,    "label": "limit=0: empty product" },
+        { "inputs": { "RCX": 1 },  "expected": 1,    "label": "limit=1: 1!" },
+        { "inputs": { "RCX": 2 },  "expected": 2,    "label": "limit=2: 2!" },
+        { "inputs": { "RCX": 3 },  "expected": 6,    "label": "limit=3: 3!" },
+        { "inputs": { "RCX": 4 },  "expected": 24,   "label": "limit=4: 4!" },
+        { "inputs": { "RCX": 5 },  "expected": 120,  "label": "limit=5: 5!" },
+        { "inputs": { "RCX": 6 },  "expected": 720,  "label": "limit=6: 6!" },
+        { "inputs": { "RCX": 7 },  "expected": 5040, "label": "limit=7: 7!" },
+        { "inputs": { "RCX": 8 },  "expected": 1,    "label": "limit=0 again (mask drops bit 3)" },
+        { "inputs": { "RCX": 15 }, "expected": 5040, "label": "limit=7 again after mask" }
+      ]
+    },
+    {
+      "name": "vm_collatz_loop",
+      "symbol": "vm_collatz_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        { "line_all": ["and i32", ", 1"] },
+        "phi i32",
+        "add i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 }, "expected": 0,  "label": "n=1: already done" },
+        { "inputs": { "RCX": 1 }, "expected": 1,  "label": "n=2: 2->1" },
+        { "inputs": { "RCX": 2 }, "expected": 7,  "label": "n=3: 7 steps" },
+        { "inputs": { "RCX": 3 }, "expected": 2,  "label": "n=4: 4->2->1" },
+        { "inputs": { "RCX": 4 }, "expected": 5,  "label": "n=5: 5 steps" },
+        { "inputs": { "RCX": 5 }, "expected": 8,  "label": "n=6: 8 steps" },
+        { "inputs": { "RCX": 6 }, "expected": 16, "label": "n=7: 16 steps" },
+        { "inputs": { "RCX": 7 }, "expected": 3,  "label": "n=8: 3 steps" }
+      ]
+    },
+    {
+      "name": "vm_gcd_loop",
+      "symbol": "vm_gcd_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "srem i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 1,  "label": "a=1, b=1: gcd 1" },
+        { "inputs": { "RCX": 18 },    "expected": 1,  "label": "a=3, b=2: gcd 1" },
+        { "inputs": { "RCX": 102 },   "expected": 7,  "label": "a=7, b=7: gcd 7" },
+        { "inputs": { "RCX": 136 },   "expected": 9,  "label": "a=9, b=9: gcd 9" },
+        { "inputs": { "RCX": 53 },    "expected": 2,  "label": "a=6, b=4: gcd 2" },
+        { "inputs": { "RCX": 87 },    "expected": 2,  "label": "a=8, b=6: gcd 2" },
+        { "inputs": { "RCX": 207 },   "expected": 1,  "label": "a=16, b=13: gcd 1" },
+        { "inputs": { "RCX": 255 },   "expected": 16, "label": "a=16, b=16: gcd 16" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
