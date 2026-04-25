@@ -5268,6 +5268,27 @@
       ]
     },
     {
+      "name": "vm_byte_bit_pos_count64_loop",
+      "symbol": "vm_byte_bit_pos_count64_loop_target",
+      "patterns": [
+        "lshr",
+        "and",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2: byte0=1 bit0=1; byte1=0 bit1=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0, "label": "x=2 n=3: byte0=2 bit0=0; rest=0" },
+        { "inputs": { "RCX": 7 },                    "expected": 1, "label": "x=7 n=8: byte0=7 bit0=1; rest 0" },
+        { "inputs": { "RCX": 8 },                    "expected": 0, "label": "x=8 n=1: byte0=8 bit0=0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3, "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 4, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 8, "label": "all 0xFF n=8: every byte's bit i is set" },
+        { "inputs": { "RCX": 9241421688590303745 }, "expected": 2, "label": "0x8040201008040201 n=2 (low 3 bits=001+1=2): byte0=01 bit0=1; byte1=02 bit1=1" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 0, "label": "0x12345...EF0: n=1 byte0=0xF0 bit0=0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
