@@ -1690,6 +1690,28 @@
       ]
     },
     {
+      "name": "vm_int64_loop",
+      "symbol": "vm_int64_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,         "label": "limit=1, acc=0*31+0=0" },
+        { "inputs": { "RCX": 1 },     "expected": 1,         "label": "limit=2: 0*31+0=0; 0*31+1=1" },
+        { "inputs": { "RCX": 7 },     "expected": 947656708, "label": "limit=8: deep recurrence" },
+        { "inputs": { "RCX": 255 },   "expected": 947656708, "label": "0xFF: limit=8" },
+        { "inputs": { "RCX": 51966 }, "expected": 30569571,  "label": "0xCAFE: limit=7" },
+        { "inputs": { "RCX": 74565 }, "expected": 986115,    "label": "0x12345: limit=6" },
+        { "inputs": { "RCX": 57005 }, "expected": 986115,    "label": "0xDEAD: limit=6" },
+        { "inputs": { "RCX": 128 },   "expected": 0,         "label": "0x80: limit=1" },
+        { "inputs": { "RCX": 6 },     "expected": 30569571,  "label": "limit=7" },
+        { "inputs": { "RCX": 100 },   "expected": 31810,     "label": "0x64: limit=5" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
