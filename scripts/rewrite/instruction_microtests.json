@@ -3630,6 +3630,27 @@
       ]
     },
     {
+      "name": "vm_threestate_xormul64_loop",
+      "symbol": "vm_threestate_xormul64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 11400714819323198484, "label": "x=0 a=0 b=~0 c=0 n=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 1995974887614534114,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 17689537465226585472, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 10648103815310885736, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8037997838901812412,  "label": "x=8 n=1: single iter" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 7095180427346219998,  "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 15430819088305965056, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 17898289560204304,    "label": "all 0xFF: a=~0 b=0 c=-GR" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 5158310972223453116,  "label": "0x0102...0708: n=1 single iter" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 7738869930969336900,  "label": "0x12345...EF0: n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
