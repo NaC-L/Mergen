@@ -4354,6 +4354,27 @@
       ]
     },
     {
+      "name": "vm_xor_shifted_self_byte64_loop",
+      "symbol": "vm_xor_shifted_self_byte64_loop_target",
+      "patterns": [
+        "xor",
+        "lshr",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 72339069014638593,    "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 144117387099111426,   "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 506381209866536704,   "label": "x=7 n=8" },
+        { "inputs": { "RCX": 8 },                    "expected": 576460752303423496,   "label": "x=8 n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3490418122958975024,  "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2468625636935069440,  "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551360, "label": "all 0xFF: cascading XOR mask propagates" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 649363900864856335,   "label": "0x0102...0708: n=1" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 16295820255188902446, "label": "0x12345...EF0: n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
