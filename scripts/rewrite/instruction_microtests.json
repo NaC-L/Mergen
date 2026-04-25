@@ -1735,6 +1735,28 @@
       ]
     },
     {
+      "name": "vm_byte_loop",
+      "symbol": "vm_byte_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,   "label": "limit=0, x=0" },
+        { "inputs": { "RCX": 1 },     "expected": 1,   "label": "limit=0, x=1" },
+        { "inputs": { "RCX": 256 },   "expected": 5,   "label": "0x100: limit=1, state=0" },
+        { "inputs": { "RCX": 768 },   "expected": 147, "label": "0x300: limit=3, state=0" },
+        { "inputs": { "RCX": 51966 }, "expected": 44,  "label": "0xCAFE: limit=12, state=0xFE" },
+        { "inputs": { "RCX": 43981 }, "expected": 28,  "label": "0xABCD: limit=11, state=0xCD" },
+        { "inputs": { "RCX": 74565 }, "expected": 188, "label": "0x12345: limit=3, state=0x45" },
+        { "inputs": { "RCX": 33023 }, "expected": 255, "label": "0x80FF: limit=0, state=0xFF" },
+        { "inputs": { "RCX": 65535 }, "expected": 82,  "label": "0xFFFF: limit=15, state=0xFF" },
+        { "inputs": { "RCX": 16962 }, "expected": 216, "label": "0x4242: limit=2, state=0x42" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
