@@ -4189,6 +4189,27 @@
       ]
     },
     {
+      "name": "vm_shiftin_top64_loop",
+      "symbol": "vm_shiftin_top64_loop_target",
+      "patterns": [
+        "shl",
+        "lshr",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 281474976710656,     "label": "x=1 n=2: byte0=1 << 56=2^56; >>8 then OR byte1=0 << 56" },
+        { "inputs": { "RCX": 2 },                    "expected": 2199023255552,       "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,                    "label": "x=7 n=8: byte0=7 ends up at byte 0 after 8 right-shifts" },
+        { "inputs": { "RCX": 8 },                    "expected": 576460752303423488, "label": "x=8 n=1: 8 << 56" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 871857044992,        "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928559,           "label": "0xDEADBEEF: n=8 - all bytes traverse top->bottom; result equals input low 32 bits" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "all 0xFF n=8: palindrome invariant" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 576460752303423488, "label": "0x0102...0708: n=1 byte0=8 << 56 (matches x=8)" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 17293822569102704640, "label": "0x12345...EF0: n=1 byte0=0xF0 << 56" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
