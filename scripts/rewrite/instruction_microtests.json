@@ -1921,6 +1921,26 @@
       ]
     },
     {
+      "name": "vm_dual_array_loop",
+      "symbol": "vm_dual_array_loop_target",
+      "patterns": [
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,          "label": "seed=0: zero product" },
+        { "inputs": { "RCX": 1 },          "expected": 120,        "label": "seed=1" },
+        { "inputs": { "RCX": 2 },          "expected": 312,        "label": "seed=2" },
+        { "inputs": { "RCX": 5 },          "expected": 1320,       "label": "seed=5" },
+        { "inputs": { "RCX": 10 },         "expected": 4440,       "label": "seed=10" },
+        { "inputs": { "RCX": 100 },        "expected": 368400,     "label": "seed=100" },
+        { "inputs": { "RCX": 1000 },       "expected": 36084000,   "label": "seed=1000" },
+        { "inputs": { "RCX": 65536 },      "expected": 5505024,    "label": "seed=0x10000: high-bit interaction" },
+        { "inputs": { "RCX": 2147483647 }, "expected": 4294967248, "label": "INT_MAX: 2-comp wrap" },
+        { "inputs": { "RCX": 4294967295 }, "expected": 4294967248, "label": "-1 u32: same as INT_MAX (mul wraps)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
