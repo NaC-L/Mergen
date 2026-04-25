@@ -1511,6 +1511,29 @@
       ]
     },
     {
+      "name": "vm_imported_clz_loop",
+      "symbol": "vm_imported_clz_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "call",
+        "or",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 31,  "label": "limit=1, v=1: clz=31" },
+        { "inputs": { "RCX": 1 },          "expected": 57,  "label": "limit=2" },
+        { "inputs": { "RCX": 7 },          "expected": 197, "label": "limit=8" },
+        { "inputs": { "RCX": 255 },        "expected": 192, "label": "0xFF" },
+        { "inputs": { "RCX": 170 },        "expected": 72,  "label": "0xAA: limit=3" },
+        { "inputs": { "RCX": 85 },         "expected": 147, "label": "0x55: limit=6" },
+        { "inputs": { "RCX": 65535 },      "expected": 128, "label": "0xFFFF" },
+        { "inputs": { "RCX": 74565 },      "expected": 90,  "label": "0x12345" },
+        { "inputs": { "RCX": 11259375 },   "expected": 64,  "label": "0xABCDEF" },
+        { "inputs": { "RCX": -889275714 }, "expected": 0,   "label": "0xCAFEBABE: top bit set, all clz=0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
