@@ -2604,6 +2604,26 @@
       ]
     },
     {
+      "name": "vm_treepath64_loop",
+      "symbol": "vm_treepath64_loop_target",
+      "patterns": [
+        "and",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0, n=1, bit0=0: s = 0*2 = 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 2,                    "label": "x=1, n=2: bit0=1 then bit1=0 -> 1 then 2" },
+        { "inputs": { "RCX": 7 },                    "expected": 416,                  "label": "x=7, n=8: 3 set bits low" },
+        { "inputs": { "RCX": 63 },                   "expected": 12682136550675316736, "label": "x=0x3F, n=64: 6 set bits low + 58 high zeros" },
+        { "inputs": { "RCX": 64 },                   "expected": 0,                    "label": "x=0x40, n=1: bit0=0" },
+        { "inputs": { "RCX": 255 },                  "expected": 14987979559889010688, "label": "x=0xFF, n=64: 8 set bits low" },
+        { "inputs": { "RCX": 51966 },                "expected": 14927180964919508992, "label": "x=0xCAFE, n=63" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 17133061565256302592, "label": "x=0xCAFEBABE, n=63" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 13589915092710809216, "label": "max u64, n=64: 3*x+1 every iter wraps mod 2^64" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 96332860,             "label": "K (golden), n=22" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
