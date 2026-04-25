@@ -1,14 +1,12 @@
 # vm_smax64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_smax64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_smax64_loop.ll`
 - **Symbol:** `vm_smax64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_smax64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_smax64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | x=0, n=1: max stays at val=0 (INT64_MIN beats nothing) |
-| 2 | RCX=1 | 1 | 1 | — | **no** | x=1, n=2 |
-| 3 | RCX=7 | 8709371129873690707 | 8709371129873690707 | — | **no** | x=7, n=8 |
-| 4 | RCX=31 | 8709371129873690699 | 8709371129873690699 | — | **no** | x=0x1F, n=32 max |
-| 5 | RCX=255 | 8709371129873690795 | 8709371129873690795 | — | **no** | x=0xFF, n=32 |
-| 6 | RCX=51966 | 8709371129873644202 | 8709371129873644202 | — | **no** | x=0xCAFE, n=31 |
-| 7 | RCX=3405691582 | 8709371126563162858 | 8709371126563162858 | — | **no** | x=0xCAFEBABE, n=31 |
-| 8 | RCX=18446744073709551615 | 9102032882310693530 | 9102032882310693530 | — | **no** | max u64 (signed -1), n=32 |
-| 9 | RCX=1311768467463790320 | 8695855810279968268 | 8695855810279968268 | — | **no** | 0x123...DEF0, n=17 |
-| 10 | RCX=11400714819323198485 | 9025462342794460485 | 9025462342794460485 | — | **no** | K (golden), n=22 |
-
-## Failure detail
-
-### case 1: x=0, n=1: max stays at val=0 (INT64_MIN beats nothing)
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1, n=2
-
-- inputs: `RCX=1`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 3: x=7, n=8
-
-- inputs: `RCX=7`
-- manifest expected: `8709371129873690707`
-- native: `8709371129873690707`
-- lifted: `—`
-
-### case 4: x=0x1F, n=32 max
-
-- inputs: `RCX=31`
-- manifest expected: `8709371129873690699`
-- native: `8709371129873690699`
-- lifted: `—`
-
-### case 5: x=0xFF, n=32
-
-- inputs: `RCX=255`
-- manifest expected: `8709371129873690795`
-- native: `8709371129873690795`
-- lifted: `—`
-
-### case 6: x=0xCAFE, n=31
-
-- inputs: `RCX=51966`
-- manifest expected: `8709371129873644202`
-- native: `8709371129873644202`
-- lifted: `—`
-
-### case 7: x=0xCAFEBABE, n=31
-
-- inputs: `RCX=3405691582`
-- manifest expected: `8709371126563162858`
-- native: `8709371126563162858`
-- lifted: `—`
-
-### case 8: max u64 (signed -1), n=32
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `9102032882310693530`
-- native: `9102032882310693530`
-- lifted: `—`
-
-### case 9: 0x123...DEF0, n=17
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `8695855810279968268`
-- native: `8695855810279968268`
-- lifted: `—`
-
-### case 10: K (golden), n=22
-
-- inputs: `RCX=11400714819323198485`
-- manifest expected: `9025462342794460485`
-- native: `9025462342794460485`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0, n=1: max stays at val=0 (INT64_MIN beats nothing) |
+| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1, n=2 |
+| 3 | RCX=7 | 8709371129873690707 | 8709371129873690707 | 8709371129873690707 | yes | x=7, n=8 |
+| 4 | RCX=31 | 8709371129873690699 | 8709371129873690699 | 8709371129873690699 | yes | x=0x1F, n=32 max |
+| 5 | RCX=255 | 8709371129873690795 | 8709371129873690795 | 8709371129873690795 | yes | x=0xFF, n=32 |
+| 6 | RCX=51966 | 8709371129873644202 | 8709371129873644202 | 8709371129873644202 | yes | x=0xCAFE, n=31 |
+| 7 | RCX=3405691582 | 8709371126563162858 | 8709371126563162858 | 8709371126563162858 | yes | x=0xCAFEBABE, n=31 |
+| 8 | RCX=18446744073709551615 | 9102032882310693530 | 9102032882310693530 | 9102032882310693530 | yes | max u64 (signed -1), n=32 |
+| 9 | RCX=1311768467463790320 | 8695855810279968268 | 8695855810279968268 | 8695855810279968268 | yes | 0x123...DEF0, n=17 |
+| 10 | RCX=11400714819323198485 | 9025462342794460485 | 9025462342794460485 | 9025462342794460485 | yes | K (golden), n=22 |
 
 ## Source
 

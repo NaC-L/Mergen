@@ -1,14 +1,12 @@
 # vm_nibrev64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_nibrev64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_nibrev64_loop.ll`
 - **Symbol:** `vm_nibrev64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_nibrev64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_nibrev64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | x=0 |
-| 2 | RCX=1 | 1 | 1 | — | **no** | x=1, n=2 even -> identity |
-| 3 | RCX=15 | 15 | 15 | — | **no** | x=0xF, n=8 even -> identity |
-| 4 | RCX=51966 | 17270178671059009536 | 17270178671059009536 | — | **no** | x=0xCAFE, n=7 odd -> 0xEFAC0...0 |
-| 5 | RCX=3405691582 | 16981930341944000512 | 16981930341944000512 | — | **no** | x=0xCAFEBABE, n=7 odd |
-| 6 | RCX=1311768467463790320 | 1147797409030816545 | 1147797409030816545 | — | **no** | 0x123456789ABCDEF0, n=1 -> 0x0FEDCBA987654321 |
-| 7 | RCX=1147797409030816545 | 1147797409030816545 | 1147797409030816545 | — | **no** | already-reversed input, n=2 even -> identity |
-| 8 | RCX=18446744073709551615 | 18446744073709551615 | 18446744073709551615 | — | **no** | max u64: nibble-rev fixed point |
-| 9 | RCX=11400714819323198485 | 11400714819323198485 | 11400714819323198485 | — | **no** | K (golden), n=6 even -> identity |
-| 10 | RCX=3735928559 | 3735928559 | 3735928559 | — | **no** | x=0xDEADBEEF, n=8 even -> identity |
-
-## Failure detail
-
-### case 1: x=0
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1, n=2 even -> identity
-
-- inputs: `RCX=1`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 3: x=0xF, n=8 even -> identity
-
-- inputs: `RCX=15`
-- manifest expected: `15`
-- native: `15`
-- lifted: `—`
-
-### case 4: x=0xCAFE, n=7 odd -> 0xEFAC0...0
-
-- inputs: `RCX=51966`
-- manifest expected: `17270178671059009536`
-- native: `17270178671059009536`
-- lifted: `—`
-
-### case 5: x=0xCAFEBABE, n=7 odd
-
-- inputs: `RCX=3405691582`
-- manifest expected: `16981930341944000512`
-- native: `16981930341944000512`
-- lifted: `—`
-
-### case 6: 0x123456789ABCDEF0, n=1 -> 0x0FEDCBA987654321
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `1147797409030816545`
-- native: `1147797409030816545`
-- lifted: `—`
-
-### case 7: already-reversed input, n=2 even -> identity
-
-- inputs: `RCX=1147797409030816545`
-- manifest expected: `1147797409030816545`
-- native: `1147797409030816545`
-- lifted: `—`
-
-### case 8: max u64: nibble-rev fixed point
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `18446744073709551615`
-- native: `18446744073709551615`
-- lifted: `—`
-
-### case 9: K (golden), n=6 even -> identity
-
-- inputs: `RCX=11400714819323198485`
-- manifest expected: `11400714819323198485`
-- native: `11400714819323198485`
-- lifted: `—`
-
-### case 10: x=0xDEADBEEF, n=8 even -> identity
-
-- inputs: `RCX=3735928559`
-- manifest expected: `3735928559`
-- native: `3735928559`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0 |
+| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1, n=2 even -> identity |
+| 3 | RCX=15 | 15 | 15 | 15 | yes | x=0xF, n=8 even -> identity |
+| 4 | RCX=51966 | 17270178671059009536 | 17270178671059009536 | 17270178671059009536 | yes | x=0xCAFE, n=7 odd -> 0xEFAC0...0 |
+| 5 | RCX=3405691582 | 16981930341944000512 | 16981930341944000512 | 16981930341944000512 | yes | x=0xCAFEBABE, n=7 odd |
+| 6 | RCX=1311768467463790320 | 1147797409030816545 | 1147797409030816545 | 1147797409030816545 | yes | 0x123456789ABCDEF0, n=1 -> 0x0FEDCBA987654321 |
+| 7 | RCX=1147797409030816545 | 1147797409030816545 | 1147797409030816545 | 1147797409030816545 | yes | already-reversed input, n=2 even -> identity |
+| 8 | RCX=18446744073709551615 | 18446744073709551615 | 18446744073709551615 | 18446744073709551615 | yes | max u64: nibble-rev fixed point |
+| 9 | RCX=11400714819323198485 | 11400714819323198485 | 11400714819323198485 | 11400714819323198485 | yes | K (golden), n=6 even -> identity |
+| 10 | RCX=3735928559 | 3735928559 | 3735928559 | 3735928559 | yes | x=0xDEADBEEF, n=8 even -> identity |
 
 ## Source
 

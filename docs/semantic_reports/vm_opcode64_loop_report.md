@@ -1,14 +1,12 @@
 # vm_opcode64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_opcode64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_opcode64_loop.ll`
 - **Symbol:** `vm_opcode64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_opcode64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_opcode64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 1 | 1 | — | **no** | x=0, n=1, op=0: s=0+1=1 |
-| 2 | RCX=1 | 1 | 1 | — | **no** | x=1, n=2: op=1 then op=0 -> 0*2=0, +1=1 |
-| 3 | RCX=2 | 4 | 4 | — | **no** | x=2, n=3 |
-| 4 | RCX=3 | 18446744073709551612 | 18446744073709551612 | — | **no** | x=3, n=4: -7 underflow |
-| 5 | RCX=15 | 8 | 8 | — | **no** | x=0xF, n=16: 1 set nibble + zeros |
-| 6 | RCX=51966 | 21 | 21 | — | **no** | x=0xCAFE, n=15 |
-| 7 | RCX=3405691582 | 19 | 19 | — | **no** | x=0xCAFEBABE, n=15 |
-| 8 | RCX=1311768467463790320 | 1 | 1 | — | **no** | 0x123...DEF0, n=1, op=0: s=1 |
-| 9 | RCX=18446744073709551615 | 18446744073709551504 | 18446744073709551504 | — | **no** | max u64, n=16: every op=3 -> -7*16=-112 |
-| 10 | RCX=11400714819323198485 | 7046029254386353136 | 7046029254386353136 | — | **no** | K (golden), n=6 |
-
-## Failure detail
-
-### case 1: x=0, n=1, op=0: s=0+1=1
-
-- inputs: `RCX=0`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 2: x=1, n=2: op=1 then op=0 -> 0*2=0, +1=1
-
-- inputs: `RCX=1`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 3: x=2, n=3
-
-- inputs: `RCX=2`
-- manifest expected: `4`
-- native: `4`
-- lifted: `—`
-
-### case 4: x=3, n=4: -7 underflow
-
-- inputs: `RCX=3`
-- manifest expected: `18446744073709551612`
-- native: `18446744073709551612`
-- lifted: `—`
-
-### case 5: x=0xF, n=16: 1 set nibble + zeros
-
-- inputs: `RCX=15`
-- manifest expected: `8`
-- native: `8`
-- lifted: `—`
-
-### case 6: x=0xCAFE, n=15
-
-- inputs: `RCX=51966`
-- manifest expected: `21`
-- native: `21`
-- lifted: `—`
-
-### case 7: x=0xCAFEBABE, n=15
-
-- inputs: `RCX=3405691582`
-- manifest expected: `19`
-- native: `19`
-- lifted: `—`
-
-### case 8: 0x123...DEF0, n=1, op=0: s=1
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 9: max u64, n=16: every op=3 -> -7*16=-112
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `18446744073709551504`
-- native: `18446744073709551504`
-- lifted: `—`
-
-### case 10: K (golden), n=6
-
-- inputs: `RCX=11400714819323198485`
-- manifest expected: `7046029254386353136`
-- native: `7046029254386353136`
-- lifted: `—`
+| 1 | RCX=0 | 1 | 1 | 1 | yes | x=0, n=1, op=0: s=0+1=1 |
+| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1, n=2: op=1 then op=0 -> 0*2=0, +1=1 |
+| 3 | RCX=2 | 4 | 4 | 4 | yes | x=2, n=3 |
+| 4 | RCX=3 | 18446744073709551612 | 18446744073709551612 | 18446744073709551612 | yes | x=3, n=4: -7 underflow |
+| 5 | RCX=15 | 8 | 8 | 8 | yes | x=0xF, n=16: 1 set nibble + zeros |
+| 6 | RCX=51966 | 21 | 21 | 21 | yes | x=0xCAFE, n=15 |
+| 7 | RCX=3405691582 | 19 | 19 | 19 | yes | x=0xCAFEBABE, n=15 |
+| 8 | RCX=1311768467463790320 | 1 | 1 | 1 | yes | 0x123...DEF0, n=1, op=0: s=1 |
+| 9 | RCX=18446744073709551615 | 18446744073709551504 | 18446744073709551504 | 18446744073709551504 | yes | max u64, n=16: every op=3 -> -7*16=-112 |
+| 10 | RCX=11400714819323198485 | 7046029254386353136 | 7046029254386353136 | 7046029254386353136 | yes | K (golden), n=6 |
 
 ## Source
 

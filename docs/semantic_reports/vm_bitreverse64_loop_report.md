@@ -1,14 +1,12 @@
 # vm_bitreverse64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_bitreverse64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_bitreverse64_loop.ll`
 - **Symbol:** `vm_bitreverse64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_bitreverse64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_bitreverse64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | x=0: zero stays zero |
-| 2 | RCX=1 | 9223372036854775808 | 9223372036854775808 | — | **no** | x=1 -> MSB |
-| 3 | RCX=255 | 18374686479671623680 | 18374686479671623680 | — | **no** | x=0xFF -> top byte |
-| 4 | RCX=9223372036854775808 | 1 | 1 | — | **no** | x=2^63 -> 1 (MSB to LSB) |
-| 5 | RCX=51966 | 9174676865883832320 | 9174676865883832320 | — | **no** | x=0xCAFE |
-| 6 | RCX=3405691582 | 9033516422034096128 | 9033516422034096128 | — | **no** | x=0xCAFEBABE |
-| 7 | RCX=1311768467463790320 | 1115552785675988040 | 1115552785675988040 | — | **no** | 0x123...DEF0 |
-| 8 | RCX=18446744073709551615 | 18446744073709551615 | 18446744073709551615 | — | **no** | max u64: bitreverse fixed point |
-| 9 | RCX=11400714819323198485 | 12123218500447562873 | 12123218500447562873 | — | **no** | x=K (golden ratio) |
-| 10 | RCX=12297829382473034410 | 6148914691236517205 | 6148914691236517205 | — | **no** | 0xAAAA... -> 0x5555... |
-
-## Failure detail
-
-### case 1: x=0: zero stays zero
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1 -> MSB
-
-- inputs: `RCX=1`
-- manifest expected: `9223372036854775808`
-- native: `9223372036854775808`
-- lifted: `—`
-
-### case 3: x=0xFF -> top byte
-
-- inputs: `RCX=255`
-- manifest expected: `18374686479671623680`
-- native: `18374686479671623680`
-- lifted: `—`
-
-### case 4: x=2^63 -> 1 (MSB to LSB)
-
-- inputs: `RCX=9223372036854775808`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 5: x=0xCAFE
-
-- inputs: `RCX=51966`
-- manifest expected: `9174676865883832320`
-- native: `9174676865883832320`
-- lifted: `—`
-
-### case 6: x=0xCAFEBABE
-
-- inputs: `RCX=3405691582`
-- manifest expected: `9033516422034096128`
-- native: `9033516422034096128`
-- lifted: `—`
-
-### case 7: 0x123...DEF0
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `1115552785675988040`
-- native: `1115552785675988040`
-- lifted: `—`
-
-### case 8: max u64: bitreverse fixed point
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `18446744073709551615`
-- native: `18446744073709551615`
-- lifted: `—`
-
-### case 9: x=K (golden ratio)
-
-- inputs: `RCX=11400714819323198485`
-- manifest expected: `12123218500447562873`
-- native: `12123218500447562873`
-- lifted: `—`
-
-### case 10: 0xAAAA... -> 0x5555...
-
-- inputs: `RCX=12297829382473034410`
-- manifest expected: `6148914691236517205`
-- native: `6148914691236517205`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0: zero stays zero |
+| 2 | RCX=1 | 9223372036854775808 | 9223372036854775808 | 9223372036854775808 | yes | x=1 -> MSB |
+| 3 | RCX=255 | 18374686479671623680 | 18374686479671623680 | 18374686479671623680 | yes | x=0xFF -> top byte |
+| 4 | RCX=9223372036854775808 | 1 | 1 | 1 | yes | x=2^63 -> 1 (MSB to LSB) |
+| 5 | RCX=51966 | 9174676865883832320 | 9174676865883832320 | 9174676865883832320 | yes | x=0xCAFE |
+| 6 | RCX=3405691582 | 9033516422034096128 | 9033516422034096128 | 9033516422034096128 | yes | x=0xCAFEBABE |
+| 7 | RCX=1311768467463790320 | 1115552785675988040 | 1115552785675988040 | 1115552785675988040 | yes | 0x123...DEF0 |
+| 8 | RCX=18446744073709551615 | 18446744073709551615 | 18446744073709551615 | 18446744073709551615 | yes | max u64: bitreverse fixed point |
+| 9 | RCX=11400714819323198485 | 12123218500447562873 | 12123218500447562873 | 12123218500447562873 | yes | x=K (golden ratio) |
+| 10 | RCX=12297829382473034410 | 6148914691236517205 | 6148914691236517205 | 6148914691236517205 | yes | 0xAAAA... -> 0x5555... |
 
 ## Source
 

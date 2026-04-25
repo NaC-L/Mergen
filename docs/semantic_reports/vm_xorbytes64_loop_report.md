@@ -1,14 +1,12 @@
 # vm_xorbytes64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_xorbytes64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_xorbytes64_loop.ll`
 - **Symbol:** `vm_xorbytes64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_xorbytes64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_xorbytes64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | x=0 |
-| 2 | RCX=1 | 1 | 1 | — | **no** | x=1: only low byte |
-| 3 | RCX=255 | 255 | 255 | — | **no** | x=0xFF: low byte = 0xFF |
-| 4 | RCX=51966 | 52 | 52 | — | **no** | x=0xCAFE: 0xFE^0xCA=0x34 |
-| 5 | RCX=3405691582 | 48 | 48 | — | **no** | 0xCAFEBABE |
-| 6 | RCX=1311768467463790320 | 0 | 0 | — | **no** | 0x123456789ABCDEF0: bytes XOR cancel |
-| 7 | RCX=18446744073709551615 | 0 | 0 | — | **no** | max u64: 8x0xFF cancel |
-| 8 | RCX=11400714819323198485 | 53 | 53 | — | **no** | K (golden) |
-| 9 | RCX=170 | 170 | 170 | — | **no** | x=0xAA: only low byte |
-| 10 | RCX=71777214294589695 | 0 | 0 | — | **no** | 0x00FF00FF00FF00FF: 4x0xFF cancel |
-
-## Failure detail
-
-### case 1: x=0
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1: only low byte
-
-- inputs: `RCX=1`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 3: x=0xFF: low byte = 0xFF
-
-- inputs: `RCX=255`
-- manifest expected: `255`
-- native: `255`
-- lifted: `—`
-
-### case 4: x=0xCAFE: 0xFE^0xCA=0x34
-
-- inputs: `RCX=51966`
-- manifest expected: `52`
-- native: `52`
-- lifted: `—`
-
-### case 5: 0xCAFEBABE
-
-- inputs: `RCX=3405691582`
-- manifest expected: `48`
-- native: `48`
-- lifted: `—`
-
-### case 6: 0x123456789ABCDEF0: bytes XOR cancel
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 7: max u64: 8x0xFF cancel
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 8: K (golden)
-
-- inputs: `RCX=11400714819323198485`
-- manifest expected: `53`
-- native: `53`
-- lifted: `—`
-
-### case 9: x=0xAA: only low byte
-
-- inputs: `RCX=170`
-- manifest expected: `170`
-- native: `170`
-- lifted: `—`
-
-### case 10: 0x00FF00FF00FF00FF: 4x0xFF cancel
-
-- inputs: `RCX=71777214294589695`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0 |
+| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1: only low byte |
+| 3 | RCX=255 | 255 | 255 | 255 | yes | x=0xFF: low byte = 0xFF |
+| 4 | RCX=51966 | 52 | 52 | 52 | yes | x=0xCAFE: 0xFE^0xCA=0x34 |
+| 5 | RCX=3405691582 | 48 | 48 | 48 | yes | 0xCAFEBABE |
+| 6 | RCX=1311768467463790320 | 0 | 0 | 0 | yes | 0x123456789ABCDEF0: bytes XOR cancel |
+| 7 | RCX=18446744073709551615 | 0 | 0 | 0 | yes | max u64: 8x0xFF cancel |
+| 8 | RCX=11400714819323198485 | 53 | 53 | 53 | yes | K (golden) |
+| 9 | RCX=170 | 170 | 170 | 170 | yes | x=0xAA: only low byte |
+| 10 | RCX=71777214294589695 | 0 | 0 | 0 | yes | 0x00FF00FF00FF00FF: 4x0xFF cancel |
 
 ## Source
 
