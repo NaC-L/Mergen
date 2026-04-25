@@ -1397,6 +1397,28 @@
       ]
     },
     {
+      "name": "vm_imported_abs_loop",
+      "symbol": "vm_imported_abs_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "call",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,    "label": "limit=1, threshold=0, delta=0" },
+        { "inputs": { "RCX": 1 },     "expected": 17,   "label": "limit=2, threshold=0, sum |0|+|17|" },
+        { "inputs": { "RCX": 16 },    "expected": 2,    "label": "0x10: limit=1, threshold=2" },
+        { "inputs": { "RCX": 32 },    "expected": 4,    "label": "0x20: limit=1, threshold=4" },
+        { "inputs": { "RCX": 64 },    "expected": 8,    "label": "0x40: limit=1, threshold=8" },
+        { "inputs": { "RCX": 128 },   "expected": 16,   "label": "0x80: limit=1, threshold=16" },
+        { "inputs": { "RCX": 255 },   "expected": 318,  "label": "0xFF: limit=8" },
+        { "inputs": { "RCX": 291 },   "expected": 72,   "label": "0x123: limit=4" },
+        { "inputs": { "RCX": 4660 },  "expected": 180,  "label": "0x1234: limit=5" },
+        { "inputs": { "RCX": 65535 }, "expected": 1564, "label": "0xFFFF: limit=8" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
