@@ -1822,6 +1822,27 @@
       ]
     },
     {
+      "name": "vm_byte_buffer_loop",
+      "symbol": "vm_byte_buffer_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "add",
+        "zext"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 840,  "label": "seed=0" },
+        { "inputs": { "RCX": 1 },     "expected": 856,  "label": "seed=1" },
+        { "inputs": { "RCX": 5 },     "expected": 920,  "label": "seed=5" },
+        { "inputs": { "RCX": 7 },     "expected": 952,  "label": "seed=7" },
+        { "inputs": { "RCX": 16 },    "expected": 1096, "label": "0x10" },
+        { "inputs": { "RCX": 85 },    "expected": 2200, "label": "0x55" },
+        { "inputs": { "RCX": 128 },   "expected": 2888, "label": "0x80" },
+        { "inputs": { "RCX": 255 },   "expected": 1080, "label": "0xFF: wrap-modulated" },
+        { "inputs": { "RCX": 51966 }, "expected": 1064, "label": "0xCAFE: seed=0xFE" },
+        { "inputs": { "RCX": 74565 }, "expected": 1944, "label": "0x12345: seed=0x45" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
