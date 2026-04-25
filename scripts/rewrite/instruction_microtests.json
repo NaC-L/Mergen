@@ -1903,6 +1903,24 @@
       ]
     },
     {
+      "name": "vm_u64_array_loop",
+      "symbol": "vm_u64_array_loop_target",
+      "patterns": [
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                  "expected": 6,          "label": "seed=0: only constant additive part" },
+        { "inputs": { "RCX": 1 },                  "expected": 16,         "label": "seed=1" },
+        { "inputs": { "RCX": 7 },                  "expected": 76,         "label": "seed=7" },
+        { "inputs": { "RCX": 4294967296 },         "expected": 6,          "label": "0x1_00000000: only high i64 bits" },
+        { "inputs": { "RCX": 3405691582 },          "expected": 3992144754, "label": "0xCAFEBABE" },
+        { "inputs": { "RCX": 209937112161965 },     "expected": 3992236744, "label": "0xBEEFCAFEDEAD: shorter 48-bit input" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4294967292, "label": "max u64: low32 = -4 u32" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 190887270,  "label": "0x123456789ABCDEF0" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
