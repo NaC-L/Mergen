@@ -2246,6 +2246,26 @@
       ]
     },
     {
+      "name": "vm_djb264_loop",
+      "symbol": "vm_djb264_loop_target",
+      "patterns": [
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 177573,          "label": "x=0, n=1: 5381*33+0" },
+        { "inputs": { "RCX": 1 },                    "expected": 5859942,         "label": "x=1, n=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 7568183103855660, "label": "x=7, n=8 (max)" },
+        { "inputs": { "RCX": 255 },                  "expected": 7578752477713956, "label": "x=0xFF, n=8" },
+        { "inputs": { "RCX": 51966 },                "expected": 229665779872749,  "label": "x=0xCAFE, n=7" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 229582808239653,  "label": "x=0xCAFEBABE, n=7" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 177813,          "label": "x=0x123...DEF0, n=1: low byte 0xF0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 7579092093431421, "label": "max u64, n=8" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 6950360842513,    "label": "x=K (golden ratio), n=6" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 7578322995237885, "label": "x=0xDEADBEEF, n=8" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
