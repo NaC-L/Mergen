@@ -1110,6 +1110,31 @@
       ]
     },
     {
+      "name": "vm_djb2_loop",
+      "symbol": "vm_djb2_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "mul",
+        "add",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },        "expected": 46501, "label": "limit=1, nib=0" },
+        { "inputs": { "RCX": 1 },        "expected": 27238, "label": "limit=2, nibs=[1,0]" },
+        { "inputs": { "RCX": 2 },        "expected": 47975, "label": "limit=3, nibs=[2,0,0]" },
+        { "inputs": { "RCX": 7 },        "expected": 7212,  "label": "limit=8, nibs=[7,0,..,0]" },
+        { "inputs": { "RCX": 18 },       "expected": 48008, "label": "0x12: limit=3, nibs=[2,1,0]" },
+        { "inputs": { "RCX": 291 },      "expected": 48459, "label": "0x123: limit=4, nibs=[3,2,1,0]" },
+        { "inputs": { "RCX": 4660 },     "expected": 4079,  "label": "0x1234: limit=5" },
+        { "inputs": { "RCX": 74565 },    "expected": 57268, "label": "0x12345: limit=6" },
+        { "inputs": { "RCX": 16777215 }, "expected": 40191, "label": "all F: limit=8" },
+        { "inputs": { "RCX": 11259375 }, "expected": 32432, "label": "0xABCDEF: limit=8" },
+        { "inputs": { "RCX": 85 },       "expected": 19055, "label": "0x55: limit=6" },
+        { "inputs": { "RCX": 170 },      "expected": 57017, "label": "0xAA: limit=3" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
