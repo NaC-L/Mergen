@@ -2784,6 +2784,26 @@
       ]
     },
     {
+      "name": "vm_peasant64_loop",
+      "symbol": "vm_peasant64_loop_target",
+      "patterns": [
+        "add",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0,                    "RDX": 0 },                    "expected": 0,                    "label": "0*0=0: skip loop" },
+        { "inputs": { "RCX": 3,                    "RDX": 5 },                    "expected": 15,                   "label": "3*5=15" },
+        { "inputs": { "RCX": 11,                   "RDX": 13 },                   "expected": 143,                  "label": "11*13=143" },
+        { "inputs": { "RCX": 51966,                "RDX": 47806 },                "expected": 2484286596,           "label": "0xCAFE*0xBABE" },
+        { "inputs": { "RCX": 3405691582,           "RDX": 3735928559 },           "expected": 12723420444339690338, "label": "0xCAFEBABE * 0xDEADBEEF (wraps mod 2^64)" },
+        { "inputs": { "RCX": 9223372036854775808,   "RDX": 2 },                    "expected": 0,                    "label": "2^63*2=2^64 wraps to 0" },
+        { "inputs": { "RCX": 18446744073709551615, "RDX": 18446744073709551615 }, "expected": 1,                    "label": "max u64 * max u64 = 1 mod 2^64" },
+        { "inputs": { "RCX": 7,                    "RDX": 0 },                    "expected": 0,                    "label": "y=0: skip loop" },
+        { "inputs": { "RCX": 0,                    "RDX": 7 },                    "expected": 0,                    "label": "x=0: a=0, no contribution" },
+        { "inputs": { "RCX": 4294967297,            "RDX": 4294967297 },           "expected": 8589934593,           "label": "(2^32+1)*(2^32+1) wraps mod 2^64" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
