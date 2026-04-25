@@ -2366,6 +2366,26 @@
       ]
     },
     {
+      "name": "vm_bswap64_loop",
+      "symbol": "vm_bswap64_loop_target",
+      "patterns": [
+        "or",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: zero stays zero" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1, n=2: double bswap = identity" },
+        { "inputs": { "RCX": 2 },                    "expected": 144115188075855872,   "label": "x=2, n=3: bswap once -> 0x0200...0" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,                    "label": "x=7, n=8: even -> identity" },
+        { "inputs": { "RCX": 255 },                  "expected": 255,                  "label": "x=0xFF, n=8: even -> identity" },
+        { "inputs": { "RCX": 51966 },                "expected": 18359486830929248256, "label": "x=0xCAFE, n=7 (odd) -> 0xFECA00..0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 13743577356411338752, "label": "x=0xCAFEBABE, n=7 (odd)" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 17356517385562371090, "label": "0x123...DEF0, n=1: bswap once" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "max u64: bswap fixed point" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 11400714819323198485, "label": "K (golden): n=6 even -> identity" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
