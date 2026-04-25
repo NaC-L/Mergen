@@ -3243,6 +3243,26 @@
       ]
     },
     {
+      "name": "vm_popsq64_loop",
+      "symbol": "vm_popsq64_loop_target",
+      "patterns": [
+        "and",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "x=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1: low byte popcount=1, 1^2=1" },
+        { "inputs": { "RCX": 255 },                  "expected": 64,  "label": "x=0xFF: 8^2=64" },
+        { "inputs": { "RCX": 51966 },                "expected": 65,  "label": "x=0xCAFE" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 25,  "label": "0x0102030405060708" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 272, "label": "0xCAFEBABEDEADBEEF" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 512, "label": "max u64: 8 bytes * 64" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 192, "label": "K (golden)" },
+        { "inputs": { "RCX": 81985529216486895 },    "expected": 152, "label": "0x0123456789ABCDEF" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 126, "label": "0xCAFEBABE" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
