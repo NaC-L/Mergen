@@ -5085,6 +5085,27 @@
       ]
     },
     {
+      "name": "vm_swap_shift_pair64_loop",
+      "symbol": "vm_swap_shift_pair64_loop_target",
+      "patterns": [
+        "xor",
+        "add",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 18446744073709551613, "label": "x=0 a=0 b=~0 n=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 9223372036854775802,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 4611686018427387871,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 13690942867206307100, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 18446744073709551593, "label": "x=8 n=1: single iter" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3746994476429146472,  "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 13690942385312516512, "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4971973988617027375,  "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 18265186623257113705, "label": "0x0102...0708: n=1" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 15176334983659810693, "label": "0x12345...EF0: n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
