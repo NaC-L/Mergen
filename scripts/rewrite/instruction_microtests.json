@@ -4005,6 +4005,26 @@
       ]
     },
     {
+      "name": "vm_orsum_byte_idx64_loop",
+      "symbol": "vm_orsum_byte_idx64_loop_target",
+      "patterns": [
+        "or",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1,   "label": "x=0 n=1: 0|0|1=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 3,   "label": "x=1 n=2: 0|1|1=1; |0|2=3" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,   "label": "x=2 n=3: bytes [2,0,0] | counters [1,2,3]" },
+        { "inputs": { "RCX": 7 },                    "expected": 15,  "label": "x=7 n=8: 7 | (1|2|...|8) = 7|15 = 15" },
+        { "inputs": { "RCX": 8 },                    "expected": 9,   "label": "x=8 n=1: 8|1=9" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 255, "label": "0xCAFEBABE: n=7 OR of high-byte BE=0xBE | counters fills low 8 bits" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 255, "label": "0xDEADBEEF: n=8 fills low 8 bits" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 255, "label": "all 0xFF: low byte already 0xFF -> 0xFF" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 9,   "label": "0x0102...0708: n=1 byte0=8 | 1=9" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 241, "label": "0x12345...EF0: n=1 byte0=0xF0 | 1=0xF1=241" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
