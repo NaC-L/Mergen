@@ -4963,6 +4963,26 @@
       ]
     },
     {
+      "name": "vm_clear_low_bit64_loop",
+      "symbol": "vm_clear_low_bit64_loop_target",
+      "patterns": [
+        "and",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                    "label": "x=1: 1 set bit cleared" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,                    "label": "x=2: 1 set bit cleared" },
+        { "inputs": { "RCX": 7 },                    "expected": 0,                    "label": "x=7: 3 bits cleared (n=8>=3)" },
+        { "inputs": { "RCX": 8 },                    "expected": 0,                    "label": "x=8: 1 set bit" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405690880,           "label": "0xCAFEBABE: clear 7 lowest set bits" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735927808,           "label": "0xDEADBEEF: clear 8 lowest set bits" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551360, "label": "all 0xFF n=8: clear low 8 set bits" },
+        { "inputs": { "RCX": 255 },                  "expected": 0,                    "label": "0xFF n=8: 8 set bits cleared" },
+        { "inputs": { "RCX": 128 },                  "expected": 0,                    "label": "0x80 n=1: single bit cleared" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
