@@ -1183,6 +1183,30 @@
       ]
     },
     {
+      "name": "vm_kernighan_loop",
+      "symbol": "vm_kernighan_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 65535"] },
+        "phi i32",
+        "add",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,  "label": "v=0: 0 trips" },
+        { "inputs": { "RCX": 1 },     "expected": 1,  "label": "v=1" },
+        { "inputs": { "RCX": 3 },     "expected": 2,  "label": "v=0x03" },
+        { "inputs": { "RCX": 7 },     "expected": 3,  "label": "v=0x07" },
+        { "inputs": { "RCX": 85 },    "expected": 4,  "label": "0x55: 4 bits set" },
+        { "inputs": { "RCX": 170 },   "expected": 4,  "label": "0xAA: 4 bits set" },
+        { "inputs": { "RCX": 65535 }, "expected": 16, "label": "all 16 bits: 16 trips" },
+        { "inputs": { "RCX": 256 },   "expected": 1,  "label": "0x100: single bit" },
+        { "inputs": { "RCX": 4660 },  "expected": 5,  "label": "0x1234: 5 bits" },
+        { "inputs": { "RCX": 32768 }, "expected": 1,  "label": "0x8000" },
+        { "inputs": { "RCX": 32769 }, "expected": 2,  "label": "0x8001" },
+        { "inputs": { "RCX": 65534 }, "expected": 15, "label": "0xFFFE" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
