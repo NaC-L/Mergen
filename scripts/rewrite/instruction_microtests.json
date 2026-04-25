@@ -3363,6 +3363,26 @@
       ]
     },
     {
+      "name": "vm_altbytesum64_loop",
+      "symbol": "vm_altbytesum64_loop_target",
+      "patterns": [
+        "add",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero bytes" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1: +1" },
+        { "inputs": { "RCX": 255 },                  "expected": 255,                  "label": "x=0xFF: +255" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 4,                    "label": "0x0102030405060708: 8-(7-(6-(5-(4-(3-(2-1))))))=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,                    "label": "all 0xFF: 8 bytes alternating cancel to 0" },
+        { "inputs": { "RCX": 128 },                  "expected": 128,                  "label": "x=0x80: +128 (positive byte)" },
+        { "inputs": { "RCX": 9259542123273814144 },  "expected": 128,                  "label": "0x8080808080808080: +/- 128 cancels to +128" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 56,                   "label": "0xCAFEBABE: 4-byte alternating sum" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 240,                  "label": "0x123456789ABCDEF0" },
+        { "inputs": { "RCX": 16045690985374415566 }, "expected": 18446744073709551555, "label": "0xDEADBEEFFEEDFACE: result negative -> u64=2^64-61" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
