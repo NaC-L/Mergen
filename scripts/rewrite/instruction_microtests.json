@@ -5941,6 +5941,27 @@
       ]
     },
     {
+      "name": "vm_word_xor_uge_thresh64_loop",
+      "symbol": "vm_word_xor_uge_thresh64_loop_target",
+      "patterns": [
+        "icmp",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "x=0 n=1 word=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,     "label": "x=1 n=2 [1,0] none qualify" },
+        { "inputs": { "RCX": 32768 },                "expected": 32768, "label": "0x8000 n=1 word=0x8000" },
+        { "inputs": { "RCX": 32767 },                "expected": 0,     "label": "0x7FFF n=4 [0x7FFF,0,0,0] none qualify" },
+        { "inputs": { "RCX": 65535 },                "expected": 65535, "label": "0xFFFF n=4 only first qualifies" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 28736, "label": "0xCAFEBABE n=3 xor 0xBABE^0xCAFE = 28736" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 24642, "label": "0xDEADBEEF n=4 xor of high words = 24642" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,     "label": "all 0xFFFF n=4 4*0xFFFF -> 0" },
+        { "inputs": { "RCX": 9223512776490680319 },  "expected": 32767, "label": "0x800080008000FFFF n=4 -> 0xFFFF^0x8000^0x8000^0x8000" },
+        { "inputs": { "RCX": 9223090570467934211 },  "expected": 65535, "label": "0x7FFF0001FFFF0003 n=4 only 0xFFFF qualifies" },
+        { "inputs": { "RCX": 9223794260057489411 },  "expected": 3,     "label": "0x8001800280038003 n=4 xor of all 4 -> 3" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
