@@ -3464,6 +3464,26 @@
       ]
     },
     {
+      "name": "vm_squareadd64_loop",
+      "symbol": "vm_squareadd64_loop_target",
+      "patterns": [
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: r stays 0 (0*0+0=0)" },
+        { "inputs": { "RCX": 1 },                    "expected": 2,                    "label": "x=1 n=2: r=1->1+0=1->1+1=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 291,                  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 45239079,             "label": "x=3 n=4" },
+        { "inputs": { "RCX": 7 },                    "expected": 9195696129828624491, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 64,                   "label": "x=8 n=1: r=64+0=64" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 972137993493440703, "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2025791209710884971, "label": "0xDEADBEEF: n=8 (low nibble=F-> low3=7)" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 6702382813236303979, "label": "all 0xFF: n=8" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 11953125779633938688, "label": "0x12345...EF0: n=1: r=x*x mod 2^64" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
