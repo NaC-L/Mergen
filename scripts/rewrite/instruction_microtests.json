@@ -3838,6 +3838,27 @@
       ]
     },
     {
+      "name": "vm_bytesmul_idx64_loop",
+      "symbol": "vm_bytesmul_idx64_loop_target",
+      "patterns": [
+        "sext",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: byte0=+1 *1 + byte1=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,                    "label": "x=2 n=3: byte0=+2 *1" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,                    "label": "x=7 n=8: byte0=+7 *1; rest zero" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,                    "label": "x=8 n=1: byte0=+8 *1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744073709551188, "label": "0xCAFEBABE: n=7 mixed-sign bytes scaled by index" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744073709551082, "label": "0xDEADBEEF: n=8 mostly negative bytes" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551580, "label": "all 0xFF n=8: -1*(1+2+...+8)=-36 -> 2^64-36" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 8,                    "label": "0x0102...0708: n=1 byte0=+8 *1" },
+        { "inputs": { "RCX": 9259542125412876287 },  "expected": 18446744073709548278, "label": "0x80808080FFFFFFFF: n=8 negative-byte-heavy mixed" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
