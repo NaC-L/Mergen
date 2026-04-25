@@ -1278,6 +1278,30 @@
       ]
     },
     {
+      "name": "vm_hexcount_loop",
+      "symbol": "vm_hexcount_loop_target",
+      "patterns": [
+        "add",
+        "and",
+        "icmp",
+        "zext"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0, "label": "all zero nibbles" },
+        { "inputs": { "RCX": 1 },          "expected": 0, "label": "only nibble 0 = 1" },
+        { "inputs": { "RCX": 10 },         "expected": 1, "label": "0xA: 1 letter" },
+        { "inputs": { "RCX": 171 },        "expected": 2, "label": "0xAB: 2 letters" },
+        { "inputs": { "RCX": 255 },       "expected": 2, "label": "0xFF: 2 letters" },
+        { "inputs": { "RCX": 39321 },     "expected": 0, "label": "0x9999: all digit nibbles" },
+        { "inputs": { "RCX": 4660 },      "expected": 0, "label": "0x1234: all digits" },
+        { "inputs": { "RCX": 305419896 }, "expected": 0, "label": "0x12345678: all digits" },
+        { "inputs": { "RCX": -1431655766 }, "expected": 8, "label": "0xAAAAAAAA: all letters" },
+        { "inputs": { "RCX": -1412567296 }, "expected": 6, "label": "0xABCDEF00: 6 letters" },
+        { "inputs": { "RCX": -19088744 }, "expected": 6, "label": "0xFEDCBA98: 6 letters" },
+        { "inputs": { "RCX": -889275714 }, "expected": 8, "label": "0xCAFEBABE: 8 letters" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
