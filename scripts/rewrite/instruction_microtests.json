@@ -989,6 +989,29 @@
       ]
     },
     {
+      "name": "vm_argmax_loop",
+      "symbol": "vm_argmax_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "icmp",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0, "label": "limit=1" },
+        { "inputs": { "RCX": 1 },     "expected": 1, "label": "limit=2" },
+        { "inputs": { "RCX": 2 },     "expected": 2, "label": "limit=3" },
+        { "inputs": { "RCX": 7 },     "expected": 4, "label": "limit=8: max at i=4" },
+        { "inputs": { "RCX": 55 },    "expected": 4, "label": "0x37: limit=8" },
+        { "inputs": { "RCX": 170 },   "expected": 2, "label": "0xAA: limit=3, max at i=2" },
+        { "inputs": { "RCX": 196 },   "expected": 1, "label": "0xC4: limit=5, max at i=1" },
+        { "inputs": { "RCX": 255 },   "expected": 0, "label": "0xFF: limit=8, max at i=0" },
+        { "inputs": { "RCX": 256 },   "expected": 0, "label": "limit=1 (mask drops bit 8)" },
+        { "inputs": { "RCX": 4660 },  "expected": 4, "label": "0x1234: limit=5" },
+        { "inputs": { "RCX": 65244 }, "expected": 1, "label": "0xFEDC: limit=5, max at i=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
