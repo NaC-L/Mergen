@@ -1,14 +1,12 @@
 # vm_dword_xormul64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_dword_xormul64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_dword_xormul64_loop.ll`
 - **Symbol:** `vm_dword_xormul64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_dword_xormul64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_dword_xormul64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | all zero -> 0 |
-| 2 | RCX=1 | 2654435769 | 2654435769 | — | **no** | x=1 n=2: 1*GR^0=GR |
-| 3 | RCX=2 | 5308871538 | 5308871538 | — | **no** | x=2 n=1 |
-| 4 | RCX=3 | 7963307307 | 7963307307 | — | **no** | x=3 n=2: dword 3 then 0 |
-| 5 | RCX=3405691582 | 9040189553442996558 | 9040189553442996558 | — | **no** | 0xCAFEBABE: n=1 single dword |
-| 6 | RCX=3735928559 | 9916782397438226871 | 9916782397438226871 | — | **no** | 0xDEADBEEF: n=2 dword + 0 |
-| 7 | RCX=18446744073709551615 | 0 | 0 | — | **no** | all 0xFF: 2 XOR of 0xFFFFFFFF*GR cancel |
-| 8 | RCX=72623859790382856 | 223718755872922824 | 223718755872922824 | — | **no** | 0x0102...0708: n=1 lower dword=0x05060708 |
-| 9 | RCX=1311768467463790320 | 6891098688453380976 | 6891098688453380976 | — | **no** | 0x12345...EF0: n=1 lower dword=0x9ABCDEF0 |
-| 10 | RCX=18364758544493064720 | 5269663737911033232 | 5269663737911033232 | — | **no** | 0xFEDCBA9876543210: n=1 lower dword=0x76543210 |
-
-## Failure detail
-
-### case 1: all zero -> 0
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1 n=2: 1*GR^0=GR
-
-- inputs: `RCX=1`
-- manifest expected: `2654435769`
-- native: `2654435769`
-- lifted: `—`
-
-### case 3: x=2 n=1
-
-- inputs: `RCX=2`
-- manifest expected: `5308871538`
-- native: `5308871538`
-- lifted: `—`
-
-### case 4: x=3 n=2: dword 3 then 0
-
-- inputs: `RCX=3`
-- manifest expected: `7963307307`
-- native: `7963307307`
-- lifted: `—`
-
-### case 5: 0xCAFEBABE: n=1 single dword
-
-- inputs: `RCX=3405691582`
-- manifest expected: `9040189553442996558`
-- native: `9040189553442996558`
-- lifted: `—`
-
-### case 6: 0xDEADBEEF: n=2 dword + 0
-
-- inputs: `RCX=3735928559`
-- manifest expected: `9916782397438226871`
-- native: `9916782397438226871`
-- lifted: `—`
-
-### case 7: all 0xFF: 2 XOR of 0xFFFFFFFF*GR cancel
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 8: 0x0102...0708: n=1 lower dword=0x05060708
-
-- inputs: `RCX=72623859790382856`
-- manifest expected: `223718755872922824`
-- native: `223718755872922824`
-- lifted: `—`
-
-### case 9: 0x12345...EF0: n=1 lower dword=0x9ABCDEF0
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `6891098688453380976`
-- native: `6891098688453380976`
-- lifted: `—`
-
-### case 10: 0xFEDCBA9876543210: n=1 lower dword=0x76543210
-
-- inputs: `RCX=18364758544493064720`
-- manifest expected: `5269663737911033232`
-- native: `5269663737911033232`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | all zero -> 0 |
+| 2 | RCX=1 | 2654435769 | 2654435769 | 2654435769 | yes | x=1 n=2: 1*GR^0=GR |
+| 3 | RCX=2 | 5308871538 | 5308871538 | 5308871538 | yes | x=2 n=1 |
+| 4 | RCX=3 | 7963307307 | 7963307307 | 7963307307 | yes | x=3 n=2: dword 3 then 0 |
+| 5 | RCX=3405691582 | 9040189553442996558 | 9040189553442996558 | 9040189553442996558 | yes | 0xCAFEBABE: n=1 single dword |
+| 6 | RCX=3735928559 | 9916782397438226871 | 9916782397438226871 | 9916782397438226871 | yes | 0xDEADBEEF: n=2 dword + 0 |
+| 7 | RCX=18446744073709551615 | 0 | 0 | 0 | yes | all 0xFF: 2 XOR of 0xFFFFFFFF*GR cancel |
+| 8 | RCX=72623859790382856 | 223718755872922824 | 223718755872922824 | 223718755872922824 | yes | 0x0102...0708: n=1 lower dword=0x05060708 |
+| 9 | RCX=1311768467463790320 | 6891098688453380976 | 6891098688453380976 | 6891098688453380976 | yes | 0x12345...EF0: n=1 lower dword=0x9ABCDEF0 |
+| 10 | RCX=18364758544493064720 | 5269663737911033232 | 5269663737911033232 | 5269663737911033232 | yes | 0xFEDCBA9876543210: n=1 lower dword=0x76543210 |
 
 ## Source
 

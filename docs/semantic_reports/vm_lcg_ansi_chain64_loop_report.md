@@ -1,14 +1,12 @@
 # vm_lcg_ansi_chain64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_lcg_ansi_chain64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_lcg_ansi_chain64_loop.ll`
 - **Symbol:** `vm_lcg_ansi_chain64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_lcg_ansi_chain64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_lcg_ansi_chain64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 12345 | 12345 | — | **no** | x=0 n=1: 0*A+12345=12345 |
-| 2 | RCX=1 | 1217759518843121895 | 1217759518843121895 | — | **no** | x=1 n=2 |
-| 3 | RCX=2 | 13429379559266951497 | 13429379559266951497 | — | **no** | x=2 n=3 |
-| 4 | RCX=7 | 15269757630230227199 | 15269757630230227199 | — | **no** | x=7 n=8: max trip |
-| 5 | RCX=8 | 8828134305 | 8828134305 | — | **no** | x=8 n=1: 8*A+12345 |
-| 6 | RCX=3405691582 | 5394996920446395057 | 5394996920446395057 | — | **no** | 0xCAFEBABE: n=7 |
-| 7 | RCX=3735928559 | 7100797012767448295 | 7100797012767448295 | — | **no** | 0xDEADBEEF: n=8 |
-| 8 | RCX=18446744073709551615 | 14013565258359107575 | 14013565258359107575 | — | **no** | all 0xFF n=8 |
-| 9 | RCX=72623859790382856 | 7289336239468420769 | 7289336239468420769 | — | **no** | 0x0102...0708: n=1 single LCG step |
-| 10 | RCX=1311768467463790320 | 3689348795830123625 | 3689348795830123625 | — | **no** | 0x12345...EF0: n=1 |
-
-## Failure detail
-
-### case 1: x=0 n=1: 0*A+12345=12345
-
-- inputs: `RCX=0`
-- manifest expected: `12345`
-- native: `12345`
-- lifted: `—`
-
-### case 2: x=1 n=2
-
-- inputs: `RCX=1`
-- manifest expected: `1217759518843121895`
-- native: `1217759518843121895`
-- lifted: `—`
-
-### case 3: x=2 n=3
-
-- inputs: `RCX=2`
-- manifest expected: `13429379559266951497`
-- native: `13429379559266951497`
-- lifted: `—`
-
-### case 4: x=7 n=8: max trip
-
-- inputs: `RCX=7`
-- manifest expected: `15269757630230227199`
-- native: `15269757630230227199`
-- lifted: `—`
-
-### case 5: x=8 n=1: 8*A+12345
-
-- inputs: `RCX=8`
-- manifest expected: `8828134305`
-- native: `8828134305`
-- lifted: `—`
-
-### case 6: 0xCAFEBABE: n=7
-
-- inputs: `RCX=3405691582`
-- manifest expected: `5394996920446395057`
-- native: `5394996920446395057`
-- lifted: `—`
-
-### case 7: 0xDEADBEEF: n=8
-
-- inputs: `RCX=3735928559`
-- manifest expected: `7100797012767448295`
-- native: `7100797012767448295`
-- lifted: `—`
-
-### case 8: all 0xFF n=8
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `14013565258359107575`
-- native: `14013565258359107575`
-- lifted: `—`
-
-### case 9: 0x0102...0708: n=1 single LCG step
-
-- inputs: `RCX=72623859790382856`
-- manifest expected: `7289336239468420769`
-- native: `7289336239468420769`
-- lifted: `—`
-
-### case 10: 0x12345...EF0: n=1
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `3689348795830123625`
-- native: `3689348795830123625`
-- lifted: `—`
+| 1 | RCX=0 | 12345 | 12345 | 12345 | yes | x=0 n=1: 0*A+12345=12345 |
+| 2 | RCX=1 | 1217759518843121895 | 1217759518843121895 | 1217759518843121895 | yes | x=1 n=2 |
+| 3 | RCX=2 | 13429379559266951497 | 13429379559266951497 | 13429379559266951497 | yes | x=2 n=3 |
+| 4 | RCX=7 | 15269757630230227199 | 15269757630230227199 | 15269757630230227199 | yes | x=7 n=8: max trip |
+| 5 | RCX=8 | 8828134305 | 8828134305 | 8828134305 | yes | x=8 n=1: 8*A+12345 |
+| 6 | RCX=3405691582 | 5394996920446395057 | 5394996920446395057 | 5394996920446395057 | yes | 0xCAFEBABE: n=7 |
+| 7 | RCX=3735928559 | 7100797012767448295 | 7100797012767448295 | 7100797012767448295 | yes | 0xDEADBEEF: n=8 |
+| 8 | RCX=18446744073709551615 | 14013565258359107575 | 14013565258359107575 | 14013565258359107575 | yes | all 0xFF n=8 |
+| 9 | RCX=72623859790382856 | 7289336239468420769 | 7289336239468420769 | 7289336239468420769 | yes | 0x0102...0708: n=1 single LCG step |
+| 10 | RCX=1311768467463790320 | 3689348795830123625 | 3689348795830123625 | 3689348795830123625 | yes | 0x12345...EF0: n=1 |
 
 ## Source
 

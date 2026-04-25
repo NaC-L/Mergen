@@ -1,14 +1,12 @@
 # vm_signedxor_byte_idx64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_signedxor_byte_idx64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_signedxor_byte_idx64_loop.ll`
 - **Symbol:** `vm_signedxor_byte_idx64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_signedxor_byte_idx64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_signedxor_byte_idx64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | all zero -> 0 |
-| 2 | RCX=1 | 1 | 1 | — | **no** | x=1 n=2: byte0=+1*1 |
-| 3 | RCX=2 | 2 | 2 | — | **no** | x=2 n=3: byte0=+2*1 |
-| 4 | RCX=7 | 7 | 7 | — | **no** | x=7 n=8: only byte0=7 contributes |
-| 5 | RCX=8 | 8 | 8 | — | **no** | x=8 n=1: byte0=+8*1 |
-| 6 | RCX=3405691582 | 24 | 24 | — | **no** | 0xCAFEBABE: n=7 - high bits cancel pairwise |
-| 7 | RCX=3735928559 | 236 | 236 | — | **no** | 0xDEADBEEF: n=8 |
-| 8 | RCX=18446744073709551615 | 0 | 0 | — | **no** | all 0xFF: 8 sext(-1)*counters - high-bit fold cancels |
-| 9 | RCX=9259542125412876287 | 0 | 0 | — | **no** | 0x80808080FFFFFFFF: 8 mixed signed bytes XOR cancel |
-| 10 | RCX=1311768467463790320 | 18446744073709551600 | 18446744073709551600 | — | **no** | 0x12345...EF0: n=1 sext(0xF0)*1=-16 -> 2^64-16 (DIFFERENT from unsigned 240) |
-
-## Failure detail
-
-### case 1: all zero -> 0
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1 n=2: byte0=+1*1
-
-- inputs: `RCX=1`
-- manifest expected: `1`
-- native: `1`
-- lifted: `—`
-
-### case 3: x=2 n=3: byte0=+2*1
-
-- inputs: `RCX=2`
-- manifest expected: `2`
-- native: `2`
-- lifted: `—`
-
-### case 4: x=7 n=8: only byte0=7 contributes
-
-- inputs: `RCX=7`
-- manifest expected: `7`
-- native: `7`
-- lifted: `—`
-
-### case 5: x=8 n=1: byte0=+8*1
-
-- inputs: `RCX=8`
-- manifest expected: `8`
-- native: `8`
-- lifted: `—`
-
-### case 6: 0xCAFEBABE: n=7 - high bits cancel pairwise
-
-- inputs: `RCX=3405691582`
-- manifest expected: `24`
-- native: `24`
-- lifted: `—`
-
-### case 7: 0xDEADBEEF: n=8
-
-- inputs: `RCX=3735928559`
-- manifest expected: `236`
-- native: `236`
-- lifted: `—`
-
-### case 8: all 0xFF: 8 sext(-1)*counters - high-bit fold cancels
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 9: 0x80808080FFFFFFFF: 8 mixed signed bytes XOR cancel
-
-- inputs: `RCX=9259542125412876287`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 10: 0x12345...EF0: n=1 sext(0xF0)*1=-16 -> 2^64-16 (DIFFERENT from unsigned 240)
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `18446744073709551600`
-- native: `18446744073709551600`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | all zero -> 0 |
+| 2 | RCX=1 | 1 | 1 | 1 | yes | x=1 n=2: byte0=+1*1 |
+| 3 | RCX=2 | 2 | 2 | 2 | yes | x=2 n=3: byte0=+2*1 |
+| 4 | RCX=7 | 7 | 7 | 7 | yes | x=7 n=8: only byte0=7 contributes |
+| 5 | RCX=8 | 8 | 8 | 8 | yes | x=8 n=1: byte0=+8*1 |
+| 6 | RCX=3405691582 | 24 | 24 | 24 | yes | 0xCAFEBABE: n=7 - high bits cancel pairwise |
+| 7 | RCX=3735928559 | 236 | 236 | 236 | yes | 0xDEADBEEF: n=8 |
+| 8 | RCX=18446744073709551615 | 0 | 0 | 0 | yes | all 0xFF: 8 sext(-1)*counters - high-bit fold cancels |
+| 9 | RCX=9259542125412876287 | 0 | 0 | 0 | yes | 0x80808080FFFFFFFF: 8 mixed signed bytes XOR cancel |
+| 10 | RCX=1311768467463790320 | 18446744073709551600 | 18446744073709551600 | 18446744073709551600 | yes | 0x12345...EF0: n=1 sext(0xF0)*1=-16 -> 2^64-16 (DIFFERENT from unsigned 240) |
 
 ## Source
 

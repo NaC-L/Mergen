@@ -4541,6 +4541,27 @@
       ]
     },
     {
+      "name": "vm_signed_word_range64_loop",
+      "symbol": "vm_signed_word_range64_loop_target",
+      "patterns": [
+        "icmp slt",
+        "select",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "all zero -> mx=mn=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1 n=2: words [+1,0] -> 1-0" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,     "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,     "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 17730, "label": "0xCAFEBABE: n=3 mixed-sign words" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 16657, "label": "0xDEADBEEF: n=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,     "label": "all 0xFF: mx=mn=-1" },
+        { "inputs": { "RCX": 2147516415 },           "expected": 65535, "label": "0x80007FFF: n=1 single word=0x7FFF=32767 -> 0" },
+        { "inputs": { "RCX": 9223231301513871360 }, "expected": 0,     "label": "0x7FFF80007FFF8000: n=1 lower word=0x8000=-32768" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 0,     "label": "0x12345...EF0: n=1 single signed word" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],

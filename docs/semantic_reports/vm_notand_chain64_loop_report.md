@@ -1,14 +1,12 @@
 # vm_notand_chain64_loop - original vs lifted equivalence
 
-- **Verdict:** FAIL (10/10)
-- **Cases:** 0/10 equivalent
+- **Verdict:** PASS
+- **Cases:** 10/10 equivalent
 - **Source:** `testcases/rewrite_smoke/vm_notand_chain64_loop.c`
-- **Lifted IR:** _(missing)_
+- **Lifted IR:** `rewrite-regression-work/ir_outputs/vm_notand_chain64_loop.ll`
 - **Symbol:** `vm_notand_chain64_loop_target`
 - **Native driver:** `rewrite-regression-work/eq/vm_notand_chain64_loop_eq.exe`
-
-**Diagnostics:**
-- lifted IR missing: C:\Users\Yusuf\Desktop\mergenrewrite\rewrite-regression-work\ir_outputs\vm_notand_chain64_loop.ll
+- **Lifted signature:** `define i64 @main(i64 %RAX, i64 %RCX, i64 %RDX, i64 %RBX, i64 %RSP, i64 %RBP, i64 %RSI, i64 %RDI, i64 %R8, i64 %R9, i64 %R10, i64 %R11, i64 %R12, i64 %R13, i64 %R14, i64 %R15, ptr nocapture readnone %EIP, ptr nocapture readnone %memory, i128 %XMM0, i128 %XMM1, i128 %XMM2, i128 %XMM3, i128 %XMM4, i128 %XMM5, i128 %XMM6, i128 %XMM7, i128 %XMM8, i128 %XMM9, i128 %XMM10, i128 %XMM11, i128 %XMM12, i128 %XMM13, i128 %XMM14, i128 %XMM15) local_unnamed_addr #0`
 
 ## Equivalence (native vs lifted)
 
@@ -16,88 +14,16 @@ Each row runs the same inputs through (a) the original program compiled to a rea
 
 | # | Inputs | Manifest | Native | Lifted | Equivalent | Label |
 |---|--------|----------|--------|--------|------------|-------|
-| 1 | RCX=0 | 0 | 0 | — | **no** | x=0: r stays 0 (NOT AND 0 = 0; xor i<<3 keeps in low bits but r=0&0) |
-| 2 | RCX=1 | 9 | 9 | — | **no** | x=1 n=2: trace through 2 iters |
-| 3 | RCX=2 | 16 | 16 | — | **no** | x=2 n=3 |
-| 4 | RCX=7 | 63 | 63 | — | **no** | x=7 n=8: max trip |
-| 5 | RCX=8 | 0 | 0 | — | **no** | x=8 n=1: (~8)&8=0; xor 0=0 |
-| 6 | RCX=3405691582 | 56 | 56 | — | **no** | 0xCAFEBABE: n=7 |
-| 7 | RCX=3735928559 | 3735928575 | 3735928575 | — | **no** | 0xDEADBEEF: n=8 |
-| 8 | RCX=18446744073709551615 | 18446744073709551615 | 18446744073709551615 | — | **no** | all 0xFF: ~r is single-bit, AND with all-1 keeps it; eight xor i<<3 over [0..56] flips 8 bytes |
-| 9 | RCX=72623859790382856 | 0 | 0 | — | **no** | 0x0102...0708: n=1 single iter |
-| 10 | RCX=1311768467463790320 | 0 | 0 | — | **no** | 0x12345...EF0: n=1 single iter (~x)&x=0 |
-
-## Failure detail
-
-### case 1: x=0: r stays 0 (NOT AND 0 = 0; xor i<<3 keeps in low bits but r=0&0)
-
-- inputs: `RCX=0`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 2: x=1 n=2: trace through 2 iters
-
-- inputs: `RCX=1`
-- manifest expected: `9`
-- native: `9`
-- lifted: `—`
-
-### case 3: x=2 n=3
-
-- inputs: `RCX=2`
-- manifest expected: `16`
-- native: `16`
-- lifted: `—`
-
-### case 4: x=7 n=8: max trip
-
-- inputs: `RCX=7`
-- manifest expected: `63`
-- native: `63`
-- lifted: `—`
-
-### case 5: x=8 n=1: (~8)&8=0; xor 0=0
-
-- inputs: `RCX=8`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 6: 0xCAFEBABE: n=7
-
-- inputs: `RCX=3405691582`
-- manifest expected: `56`
-- native: `56`
-- lifted: `—`
-
-### case 7: 0xDEADBEEF: n=8
-
-- inputs: `RCX=3735928559`
-- manifest expected: `3735928575`
-- native: `3735928575`
-- lifted: `—`
-
-### case 8: all 0xFF: ~r is single-bit, AND with all-1 keeps it; eight xor i<<3 over [0..56] flips 8 bytes
-
-- inputs: `RCX=18446744073709551615`
-- manifest expected: `18446744073709551615`
-- native: `18446744073709551615`
-- lifted: `—`
-
-### case 9: 0x0102...0708: n=1 single iter
-
-- inputs: `RCX=72623859790382856`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
-
-### case 10: 0x12345...EF0: n=1 single iter (~x)&x=0
-
-- inputs: `RCX=1311768467463790320`
-- manifest expected: `0`
-- native: `0`
-- lifted: `—`
+| 1 | RCX=0 | 0 | 0 | 0 | yes | x=0: r stays 0 (NOT AND 0 = 0; xor i<<3 keeps in low bits but r=0&0) |
+| 2 | RCX=1 | 9 | 9 | 9 | yes | x=1 n=2: trace through 2 iters |
+| 3 | RCX=2 | 16 | 16 | 16 | yes | x=2 n=3 |
+| 4 | RCX=7 | 63 | 63 | 63 | yes | x=7 n=8: max trip |
+| 5 | RCX=8 | 0 | 0 | 0 | yes | x=8 n=1: (~8)&8=0; xor 0=0 |
+| 6 | RCX=3405691582 | 56 | 56 | 56 | yes | 0xCAFEBABE: n=7 |
+| 7 | RCX=3735928559 | 3735928575 | 3735928575 | 3735928575 | yes | 0xDEADBEEF: n=8 |
+| 8 | RCX=18446744073709551615 | 18446744073709551615 | 18446744073709551615 | 18446744073709551615 | yes | all 0xFF: ~r is single-bit, AND with all-1 keeps it; eight xor i<<3 over [0..56] flips 8 bytes |
+| 9 | RCX=72623859790382856 | 0 | 0 | 0 | yes | 0x0102...0708: n=1 single iter |
+| 10 | RCX=1311768467463790320 | 0 | 0 | 0 | yes | 0x12345...EF0: n=1 single iter (~x)&x=0 |
 
 ## Source
 
