@@ -854,6 +854,28 @@
       ]
     },
     {
+      "name": "vm_xordecrypt_loop",
+      "symbol": "vm_xordecrypt_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 255"] },
+        "xor i32",
+        "add",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 1112, "label": "key=0: sum of (buf[i] ^ i)" },
+        { "inputs": { "RCX": 1 },   "expected": 1096, "label": "key=1" },
+        { "inputs": { "RCX": 51 },  "expected": 1064, "label": "key=0x33" },
+        { "inputs": { "RCX": 85 },  "expected": 936,  "label": "key=0x55" },
+        { "inputs": { "RCX": 119 }, "expected": 920,  "label": "key=0x77" },
+        { "inputs": { "RCX": 127 }, "expected": 856,  "label": "key=0x7F" },
+        { "inputs": { "RCX": 170 }, "expected": 1112, "label": "key=0xAA" },
+        { "inputs": { "RCX": 192 }, "expected": 984,  "label": "key=0xC0" },
+        { "inputs": { "RCX": 255 }, "expected": 1112, "label": "key=0xFF" },
+        { "inputs": { "RCX": 256 }, "expected": 1112, "label": "key=0 again (mask drops bit 8)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
