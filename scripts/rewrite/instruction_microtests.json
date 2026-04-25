@@ -2584,6 +2584,26 @@
       ]
     },
     {
+      "name": "vm_decdigits64_loop",
+      "symbol": "vm_decdigits64_loop_target",
+      "patterns": [
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1,  "label": "x=0: special-case 1 digit" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,  "label": "x=1" },
+        { "inputs": { "RCX": 10 },                   "expected": 2,  "label": "x=10" },
+        { "inputs": { "RCX": 100 },                  "expected": 3,  "label": "x=100" },
+        { "inputs": { "RCX": 999 },                  "expected": 3,  "label": "x=999" },
+        { "inputs": { "RCX": 1000 },                 "expected": 4,  "label": "x=1000" },
+        { "inputs": { "RCX": 1000000000 },           "expected": 10, "label": "x=10^9" },
+        { "inputs": { "RCX": 51966 },                "expected": 5,  "label": "x=0xCAFE = 51966" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 20, "label": "max u64: 20 digits" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 20, "label": "K (golden), 20 digits" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
