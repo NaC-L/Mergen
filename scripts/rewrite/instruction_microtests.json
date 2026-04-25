@@ -3735,6 +3735,27 @@
       ]
     },
     {
+      "name": "vm_subxor_chain64_loop",
+      "symbol": "vm_subxor_chain64_loop_target",
+      "patterns": [
+        "sub",
+        "xor",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: r stays 0 (sub 0 xor 0)" },
+        { "inputs": { "RCX": 1 },                    "expected": 15,                   "label": "x=1 n=2: r=1; (1-1)^8=8; (8-1)^8=0xF" },
+        { "inputs": { "RCX": 2 },                    "expected": 12,                   "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 15,                   "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 64,                   "label": "x=8 n=1: r=(8-8)^64=64" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744044315466236, "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3803042551,            "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 7,                    "label": "all 0xFF: x<<3 has low bits clear, sub wraps" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 580990878323062848,   "label": "0x0102...0708: n=1 single iter" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 10494147739710322560, "label": "0x12345...EF0: n=1 single iter" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
