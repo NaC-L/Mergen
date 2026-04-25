@@ -2704,6 +2704,26 @@
       ]
     },
     {
+      "name": "vm_4state64_loop",
+      "symbol": "vm_4state64_loop_target",
+      "patterns": [
+        "add",
+        "phi"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 7581304714302077699,  "label": "x=0, n=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 15162609428604155393, "label": "x=1, n=2" },
+        { "inputs": { "RCX": 5 },                    "expected": 6135728040287875135,  "label": "x=5, n=6" },
+        { "inputs": { "RCX": 15 },                   "expected": 406151117814638971,   "label": "x=15, n=16 max" },
+        { "inputs": { "RCX": 255 },                  "expected": 406151117813620251,   "label": "x=0xFF, n=16" },
+        { "inputs": { "RCX": 51966 },                "expected": 12054802488707175559, "label": "0xCAFE, n=15" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 12054768846522478919, "label": "0xCAFEBABE, n=15" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 7263774620141486851,  "label": "0x123...DEF0, n=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18040592955894579739, "label": "max u64, n=16" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 18414027014724759455, "label": "K (golden), n=6" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
