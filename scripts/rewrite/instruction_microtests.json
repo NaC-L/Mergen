@@ -5449,6 +5449,26 @@
       ]
     },
     {
+      "name": "vm_word_uge_thresh_count64_loop",
+      "symbol": "vm_word_uge_thresh_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 n=1 word=0 < 0x8000" },
+        { "inputs": { "RCX": 1 },                    "expected": 0, "label": "x=1 n=2 [1,0]" },
+        { "inputs": { "RCX": 32768 },                "expected": 1, "label": "0x8000 n=1 word=0x8000 -> 1" },
+        { "inputs": { "RCX": 32767 },                "expected": 0, "label": "0x7FFF n=4 [0x7FFF,0,0,0]" },
+        { "inputs": { "RCX": 65535 },                "expected": 1, "label": "0xFFFF n=4 [0xFFFF,0,0,0]" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 2, "label": "0xCAFEBABE n=3 [0xBABE,0xCAFE,0] -> 2" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2, "label": "0xDEADBEEF n=4 [0xBEEF,0xDEAD,0,0] -> 2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4, "label": "all 0xFFFF n=4 all >= 0x8000" },
+        { "inputs": { "RCX": 9223512776490680319 },  "expected": 4, "label": "0x800080008000FFFF n=4 all >= 0x8000" },
+        { "inputs": { "RCX": 9223090566172999679 },  "expected": 1, "label": "0x7FFF0000FFFF7FFF n=4 only 0xFFFF qualifies" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
