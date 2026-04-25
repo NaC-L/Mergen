@@ -1964,6 +1964,26 @@
       ]
     },
     {
+      "name": "vm_vartrip_array_loop",
+      "symbol": "vm_vartrip_array_loop_target",
+      "patterns": [
+        "xor",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,         "label": "n=1, seed_hi=0" },
+        { "inputs": { "RCX": 1 },          "expected": 1,         "label": "n=2, seed_hi=0" },
+        { "inputs": { "RCX": 7 },          "expected": 28,        "label": "n=8, seed_hi=0: triangle" },
+        { "inputs": { "RCX": 15 },         "expected": 120,       "label": "0xF: n=16 max, seed_hi=0" },
+        { "inputs": { "RCX": 16 },         "expected": 0,         "label": "0x10: n=1, seed_hi=0" },
+        { "inputs": { "RCX": 255 },        "expected": 120,       "label": "0xFF: n=16, seed_hi=0" },
+        { "inputs": { "RCX": 256 },        "expected": 1,         "label": "0x100: n=1, seed_hi=1" },
+        { "inputs": { "RCX": 4660 },       "expected": 92,        "label": "0x1234: n=5, seed_hi=18" },
+        { "inputs": { "RCX": 51966 },      "expected": 2995,      "label": "0xCAFE: n=15, seed_hi=0xCA" },
+        { "inputs": { "RCX": 3405691582 }, "expected": 199552195, "label": "0xCAFEBABE: n=15, seed_hi=0xCAFEBA" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
