@@ -2445,6 +2445,26 @@
       ]
     },
     {
+      "name": "vm_satadd64_loop",
+      "symbol": "vm_satadd64_loop_target",
+      "patterns": [
+        "add",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1,                    "label": "x=0, inc=1, n=1: 0+1" },
+        { "inputs": { "RCX": 1 },                    "expected": 2,                    "label": "x=1, inc=1, n=2" },
+        { "inputs": { "RCX": 7 },                    "expected": 56,                   "label": "x=7, inc=7, n=8" },
+        { "inputs": { "RCX": 255 },                  "expected": 2040,                 "label": "x=0xFF, inc=0xFF, n=8" },
+        { "inputs": { "RCX": 9223372036854775809 },  "expected": 18446744073709551615, "label": "x=2^63+1, n=2: saturates iter2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 23839841081,          "label": "x=0xCAFEBABE: 7*0xCAFEBABF" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1311768467463790321, "label": "x=0x123...DEF0, n=1: single add" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "max u64: saturates iter2" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 18446744073709551615, "label": "K (golden, n=6): saturates" },
+        { "inputs": { "RCX": 9223372036854775807 },  "expected": 18446744073709551615, "label": "INT64_MAX, n=8: saturates" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
