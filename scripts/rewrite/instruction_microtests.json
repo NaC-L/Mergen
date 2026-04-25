@@ -3064,6 +3064,25 @@
       ]
     },
     {
+      "name": "vm_pextslow64_loop",
+      "symbol": "vm_pextslow64_loop_target",
+      "patterns": [
+        "and",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "x=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,          "label": "x=1: src bit 0 = 1, mask bit 0 = 0" },
+        { "inputs": { "RCX": 255 },                  "expected": 15,         "label": "x=0xFF: extract odd bits 1,3,5,7" },
+        { "inputs": { "RCX": 51966 },                "expected": 191,        "label": "x=0xCAFE" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 49151,      "label": "x=0xCAFEBABE" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 2696280958, "label": "0x123456789ABCDEF0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4294967295, "label": "max u64: extract 32 bits = 0xFFFFFFFF" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 3043943525, "label": "K (golden)" },
+        { "inputs": { "RCX": 12297829381654935552 }, "expected": 65535,      "label": "0xAAAAAAAA00000000: extract 16 bits" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
