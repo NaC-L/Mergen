@@ -536,6 +536,29 @@
       ]
     },
     {
+      "name": "vm_callret_loop",
+      "symbol": "vm_callret_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "add i32",
+        "br i1"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },   "expected": 0,   "label": "a1=0,a2=0: SUB(0)+SUB(0)" },
+        { "inputs": { "RCX": 1 },   "expected": 2,   "label": "a1=1,a2=0: SUB(1)+SUB(0)=2" },
+        { "inputs": { "RCX": 2 },   "expected": 6,   "label": "a1=2,a2=0: SUB(2)+SUB(0)=6" },
+        { "inputs": { "RCX": 3 },   "expected": 12,  "label": "a1=3,a2=0: SUB(3)+SUB(0)=12" },
+        { "inputs": { "RCX": 5 },   "expected": 30,  "label": "a1=5,a2=0: SUB(5)+SUB(0)=30" },
+        { "inputs": { "RCX": 7 },   "expected": 56,  "label": "a1=7,a2=0: SUB(7)+SUB(0)=56" },
+        { "inputs": { "RCX": 10 },  "expected": 8,   "label": "a1=2,a2=1: SUB(2)+SUB(1)=6+2=8" },
+        { "inputs": { "RCX": 15 },  "expected": 58,  "label": "a1=7,a2=1: SUB(7)+SUB(1)=56+2=58" },
+        { "inputs": { "RCX": 31 },  "expected": 68,  "label": "a1=7,a2=3: 56+12=68" },
+        { "inputs": { "RCX": 63 },  "expected": 112, "label": "a1=7,a2=7: 56+56=112" },
+        { "inputs": { "RCX": 255 }, "expected": 112, "label": "a1=7,a2=7 again (high bits ignored)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
