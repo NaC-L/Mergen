@@ -4148,6 +4148,26 @@
       ]
     },
     {
+      "name": "vm_data_ashr64_loop",
+      "symbol": "vm_data_ashr64_loop_target",
+      "patterns": [
+        "ashr",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1: r=0; (0 >> 0) + 0 = 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,                    "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,                    "label": "x=7 n=8: only byte0=7 contributes" },
+        { "inputs": { "RCX": 8 },                    "expected": 16,                   "label": "x=8 n=1: 8 ashr 0 + 8 = 16" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 52233,                "label": "0xCAFEBABE: n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 447,                  "label": "0xDEADBEEF: n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 257,                  "label": "all 0xFF: ashr fills 1s -> stable -1 + 0xFF, several iters" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 9223372036854775808,  "label": "x=2^63 n=1: ashr by 0=identity, +0=2^63" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 1311768467463790560, "label": "0x12345...EF0: n=1 byte=0xF0=240; ashr 0; +240" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
