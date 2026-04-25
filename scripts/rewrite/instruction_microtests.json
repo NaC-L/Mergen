@@ -899,6 +899,27 @@
       ]
     },
     {
+      "name": "vm_horner_signed_loop",
+      "symbol": "vm_horner_signed_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },  "expected": 4294967294, "label": "t=1: -2 unsigned" },
+        { "inputs": { "RCX": 1 },  "expected": 2,          "label": "t=2: 2" },
+        { "inputs": { "RCX": 2 },  "expected": 14,         "label": "t=3: 14" },
+        { "inputs": { "RCX": 3 },  "expected": 40,         "label": "t=4: 40" },
+        { "inputs": { "RCX": 4 },  "expected": 86,         "label": "t=5: 86" },
+        { "inputs": { "RCX": 5 },  "expected": 158,        "label": "t=6: 158" },
+        { "inputs": { "RCX": 6 },  "expected": 262,        "label": "t=7: 262" },
+        { "inputs": { "RCX": 7 },  "expected": 404,        "label": "t=8: 404" },
+        { "inputs": { "RCX": 8 },  "expected": 4294967294, "label": "t=1 again (mask drops bit 3)" },
+        { "inputs": { "RCX": 15 }, "expected": 404,        "label": "t=8 again after mask" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
