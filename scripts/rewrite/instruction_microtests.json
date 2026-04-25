@@ -2485,6 +2485,26 @@
       ]
     },
     {
+      "name": "vm_divcount64_loop",
+      "symbol": "vm_divcount64_loop_target",
+      "patterns": [
+        "udiv",
+        "icmp"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 63, "label": "x=0: ~x=max u64, div=2 -> 63 halvings" },
+        { "inputs": { "RCX": 1 },                    "expected": 40, "label": "x=1: div=3, log_3(max-1)" },
+        { "inputs": { "RCX": 2 },                    "expected": 31, "label": "x=2: div=4, log_4(max-2)" },
+        { "inputs": { "RCX": 255 },                  "expected": 7,  "label": "x=0xFF: div=257, log_257(max-255)" },
+        { "inputs": { "RCX": 51966 },                "expected": 7,  "label": "x=0xCAFE: div=256" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 8,  "label": "x=0xCAFEBABE: div=192" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 8,  "label": "x=0x123...DEF0: div=242" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,  "label": "max u64: ~x=0 < div, count=0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 13, "label": "x=K: div=23, log_23" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 8,  "label": "x=0xDEADBEEF: div=241" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
