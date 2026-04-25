@@ -5389,6 +5389,26 @@
       ]
     },
     {
+      "name": "vm_dword_eq_first_count64_loop",
+      "symbol": "vm_dword_eq_first_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1, "label": "x=0 n=1 first=0 -> 1" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2 first=1 dwords [1,0]" },
+        { "inputs": { "RCX": 4294967297 },           "expected": 2, "label": "0x0000000100000001 n=2 both=1" },
+        { "inputs": { "RCX": 14627333964952502273 }, "expected": 1, "label": "0xCAFEBABE00000001 n=2 first=1 only first matches" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 2, "label": "all 0xFFFFFFFF n=2 both match" },
+        { "inputs": { "RCX": 16045690981402826359 }, "expected": 1, "label": "0xDEADBEEF12345677 n=2 first=0x12345677 only first matches" },
+        { "inputs": { "RCX": 12973086870 },          "expected": 1, "label": "0x305419896 n=2 first=0x05419896 second=3 -> 1" },
+        { "inputs": { "RCX": 12379739850550389708 }, "expected": 1, "label": "0xABCDABCDABCDABCC n=1" },
+        { "inputs": { "RCX": 305397760 },            "expected": 1, "label": "0x12340000 n=1" },
+        { "inputs": { "RCX": 305419896 },            "expected": 1, "label": "0x12345678 n=1" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
