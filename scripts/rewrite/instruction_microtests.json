@@ -5064,6 +5064,27 @@
       ]
     },
     {
+      "name": "vm_addshl_dword64_loop",
+      "symbol": "vm_addshl_dword64_loop_target",
+      "patterns": [
+        "add",
+        "shl",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,           "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 4,           "label": "x=1 n=2: (0+1)<<1=2; (2+0)<<1=4" },
+        { "inputs": { "RCX": 2 },                    "expected": 4,           "label": "x=2 n=1: (0+2)<<1=4" },
+        { "inputs": { "RCX": 3 },                    "expected": 12,          "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 6811383164,  "label": "0xCAFEBABE: n=1 single iter" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 14943714236, "label": "0xDEADBEEF: n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 25769803770, "label": "all 0xFF n=2" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 168562192,   "label": "0x0102...0708: n=1" },
+        { "inputs": { "RCX": 18364758544493064720 }, "expected": 3970458656,  "label": "0xFEDCBA9876543210: n=1" },
+        { "inputs": { "RCX": 4294967297 },           "expected": 6,           "label": "0x100000001: n=2 (1+1)<<1+1)<<1=6 wait trace" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
