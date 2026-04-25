@@ -1843,6 +1843,26 @@
       ]
     },
     {
+      "name": "vm_short_array_loop",
+      "symbol": "vm_short_array_loop_target",
+      "patterns": [
+        "sext i16",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,      "label": "seed=0" },
+        { "inputs": { "RCX": 1 },     "expected": 36,     "label": "seed=1" },
+        { "inputs": { "RCX": 10 },    "expected": 360,    "label": "seed=10" },
+        { "inputs": { "RCX": 100 },   "expected": 3600,   "label": "seed=100" },
+        { "inputs": { "RCX": 1000 },  "expected": 36000,  "label": "seed=1000" },
+        { "inputs": { "RCX": 5000 },  "expected": 48928,  "label": "seed=5000: i16 wrap on i*7,i*8" },
+        { "inputs": { "RCX": 65535 }, "expected": 4294967260, "label": "0xFFFF: seed=-1 (-36 u32)" },
+        { "inputs": { "RCX": 65436 }, "expected": 4294963696, "label": "0xFF9C: seed=-100 (-3600 u32)" },
+        { "inputs": { "RCX": 51966 }, "expected": 4294937528, "label": "0xCAFE: seed=-13570 (-29768 u32, wraps)" },
+        { "inputs": { "RCX": 74565 }, "expected": 4294964660, "label": "0x12345: seed=0x2345 (-2636 u32)" }
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
