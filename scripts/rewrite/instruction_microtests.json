@@ -4369,6 +4369,45 @@
       ]
     },
     {
+      "name": "vm_subword_idx64_loop",
+      "symbol": "vm_subword_idx64_loop_target",
+      "patterns": [
+        "sub",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 18446744073709551615, "label": "x=1 n=2: -1*1+0=-1 in u64" },
+        { "inputs": { "RCX": 2 },                    "expected": 18446744073709551614, "label": "x=2 n=3: -2 in u64" },
+        { "inputs": { "RCX": 3 },                    "expected": 18446744073709551613, "label": "x=3 n=4: -3 in u64" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744073709399878, "label": "0xCAFEBABE n=3: -(BABE*1+CAFE*2+0*3) in u64" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744073709388727, "label": "0xDEADBEEF n=4: -(BEEF*1+DEAD*2+0+0) in u64" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073708896266, "label": "all 0xFFFF n=4: -0xFFFF*10 in u64" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 18446744073709551612, "label": "0x0001000200030004 n=1: -4 in u64" }
+      ]
+    },
+    {
+      "name": "vm_subdword_idx64_loop",
+      "symbol": "vm_subdword_idx64_loop_target",
+      "patterns": [
+        "sub",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 18446744073709551615, "label": "x=1 n=2: -1 in u64" },
+        { "inputs": { "RCX": 2 },                    "expected": 18446744073709551614, "label": "x=2 n=1: -2" },
+        { "inputs": { "RCX": 3 },                    "expected": 18446744073709551613, "label": "x=3 n=2: -3 in u64" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744070303860034, "label": "0xCAFEBABE n=1: -dword in u64" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744069973623057, "label": "0xDEADBEEF n=2: -DEADBEEF in u64" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744060824649731, "label": "all 0xFFFFFFFF n=2: -3*0xFFFFFFFF in u64" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 18446744063162239893, "label": "0xCAFEBABEDEADBEEF n=2: -(DEADBEEF*1 + CAFEBABE*2) in u64" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 18446744073709551611, "label": "0x100000003 n=2: -5 in u64" }
+      ]
+    },
+    {
       "name": "vm_bytediv5_sum64_loop",
       "symbol": "vm_bytediv5_sum64_loop_target",
       "patterns": [
