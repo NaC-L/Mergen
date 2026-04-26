@@ -3969,6 +3969,26 @@
       ]
     },
     {
+      "name": "vm_squaresub64_loop",
+      "symbol": "vm_squaresub64_loop_target",
+      "patterns": [
+        "mul",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1: r=0*0-0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                    "label": "x=1 n=2: 1-0=1; 1-1=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 223,                  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 6331956765633544285, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 64,                   "label": "x=8 n=1: r=64-0=64" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 13232713712165847059, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3796849151549898845, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 93,                   "label": "all 0xFF: n=8 squarings minus i sequence" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 11953125779633938688, "label": "0x12345...DEF0 n=1: r=x*x" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 6935571592141910020, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_xorrot64_loop",
       "symbol": "vm_xorrot64_loop_target",
       "patterns": [
