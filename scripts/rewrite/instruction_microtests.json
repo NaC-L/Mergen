@@ -4873,6 +4873,46 @@
       ]
     },
     {
+      "name": "vm_word_shl_data64_loop",
+      "symbol": "vm_word_shl_data64_loop_target",
+      "patterns": [
+        "shl",
+        "or",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                  "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                  "label": "x=1 n=2: word=1, shift=1, OR=0; iter2 word=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,                  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 0,                  "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3047626,           "label": "0xCAFEBABE n=3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1556702,           "label": "0xDEADBEEF n=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 8972288695173375,  "label": "all 0xFFFF n=4: shl by 15 each iter" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 0,                  "label": "0x0001000200030004 n=1: word=4 shl by 4=0, OR 0=0" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 417874014273738,    "label": "0xCAFEBABEDEADBEEF n=4: full word stride trip" }
+      ]
+    },
+    {
+      "name": "vm_dword_shl_data64_loop",
+      "symbol": "vm_dword_shl_data64_loop_target",
+      "patterns": [
+        "shl",
+        "or",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,               "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,               "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,               "label": "x=2 n=1: 0 shl 2 | (2>>16)=0" },
+        { "inputs": { "RCX": 3 },                    "expected": 0,               "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 51966,           "label": "0xCAFEBABE n=1: 0 shl 30 | (CAFEBABE>>16)=0xCAFE" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 57005,           "label": "0xDEADBEEF n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 140735340937215, "label": "all 0xFFFFFFFF n=2" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 61208652729086, "label": "0xCAFEBABEDEADBEEF n=2" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 0,               "label": "0x100000003 n=2" }
+      ]
+    },
+    {
       "name": "vm_data_lshr64_loop",
       "symbol": "vm_data_lshr64_loop_target",
       "patterns": [
