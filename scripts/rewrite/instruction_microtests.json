@@ -3405,6 +3405,42 @@
       ]
     },
     {
+      "name": "vm_altwordsum64_loop",
+      "symbol": "vm_altwordsum64_loop_target",
+      "patterns": [
+        "add",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: +1-0=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,                    "label": "all 0xFFFF n=4: +-+-FFFF cancel to 0" },
+        { "inputs": { "RCX": 4295098372 },           "expected": 4,                    "label": "0x100020004 n=1: word=0x4 -> +4" },
+        { "inputs": { "RCX": 4611738795522396163 }, "expected": 18446744073709543427, "label": "0x4000300020001003 n=4: +1003-2000+3000-4000=-8189" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744073709547456, "label": "0xCAFEBABE n=3: +BABE-CAFE+0=-4160" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744073709543490, "label": "0xDEADBEEF n=4: +BEEF-DEAD+0-0=-8126" },
+        { "inputs": { "RCX": 2814797012533261 },     "expected": 1,                    "label": "0x000A000B000C000D n=2: +D-C=1" }
+      ]
+    },
+    {
+      "name": "vm_altdwordsum64_loop",
+      "symbol": "vm_altdwordsum64_loop_target",
+      "patterns": [
+        "add",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1 n=2: +1-0=1" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,          "label": "all 0xFFFFFFFF n=2: +-FFFFFFFF cancel" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 2,          "label": "0x100000003 n=2: +3-1=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405691582, "label": "0xCAFEBABE n=1: +0xCAFEBABE" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928559, "label": "0xDEADBEEF n=2: +0xDEADBEEF-0" },
+        { "inputs": { "RCX": 18446744069414584319 }, "expected": 1,          "label": "0xFFFFFFFEFFFFFFFF n=2: +FFFFFFFF-FFFFFFFE=1" },
+        { "inputs": { "RCX": 4294967297 },           "expected": 0,          "label": "0x100000001 n=2: +1-1=0" }
+      ]
+    },
+    {
       "name": "vm_signedbytesum64_loop",
       "symbol": "vm_signedbytesum64_loop_target",
       "patterns": [
