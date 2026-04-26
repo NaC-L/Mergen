@@ -517,6 +517,48 @@
       ]
     },
     {
+      "name": "vm_lcg_word_loop",
+      "symbol": "vm_lcg_word_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 65535"] },
+        "phi i32",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 1,     "label": "n=0: state stays 1" },
+        { "inputs": { "RCX": 1 },     "expected": 9,     "label": "n=1, key=1: 9" },
+        { "inputs": { "RCX": 2 },     "expected": 55,    "label": "n=2, key=2" },
+        { "inputs": { "RCX": 5 },     "expected": 9373,  "label": "n=5, key=5" },
+        { "inputs": { "RCX": 7 },     "expected": 11291, "label": "n=7, key=7" },
+        { "inputs": { "RCX": 10 },    "expected": 19615, "label": "n=10, key=10" },
+        { "inputs": { "RCX": 15 },    "expected": 5251,  "label": "n=15, key=15" },
+        { "inputs": { "RCX": 51966 }, "expected": 4195,  "label": "0xCAFE: n=14, key=0xCAFE" },
+        { "inputs": { "RCX": 65535 }, "expected": 61011, "label": "0xFFFF: n=15, key=0xFFFF" }
+      ]
+    },
+    {
+      "name": "vm_lcg_dword_loop",
+      "symbol": "vm_lcg_dword_loop_target",
+      "patterns": [
+        { "line_all": ["and", ", 15"] },
+        "phi",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 1,          "label": "n=0: state stays 1" },
+        { "inputs": { "RCX": 1 },          "expected": 9,          "label": "n=1, key=1" },
+        { "inputs": { "RCX": 2 },          "expected": 55,         "label": "n=2, key=2" },
+        { "inputs": { "RCX": 5 },          "expected": 9373,       "label": "n=5, key=5" },
+        { "inputs": { "RCX": 7 },          "expected": 273435,     "label": "n=7, key=7" },
+        { "inputs": { "RCX": 10 },         "expected": 41503903,   "label": "n=10, key=10" },
+        { "inputs": { "RCX": 15 },         "expected": 342955139,  "label": "n=15, key=15" },
+        { "inputs": { "RCX": 3405691582 }, "expected": 873484771,  "label": "0xCAFEBABE: n=14, key=0xCAFEBABE" },
+        { "inputs": { "RCX": 4294967295 }, "expected": 2826694227, "label": "all 0xFFFFFFFF: n=15, key=full" }
+      ]
+    },
+    {
       "name": "vm_dispatch_table_loop",
       "symbol": "vm_dispatch_table_loop_target",
       "patterns": [
