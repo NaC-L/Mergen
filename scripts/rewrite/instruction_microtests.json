@@ -5733,6 +5733,26 @@
       ]
     },
     {
+      "name": "vm_lcg_ansi_chain_sub64_loop",
+      "symbol": "vm_lcg_ansi_chain_sub64_loop_target",
+      "patterns": [
+        "mul",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 18446744073709539271, "label": "x=0 n=1: 0*1103515245-12345 wraps to ~12344" },
+        { "inputs": { "RCX": 1 },                    "expected": 1217732273051698155,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 15476021518491144587, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 9987009112681171663,  "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8828109615,           "label": "x=8 n=1: 8*M - 12345" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 12897472376843656379, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1818048495218392759,  "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 8730816740810052039,  "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 3689348795830098935,  "label": "0x12345...DEF0 n=1" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 13163146543815636707, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_bytesq_idx_sum64_loop",
       "symbol": "vm_bytesq_idx_sum64_loop_target",
       "patterns": [
