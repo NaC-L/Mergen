@@ -4,29 +4,39 @@
 # Primary metric: number of VM-shaped samples in instruction_microtests.json.
 # A "VM-shaped" sample has "vm" (case-insensitive) in `name` and non-empty
 # `patterns` and `semantic` lists. This rewards fully-wired samples, not stubs.
+#
+# Implementation note: run_experiment's bash subshell on Windows often
+# does not expose python on PATH, so we go through powershell.exe (always
+# present in System32) which then resolves py.exe / python via Get-Command.
+# Stdout flushes through the powershell process pipe reliably.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Generate metrics via PowerShell: natively on PATH, no stdout plumbing issues
-# when run under bash on Windows.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "
-  \$ErrorActionPreference = 'Stop';
-  \$raw = Get-Content -Raw -LiteralPath 'scripts/rewrite/instruction_microtests.json';
-  \$data = \$raw | ConvertFrom-Json;
-  \$samples = @(\$data.samples);
-  \$vm = 0;
-  \$totalSem = 0;
-  foreach (\$s in \$samples) {
-    \$name = ''; if (\$s.name) { \$name = [string]\$s.name };
-    \$patterns = @(); if (\$s.patterns) { \$patterns = @(\$s.patterns) };
-    \$semantic = @(); if (\$s.semantic) { \$semantic = @(\$s.semantic) };
-    \$totalSem += \$semantic.Count;
-    if (\$name.ToLower().Contains('vm') -and \$patterns.Count -gt 0 -and \$semantic.Count -gt 0) {
-      \$vm += 1;
-    }
-  };
-  Write-Output (\"METRIC vm_sample_count=\$vm\");
-  Write-Output (\"METRIC total_semantic_cases=\$totalSem\");
-  Write-Output (\"METRIC manifest_samples=\$(\$samples.Count)\");
-"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command '
+$ErrorActionPreference = "Stop"
+$py = Get-Command py.exe -ErrorAction SilentlyContinue
+if (-not $py) { $py = Get-Command python.exe -ErrorAction SilentlyContinue }
+if (-not $py) { Write-Error "no python interpreter on PATH"; exit 127 }
+
+$code = @"
+import json
+from pathlib import Path
+with Path('"'"'scripts/rewrite/instruction_microtests.json'"'"').open('"'"'r'"'"', encoding='"'"'utf-8'"'"') as f:
+    data = json.load(f)
+samples = data.get('"'"'samples'"'"') or []
+vm = 0
+ts = 0
+for s in samples:
+    name = (s.get('"'"'name'"'"') or '"'"''"'"').lower()
+    patterns = s.get('"'"'patterns'"'"') or []
+    semantic = s.get('"'"'semantic'"'"') or []
+    ts += len(semantic)
+    if '"'"'vm'"'"' in name and patterns and semantic:
+        vm += 1
+print(f'"'"'METRIC vm_sample_count={vm}'"'"')
+print(f'"'"'METRIC total_semantic_cases={ts}'"'"')
+print(f'"'"'METRIC manifest_samples={len(samples)}'"'"')
+"@
+& $py.Source -c $code
+'
