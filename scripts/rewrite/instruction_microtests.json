@@ -4573,6 +4573,46 @@
       ]
     },
     {
+      "name": "vm_dynshl_accum_word64_loop",
+      "symbol": "vm_dynshl_accum_word64_loop_target",
+      "patterns": [
+        "shl",
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,               "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 12,              "label": "x=1 n=2: (1<<1)+1=3; (3<<2)+0=12" },
+        { "inputs": { "RCX": 2 },                    "expected": 192,             "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 4608,            "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 217966206768,    "label": "0xCAFEBABE n=3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3825623167104,   "label": "0xDEADBEEF n=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 43055471,        "label": "all 0xFFFF n=4: cumulative left shift wraps mod 2^64" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 562967133683724, "label": "0x0001000200030004 n=1: (x<<1)+4" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 0,               "label": "x=2^63 n=1: (2^63<<1)+0 wraps to 0" }
+      ]
+    },
+    {
+      "name": "vm_dynshl_accum_dword64_loop",
+      "symbol": "vm_dynshl_accum_dword64_loop_target",
+      "patterns": [
+        "shl",
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,           "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 12,          "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 6,           "label": "x=2 n=1: (2<<1)+2=6" },
+        { "inputs": { "RCX": 3 },                    "expected": 36,          "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 10217074746, "label": "0xCAFEBABE n=1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 44831142708, "label": "0xDEADBEEF n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 21474836467, "label": "all 0xFFFFFFFF n=2: cumulative shift wraps mod 2^64" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 34359738405, "label": "0x100000003 n=2" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 0,           "label": "x=2^63 n=1: (2^63<<1)+0 wraps to 0" }
+      ]
+    },
+    {
       "name": "vm_dynlshr_accum_byte64_loop",
       "symbol": "vm_dynlshr_accum_byte64_loop_target",
       "patterns": [
@@ -4593,6 +4633,44 @@
       ]
     },
     {
+      "name": "vm_dynlshr_accum_word64_loop",
+      "symbol": "vm_dynlshr_accum_word64_loop_target",
+      "patterns": [
+        "lshr",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                   "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,                   "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 0,                   "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 53208672,            "label": "0xCAFEBABE n=3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3648141,             "label": "0xDEADBEEF n=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18014398509420159, "label": "all 0xFFFF n=4" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 140741783420934, "label": "0x0001000200030004 n=1: (x>>1)^4" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 4611686018427387904, "label": "x=2^63 n=1: (2^63>>1)^0=2^62" }
+      ]
+    },
+    {
+      "name": "vm_dynlshr_accum_dword64_loop",
+      "symbol": "vm_dynlshr_accum_dword64_loop_target",
+      "patterns": [
+        "lshr",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                   "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,                   "label": "x=2 n=1: (2>>1)^2=1^2=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 0,                   "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 2944526305,          "label": "0xCAFEBABE n=1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 746510438,           "label": "0xDEADBEEF n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 2305843005992468479, "label": "all 0xFFFFFFFF n=2" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 536870913,           "label": "0x100000003 n=2" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 4611686018427387904, "label": "x=2^63 n=1: (2^63>>1)^0=2^62" }
+      ]
+    },
+    {
       "name": "vm_dynashr_accum_byte64_loop",
       "symbol": "vm_dynashr_accum_byte64_loop_target",
       "patterns": [
@@ -4610,6 +4688,44 @@
         { "inputs": { "RCX": 18446744073709551615 }, "expected": 256,                  "label": "all 0xFF: ashr fills 1s -> r=-1 each iter; final +0xFF*8 wraps via -1+sums" },
         { "inputs": { "RCX": 9223372036854775808 }, "expected": 13835058055282163712, "label": "x=2^63 n=1: ashr 2^63>>1=0xC000... + 0=2^63+2^62" },
         { "inputs": { "RCX": 1311768467463790320 },  "expected": 655884233731895400, "label": "0x12345...EF0: n=1 single iter" }
+      ]
+    },
+    {
+      "name": "vm_dynashr_accum_word64_loop",
+      "symbol": "vm_dynashr_accum_word64_loop_target",
+      "patterns": [
+        "ashr",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                   "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,                   "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 0,                   "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 53221920,            "label": "0xCAFEBABE n=3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3648908,             "label": "0xDEADBEEF n=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 70270,               "label": "all 0xFFFF n=4: ashr keeps -1 each iter then add 0xFFFF*4" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 140741783420934, "label": "0x0001000200030004 n=1: (sashr x>>1)+4" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 13835058055282163712, "label": "x=2^63 n=1: sign-extend ashr -> 0xC000.. +0" }
+      ]
+    },
+    {
+      "name": "vm_dynashr_accum_dword64_loop",
+      "symbol": "vm_dynashr_accum_dword64_loop_target",
+      "patterns": [
+        "ashr",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,                   "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,                   "label": "x=2 n=1: (sashr 2>>1)+2=1+2=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 1,                   "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 5108537373,          "label": "0xCAFEBABE n=1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1400973209,          "label": "0xDEADBEEF n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 5368709118,          "label": "all 0xFFFFFFFF n=2" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 536870914,           "label": "0x100000003 n=2" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 13835058055282163712, "label": "x=2^63 n=1: sign-extend ashr -> 0xC000.. +0" }
       ]
     },
     {
