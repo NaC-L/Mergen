@@ -4316,6 +4316,27 @@
       ]
     },
     {
+      "name": "vm_xormulsub_chain64_loop",
+      "symbol": "vm_xormulsub_chain64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0: zero stays" },
+        { "inputs": { "RCX": 1 },                    "expected": 281488499309160,     "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 680622842442507924,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 14393948667431624240, "label": "x=7 n=8" },
+        { "inputs": { "RCX": 8 },                    "expected": 134220944,            "label": "x=8 n=1: (0^8)*prime - 8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 15149149219582766932, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 9673520481741879600,  "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 17699818267589480144, "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 16781176650284978296, "label": "K (golden)" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 1065811879526798560,  "label": "0x12345...DEF0 n=1" }
+      ]
+    },
+    {
       "name": "vm_subxor_chain64_loop",
       "symbol": "vm_subxor_chain64_loop_target",
       "patterns": [
