@@ -4072,6 +4072,27 @@
       ]
     },
     {
+      "name": "vm_murmurstep_lshl64_loop",
+      "symbol": "vm_murmurstep_lshl64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1: 0 mix collapses to 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 4854431496051140388,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 14689272252082285330, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 6187451061031696368,  "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 10624339631800274088, "label": "x=8 n=1: single mix-with-shl47-fold" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 10395362338828159134, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1394755592567316656,  "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 7474548289056949200,  "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 3214484131207852464,  "label": "0x12345...DEF0 n=1" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 10760818396291961028, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_pairmix64_loop",
       "symbol": "vm_pairmix64_loop_target",
       "patterns": [
