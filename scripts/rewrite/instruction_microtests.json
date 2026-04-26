@@ -3989,6 +3989,27 @@
       ]
     },
     {
+      "name": "vm_xorrot_substep64_loop",
+      "symbol": "vm_xorrot_substep64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1: r=0^0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 11400714819323198485, "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 2035086067082907511,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 15910081545060595888, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,                    "label": "x=8 n=1: single iter" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 764997134395779667,   "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 16146526750586190704, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 15153632643935687824, "label": "all 0xFF: n=8 LCG sub-steps" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 1311768467463790320, "label": "0x12345...DEF0 n=1: r=x" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 2025866388925146605, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_murmurstep64_loop",
       "symbol": "vm_murmurstep64_loop_target",
       "patterns": [
