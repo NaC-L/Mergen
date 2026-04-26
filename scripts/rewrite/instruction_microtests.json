@@ -3480,6 +3480,40 @@
       ]
     },
     {
+      "name": "vm_wordmax64_loop",
+      "symbol": "vm_wordmax64_loop_target",
+      "patterns": [
+        "llvm.umax.i64"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1 n=2: max(1,0)=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,     "label": "x=2 n=3: max(2,0,0)=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,     "label": "x=3 n=4: max(3,0,0,0)=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 51966, "label": "0xCAFEBABE n=3: words BABE,CAFE,0 -> 0xCAFE=51966" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 57005, "label": "0xDEADBEEF n=4: words BEEF,DEAD,0,0 -> 0xDEAD=57005" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 65535, "label": "all 0xFFFF n=4: 0xFFFF" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 57072, "label": "0x123456789ABCDEF0 n=1: word=0xDEF0=57072" }
+      ]
+    },
+    {
+      "name": "vm_dwordmax64_loop",
+      "symbol": "vm_dwordmax64_loop_target",
+      "patterns": [
+        "llvm.umax.i64"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1 n=2: max(1,0)=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,          "label": "x=2 n=1: dword=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,          "label": "x=3 n=2: max(3,0)=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405691582, "label": "0xCAFEBABE n=1: dword=0xCAFEBABE" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928559, "label": "0xDEADBEEF n=2: max(DEADBEEF,0)" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4294967295, "label": "all 0xFFFFFFFF n=2" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 2596069104, "label": "0x123456789ABCDEF0 n=1: dword=0x9ABCDEF0=2596069104" }
+      ]
+    },
+    {
       "name": "vm_byterange64_loop",
       "symbol": "vm_byterange64_loop_target",
       "patterns": [
