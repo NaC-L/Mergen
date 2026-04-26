@@ -140,6 +140,72 @@
       }
     },
     {
+      "name": "shrx_rax_rcx_rdx_preserves_flags",
+      "handler": "shr",
+      "instruction_bytes": [196, 226, 235, 247, 193],
+      "initial": {
+        "registers": {
+          "RCX": "0xf0f0f0f0f0f0f0f0",
+          "RDX": "0x4",
+          "RAX": "0xaaaaaaaaaaaaaaaa"
+        },
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 1,
+          "FLAG_AF": 1
+        }
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 1,
+          "FLAG_AF": 1
+        }
+      }
+    },
+    {
+      "name": "shlx_rax_rcx_rdx_preserves_flags",
+      "handler": "shl",
+      "instruction_bytes": [196, 226, 233, 247, 193],
+      "initial": {
+        "registers": {
+          "RCX": "0x0f0f0f0f0f0f0f0f",
+          "RDX": "0x4",
+          "RAX": "0xaaaaaaaaaaaaaaaa"
+        },
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 1,
+          "FLAG_AF": 1
+        }
+      },
+      "expected": {
+        "registers": {
+          "RAX": null
+        },
+        "flags": {
+          "FLAG_CF": 1,
+          "FLAG_OF": 0,
+          "FLAG_ZF": 1,
+          "FLAG_SF": 0,
+          "FLAG_PF": 1,
+          "FLAG_AF": 1
+        }
+      }
+    },
+    {
       "name": "loop_rcx_two_taken",
       "handler": "loopx",
       "instruction_bytes": [226, 16],

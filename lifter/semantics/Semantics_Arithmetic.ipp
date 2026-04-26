@@ -463,10 +463,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_sar() {
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shr() {
 
-  auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
-  auto count = 1 + (instruction.mnemonic == Mnemonic::SARX);
+  const bool isThreeOperandShift = instruction.mnemonic == Mnemonic::SARX ||
+                                  instruction.mnemonic == Mnemonic::SHRX;
+  auto source = 0 + isThreeOperandShift;
+  auto count = 1 + isThreeOperandShift;
 
-  Value* Lvalue = GetIndexValue(dest);
+  Value* Lvalue = GetIndexValue(source);
   Value* countValue = GetIndexValue(count);
   countValue = createZExtFolder(countValue, Lvalue->getType());
 
@@ -539,9 +541,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_shl() {
 
   printvalue2(finished);
 
-  auto dest = 0 + (instruction.mnemonic == Mnemonic::SARX);
-  auto count = 1 + (instruction.mnemonic == Mnemonic::SARX);
-  Value* Lvalue = GetIndexValue(dest);
+  const bool isThreeOperandShift = instruction.mnemonic == Mnemonic::SHLX;
+  auto source = 0 + isThreeOperandShift;
+  auto count = 1 + isThreeOperandShift;
+  Value* Lvalue = GetIndexValue(source);
   Value* countValue = GetIndexValue(count);
   countValue = createZExtFolder(countValue, Lvalue->getType());
 
