@@ -2567,6 +2567,44 @@
       ]
     },
     {
+      "name": "vm_wswap64_loop",
+      "symbol": "vm_wswap64_loop_target",
+      "patterns": [
+        "shl",
+        "or",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                   "label": "x=1 n=2: identity" },
+        { "inputs": { "RCX": 2 },                    "expected": 562949953421312,    "label": "x=2 n=3 (odd): one wswap -> 0x2 << 48" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,                   "label": "x=7 n=8 (even): identity" },
+        { "inputs": { "RCX": 8 },                    "expected": 2251799813685248,   "label": "x=8 n=1 (odd): wswap once" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 16064510004525797940,"label": "0x123456789ABCDEF0 n=1: word-swap once" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 14627333968688430831,"label": "0xCAFEBABEDEADBEEF n=8 (even): identity" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615,"label": "all 0xFFFF n=8: wswap fixed point" }
+      ]
+    },
+    {
+      "name": "vm_dswap64_loop",
+      "symbol": "vm_dswap64_loop_target",
+      "patterns": [
+        "shl",
+        "or",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                   "label": "x=1 n=2: identity (dswap twice)" },
+        { "inputs": { "RCX": 2 },                    "expected": 8589934592,         "label": "x=2 n=3 (odd): dswap once -> 2 << 32" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,                   "label": "x=7 n=8 (even): identity" },
+        { "inputs": { "RCX": 8 },                    "expected": 34359738368,        "label": "x=8 n=1 (odd): dswap once -> 8 << 32" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 11150031900141442680,"label": "0x123456789ABCDEF0 n=1: dwords swapped" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 14627333968688430831,"label": "0xCAFEBABEDEADBEEF n=8 (even): identity" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615,"label": "all 0xFFFFFFFF: dswap fixed point" }
+      ]
+    },
+    {
       "name": "vm_cttz64_loop",
       "symbol": "vm_cttz64_loop_target",
       "patterns": [
