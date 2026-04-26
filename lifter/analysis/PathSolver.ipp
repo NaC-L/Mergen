@@ -74,6 +74,15 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       }
     }
   }
+  // NOTE: deep simplification is invoked LATER as a fallback (only when the
+  // standard resolution chain — ConstantInt check, getConstraintVal,
+  // computePossibleValues — has failed). Running it here unconditionally
+  // would change the SSA value the path solver hands to downstream code
+  // even for trivially-resolvable jumps, breaking determinism for the
+  // golden IR baseline. The Denuvo dispatcher cases that motivated this
+  // helper only need the simplification when nothing else can resolve the
+  // target.
+
   auto normalizeTargetAddress = [&](uint64_t target) -> uint64_t {
     return normalizeRuntimeTargetAddress(target);
   };
@@ -246,6 +255,35 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
   run = 0;
   auto pvset = computePossibleValues(simplifyValue);
   std::vector<APInt> pv(pvset.begin(), pvset.end());
+
+  // Fallback: if standard enumeration came up empty, try cancelling out
+  // the def-chain (Denuvo wraps targets in `(x ⊕ k) + (-(x ⊕ k) + n)`-
+  // style noise that requires distributing the negation through the inner
+  // sum to fold). The deep simplifier emits canonical IR via the lifter's
+  // builder, so a successful cancellation gives us a clean Value that the
+  // ConstantInt fast path / computePossibleValues can re-resolve.
+  if (pv.empty() && simplifyValue) {
+    const llvm::DataLayout& DL = fnc->getParent()->getDataLayout();
+    Value* simpler =
+        ::deepSimplifyValue(simplifyValue, builder.get(), DL);
+    if (simpler && simpler != simplifyValue) {
+      simplifyValue = simpler;
+      if (auto* CI = dyn_cast<ConstantInt>(simplifyValue)) {
+        dest = normalizeTargetAddress(CI->getZExtValue());
+        result = PATH_solved;
+        auto resolved = resolveTargetBlock(dest, "bb_simplified_const");
+        builder->CreateBr(resolved.block);
+        if (!resolved.reusedBackedge) {
+          blockInfo = BBInfo(dest, resolved.block);
+          backupQueuedTarget(blockInfo.block, resolved.generalizedBackup);
+          unvisitedBlocks.push_back(blockInfo);
+        }
+        return result;
+      }
+      pvset = computePossibleValues(simplifyValue);
+      pv.assign(pvset.begin(), pvset.end());
+    }
+  }
   if (shouldTraceHotPathSolve()) {
     std::cout << "[diag] solvePath site=0x" << std::hex << pathSolveSite
               << std::dec << " pv_count=" << pvset.size();
@@ -445,6 +483,14 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       }
     }
 
+    // Both targets resolved into a real CondBr; record success so the
+    // caller does not warn "Unresolved indirect jump" on a fully-lifted
+    // two-way branch. Without this, the function fell through to the
+    // initial PATH_unsolved and `lift_jmp`/`lift_ret` flagged the site as
+    // unresolved even though the IR contained the correct cond branch.
+    dest = firstTarget;
+    result = PATH_solved;
+
     debugging::doIfDebug([&]() {
       std::string Filename = "output_newpath.ll";
       std::error_code EC;
@@ -452,6 +498,8 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       function->getParent()->print(OS, nullptr);
       std::cout << "created a new path\n" << std::flush;
     });
+
+    return result;
   }
 
   if (pv.size() > 2) {
