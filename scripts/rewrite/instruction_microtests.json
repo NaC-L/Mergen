@@ -3951,6 +3951,45 @@
       ]
     },
     {
+      "name": "vm_wordsmul_idx64_loop",
+      "symbol": "vm_wordsmul_idx64_loop_target",
+      "patterns": [
+        "sext",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: sext(1)*1+sext(0)*2=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,                    "label": "x=2 n=3: sext(2)*1=2; rest 0" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,                    "label": "x=3 n=4: sext(3)*1; rest 0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744073709506746, "label": "0xCAFEBABE n=3: sext(BABE)*1+sext(CAFE)*2+0*3 (negative)" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744073709517897, "label": "0xDEADBEEF n=4: sext negative" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551606, "label": "all 0xFFFF n=4: sext(-1)*(1+2+3+4)=-10 -> 2^64-10" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 18446744073709543152, "label": "0x123456789ABCDEF0 n=1: sext(0xDEF0)*1=-8464 -> 2^64-8464" }
+      ]
+    },
+    {
+      "name": "vm_dwordsmul_idx64_loop",
+      "symbol": "vm_dwordsmul_idx64_loop_target",
+      "patterns": [
+        "sext",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: sext(1)*1+0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,                    "label": "x=2 n=1: sext(2)*1=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,                    "label": "x=3 n=2: sext(3)*1+0=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744072820275902, "label": "0xCAFEBABE n=1: sext(0xCAFEBABE)*1 = -889275714" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744073150512879, "label": "0xDEADBEEF n=2: sext(DEADBEEF)*1 + 0 = -559038737" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551613, "label": "all 0xFFFFFFFF n=2: sext(-1)*(1+2)=-3" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 18446744071371961451, "label": "0xCAFEBABEDEADBEEF n=2: sext(DEADBEEF)*1 + sext(CAFEBABE)*2" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 5,                    "label": "0x100000003 n=2: sext(3)*1+sext(1)*2=5" }
+      ]
+    },
+    {
       "name": "vm_notand_chain64_loop",
       "symbol": "vm_notand_chain64_loop_target",
       "patterns": [
@@ -4050,6 +4089,45 @@
         { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,                    "label": "all 0xFF: 8 sext(-1)*counters - high-bit fold cancels" },
         { "inputs": { "RCX": 9259542125412876287 },  "expected": 0,                    "label": "0x80808080FFFFFFFF: 8 mixed signed bytes XOR cancel" },
         { "inputs": { "RCX": 1311768467463790320 },  "expected": 18446744073709551600, "label": "0x12345...EF0: n=1 sext(0xF0)*1=-16 -> 2^64-16 (DIFFERENT from unsigned 240)" }
+      ]
+    },
+    {
+      "name": "vm_signedxor_word_idx64_loop",
+      "symbol": "vm_signedxor_word_idx64_loop_target",
+      "patterns": [
+        "sext",
+        "mul",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: sext(1)*1 ^ 0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,                    "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,                    "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 12098,                "label": "0xCAFEBABE n=3: sext words XORed with counter scale" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 949,                  "label": "0xDEADBEEF n=4: sext words XORed" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,                    "label": "all 0xFFFF n=4: sext(-1)*counter XOR cancels" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 18446744073709543152, "label": "0x123456789ABCDEF0 n=1: sext(0xDEF0)*1=-8464 -> 2^64-8464" }
+      ]
+    },
+    {
+      "name": "vm_signedxor_dword_idx64_loop",
+      "symbol": "vm_signedxor_dword_idx64_loop_target",
+      "patterns": [
+        "sext",
+        "mul",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: sext(1)*1 ^ 0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,                    "label": "x=2 n=1: sext(2)*1=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,                    "label": "x=3 n=2: 3 ^ 0=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744072820275902, "label": "0xCAFEBABE n=1: sext(0xCAFEBABE)*1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744073150512879, "label": "0xDEADBEEF n=2: sext(DEADBEEF)*1 ^ 0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1,                    "label": "all 0xFFFFFFFF n=2: sext(-1)*1 ^ sext(-1)*2 = -1 ^ -2 = 1" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 1263586195,           "label": "0xCAFEBABEDEADBEEF n=2: sext(DEADBEEF)*1 ^ sext(CAFEBABE)*2" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 1,                    "label": "0x100000003 n=2: sext(3)*1 ^ sext(1)*2 = 3 ^ 2 = 1" }
       ]
     },
     {
