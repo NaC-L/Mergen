@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 407 vm-shaped samples (run #62, commit 22e583e)
-- why it won: 122 cumulative new samples across 62 logged runs in this segment. Six sibling-op pairs closed: satsub<>satadd, borrowchain<>carrychain, xormulsub<>xormuladd_chain, addxor<>subxor_chain, notor<>notand_chain, andxor_pair<>orxor_pair. The lever is sibling-op pair completion.
+- metric: 408 vm-shaped samples (run #63, commit e363ea2)
+- why it won: 123 cumulative new samples across 63 logged runs in this segment. Seven sibling-op pairs closed: satsub<>satadd, borrowchain<>carrychain, xormulsub<>xormuladd_chain, addxor<>subxor_chain, notor<>notand_chain, andxor_pair<>orxor_pair, pairmix_sub<>pairmix.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
