@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 356 vm-shaped samples (run #34, commit b412e8c)
-- why it won: 71 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions extend the *_idx64 family (lane*counter ADD/SUB/AND/OR/XOR + sext-i16/i32 ADD/XOR) to u16/u32 stride, the dyn{shl,lshr,ashr}_accum trio to u16/u32 stride, mod3/div5/shl3_xor reducers to u16/u32 stride, and self-referential xormul + counter-squared scaled add to u16/u32 stride. Pattern: read the existing byte-stride sample, mirror its dispatcher exactly, swap mask/n_mask/lane width, regenerate semantic vectors with python, validate before commit.
+- metric: 357 vm-shaped samples (run #35, commit 06fc5d3)
+- why it won: 72 cumulative new samples in this segment, all width-symmetric completions of in-tree families. The signed-range family was the last sample to surface a real gap: vm_signed_word_range and vm_signed_dword_range existed but the byte sibling under the canonical 4-state dispatcher shape was missing (and the existing vm_signed_byterange64 sample uses the 7-state shape; both are valid distinct tests). Earlier segment work covered: predicate-gated reducer ult variants; gt_thresh / ne_first / nonzero / increase / bit_pos count; or/xor fold at byte; add/sub/xormul chain at byte; alt sum at word/dword; max/min/clamp const-sum at word/dword; addshl chain at byte and word; max/prod/sq_sum at word and dword; mod3/div5/shl3_xor at word and dword; counter-driven dyn{shl,lshr,ashr}_accum at word and dword; lane*counter and/or/xor/sub/sext at word and dword; self-referential xormul at word and dword; counter-squared scale at word and dword.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
