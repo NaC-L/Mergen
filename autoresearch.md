@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 422 vm-shaped samples (run #77, commit 52c628b)
-- why it won: 137 cumulative new samples across 77 logged runs in this segment. Twenty sibling-op pairs closed plus djb2a now spans byte/word/dword strides (paralleling djb2's existing coverage); latest two runs added djb2a_word and djb2a_dword on the xor<>add combine pair lever.
+- metric: 423 vm-shaped samples (run #78, commit b447811)
+- why it won: 138 cumulative new samples across 78 logged runs in this segment. Twenty-one sibling-op pairs closed; latest: xxhmix_mulxor<>xxhmix64 (mul-then-xor vs xor-then-mul with xxhash PRIME64_3, parallel to the fnv1<>fnv1a op-order pair lever).
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
