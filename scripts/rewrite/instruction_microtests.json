@@ -4823,6 +4823,45 @@
       ]
     },
     {
+      "name": "vm_wordsq_idx_sum64_loop",
+      "symbol": "vm_wordsq_idx_sum64_loop_target",
+      "patterns": [
+        "mul",
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,       "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,       "label": "x=1 n=2: 1*1*1+0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,       "label": "x=2 n=3: 2*1*1" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,       "label": "x=3 n=4: 3*1*1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 255670,  "label": "0xCAFEBABE n=3: BABE*1+CAFE*4+0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 276899,  "label": "0xDEADBEEF n=4: BEEF*1+DEAD*4+0+0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1966050, "label": "all 0xFFFF n=4: 0xFFFF*(1+4+9+16)=0xFFFF*30" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 4,       "label": "0x0001000200030004 n=1: 4*1=4" }
+      ]
+    },
+    {
+      "name": "vm_dwordsq_idx_sum64_loop",
+      "symbol": "vm_dwordsq_idx_sum64_loop_target",
+      "patterns": [
+        "mul",
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,           "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,           "label": "x=1 n=2: 1*1+0" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,           "label": "x=2 n=1: 2*1" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,           "label": "x=3 n=2: 3*1+0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405691582,  "label": "0xCAFEBABE n=1: dword*1=dword" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928559,  "label": "0xDEADBEEF n=2: DEADBEEF*1+0*4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 21474836475, "label": "all 0xFFFFFFFF n=2: 0xFFFFFFFF*(1+4)=5*0xFFFFFFFF" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 17358694887, "label": "0xCAFEBABEDEADBEEF n=2: DEADBEEF*1 + CAFEBABE*4" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 7,           "label": "0x100000003 n=2: 3*1 + 1*4=7" }
+      ]
+    },
+    {
       "name": "vm_dynshl_accum_byte64_loop",
       "symbol": "vm_dynshl_accum_byte64_loop_target",
       "patterns": [
