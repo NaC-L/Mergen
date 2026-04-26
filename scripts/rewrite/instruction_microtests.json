@@ -4377,6 +4377,47 @@
       ]
     },
     {
+      "name": "vm_dyn_ashr_word64_loop",
+      "symbol": "vm_dyn_ashr_word64_loop_target",
+      "patterns": [
+        "ashr",
+        "xor",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1 n=2: 1 ^ 0 = 1" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,     "label": "x=2 n=3: 2 ^ 1 ^ 0 = 3" },
+        { "inputs": { "RCX": 7 },                    "expected": 5,     "label": "x=7 n=8: 7^3^1^0... = 5" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,     "label": "x=8 n=1: word0 of x = 8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 31373, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 57953, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,     "label": "all 0xFF: ashr fills 1s; 8 xor of 0xFFFF cancel to 0" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 0,     "label": "x=2^63 n=1: word0=0" }
+      ]
+    },
+    {
+      "name": "vm_dyn_ashr_dword64_loop",
+      "symbol": "vm_dyn_ashr_dword64_loop_target",
+      "patterns": [
+        "ashr",
+        "xor",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,          "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 5,          "label": "x=7 n=8" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,          "label": "x=8 n=1: dword0 of x = 8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 2377284237, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2489180769, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,          "label": "all 0xFF: ashr -1 stays -1; 8 XOR of 0xFFFFFFFF cancel" },
+        { "inputs": { "RCX": 9223372036854775808 }, "expected": 0,          "label": "x=2^63 n=1: dword0=0" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 1079894625, "label": "0xCAFEBABEDEADBEEF n=8" }
+      ]
+    },
+    {
       "name": "vm_bytesmul_idx64_loop",
       "symbol": "vm_bytesmul_idx64_loop_target",
       "patterns": [
