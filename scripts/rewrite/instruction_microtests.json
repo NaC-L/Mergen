@@ -5351,6 +5351,42 @@
       ]
     },
     {
+      "name": "vm_word_increase_count64_loop",
+      "symbol": "vm_word_increase_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 n=1: word0=0 not > prev=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0, "label": "x=1 n=2: words [1,0] - none > prev" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE n=3: BABE,CAFE,0 - one inc (BABE->CAFE)" },
+        { "inputs": { "RCX": 4295163906 },           "expected": 1, "label": "0x000100030002 n=3: 0002,0003,0001 - one inc (0002->0003)" },
+        { "inputs": { "RCX": 4611738795522396163 }, "expected": 3, "label": "0x4000300020001003 n=4: 1003,2000,3000,4000 strictly inc 3 times" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFFFF n=4: all equal" },
+        { "inputs": { "RCX": 4222189076152335 },     "expected": 0, "label": "0x000F000F000F000F n=4: all equal" },
+        { "inputs": { "RCX": 9224621096559591425 }, "expected": 1, "label": "0x8004700360024001 n=2: [4001,6002] one inc" }
+      ]
+    },
+    {
+      "name": "vm_dword_increase_count64_loop",
+      "symbol": "vm_dword_increase_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 n=1: dword0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0, "label": "x=1 n=2: [1,0] - 0 not > 1" },
+        { "inputs": { "RCX": 8589934593 },           "expected": 1, "label": "0x200000001 n=2: [1,2] strict inc" },
+        { "inputs": { "RCX": 4611686018964258817 }, "expected": 1, "label": "0x4000000020000001 n=2: [20000001,40000000] inc" },
+        { "inputs": { "RCX": 18446744069414584321 }, "expected": 1, "label": "0xFFFFFFFF00000001 n=2: [1,FFFFFFFF] big inc" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFFFFFFFF n=2: equal" },
+        { "inputs": { "RCX": 4294967296 },           "expected": 0, "label": "0x100000000 n=1: single dword=0" },
+        { "inputs": { "RCX": 4294967297 },           "expected": 0, "label": "0x100000001 n=2: [1,1] equal" }
+      ]
+    },
+    {
       "name": "vm_word_lt_thresh_count64_loop",
       "symbol": "vm_word_lt_thresh_count64_loop_target",
       "patterns": [
