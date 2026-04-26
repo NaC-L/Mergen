@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 389 vm-shaped samples (run #49, commit 1a67e6a)
-- why it won: 104 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions: LCG mixed-recurrence at u16/u32 mask. Marginal value tapering - each new keep adds 2 samples while the easy width-mirroring lever consumed in earlier runs added 6-9 each. Remaining single-stride samples are increasingly tied to byte-specific design choices (input-derived multipliers, byte-walking shifts, byte-tuned modular constants) and cannot be mirrored without redesigning the test.
+- metric: 390 vm-shaped samples (run #50, commit 49f0629) - 50-run / 105-sample segment mark
+- why it won: 105 cumulative new samples across 50 logged runs in this segment, all width-symmetric completions of in-tree byte-stride samples. Latest addition: vm_pair_xormul_word64_loop (2 u16 words per iter, 1..2 trip count). The dword variant of pair_xormul is not viable (only 1 trip fits) so the family stops at byte+word. Easy width-mirror lever consumed: per-run gain has dropped from 6-9 in early segment to 1-2 most recent runs, and remaining single-stride samples are tied to byte-specific design choices (input-derived multipliers, byte-walking shifts, byte-tuned modular constants) that cannot be mirrored without redesigning the test.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
