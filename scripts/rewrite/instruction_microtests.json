@@ -5147,6 +5147,26 @@
       ]
     },
     {
+      "name": "vm_byte_ne_first_count64_loop",
+      "symbol": "vm_byte_ne_first_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 n=1 byte0=first cnt=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2 [1,0] only byte1 differs" },
+        { "inputs": { "RCX": 2 },                    "expected": 2, "label": "x=2 n=3 [2,0,0] bytes 1,2 differ" },
+        { "inputs": { "RCX": 7 },                    "expected": 7, "label": "x=7 n=8 only byte0=7 matches" },
+        { "inputs": { "RCX": 8 },                    "expected": 0, "label": "x=8 n=1 trivially 0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 6, "label": "0xCAFEBABE n=7 first=0xBE rest differ" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 7, "label": "0xDEADBEEF n=8 first=0xEF rest differ" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFF n=8 every byte matches" },
+        { "inputs": { "RCX": 72623859790382856 },    "expected": 0, "label": "0x0102...0708 n=1 trivially 0" },
+        { "inputs": { "RCX": 12297829382473034410 }, "expected": 0, "label": "0xAAAA...AAAA n=3 all 0xAA" }
+      ]
+    },
+    {
       "name": "vm_byte_lt_thresh_count64_loop",
       "symbol": "vm_byte_lt_thresh_count64_loop_target",
       "patterns": [
@@ -6183,6 +6203,7 @@
     {
       "name": "switch_3way",
       "symbol": "switch_3way_target",
+      "case_index_required": true,
       "patterns": ["switch i32 %", "i32 1, label", "i32 2, label", "i32 3, label", "phi i64", "[ 100,", "[ 200,", "[ 300,", "[ 999,"],
       "semantic": [
         { "inputs": { "RCX": 1 },   "expected": 100, "label": "case 1" },
@@ -6211,6 +6232,7 @@
     {
       "name": "switch_sparse",
       "symbol": "switch_sparse_target",
+      "case_index_required": true,
       "patterns": ["switch i32 %", "i32 10, label", "i32 50, label", "i32 200, label", "i32 1000, label", "phi i64", "[ 11,", "[ 55,", "[ 222,", "[ 1337,", "[ 4294967295,"],
       "semantic": [
         { "inputs": { "RCX": 10 },   "expected": 11,         "label": "case 10" },
@@ -6236,6 +6258,7 @@
     {
       "name": "jumptable_basic",
       "symbol": "jumptable_basic_target",
+      "case_index_required": true,
       "patterns": [
         "switch i64 %RCX",
         "i64 0, label",
@@ -6261,6 +6284,7 @@
     {
       "name": "jumptable_dense",
       "symbol": "jumptable_dense_target",
+      "case_index_required": true,
       "patterns": [
         "switch i64 %RCX",
         "i64 0, label",
@@ -6293,6 +6317,7 @@
     {
       "name": "calc_jumptable",
       "symbol": "calc_jumptable",
+      "case_index_required": true,
       "patterns": [
         { "line_all": ["icmp ult i32", ", 10"] },
         "trunc i64 %RCX to i32",
@@ -6319,6 +6344,7 @@
     {
       "name": "jumptable_rel32",
       "symbol": "jumptable_rel32_target",
+      "case_index_required": true,
       "patterns": [
         { "line_all": ["icmp ult i32", ", 5"] },
         "switch i64 %RCX",
@@ -6414,6 +6440,7 @@
     {
       "name": "calc_jumptable_large",
       "symbol": "calc_jumptable_large",
+      "case_index_required": true,
       "patterns": [
         "and i64 %RCX, 15",
         "switch i64 %sw_input",

@@ -61,6 +61,10 @@ function Get-ValidatedRewriteManifestSamples {
             throw "Manifest sample '$($sample.name)' has invalid skip value '$($sample.skip)' (must be true or false)"
         }
 
+        if ($sample.PSObject.Properties['case_index_required'] -and ($sample.case_index_required -isnot [bool])) {
+            throw "Manifest sample '$($sample.name)' has invalid case_index_required value '$($sample.case_index_required)' (must be true or false)"
+        }
+
         if ($RequireSymbol -and (-not $sample.PSObject.Properties['symbol'] -or -not ($sample.symbol -is [string]) -or [string]::IsNullOrWhiteSpace($sample.symbol))) {
             throw "Manifest sample '$($sample.name)' has invalid symbol '$($sample.symbol)' (must be a non-empty string)"
         }

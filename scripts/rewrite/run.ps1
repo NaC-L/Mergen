@@ -62,9 +62,12 @@ if ($extra.Count -gt 0) {
 $irDir = Join-Path $WorkDir 'ir_outputs'
 New-Item -ItemType Directory -Path $irDir -Force | Out-Null
 Get-ChildItem -Path $irDir -Filter '*.ll' -File -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem -Path $irDir -Filter '*.diag.json' -File -ErrorAction SilentlyContinue | Remove-Item -Force
 
 $outputLl = Join-Path $repoRoot 'output.ll'
 $outputNoOptsLl = Join-Path $repoRoot 'output_no_opts.ll'
+$outputDiag = Join-Path $repoRoot 'output_diagnostics.json'
+$diagCheckScript = Join-Path $PSScriptRoot 'check_diagnostics.py'
 
 Push-Location $repoRoot
 try {
@@ -110,6 +113,7 @@ try {
 
         Remove-Item $outputLl -Force -ErrorAction SilentlyContinue
         Remove-Item $outputNoOptsLl -Force -ErrorAction SilentlyContinue
+        Remove-Item $outputDiag -Force -ErrorAction SilentlyContinue
 
         Write-Host "Lifting $binaryPath @ $targetAddress"
         & $LifterPath $binaryPath $targetAddress
@@ -123,6 +127,16 @@ try {
 
         Copy-Item $outputLl (Join-Path $irDir "$($sample.name).ll") -Force
         Copy-Item $outputNoOptsLl (Join-Path $irDir "$($sample.name)_no_opts.ll") -Force
+        if (Test-Path $outputDiag) {
+            $diagCopy = Join-Path $irDir "$($sample.name).diag.json"
+            Copy-Item $outputDiag $diagCopy -Force
+            & python $diagCheckScript $diagCopy
+            if ($LASTEXITCODE -ne 0) {
+                throw "Diagnostics shape check failed for $($sample.name)"
+            }
+        } else {
+            throw "Lifter did not emit output_diagnostics.json for '$($sample.name)'"
+        }
     }
 }
 finally {
