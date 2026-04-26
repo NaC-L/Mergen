@@ -4235,6 +4235,42 @@
       ]
     },
     {
+      "name": "vm_worddiv5_sum64_loop",
+      "symbol": "vm_worddiv5_sum64_loop_target",
+      "patterns": [
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,     "label": "x=1 n=2: 1/5=0; 0/5=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,     "label": "x=2 n=3: 2/5=0" },
+        { "inputs": { "RCX": 3 },                    "expected": 0,     "label": "x=3 n=4: 3/5=0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 19954, "label": "0xCAFEBABE n=3: BABE/5+CAFE/5+0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 21176, "label": "0xDEADBEEF n=4: BEEF/5+DEAD/5+0+0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 52428, "label": "all 0xFFFF n=4: 4 * 13107" },
+        { "inputs": { "RCX": 562962838650887 },      "expected": 2,     "label": "0x0002000300050007 n=4: 7/5+5/5+3/5+2/5=1+1+0+0=2" }
+      ]
+    },
+    {
+      "name": "vm_dworddiv5_sum64_loop",
+      "symbol": "vm_dworddiv5_sum64_loop_target",
+      "patterns": [
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 0,          "label": "x=1 n=2: 1/5=0; 0/5=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,          "label": "x=2 n=1: 2/5=0" },
+        { "inputs": { "RCX": 3 },                    "expected": 0,          "label": "x=3 n=2: 3/5=0; 0/5=0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 681138316,  "label": "0xCAFEBABE n=1: dword/5" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 747185711,  "label": "0xDEADBEEF n=2: DEADBEEF/5+0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1717986918, "label": "all 0xFFFFFFFF n=2: 2 * 858993459" },
+        { "inputs": { "RCX": 8589934597 },           "expected": 1,          "label": "0x200000005 n=2: 5/5+2/5=1+0=1" }
+      ]
+    },
+    {
       "name": "vm_bytemod3_sum64_loop",
       "symbol": "vm_bytemod3_sum64_loop_target",
       "patterns": [
@@ -4252,6 +4288,42 @@
         { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFF n=8: 255%3=0 (255=85*3) so 0" },
         { "inputs": { "RCX": 72623859790382856 },    "expected": 2, "label": "0x0102...0708: n=1 byte0=8 -> 2" },
         { "inputs": { "RCX": 1311768467463790320 },  "expected": 0, "label": "0x12345...EF0: n=1 byte0=240 -> 240%3=0" }
+      ]
+    },
+    {
+      "name": "vm_wordmod3_sum64_loop",
+      "symbol": "vm_wordmod3_sum64_loop_target",
+      "patterns": [
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2: 1%3+0%3=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2, "label": "x=2 n=3: 2%3=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 0, "label": "x=3 n=4: 3%3=0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE n=3: BABE%3 + CAFE%3 + 0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2, "label": "0xDEADBEEF n=4: BEEF%3 + DEAD%3 + 0 + 0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFFFF n=4: 0xFFFF=21845*3 -> 0" },
+        { "inputs": { "RCX": 562962838650887 },      "expected": 5, "label": "0x0002000300050007 n=4: 7%3+5%3+3%3+2%3=1+2+0+2=5" }
+      ]
+    },
+    {
+      "name": "vm_dwordmod3_sum64_loop",
+      "symbol": "vm_dwordmod3_sum64_loop_target",
+      "patterns": [
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2: 1%3+0%3=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2, "label": "x=2 n=1: 2%3=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 0, "label": "x=3 n=2: 3%3+0%3=0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE n=1: dword%3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2, "label": "0xDEADBEEF n=2: DEADBEEF%3 + 0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFFFFFFFF n=2: 0xFFFFFFFF=1431655765*3 -> 0" },
+        { "inputs": { "RCX": 8589934597 },           "expected": 4, "label": "0x200000005 n=2: 5%3+2%3=2+2=4" }
       ]
     },
     {
