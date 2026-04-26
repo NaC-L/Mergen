@@ -6084,6 +6084,132 @@
       ]
     },
     {
+      "name": "vm_byte_and_ult_thresh64_loop",
+      "symbol": "vm_byte_and_ult_thresh64_loop_target",
+      "patterns": ["icmp", "and"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 0, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 0, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 255, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 255, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 0, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
+      "name": "vm_byte_or_ult_thresh64_loop",
+      "symbol": "vm_byte_or_ult_thresh64_loop_target",
+      "patterns": ["icmp", "or"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 1, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 0, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 0, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 0, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 0, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
+      "name": "vm_byte_xor_ult_thresh64_loop",
+      "symbol": "vm_byte_xor_ult_thresh64_loop_target",
+      "patterns": ["icmp", "xor"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 1, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 0, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 0, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 0, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 0, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
+      "name": "vm_word_and_ult_thresh64_loop",
+      "symbol": "vm_word_and_ult_thresh64_loop_target",
+      "patterns": ["icmp", "and"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 0, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 0, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 65535, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 65535, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 65535, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
+      "name": "vm_word_or_ult_thresh64_loop",
+      "symbol": "vm_word_or_ult_thresh64_loop_target",
+      "patterns": ["icmp", "or"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 1, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 0, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 0, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 0, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 0, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
+      "name": "vm_word_xor_ult_thresh64_loop",
+      "symbol": "vm_word_xor_ult_thresh64_loop_target",
+      "patterns": ["icmp", "xor"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 1, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 0, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 0, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 0, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 0, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
+      "name": "vm_dword_and_ult_thresh64_loop",
+      "symbol": "vm_dword_and_ult_thresh64_loop_target",
+      "patterns": ["icmp", "and"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 0, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 4294967295, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 4294967295, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 4294967295, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 4294967295, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
+      "name": "vm_dword_or_ult_thresh64_loop",
+      "symbol": "vm_dword_or_ult_thresh64_loop_target",
+      "patterns": ["icmp", "or"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 1, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 0, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 0, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 0, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 0, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
+      "name": "vm_dword_xor_ult_thresh64_loop",
+      "symbol": "vm_dword_xor_ult_thresh64_loop_target",
+      "patterns": ["icmp", "xor"],
+      "semantic": [
+        {"inputs": {"RCX": 0}, "expected": 0, "label": "x=0 baseline"},
+        {"inputs": {"RCX": 1}, "expected": 1, "label": "x=1 minimal n"},
+        {"inputs": {"RCX": 3405691582}, "expected": 0, "label": "0xCAFEBABE mixed lanes"},
+        {"inputs": {"RCX": 3735928559}, "expected": 0, "label": "0xDEADBEEF mixed lanes"},
+        {"inputs": {"RCX": 18446744073709551615}, "expected": 0, "label": "all-ones"},
+        {"inputs": {"RCX": 9259542123273814144}, "expected": 0, "label": "0x8080... high-bit lanes"},
+        {"inputs": {"RCX": 9223512776490680319}, "expected": 0, "label": "0x800080008000FFFF mixed"}
+      ]
+    },
+    {
       "name": "bitchain",
       "symbol": "bitchain_target",
       "patterns": ["ret i64 4090"],
