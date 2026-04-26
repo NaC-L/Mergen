@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 413 vm-shaped samples (run #68, commit 71f71e7)
-- why it won: 128 cumulative new samples across 68 logged runs in this segment. Twelve sibling-op pairs closed: satsub<>satadd, borrowchain<>carrychain, xormulsub<>xormuladd_chain, addxor<>subxor_chain, notor<>notand_chain, andxor_pair<>orxor_pair, pairmix_sub<>pairmix, threestate_xormul_sub<>threestate_xormul, lfsr64_galois<>lfsr64, zigzag_substep<>zigzag_step, lcg_ansi_chain_sub<>lcg_ansi_chain, xorrot_substep<>xorrot.
+- metric: 414 vm-shaped samples (run #69, commit 3b00204)
+- why it won: 129 cumulative new samples across 69 logged runs in this segment. Thirteen sibling-op pairs closed: satsub<>satadd, borrowchain<>carrychain, xormulsub<>xormuladd_chain, addxor<>subxor_chain, notor<>notand_chain, andxor_pair<>orxor_pair, pairmix_sub<>pairmix, threestate_xormul_sub<>threestate_xormul, lfsr64_galois<>lfsr64, zigzag_substep<>zigzag_step, lcg_ansi_chain_sub<>lcg_ansi_chain, xorrot_substep<>xorrot, squaresub<>squareadd.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
