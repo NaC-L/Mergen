@@ -4056,6 +4056,45 @@
       ]
     },
     {
+      "name": "vm_wordsq_sum64_loop",
+      "symbol": "vm_wordsq_sum64_loop_target",
+      "patterns": [
+        "add",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,           "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,           "label": "x=1 n=2: 1*1+0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 4,           "label": "x=2 n=3: 2*2+0+0=4" },
+        { "inputs": { "RCX": 3 },                    "expected": 9,           "label": "x=3 n=4: 3*3+0+0+0=9" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 4985878792,  "label": "0xCAFEBABE n=3: BABE^2 + CAFE^2 + 0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 5638726666,  "label": "0xDEADBEEF n=4: BEEF^2 + DEAD^2 + 0 + 0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 17179344900, "label": "all 0xFFFF n=4: 4*0xFFFE0001" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 3257213184,  "label": "0x123456789ABCDEF0 n=1: word=0xDEF0 squared" }
+      ]
+    },
+    {
+      "name": "vm_dwordsq_sum64_loop",
+      "symbol": "vm_dwordsq_sum64_loop_target",
+      "patterns": [
+        "add",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,                    "label": "x=1 n=2: 1*1+0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 4,                    "label": "x=2 n=1: 2*2=4" },
+        { "inputs": { "RCX": 3 },                    "expected": 9,                    "label": "x=3 n=2: 3*3+0=9" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 11598735151705662724, "label": "0xCAFEBABE n=1: dword^2 mod 2^64" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 13957162197951816481, "label": "0xDEADBEEF n=2: DEADBEEF^2 + 0 mod 2^64" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744056529682434, "label": "all 0xFFFFFFFF n=2: 2*0xFFFFFFFE00000001 mod 2^64" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 10,                   "label": "0x100000003 n=2: 9+1=10" },
+        { "inputs": { "RCX": 1311768467463790320 },  "expected": 6739574792743362816,  "label": "0x123456789ABCDEF0 n=1: dword^2 mod 2^64" }
+      ]
+    },
+    {
       "name": "vm_byteprod64_loop",
       "symbol": "vm_byteprod64_loop_target",
       "patterns": [
