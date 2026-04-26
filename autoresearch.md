@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 424 vm-shaped samples (run #79, commit b68e779)
-- why it won: 139 cumulative new samples across 79 logged runs in this segment. Twenty-one sibling-op pairs closed; latest: extending fnv1<>fnv1a op-order pair from byte to word lane (vm_fnv1_word64_loop pairs with vm_fnv1a_word64_loop).
+- metric: 425 vm-shaped samples (run #80, commit 9f539d4)
+- why it won: 140 cumulative new samples across 80 logged runs in this segment. FNV-1 now spans byte/word/dword strides paralleling FNV-1a coverage; latest run added vm_fnv1_dword64_loop completing the op-order pair lever at u32 stride.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
