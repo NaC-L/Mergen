@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 399 vm-shaped samples (run #55, commit e321441)
-- why it won: 114 cumulative new samples across 55 logged runs in this segment, all width-symmetric completions of in-tree byte-stride samples. Latest additions: prefix-XOR scan family (word/dword); explicit-shift wswap/dswap variable-trip family; Horner polynomial with parametric multiplier (word/dword); dyn_ashr lane-window XOR fold (word/dword).
+- metric: 401 vm-shaped samples (run #56, commit c18a6f9) - 400-sample mark
+- why it won: 116 cumulative new samples across 56 logged runs in this segment, all width-symmetric completions of in-tree byte-stride samples. Latest additions: prefix-XOR scan family (word/dword); explicit-shift wswap/dswap variable-trip family; Horner polynomial with parametric multiplier (word/dword); dyn_ashr lane-window XOR fold (word/dword); dynshl_pack with wider chunks (nibble, byte).
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
