@@ -5692,6 +5692,28 @@
       ]
     },
     {
+      "name": "vm_pair_xormul_word64_loop",
+      "symbol": "vm_pair_xormul_word64_loop_target",
+      "patterns": [
+        "xor",
+        "add",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1 n=2: pair (1,0)+(0,0); 1*1=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 4,          "label": "x=2 n=1: pair (2,0); 2*2=4" },
+        { "inputs": { "RCX": 3 },                    "expected": 9,          "label": "x=3 n=2: pair (3,0)+(0,0); 3*3=9" },
+        { "inputs": { "RCX": 65537 },                "expected": 0,          "label": "0x10001 n=2: pair (1,1) -> 0; pair (0,0) -> 0" },
+        { "inputs": { "RCX": 65538 },                "expected": 9,          "label": "0x10002 n=1: pair (2,1) -> 3*3=9" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 2867048192, "label": "0xCAFEBABE n=1: pair (0xBABE,0xCAFE)" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2609193528, "label": "0xDEADBEEF n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,          "label": "all 0xFFFF n=2: each pair (FFFF,FFFF) -> 0^0=0" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 5476241720, "label": "0xCAFEBABEDEADBEEF n=2" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 10,         "label": "0x100000003 n=2: pair (3,0)+(1,0); 9+1=10" }
+      ]
+    },
+    {
       "name": "vm_quad_byte_xor64_loop",
       "symbol": "vm_quad_byte_xor64_loop_target",
       "patterns": [
