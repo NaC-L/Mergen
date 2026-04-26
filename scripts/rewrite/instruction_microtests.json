@@ -862,6 +862,27 @@
       ]
     },
     {
+      "name": "vm_borrowchain_loop",
+      "symbol": "vm_borrowchain_loop_target",
+      "patterns": [
+        "xor",
+        "and",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },     "expected": 0,   "label": "a=0 b=0: 0-0" },
+        { "inputs": { "RCX": 1 },     "expected": 1,   "label": "a=1 b=0: 1-0=1" },
+        { "inputs": { "RCX": 256 },   "expected": 511, "label": "a=0 b=1: -1 = 0xFF, borrow set" },
+        { "inputs": { "RCX": 65535 }, "expected": 0,   "label": "a=0xFF b=0xFF: 0" },
+        { "inputs": { "RCX": 65280 }, "expected": 257, "label": "a=0 b=0xFF: -0xFF mod 256 = 1, borrow" },
+        { "inputs": { "RCX": 255 },   "expected": 255, "label": "a=0xFF b=0: 0xFF" },
+        { "inputs": { "RCX": 43605 }, "expected": 427, "label": "a=0x55 b=0xAA: 0xAB + borrow" },
+        { "inputs": { "RCX": 21930 }, "expected": 85,  "label": "a=0xAA b=0x55: 0x55" },
+        { "inputs": { "RCX": 33023 }, "expected": 127, "label": "a=0xFF b=0x80: 0x7F" },
+        { "inputs": { "RCX": 32640 }, "expected": 1,   "label": "a=0x80 b=0x7F: 0x01" }
+      ]
+    },
+    {
       "name": "vm_prefix_sum_loop",
       "symbol": "vm_prefix_sum_loop_target",
       "patterns": [
