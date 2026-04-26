@@ -4622,6 +4622,25 @@
       ]
     },
     {
+      "name": "vm_notor_chain64_loop",
+      "symbol": "vm_notor_chain64_loop_target",
+      "patterns": [
+        "xor",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 18446744073709551615, "label": "x=0 n=1: (~0)|0=~0; xor 0=~0" },
+        { "inputs": { "RCX": 1 },                    "expected": 9,                    "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 18446744073709551591, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,                   "label": "x=7 n=8: chain converges to 7" },
+        { "inputs": { "RCX": 8 },                    "expected": 18446744073709551615, "label": "x=8 n=1: (~8)|8=~0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744073709551567, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928519,          "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551559, "label": "all 0xFF: (~r)|x = ~0 each iter; xor i<<3 over [0..56] flips 8 bytes" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 18446744073709551615, "label": "0x12345...DEF0 n=1: (~x)|x=~0" }
+      ]
+    },
+    {
       "name": "vm_xormul_byte_idx64_loop",
       "symbol": "vm_xormul_byte_idx64_loop_target",
       "patterns": [
