@@ -455,6 +455,44 @@
       ]
     },
     {
+      "name": "vm_xor_accumulator_word_loop",
+      "symbol": "vm_xor_accumulator_word_loop_target",
+      "patterns": [
+        "mul",
+        "xor",
+        "phi"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,      "label": "key=0: zero accumulator" },
+        { "inputs": { "RCX": 1 },          "expected": 0,      "label": "key=1: 0^1^2^3=0" },
+        { "inputs": { "RCX": 65535 },      "expected": 262140, "label": "key=0xFFFF: 0^FFFF^1FFFE^2FFFD" },
+        { "inputs": { "RCX": 51966 },      "expected": 212984, "label": "key=0xCAFE" },
+        { "inputs": { "RCX": 3405691582 }, "expected": 262136, "label": "0xCAFEBABE: low word=0xBABE" },
+        { "inputs": { "RCX": 3735928559 }, "expected": 262140, "label": "0xDEADBEEF: low word=0xBEEF" },
+        { "inputs": { "RCX": 4294967295 }, "expected": 262140, "label": "all 0xFFFF: max key" },
+        { "inputs": { "RCX": 74565 },      "expected": 3072,   "label": "0x12345 -> low word=0x2345" }
+      ]
+    },
+    {
+      "name": "vm_xor_accumulator_dword_loop",
+      "symbol": "vm_xor_accumulator_dword_loop_target",
+      "patterns": [
+        "mul",
+        "xor",
+        "phi"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,          "label": "key=0: 0" },
+        { "inputs": { "RCX": 1 },          "expected": 1,          "label": "key=1: 0^0^1=1" },
+        { "inputs": { "RCX": 4294967295 }, "expected": 4294967295, "label": "all 0xFFFFFFFF: 0^0^FFFFFFFF=FFFFFFFF" },
+        { "inputs": { "RCX": 3405691582 }, "expected": 3405691582, "label": "0xCAFEBABE" },
+        { "inputs": { "RCX": 3735928559 }, "expected": 3735928559, "label": "0xDEADBEEF" },
+        { "inputs": { "RCX": 305419896 },  "expected": 305419896,  "label": "0x12345678" },
+        { "inputs": { "RCX": 2147483648 }, "expected": 2147483648, "label": "0x80000000" },
+        { "inputs": { "RCX": 1073741824 }, "expected": 1073741824, "label": "0x40000000" }
+      ]
+    },
+    {
       "name": "vm_lcg_loop",
       "symbol": "vm_lcg_loop_target",
       "patterns": [
