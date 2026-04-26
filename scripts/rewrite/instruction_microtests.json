@@ -4010,6 +4010,27 @@
       ]
     },
     {
+      "name": "vm_pairmix_sub64_loop",
+      "symbol": "vm_pairmix_sub64_loop_target",
+      "patterns": [
+        "sub",
+        "mul",
+        "xor"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 7046029254386353130,  "label": "x=0 n=1: a=0,b=~0; t=0-~0=1; a=~0*GR; b=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 1817028319279642026,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 11362887753252956168, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 11913773509238572638, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 8074031068348523346,  "label": "x=8 n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 8137016154548470966,  "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 9630019104238032567,  "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 8113686601436685260,  "label": "all 0xFF: a=~0 b=0 swapped init" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 13611749708834214306, "label": "0x12345...DEF0 n=1" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 14000534976346667473, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_fnv1a64_loop",
       "symbol": "vm_fnv1a64_loop_target",
       "patterns": [
