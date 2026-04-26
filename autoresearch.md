@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 373 vm-shaped samples (run #42, commit 1302710)
-- why it won: 88 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions: mul-by-3 Horner chain at u16/u32 stride; shiftin-top shift-register at u16/u32 stride; rev_window pack at u16/u32 stride. Earlier in this turn: murmur, xxhmix, fnv1a, djb2 hash chains and fixed-trip xor-fold (xorwords/xordwords) at u16/u32. Pattern: read the existing byte-stride sample, mirror its dispatcher, swap mask/n_mask/lane width, regenerate semantic vectors with python, validate before commit.
+- metric: 379 vm-shaped samples (run #44, commit 69cc2e7)
+- why it won: 94 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions: data-dependent shift trio (shl/lshr/ashr) at u16/u32 with 4-bit/5-bit shift amount masks; mul-by-3 Horner; shiftin-top shift-register; rev_window pack; murmur/xxhmix/fnv1a/djb2 hash chains; fixed-trip xor-fold (xorwords/xordwords). Pattern: read the existing byte-stride sample, mirror its dispatcher, swap mask/n_mask/lane width / shift-amount mask, regenerate semantic vectors with python, validate before commit.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
