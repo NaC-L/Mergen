@@ -6026,6 +6026,45 @@
       ]
     },
     {
+      "name": "vm_murmur_word_chain64_loop",
+      "symbol": "vm_murmur_word_chain64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1923352212695860590,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 1513464907819907388,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 4552591187845332896,  "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 9814602545336110135,  "label": "0xCAFEBABE n=3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 2184557697838912454,  "label": "0xDEADBEEF n=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4292959285021797243,  "label": "all 0xFFFF n=4" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 1914766847002514289,  "label": "0x0001000200030004 n=1: single mix on word=4" }
+      ]
+    },
+    {
+      "name": "vm_murmur_dword_chain64_loop",
+      "symbol": "vm_murmur_dword_chain64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1923352212695860590,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 10180755460355967416, "label": "x=2 n=1: single mix on dword=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 8579761664830348054,  "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 11141391636772596650, "label": "0xCAFEBABE n=1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 15753022096187961489, "label": "0xDEADBEEF n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1134242655461862301,  "label": "all 0xFFFFFFFF n=2" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 10176776332867076762, "label": "0xCAFEBABEDEADBEEF n=2" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 4446767358153631141,  "label": "0x100000003 n=2" }
+      ]
+    },
+    {
       "name": "vm_byte_eq_first_count64_loop",
       "symbol": "vm_byte_eq_first_count64_loop_target",
       "patterns": [
