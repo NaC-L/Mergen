@@ -2825,6 +2825,44 @@
       ]
     },
     {
+      "name": "vm_xorwords64_loop",
+      "symbol": "vm_xorwords64_loop_target",
+      "patterns": [
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1: low word=1, rest 0" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,     "label": "x=2: low word=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,     "label": "x=3: low word=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 28736, "label": "0xCAFEBABE: BABE^CAFE^0^0=0x7040=28736" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 24642, "label": "0xDEADBEEF: BEEF^DEAD^0^0=0x6042" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 4098,  "label": "0xCAFEBABEDEADBEEF: 4 words XOR" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,     "label": "all 0xFFFF: 4 cancel" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 4,     "label": "0x0001000200030004: 4^3^2^1=4" }
+      ]
+    },
+    {
+      "name": "vm_xordwords64_loop",
+      "symbol": "vm_xordwords64_loop_target",
+      "patterns": [
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1: low dword=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,          "label": "x=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,          "label": "x=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405691582, "label": "0xCAFEBABE: low dword^0=0xCAFEBABE" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928559, "label": "0xDEADBEEF: low dword^0=0xDEADBEEF" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 340984913,  "label": "0xCAFEBABEDEADBEEF: DEADBEEF^CAFEBABE" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,          "label": "all 0xFFFFFFFF: 2 cancel" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 2,          "label": "0x100000003: 3^1=2" }
+      ]
+    },
+    {
       "name": "vm_condsum64_loop",
       "symbol": "vm_condsum64_loop_target",
       "patterns": [
