@@ -56,7 +56,7 @@ int maths(test a, int b, int c) {
 
 ![image](images/org_decomp.png)
 
-VMProtect settings, everything is turned off, we virtualize the function on ultra setting. (Tested versions 3.4.0-3.6.0 3.8.1)
+VMProtect settings, everything is turned off, we virtualize the function on ultra setting. (Tested versions 3.4.0–3.6.0, 3.8.1; the required CI gate is VMP 3.8.x — see [`docs/SCOPE.md`](docs/SCOPE.md) for the current support matrix.)
 
 ![image](images/vmp_settings1.png)
 

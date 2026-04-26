@@ -24,7 +24,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 | Non-PE formats | Not supported |
 | 32-bit x86 lifting | Not supported |
 | ARM / RISC-V / other architectures | Not supported |
-| Jump-table IR quality | Supported shapes still dispatch on concrete target addresses, not logical case indices |
+| Jump-table IR quality | Most supported shapes (C-compiled `switch`, asm tables that index into a relative target list) lift to a `switch` on the original case index. The remaining gap covers shapes whose dispatcher value carries arithmetic over absolute case-target addresses; the recovered `switch` keeps address-shaped case keys instead of small integers. Tracked by `scripts/rewrite/check_case_index.py`. Currently address-shaped: `calc_switch`, `jumptable_computation`, `jumptable_shared_targets`, `jumptable_shifted`. |
 | Loop-header generalization | Gated by path-solve context: allowed for `ConditionalBranch` and `DirectJump`, and for `IndirectJump` only when the target is already resolved concretely; `Ret` never generalizes. See `docs/LOOP_HANDLING.md`. |
 
 ## Current Development Focus
@@ -32,7 +32,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 - Later: expand 128-bit register/instruction coverage beyond the current SSE2 integer XMM subset once the control-flow path is stable enough to carry the added surface area.
 
 ## Tested Protectors
-- VMProtect — examples exist; reliability varies by protection level
+- VMProtect — examples exist; reliability varies by protection level. The required CI gate runs against VMP 3.8.x targets. The VMP 3.6 sample remains in the corpus as best-effort because that specific binary is packed (not because of a 3.6-version limitation); see `python test.py vmp`.
 - Themida — examples exist; reliability varies by protection level
 
 ## Quality Contract
@@ -40,7 +40,7 @@ Mergen is a function-level LLVM IR lifting engine for deobfuscation and devirtua
 - Active regression corpus: 33 semantic samples / 177 runtime semantic cases in CI; `calc_sum_to_n`, `calc_fib`, `calc_sum_array`, `stack_vm_loop`, and `calc_cout` are all active under the current safe path
 - Determinism: golden IR hashes are enforced for tracked outputs
 - CI gates: register/flag correctness, rewrite baseline, semantic regression, and Windows build lanes
-- Targeted VMP gate: `python test.py vmp` must keep required 3.8.x targets at `blocks_completed > 0`; VMP 3.6 remains best-effort only
+- Targeted VMP gate: `python test.py vmp` must keep required 3.8.x targets at `blocks_completed > 0`; the 3.6 sample is best-effort because it is packed
 
 ## Non-goals
 - General-purpose decompilation
