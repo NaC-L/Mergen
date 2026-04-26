@@ -5571,6 +5571,44 @@
       ]
     },
     {
+      "name": "vm_word_bit_pos_count64_loop",
+      "symbol": "vm_word_bit_pos_count64_loop_target",
+      "patterns": [
+        "lshr",
+        "and",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2: w0=1 bit0=1; w1=0 bit1=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0, "label": "x=2 n=3: w0=2 bit0=0; rest 0" },
+        { "inputs": { "RCX": 3 },                    "expected": 1, "label": "x=3 n=4: w0=3 bit0=1; rest 0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE n=3: w0=BABE bit0=0; w1=CAFE bit1=1; w2=0 bit2=0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1, "label": "0xDEADBEEF n=4: w0=BEEF bit0=1; w1=DEAD bit1=0; w2=0 bit2=0; w3=0 bit3=0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4, "label": "all 0xFFFF n=4: every word's bit i is set" },
+        { "inputs": { "RCX": 2251834173882369 },     "expected": 2, "label": "0x0008000400020001 n=2: w0=1 bit0=1; w1=2 bit1=1" }
+      ]
+    },
+    {
+      "name": "vm_dword_bit_pos_count64_loop",
+      "symbol": "vm_dword_bit_pos_count64_loop_target",
+      "patterns": [
+        "lshr",
+        "and",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2: d0=1 bit0=1; d1=0 bit1=0" },
+        { "inputs": { "RCX": 2 },                    "expected": 0, "label": "x=2 n=1: d0=2 bit0=0" },
+        { "inputs": { "RCX": 3 },                    "expected": 1, "label": "x=3 n=2: d0=3 bit0=1; d1=0 bit1=0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 0, "label": "0xCAFEBABE n=1: d0=CAFEBABE bit0=0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1, "label": "0xDEADBEEF n=2: d0=DEADBEEF bit0=1; d1=0 bit1=0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 2, "label": "all 0xFFFFFFFF n=2: bit0=bit1=1" },
+        { "inputs": { "RCX": 8589934593 },           "expected": 2, "label": "0x200000001 n=2: d0=1 bit0=1; d1=2 bit1=1" }
+      ]
+    },
+    {
       "name": "vm_byte_increase_count64_loop",
       "symbol": "vm_byte_increase_count64_loop_target",
       "patterns": [
