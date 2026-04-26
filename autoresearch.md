@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 393 vm-shaped samples (run #52, commit d746aca)
-- why it won: 108 cumulative new samples across 52 logged runs in this segment, all width-symmetric completions of in-tree byte-stride samples. Latest addition: prefix-XOR scan family (word/dword) - dual-shifting load+pack-by-or pattern at u16/u32 stride. Lever near-saturated: per-run gain stays at 1-2; remaining samples are either (a) wrapper around stack arrays which the lifter has known issues with, (b) full-state recurrences with no lane structure, (c) byte-tied by design (input-derived multipliers, byte-walking shifts, byte-tuned modular constants). Each new candidate now requires careful inspection to confirm it isn't a renamed duplicate.
+- metric: 395 vm-shaped samples (run #53, commit ba33fae)
+- why it won: 110 cumulative new samples across 53 logged runs in this segment, all width-symmetric completions of in-tree byte-stride samples. Latest additions: prefix-XOR scan family (word/dword); explicit-shift word-swap and dword-swap variable-trip family analogous to vm_bswap64_loop. Lever near-saturated at ~2 samples per run; remaining single-stride templates are stack-array two-pass, full-state recurrences, or byte-tied by design.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
