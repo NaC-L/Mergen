@@ -5465,6 +5465,42 @@
       ]
     },
     {
+      "name": "vm_word_ne_first_count64_loop",
+      "symbol": "vm_word_ne_first_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 n=1 first=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2 first=1 words [1,0]: high=0 != 1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 2, "label": "0xCAFEBABE n=3 first=0xBABE: 0xCAFE,0 differ" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3, "label": "0xDEADBEEF n=4 first=0xBEEF: 0xDEAD,0,0 differ" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFFFF n=4 every word equals first" },
+        { "inputs": { "RCX": 844437815230467 },      "expected": 0, "label": "0x0003000300030003 n=4 all match" },
+        { "inputs": { "RCX": 14627128642878963715 }, "expected": 3, "label": "0xCAFE0000BABE0003 n=4 first=0x0003: 3 differ" },
+        { "inputs": { "RCX": 12379739850550389707 }, "expected": 3, "label": "0xABCDABCDABCDABCB n=4 first=0xABCB: 3 differ" }
+      ]
+    },
+    {
+      "name": "vm_dword_ne_first_count64_loop",
+      "symbol": "vm_dword_ne_first_count64_loop_target",
+      "patterns": [
+        "icmp",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "x=0 n=1 first=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2 first=1: high dword=0 != 1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 0, "label": "0xCAFEBABE n=1 single dword (low bit 0)" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1, "label": "0xDEADBEEF n=2 first=0xDEADBEEF: high=0 differ" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0, "label": "all 0xFFFFFFFF n=2 both match" },
+        { "inputs": { "RCX": 14627333964952502273 }, "expected": 1, "label": "0xCAFEBABE00000001 n=2 first=1: 0xCAFEBABE differ" },
+        { "inputs": { "RCX": 16045695481027153903 }, "expected": 1, "label": "0xDEADBEEEDEADBEEF n=2 first=0xDEADBEEF: high=0xDEADBEEE differ" },
+        { "inputs": { "RCX": 18446744065119617025 }, "expected": 1, "label": "0xFFFFFFFEFFFFFFFF n=2 first=0xFFFFFFFF: high=0xFFFFFFFE differ" }
+      ]
+    },
+    {
       "name": "vm_byte_uge_thresh_count64_loop",
       "symbol": "vm_byte_uge_thresh_count64_loop_target",
       "patterns": [
