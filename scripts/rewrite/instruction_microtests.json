@@ -2722,6 +2722,27 @@
       ]
     },
     {
+      "name": "vm_satsub64_loop",
+      "symbol": "vm_satsub64_loop_target",
+      "patterns": [
+        "sub",
+        "icmp",
+        "select"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 18446744073709551614, "label": "x=0 dec=1 n=1: ~0-1 = ~0-1" },
+        { "inputs": { "RCX": 1 },                    "expected": 18446744073709551613, "label": "x=1 dec=1 n=2: ~0-2" },
+        { "inputs": { "RCX": 2 },                    "expected": 18446744073709551606, "label": "x=2 dec=3 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 18446744073709551559, "label": "x=7 dec=7 n=8" },
+        { "inputs": { "RCX": 8 },                    "expected": 18446744073709551606, "label": "x=8 dec=9 n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744049869710534, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744043822123143, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,                    "label": "all FF: dec=~0 n=8: 1st iter -> 0; 2nd iter underflow clamp" },
+        { "inputs": { "RCX": 9223372036854775809 }, "expected": 0,                    "label": "0x8...1 n=2: 1st iter -> 0x7...E; 2nd iter underflow clamp" },
+        { "inputs": { "RCX": 4611686018427387904 }, "expected": 13835058055282163710, "label": "0x4...0 n=1: ~0 - 0x4...1" }
+      ]
+    },
+    {
       "name": "vm_fmix64_loop",
       "symbol": "vm_fmix64_loop_target",
       "patterns": [
