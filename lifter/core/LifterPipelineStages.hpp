@@ -83,7 +83,7 @@ inline void emitLiftOutputs(lifterConcolic<>* lifter, double elapsedMilliseconds
   // Write structured diagnostics + profile + stats to JSON.
   {
     auto& profile = lifter->profiler.getStages();
-    auto json = lifter->diagnostics.toJson(&profile, &lifter->liftStats);
+    auto json = lifter->diagnostics.toJson(&profile, &lifter->liftStats, &lifter->fixpointStats);
     std::string diagPath = "output_diagnostics.json";
     std::error_code EC;
     llvm::raw_fd_ostream diagFile(diagPath, EC);

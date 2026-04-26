@@ -421,7 +421,7 @@ public:
   uint32_t speculativeCallBudget    = 0;   // instructions remaining (0 = inactive)
   uint32_t maxCallInlineBudget      = 0;   // 0 = disabled (no speculative limit)
   bool liftBudgetExceeded          = false;
-  uint32_t maxBasicBlockBudget     = 4096;  // 0 = disabled
+  uint32_t maxBasicBlockBudget     = 32768;  // 0 = disabled
   llvm::BasicBlock* liftAbortBlock = nullptr;
   bool bypassStackConcolicTracking = false;
   BlockRestoreMode currentBlockRestoreMode = BlockRestoreMode::Normal;
@@ -1109,6 +1109,7 @@ public:
 
   unsigned int instct = 0;
   LiftStats liftStats;
+  FixpointStats fixpointStats;
   // Per-address lift attempt counts. Only populated when the lift-progress diag
   // is requested (MERGEN_DIAG_LIFT_PROGRESS=1); otherwise stays empty and the
   // increment below is a no-op on a DenseMap miss because we gate it behind the
