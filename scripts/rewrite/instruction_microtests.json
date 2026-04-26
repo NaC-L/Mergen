@@ -4252,6 +4252,45 @@
       ]
     },
     {
+      "name": "vm_andsum_word_idx64_loop",
+      "symbol": "vm_andsum_word_idx64_loop_target",
+      "patterns": [
+        "and",
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,  "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,  "label": "x=1 n=2: (1&1)+(0&2)=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 0,  "label": "x=2 n=3: (2&1)=0" },
+        { "inputs": { "RCX": 3 },                    "expected": 1,  "label": "x=3 n=4: (3&1)=1; rest 0" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 2,  "label": "0xCAFEBABE n=3: BABE&1=0; CAFE&2=2; 0&3=0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1,  "label": "0xDEADBEEF n=4: BEEF&1=1; DEAD&2=0; 0&3=0; 0&4=0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 10, "label": "all 0xFFFF n=4: sum 1+2+3+4=10" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 0,  "label": "0x0001000200030004 n=1: w0=4 & 1 = 0" }
+      ]
+    },
+    {
+      "name": "vm_andsum_dword_idx64_loop",
+      "symbol": "vm_andsum_dword_idx64_loop_target",
+      "patterns": [
+        "and",
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0, "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1, "label": "x=1 n=2: (1&1)+(0&2)=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 0, "label": "x=2 n=1: (2&1)=0" },
+        { "inputs": { "RCX": 3 },                    "expected": 1, "label": "x=3 n=2: (3&1)+(0&2)=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 0, "label": "0xCAFEBABE n=1: 0xCAFEBABE & 1=0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1, "label": "0xDEADBEEF n=2: DEADBEEF&1=1; 0&2=0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 3, "label": "all 0xFFFFFFFF n=2: 1+2=3" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 3, "label": "0xCAFEBABEDEADBEEF n=2: DEADBEEF&1=1; CAFEBABE&2=2; sum=3" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 1, "label": "0x100000003 n=2: 3&1=1; 1&2=0" }
+      ]
+    },
+    {
       "name": "vm_orsum_byte_idx64_loop",
       "symbol": "vm_orsum_byte_idx64_loop_target",
       "patterns": [
@@ -4269,6 +4308,43 @@
         { "inputs": { "RCX": 18446744073709551615 }, "expected": 255, "label": "all 0xFF: low byte already 0xFF -> 0xFF" },
         { "inputs": { "RCX": 72623859790382856 },    "expected": 9,   "label": "0x0102...0708: n=1 byte0=8 | 1=9" },
         { "inputs": { "RCX": 1311768467463790320 },  "expected": 241, "label": "0x12345...EF0: n=1 byte0=0xF0 | 1=0xF1=241" }
+      ]
+    },
+    {
+      "name": "vm_orsum_word_idx64_loop",
+      "symbol": "vm_orsum_word_idx64_loop_target",
+      "patterns": [
+        "or",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1,     "label": "x=0 n=1: 0|0|1=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 3,     "label": "x=1 n=2: 0|1|1=1; |0|2=3" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,     "label": "x=2 n=3: 2|1|2|3 ORed" },
+        { "inputs": { "RCX": 3 },                    "expected": 7,     "label": "x=3 n=4: 3|1|2|3|4 -> bits 0,1,2 set" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 64255, "label": "0xCAFEBABE n=3: words BABE,CAFE,0 OR counters 1,2,3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 65263, "label": "0xDEADBEEF n=4: words BEEF,DEAD,0,0 OR counters 1,2,3,4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 65535, "label": "all 0xFFFF n=4: already all bits set -> 0xFFFF" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 5,     "label": "0x0001000200030004 n=1: 4|1=5" }
+      ]
+    },
+    {
+      "name": "vm_orsum_dword_idx64_loop",
+      "symbol": "vm_orsum_dword_idx64_loop_target",
+      "patterns": [
+        "or",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1,          "label": "x=0 n=1: 0|0|1=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 3,          "label": "x=1 n=2: 1|1=1; |0|2=3" },
+        { "inputs": { "RCX": 2 },                    "expected": 3,          "label": "x=2 n=1: 2|1=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,          "label": "x=3 n=2: 3|1=3; |0|2=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405691583, "label": "0xCAFEBABE n=1: 0xCAFEBABE | 1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 3735928559, "label": "0xDEADBEEF n=2: DEADBEEF|1=DEADBEEF; |0|2=DEADBEEF (already has bit 1)" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4294967295, "label": "all 0xFFFFFFFF n=2: already all bits set" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 3741302527, "label": "0xCAFEBABEDEADBEEF n=2: DEADBEEF|1 | (CAFEBABE|2)" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 3,          "label": "0x100000003 n=2: 3|1=3; |1|2=3" }
       ]
     },
     {
