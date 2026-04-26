@@ -5216,6 +5216,45 @@
       ]
     },
     {
+      "name": "vm_addshl_byte64_loop",
+      "symbol": "vm_addshl_byte64_loop_target",
+      "patterns": [
+        "add",
+        "shl",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,      "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 4,      "label": "x=1 n=2: (0+1)<<1=2; (2+0)<<1=4" },
+        { "inputs": { "RCX": 2 },                    "expected": 16,     "label": "x=2 n=3: (0+2)<<1=4; (4+0)<<1=8; (8+0)<<1=16" },
+        { "inputs": { "RCX": 7 },                    "expected": 1792,   "label": "x=7 n=8: (0+7)<<1=14; then 7 more <<1 doublings" },
+        { "inputs": { "RCX": 8 },                    "expected": 16,     "label": "x=8 n=1: (0+8)<<1=16" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 47584,  "label": "0xCAFEBABE n=7: bytes BE,BA,FE,CA,0,0,0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 103680, "label": "0xDEADBEEF n=8: bytes EF,BE,AD,DE,0,0,0,0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 130050, "label": "all 0xFF n=8: 0xFF doubled 8 times wrapping low bits" },
+        { "inputs": { "RCX": 9241421688590303745 }, "expected": 8,      "label": "0x8040201008040201 n=2: bytes [01,02] -> ((0+1)<<1+2)<<1=8" }
+      ]
+    },
+    {
+      "name": "vm_addshl_word64_loop",
+      "symbol": "vm_addshl_word64_loop_target",
+      "patterns": [
+        "add",
+        "shl",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,       "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 4,       "label": "x=1 n=2: (0+1)<<1=2; (2+0)<<1=4" },
+        { "inputs": { "RCX": 2 },                    "expected": 16,      "label": "x=2 n=3: 2->4->8->16" },
+        { "inputs": { "RCX": 3 },                    "expected": 48,      "label": "x=3 n=4: 6->12->24->48" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 590312,  "label": "0xCAFEBABE n=3: words BABE,CAFE,0" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1238104, "label": "0xDEADBEEF n=4: words BEEF,DEAD,0,0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1966050, "label": "all 0xFFFF n=4" },
+        { "inputs": { "RCX": 1125912791875588 },     "expected": 8,       "label": "0x0004000300020004: x&3 wait n=1 -> word=4 -> 8" }
+      ]
+    },
+    {
       "name": "vm_addshl_dword64_loop",
       "symbol": "vm_addshl_dword64_loop_target",
       "patterns": [
