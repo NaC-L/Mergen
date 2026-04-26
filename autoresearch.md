@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 387 vm-shaped samples (run #48, commit 53773e8)
-- why it won: 102 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions on top of the 100-sample milestone: xor_accumulator at u16/u32 key widths (4-trip word, 2-trip dword - dword folds to trivial because 0^0^k=k, tests that the lifter handles the degenerate case). Earlier this segment: width extensions across reducer/count/hash/shift/range/clamp/Horner/Murmur/xxhmix/fnv1a/djb2/dyn{shl,lshr,ashr}_accum/lane*counter sub/and/or/xor/sext/var_horner/shiftin_top/rev_window/xor_shifted_self/data-dependent-shift trio/byte_loop narrow-recurrence.
+- metric: 389 vm-shaped samples (run #49, commit 1a67e6a)
+- why it won: 104 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions: LCG mixed-recurrence at u16/u32 mask. Marginal value tapering - each new keep adds 2 samples while the easy width-mirroring lever consumed in earlier runs added 6-9 each. Remaining single-stride samples are increasingly tied to byte-specific design choices (input-derived multipliers, byte-walking shifts, byte-tuned modular constants) and cannot be mirrored without redesigning the test.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
