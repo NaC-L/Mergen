@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 403 vm-shaped samples (run #58, commit 8a4e7bd)
-- why it won: 118 cumulative new samples across 58 logged runs in this segment. Latest additions in this turn: vm_satsub64_loop (saturating subtract pair with vm_satadd64); vm_borrowchain_loop (ripple-borrow subtractor pair with vm_carrychain). The lever has shifted from width-mirroring to sibling-operation extension - completing add/sub pairs that the corpus had only on the additive side.
+- metric: 404 vm-shaped samples (run #59, commit 718c0e4)
+- why it won: 119 cumulative new samples across 59 logged runs in this segment. Latest sibling-operation extensions: vm_satsub64 (saturating sub pair with satadd); vm_borrowchain (ripple-borrow pair with carrychain); vm_xormulsub_chain (sub pair with xormuladd_chain). The lever is now sibling-op pair completion - finding samples that test the additive/positive direction and adding the symmetric sub/negative variant.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
