@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 385 vm-shaped samples (run #47, commit 1c5ff06) - 100-sample segment milestone
-- why it won: 100 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions: data-dependent shift trio at u16/u32; xor_shifted_self self-shift XOR at u16/u32; var_horner counter-multiplier Horner at u16/u32; word_loop/dword_loop narrow-type recurrence (matching the byte_loop shape with mod 2^16 / mod 2^32 wrap). Pattern: read the existing byte-stride sample, mirror its dispatcher, swap mask/n_mask/lane width, regenerate semantic vectors with python, validate before commit.
+- metric: 387 vm-shaped samples (run #48, commit 53773e8)
+- why it won: 102 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions on top of the 100-sample milestone: xor_accumulator at u16/u32 key widths (4-trip word, 2-trip dword - dword folds to trivial because 0^0^k=k, tests that the lifter handles the degenerate case). Earlier this segment: width extensions across reducer/count/hash/shift/range/clamp/Horner/Murmur/xxhmix/fnv1a/djb2/dyn{shl,lshr,ashr}_accum/lane*counter sub/and/or/xor/sext/var_horner/shiftin_top/rev_window/xor_shifted_self/data-dependent-shift trio/byte_loop narrow-recurrence.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
