@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 310 vm-shaped samples (run #17, commit 933e2bf)
-- why it won: each kept run added 2-9 new samples to a previously-incomplete family; cumulative +25 vm samples without changing the harness or the lifter.
+- metric: 318 vm-shaped samples (run #20, commit 067fdb6)
+- why it won: 33 cumulative new samples in this segment, all width-symmetric completions of established families (predicate-gated reducer ult variants, gt_thresh count, ne_first count, nonzero count, increase count, or/xor fold at byte, add/sub/xormul chain at byte, alt sum at word/dword, max/min/clamp const-sum at word/dword, bit_pos count at word/dword, imported rotr). Each sample reuses the in-tree PC-state shape exactly so the lifter sees the same dispatcher form it already lifts cleanly.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
