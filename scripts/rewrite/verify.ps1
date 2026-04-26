@@ -139,6 +139,18 @@ foreach ($check in $checks) {
         Write-Host "FAIL: $($check.name) has unsupported pattern descriptor; use string or {\"line_all\":[...]}"
         $failed = $true
     }
+
+    if ($check.PSObject.Properties['case_index_required'] -and $check.case_index_required) {
+        $caseIndexScript = Join-Path $PSScriptRoot 'check_case_index.py'
+        & python $caseIndexScript gate $file
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "FAIL: $($check.name) case_index_required gate failed"
+            $failed = $true
+        }
+        else {
+            Write-Host "PASS: $($check.name) case_index_required gate"
+        }
+    }
 }
 
 if ($failed) {
