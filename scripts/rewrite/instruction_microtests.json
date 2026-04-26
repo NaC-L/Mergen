@@ -4439,6 +4439,26 @@
       ]
     },
     {
+      "name": "vm_byte_xormul64_loop",
+      "symbol": "vm_byte_xormul64_loop_target",
+      "patterns": [
+        "xor",
+        "mul",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1 n=2: 1^1=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 4,     "label": "x=2 n=3: 2*2=4" },
+        { "inputs": { "RCX": 7 },                    "expected": 49,    "label": "x=7 n=8: byte0=7 squared, rest 0" },
+        { "inputs": { "RCX": 8 },                    "expected": 64,    "label": "x=8 n=1: 8*8=64" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 26944, "label": "0xCAFEBABE n=7: BE^BA^FE^CA squared XORs" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 58952, "label": "0xDEADBEEF n=8: EF^BE^AD^DE squared XORs (zeros cancel)" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,     "label": "all 0xFF n=8: 8 XOR of 0xFE01 cancel pairwise" },
+        { "inputs": { "RCX": 9241421688590303745 }, "expected": 5,     "label": "0x8040201008040201 n=2: bytes [01,02] squared XOR = 1^4 = 5" }
+      ]
+    },
+    {
       "name": "vm_word_xormul64_loop",
       "symbol": "vm_word_xormul64_loop_target",
       "patterns": [
@@ -4782,6 +4802,25 @@
       ]
     },
     {
+      "name": "vm_byte_addchain64_loop",
+      "symbol": "vm_byte_addchain64_loop_target",
+      "patterns": [
+        "add",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,    "label": "x=1 n=2: bytes [1,0] -> 1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,    "label": "x=2 n=3 -> 2" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,    "label": "x=7 n=8 -> 7" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,    "label": "x=8 n=1 -> 8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 832,  "label": "0xCAFEBABE n=7: BE+BA+FE+CA+0+0+0=0x340=832" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 824,  "label": "0xDEADBEEF n=8: EF+BE+AD+DE+0+0+0+0=0x338=824" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 2040, "label": "all 0xFF n=8: 8*0xFF=2040" },
+        { "inputs": { "RCX": 9241421688590303745 }, "expected": 3,    "label": "0x8040201008040201 n=2: bytes [01,02] -> 3" }
+      ]
+    },
+    {
       "name": "vm_word_addchain64_loop",
       "symbol": "vm_word_addchain64_loop_target",
       "patterns": [
@@ -4799,6 +4838,25 @@
         { "inputs": { "RCX": 72623859790382856 },    "expected": 1800,   "label": "0x0102...0708: n=1 word=0x0708=1800" },
         { "inputs": { "RCX": 18364758544493064720 }, "expected": 12816,  "label": "0xFEDCBA9876543210: n=1 word=0x3210" },
         { "inputs": { "RCX": 1152956689784258560 },  "expected": 16384,  "label": "0x1000200030004000: n=1 word=0x4000" }
+      ]
+    },
+    {
+      "name": "vm_byte_subchain64_loop",
+      "symbol": "vm_byte_subchain64_loop_target",
+      "patterns": [
+        "sub",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "all zero -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 18446744073709551615, "label": "x=1 n=2: -1" },
+        { "inputs": { "RCX": 2 },                    "expected": 18446744073709551614, "label": "x=2 n=3: -2" },
+        { "inputs": { "RCX": 7 },                    "expected": 18446744073709551609, "label": "x=7 n=8: -7" },
+        { "inputs": { "RCX": 8 },                    "expected": 18446744073709551608, "label": "x=8 n=1: -8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18446744073709550784, "label": "0xCAFEBABE n=7: -832" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18446744073709550792, "label": "0xDEADBEEF n=8: -824" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709549576, "label": "all 0xFF n=8: -2040" },
+        { "inputs": { "RCX": 9241421688590303745 }, "expected": 18446744073709551613, "label": "0x8040201008040201 n=2: -3" }
       ]
     },
     {
