@@ -1779,6 +1779,46 @@
       ]
     },
     {
+      "name": "vm_word_loop",
+      "symbol": "vm_word_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 15"] },
+        "phi i32",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,     "label": "x=0: limit=0, state=0" },
+        { "inputs": { "RCX": 51966 },      "expected": 51966, "label": "0xCAFE: limit=0, state=0xCAFE" },
+        { "inputs": { "RCX": 65537 },      "expected": 18,    "label": "0x10001: limit=1, state=1 -> 1*13+5=18" },
+        { "inputs": { "RCX": 262145 },     "expected": 40461, "label": "0x40001: limit=4, state=1" },
+        { "inputs": { "RCX": 524289 },     "expected": 22233, "label": "0x80001: limit=8, state=1" },
+        { "inputs": { "RCX": 983041 },     "expected": 5212,  "label": "0xF0001: limit=15, state=1" },
+        { "inputs": { "RCX": 109517 },     "expected": 47470, "label": "0x1ABCD: limit=1, state=0xABCD" },
+        { "inputs": { "RCX": -1 },         "expected": 44114, "label": "-1 = 0xFFFFFFFF: limit=15, state=0xFFFF" }
+      ]
+    },
+    {
+      "name": "vm_dword_loop",
+      "symbol": "vm_dword_loop_target",
+      "patterns": [
+        { "line_all": ["and", ", 15"] },
+        "phi",
+        "mul",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,          "label": "x=0: limit=0, state=0" },
+        { "inputs": { "RCX": 268435456 },  "expected": 3489673273, "label": "0x10000000: limit=1, state=0x10000000 -> *1103515245+12345 mod 2^32" },
+        { "inputs": { "RCX": 4026531840 }, "expected": 39794291,   "label": "0xF0000000: limit=15, state=0xF0000000" },
+        { "inputs": { "RCX": 2147483648 }, "expected": 1293799192, "label": "0x80000000: limit=8, state=0x80000000" },
+        { "inputs": { "RCX": 4294967295 }, "expected": 652027854,  "label": "0xFFFFFFFF: limit=15, state=0xFFFFFFFF" },
+        { "inputs": { "RCX": 305419896 },  "expected": 191992145,  "label": "0x12345678: limit=1, state=0x12345678" },
+        { "inputs": { "RCX": 3405691582 }, "expected": 2873893666, "label": "0xCAFEBABE: limit=12, state=0xCAFEBABE" },
+        { "inputs": { "RCX": 1073741824 }, "expected": 375725100,  "label": "0x40000000: limit=4, state=0x40000000" }
+      ]
+    },
+    {
       "name": "vm_short_loop",
       "symbol": "vm_short_loop_target",
       "patterns": [
