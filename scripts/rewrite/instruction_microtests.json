@@ -5327,6 +5327,27 @@
       ]
     },
     {
+      "name": "vm_signed_byte_range64_loop",
+      "symbol": "vm_signed_byte_range64_loop_target",
+      "patterns": [
+        "icmp slt",
+        "select",
+        "sub"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "all zero n=1: byte=0 -> mx=mn=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1 n=2: bytes [+1,0] -> 1-0" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,   "label": "x=2 n=3: bytes [+2,0,0] -> 2-0" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,   "label": "x=7 n=8: bytes [+7,0..0] -> 7-0" },
+        { "inputs": { "RCX": 8 },                    "expected": 0,   "label": "x=8 n=1: single byte=+8 -> 0" },
+        { "inputs": { "RCX": 32895 },               "expected": 255, "label": "0x807F n=8: bytes [+127,-128,0..0] -> 127-(-128)=255" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 70,  "label": "0xCAFEBABE n=7: mixed-sign bytes -> 0x46" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 83,  "label": "0xDEADBEEF n=8: mixed-sign bytes -> 0x53" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,   "label": "all 0xFF n=8: all bytes=-1 -> 0" },
+        { "inputs": { "RCX": 258 },                  "expected": 2,   "label": "0x102 n=3: bytes [+2,+1,0] -> 2-0=2" }
+      ]
+    },
+    {
       "name": "vm_dword_range64_loop",
       "symbol": "vm_dword_range64_loop_target",
       "patterns": [
