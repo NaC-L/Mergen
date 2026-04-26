@@ -1611,6 +1611,28 @@
       ]
     },
     {
+      "name": "vm_imported_rotr_loop",
+      "symbol": "vm_imported_rotr_loop_target",
+      "patterns": [
+        { "line_all": ["and i32", ", 7"] },
+        "phi i32",
+        "call",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },          "expected": 0,          "label": "limit=1, x=0" },
+        { "inputs": { "RCX": 1 },          "expected": 1610612741, "label": "limit=2, x=1" },
+        { "inputs": { "RCX": 7 },          "expected": 763363344,  "label": "limit=8, x=7" },
+        { "inputs": { "RCX": 255 },        "expected": 4286578735, "label": "0xFF: limit=8" },
+        { "inputs": { "RCX": 256 },        "expected": 32,         "label": "0x100: limit=1" },
+        { "inputs": { "RCX": 51966 },      "expected": 1056977482, "label": "0xCAFE: limit=7" },
+        { "inputs": { "RCX": 43981 },      "expected": 3053464120, "label": "0xABCD: limit=6" },
+        { "inputs": { "RCX": 74565 },      "expected": 234899372,  "label": "0x12345: limit=6" },
+        { "inputs": { "RCX": -1 },         "expected": 2134900712, "label": "all F" },
+        { "inputs": { "RCX": -559038737 }, "expected": 2465449022, "label": "0xDEADBEEF" }
+      ]
+    },
+    {
       "name": "vm_wrapper_chain_loop",
       "symbol": "vm_wrapper_chain_loop_target",
       "patterns": [
