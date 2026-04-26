@@ -2546,6 +2546,27 @@
       ]
     },
     {
+      "name": "vm_lfsr64_galois_loop",
+      "symbol": "vm_lfsr64_galois_loop_target",
+      "patterns": [
+        "shl",
+        "xor",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1,                   "label": "x=0 -> seed=1<<63; n=1: shift left, fb tap=1; result=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 6,                   "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 20,                  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 1920,                "label": "x=7 n=8" },
+        { "inputs": { "RCX": 15 },                   "expected": 1015808,             "label": "x=0xF n=16: max trip" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 111597701775360,     "label": "x=0xCAFEBABE n=15" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 244837814075392,     "label": "x=0xDEADBEEF n=16" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709486080, "label": "max u64 n=16: clears low 16 bits" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 2623536934927580640, "label": "0x12345...DEF0 n=1" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 10222729562012190060, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_factorial64_loop",
       "symbol": "vm_factorial64_loop_target",
       "patterns": [
