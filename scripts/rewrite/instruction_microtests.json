@@ -4357,6 +4357,46 @@
       ]
     },
     {
+      "name": "vm_dynshl_pack_nibble64_loop",
+      "symbol": "vm_dynshl_pack_nibble64_loop_target",
+      "patterns": [
+        "shl",
+        "xor",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,    "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,    "label": "x=1 n=2: chunk0=1, chunk1=0 -> 1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,    "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,    "label": "x=7 n=8" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,    "label": "x=8 n=1: chunk0=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1000, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1251, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1285, "label": "all 0xFF n=8: nibble chunks all 0xF xor-stacked" },
+        { "inputs": { "RCX": 291 },                  "expected": 3,    "label": "0x123 n=4: nibbles [3,2,1,0] -> 3 ^ (2<<1) ^ (1<<2) ^ 0 = 3" }
+      ]
+    },
+    {
+      "name": "vm_dynshl_pack_byte64_loop",
+      "symbol": "vm_dynshl_pack_byte64_loop_target",
+      "patterns": [
+        "shl",
+        "xor",
+        "and"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1 n=2: chunk0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,     "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,     "label": "x=7 n=8" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,     "label": "x=8 n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1122,  "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1495,  "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 21845, "label": "all 0xFF n=8: byte chunks all 0xFF xor-stacked" },
+        { "inputs": { "RCX": 291 },                  "expected": 33,    "label": "0x123 n=4: bytes [0x23,0x01,0,0] -> 0x23 ^ (0x01<<1) = 0x21=33" }
+      ]
+    },
+    {
       "name": "vm_dyn_ashr64_loop",
       "symbol": "vm_dyn_ashr64_loop_target",
       "patterns": [
