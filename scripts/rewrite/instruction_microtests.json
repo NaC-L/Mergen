@@ -2509,6 +2509,27 @@
       ]
     },
     {
+      "name": "vm_horner_sub64_loop",
+      "symbol": "vm_horner_sub64_loop_target",
+      "patterns": [
+        "mul",
+        "sub",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1 p=1: 0*1-0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 18446744073709551615, "label": "x=1 n=2 p=1: -1 wrap" },
+        { "inputs": { "RCX": 2 },                    "expected": 18446744073709551614, "label": "x=2 n=3 p=1: -2 wrap" },
+        { "inputs": { "RCX": 7 },                    "expected": 18446744073709551609, "label": "x=7 n=8 p=1: -7 wrap" },
+        { "inputs": { "RCX": 8 },                    "expected": 18446744073709551608, "label": "x=8 n=1 p=1: 0-8 wrap" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18438576605866793304, "label": "0xCAFEBABE n=7 p=0xBC" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 16221160141428257152, "label": "0xDEADBEEF n=8 p=0xBF" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1,                    "label": "all 0xFF n=8 p=0x100: telescope sub-wrap to 1" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 18446744073709551376, "label": "0x12345...DEF0 n=1 p=0xDF: 0-0xF0 wrap" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 18446743402420434620, "label": "K (golden) n=6 p=0x7D" }
+      ]
+    },
+    {
       "name": "vm_horner_word64_loop",
       "symbol": "vm_horner_word64_loop_target",
       "patterns": [
