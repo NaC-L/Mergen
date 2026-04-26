@@ -4358,6 +4358,27 @@
       ]
     },
     {
+      "name": "vm_zigzag_substep64_loop",
+      "symbol": "vm_zigzag_substep64_loop_target",
+      "patterns": [
+        "ashr",
+        "sub",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 n=1: zigzag(0)=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 14092058508772706266, "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 4354685564936845357,  "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 16390740445785211212, "label": "x=7 n=8" },
+        { "inputs": { "RCX": 8 },                    "expected": 16,                   "label": "x=8 n=1: zigzag(8)=16" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 4354685571748228515,  "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 16390740445785211212, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 16390740445785211215, "label": "all 0xFF: zigzag(-1)=1 first iter, then sub-step" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 2623536934927580640, "label": "0x12345...DEF0 n=1" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 4354685564936845351, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_xormuladd_chain64_loop",
       "symbol": "vm_xormuladd_chain64_loop_target",
       "patterns": [
