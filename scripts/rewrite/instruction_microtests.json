@@ -5399,6 +5399,42 @@
       ]
     },
     {
+      "name": "vm_word_max_const_sum64_loop",
+      "symbol": "vm_word_max_const_sum64_loop_target",
+      "patterns": [
+        "llvm.umax.i64",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 16384,  "label": "x=0 n=1: max(0,0x4000)=0x4000" },
+        { "inputs": { "RCX": 1 },                    "expected": 32768,  "label": "x=1 n=2: 0x4000+0x4000=0x8000" },
+        { "inputs": { "RCX": 2 },                    "expected": 49152,  "label": "x=2 n=3: 3*0x4000=0xC000" },
+        { "inputs": { "RCX": 3 },                    "expected": 65536,  "label": "x=3 n=4: 4*0x4000=0x10000" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 116156, "label": "0xCAFEBABE n=3: max(BABE,4000)+max(CAFE,4000)+max(0,4000)" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 138652, "label": "0xDEADBEEF n=4: BEEF+DEAD+4000+4000" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 262140, "label": "all 0xFFFF n=4: 4*0xFFFF=262140" },
+        { "inputs": { "RCX": 4611756388245323776 }, "expected": 16384,  "label": "0x4000400040004000 n=1: word=0x4000, max=0x4000" }
+      ]
+    },
+    {
+      "name": "vm_dword_max_const_sum64_loop",
+      "symbol": "vm_dword_max_const_sum64_loop_target",
+      "patterns": [
+        "llvm.umax.i64",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 1073741824, "label": "x=0 n=1: max(0,0x40000000)=0x40000000" },
+        { "inputs": { "RCX": 1 },                    "expected": 2147483648, "label": "x=1 n=2: 0x40000000+0x40000000" },
+        { "inputs": { "RCX": 2 },                    "expected": 1073741824, "label": "x=2 n=1: dword=2 < 0x40000000" },
+        { "inputs": { "RCX": 3 },                    "expected": 2147483648, "label": "x=3 n=2: 0x40000000+0x40000000" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405691582, "label": "0xCAFEBABE n=1: dword > 0x40000000" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 4809670383, "label": "0xDEADBEEF n=2: max(DEADBEEF,40000000)+max(0,40000000)" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 8589934590, "label": "all 0xFFFFFFFF n=2: 2*0xFFFFFFFF" },
+        { "inputs": { "RCX": 4611686019501129728 }, "expected": 1073741824, "label": "0x4000000040000000 n=1: dword=0x40000000" }
+      ]
+    },
+    {
       "name": "vm_byte_min_const_sum64_loop",
       "symbol": "vm_byte_min_const_sum64_loop_target",
       "patterns": [
@@ -5416,6 +5452,42 @@
         { "inputs": { "RCX": 18446744073709551615 }, "expected": 512, "label": "all 0xFF: 8*0x40=512" },
         { "inputs": { "RCX": 72623859790382856 },    "expected": 8,   "label": "0x0102...0708: n=1 byte0=8" },
         { "inputs": { "RCX": 1077952576 },           "expected": 64,  "label": "0x40404040 n=1: byte=0x40, min(64,64)=64" }
+      ]
+    },
+    {
+      "name": "vm_word_min_const_sum64_loop",
+      "symbol": "vm_word_min_const_sum64_loop_target",
+      "patterns": [
+        "llvm.umin.i64",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,     "label": "x=0 n=1: 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,     "label": "x=1 n=2: 1+0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,     "label": "x=2 n=3: 2+0+0=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,     "label": "x=3 n=4: 3+0+0+0=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 32768, "label": "0xCAFEBABE n=3: high words capped at 0x4000" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 32768, "label": "0xDEADBEEF n=4: high BEEF/DEAD capped at 0x4000, low 2 zero" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 65536, "label": "all 0xFFFF n=4: 4*0x4000=0x10000" },
+        { "inputs": { "RCX": 4611756388245323776 }, "expected": 16384, "label": "0x4000400040004000 n=1: word=0x4000" }
+      ]
+    },
+    {
+      "name": "vm_dword_min_const_sum64_loop",
+      "symbol": "vm_dword_min_const_sum64_loop_target",
+      "patterns": [
+        "llvm.umin.i64",
+        "add"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,          "label": "x=0 n=1: 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,          "label": "x=1 n=2: 1+0=1" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,          "label": "x=2 n=1: 2" },
+        { "inputs": { "RCX": 3 },                    "expected": 3,          "label": "x=3 n=2: 3+0=3" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 1073741824, "label": "0xCAFEBABE n=1: dword > 0x40000000 -> capped to 0x40000000" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 1073741824, "label": "0xDEADBEEF n=2: high capped + low=0" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 2147483648, "label": "all 0xFFFFFFFF n=2: 2*0x40000000" },
+        { "inputs": { "RCX": 4611686019501129728 }, "expected": 1073741824, "label": "0x4000000040000000 n=1: dword=0x40000000" }
       ]
     },
     {
@@ -5569,8 +5641,8 @@
         { "inputs": { "RCX": 3405691582 },           "expected": 2, "label": "0xCAFEBABE n=3: 0xBABE,0xCAFE > 0x4000; 0 not" },
         { "inputs": { "RCX": 3735928559 },           "expected": 2, "label": "0xDEADBEEF n=4: 0xBEEF,0xDEAD > 0x4000" },
         { "inputs": { "RCX": 18446744073709551615 }, "expected": 4, "label": "all 0xFF n=4: every 0xFFFF > 0x4000" },
-        { "inputs": { "RCX": 4611756387171565568 }, "expected": 0, "label": "0x4000400040004000 n=1: word=0x4000 NOT strictly > 0x4000" },
-        { "inputs": { "RCX": 4612037857148403713 }, "expected": 2, "label": "0x4001400140014001 n=2: 0x4001 > 0x4000 twice" },
+        { "inputs": { "RCX": 4611756388245323776 }, "expected": 0, "label": "0x4000400040004000 n=1: word=0x4000 NOT strictly > 0x4000" },
+        { "inputs": { "RCX": 4612037867517067265 }, "expected": 2, "label": "0x4001400140014001 n=2: 0x4001 > 0x4000 twice" },
         { "inputs": { "RCX": 13835058055282163712 }, "expected": 0, "label": "0xC000000000000000 n=1: low word=0" }
       ]
     },
@@ -5587,7 +5659,7 @@
         { "inputs": { "RCX": 3405691582 },           "expected": 1, "label": "0xCAFEBABE n=1: dword=0xCAFEBABE > 0x40000000" },
         { "inputs": { "RCX": 3735928559 },           "expected": 1, "label": "0xDEADBEEF n=2: low dword > 0x40000000, high=0" },
         { "inputs": { "RCX": 18446744073709551615 }, "expected": 2, "label": "all 0xFF n=2: both 0xFFFFFFFF > 0x40000000" },
-        { "inputs": { "RCX": 4611686020574871552 }, "expected": 0, "label": "0x4000000040000000 n=1: dword=0x40000000 NOT strictly > 0x40000000" },
+        { "inputs": { "RCX": 4611686019501129728 }, "expected": 0, "label": "0x4000000040000000 n=1: dword=0x40000000 NOT strictly > 0x40000000" },
         { "inputs": { "RCX": 4611686029164806145 }, "expected": 2, "label": "0x4000000140000001 n=2: 0x40000001 > 0x40000000 twice" },
         { "inputs": { "RCX": 9223372039002259456 }, "expected": 1, "label": "0x8000000080000000 n=1: dword=0x80000000 > 0x40000000" }
       ]

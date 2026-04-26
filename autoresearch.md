@@ -59,12 +59,12 @@
   segment.
 
 ## Baseline
-- metric:
-- notes:
+- metric: 285 vm-shaped samples (run #1, commit 2e66a80)
+- notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric:
-- why it won:
+- metric: 310 vm-shaped samples (run #17, commit 933e2bf)
+- why it won: each kept run added 2-9 new samples to a previously-incomplete family; cumulative +25 vm samples without changing the harness or the lifter.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
@@ -83,3 +83,9 @@
   lesson: 13/18 first-pass VM patterns missed because the lifter heavily compresses dispatchers (if-else -> switch i32, fixed-trip loops unrolled or recognized as intrinsics like llvm.bitreverse.i8, triangular sums closed-form-solved into mul i33 + lshr i33). Patterns must be derived from lifted IR, not from source-level shape.
 - experiment: lli semantic check found undef for empty-loop inputs (limit=0) in branchy/collatz
   lesson: lifter pseudo-stack promotion drops the entry-block init when the same slot is also written inside a dispatcher state. Fix is the dual_counter pattern: keep an explicit init dispatcher state on the entry-to-halt path. branchy needed `i=0; count=0;` inside BV_LOAD_LIMIT to thread `[ 0, %entry ]` through the loop phi instead of `[ undef, %entry ]`.
+- experiment: complete predicate-gated reducer family (and/or/xor + uge/ult)
+  lesson: 9 ult variants of and/or/xor closed the family at 3 widths; generator script `scripts/rewrite/generate_vm_sample.py` self-checks against in-tree manifest entries before emit, so generated semantic vectors are guaranteed correct.
+- experiment: complete count families across widths (gt_thresh, ne_first, nonzero, increase)
+  lesson: when a family exists at one stride only, the symmetric word/dword variants are the safest next chunk - they reuse the lifter-known PC-state shape and only swap mask/n_mask/lane width.
+- experiment: complete reducer-chain families across widths (or/xor fold at byte; add/sub/xormul chain at byte; alt sum at word/dword)
+  lesson: whenever a chain or fold reducer exists at 2 of 3 widths, filling in the missing width is a pure-template addition with deterministic semantic vectors; substring-name pitfall: 'orfold' is a substring of 'xorfold' so any python loop that picks an op via `in name` MUST check the longer prefix first.
