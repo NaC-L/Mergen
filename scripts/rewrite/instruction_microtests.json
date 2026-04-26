@@ -2429,6 +2429,27 @@
       ]
     },
     {
+      "name": "vm_djb2a64_loop",
+      "symbol": "vm_djb2a64_loop_target",
+      "patterns": [
+        "mul",
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 177573,           "label": "x=0 n=1: 5381*33^0=177573" },
+        { "inputs": { "RCX": 1 },                    "expected": 5859876,          "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 193379175,        "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 7567756919425890, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 177581,           "label": "x=8 n=1: 5381*33^8=177581" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 229154121229077,  "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 7563889570562919, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 7564629698446469, "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 177493,           "label": "0x12345...DEF0 n=1: low byte 0xF0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 6949850302489,   "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_djb2_word64_loop",
       "symbol": "vm_djb2_word64_loop_target",
       "patterns": [
