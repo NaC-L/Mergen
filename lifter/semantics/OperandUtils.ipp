@@ -1220,6 +1220,100 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(Value*)::GetValueFromHighByteRegister(
 
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::SetRFLAGSValue(Value* value) {
   LLVMContext& context = builder->getContext();
+
+  // Fast path: recognize the OR-tree shape produced by GetRFLAGSValue and
+  // restore the original per-flag i1s symbolically. The generic
+  // lshr+trunc unpack below loses symbolic structure across pushfq/popfq
+  // round-trips because LLVM's per-op simplifier does not crack
+  // trunc(or(zext(x), shl(zext(y), n), ...), i1) back into x. That stops
+  // the path solver from concretising flag-dependent indirect jumps
+  // (Denuvo-style cmovcc + jmp dispatchers wrap the predicate in
+  // pushfq/popfq specifically to defeat naive flag tracking).
+  std::array<Value*, FLAGS_END> recovered{};
+  Value* falseI1 = ConstantInt::getFalse(context);
+  Value* trueI1 = ConstantInt::getTrue(context);
+  bool conformant = true;
+  std::vector<Value*> work;
+  work.push_back(value);
+  while (conformant && !work.empty()) {
+    Value* cur = work.back();
+    work.pop_back();
+    if (auto* ci = dyn_cast<ConstantInt>(cur)) {
+      // Constant contributions: each set bit < FLAGS_END pins that flag
+      // to true. Bits >= FLAGS_END (e.g. reserved RFLAGS bits packed by
+      // some other source) mean this is not our packer's tree.
+      APInt bits = ci->getValue();
+      while (bits.getBoolValue()) {
+        unsigned bit = bits.countr_zero();
+        if (bit >= FLAGS_END) {
+          conformant = false;
+          break;
+        }
+        if (recovered[bit] && recovered[bit] != trueI1) {
+          conformant = false;
+          break;
+        }
+        recovered[bit] = trueI1;
+        bits.clearBit(bit);
+      }
+      continue;
+    }
+    if (auto* binOp = dyn_cast<BinaryOperator>(cur)) {
+      if (binOp->getOpcode() == Instruction::Or) {
+        work.push_back(binOp->getOperand(0));
+        work.push_back(binOp->getOperand(1));
+        continue;
+      }
+      if (binOp->getOpcode() == Instruction::Shl) {
+        auto* shAmt = dyn_cast<ConstantInt>(binOp->getOperand(1));
+        auto* zext = dyn_cast<ZExtInst>(binOp->getOperand(0));
+        if (!shAmt || !zext ||
+            !zext->getOperand(0)->getType()->isIntegerTy(1)) {
+          conformant = false;
+          continue;
+        }
+        uint64_t bit = shAmt->getZExtValue();
+        if (bit >= FLAGS_END) {
+          conformant = false;
+          continue;
+        }
+        Value* leaf = zext->getOperand(0);
+        if (recovered[bit] && recovered[bit] != leaf) {
+          conformant = false;
+          continue;
+        }
+        recovered[bit] = leaf;
+        continue;
+      }
+      conformant = false;
+      continue;
+    }
+    if (auto* zext = dyn_cast<ZExtInst>(cur)) {
+      // FLAG_CF leaf: shl-by-0 is folded away by InstSimplify.
+      if (!zext->getOperand(0)->getType()->isIntegerTy(1)) {
+        conformant = false;
+        continue;
+      }
+      Value* leaf = zext->getOperand(0);
+      if (recovered[FLAG_CF] && recovered[FLAG_CF] != leaf) {
+        conformant = false;
+        continue;
+      }
+      recovered[FLAG_CF] = leaf;
+      continue;
+    }
+    conformant = false;
+  }
+
+  if (conformant) {
+    for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
+      Value* iv = recovered[flag] ? recovered[flag] : falseI1;
+      setFlag((Flag)flag, iv);
+    }
+    return;
+  }
+
+  // Generic path: extract each flag bit via lshr+trunc.
   for (int flag = FLAG_CF; flag < FLAGS_END; flag++) {
     int shiftAmount = flag;
     Value* shiftedFlagValue = createLShrFolder(
