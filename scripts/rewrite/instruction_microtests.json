@@ -5511,6 +5511,46 @@
       ]
     },
     {
+      "name": "vm_xor_shifted_self_word64_loop",
+      "symbol": "vm_xor_shifted_self_word64_loop_target",
+      "patterns": [
+        "xor",
+        "shl",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 281479271677953,    "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 562949953552386,    "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 844437815230464,    "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 8088688124911185984, "label": "0xCAFEBABE n=3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 6936316313013780480, "label": "0xDEADBEEF n=4" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709486080,"label": "all 0xFFFF n=4: cascading XOR mask" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 1407387768520711,    "label": "0x0001000200030004 n=1" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 15779697131309170688,"label": "0xCAFEBABEDEADBEEF n=4" }
+      ]
+    },
+    {
+      "name": "vm_xor_shifted_self_dword64_loop",
+      "symbol": "vm_xor_shifted_self_dword64_loop_target",
+      "patterns": [
+        "xor",
+        "shl",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 4294967296,         "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 8589934594,         "label": "x=2 n=1" },
+        { "inputs": { "RCX": 3 },                    "expected": 12884901888,        "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 14627333968358193854,"label": "0xCAFEBABE n=1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 16045690981097406464,"label": "0xDEADBEEF n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744069414584320,"label": "all 0xFFFFFFFF n=2: cascading XOR mask" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 16045690981097406464,"label": "0xCAFEBABEDEADBEEF n=2" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 12884901888,        "label": "0x100000003 n=2" }
+      ]
+    },
+    {
       "name": "vm_pair_xormul_byte64_loop",
       "symbol": "vm_pair_xormul_byte64_loop_target",
       "patterns": [
