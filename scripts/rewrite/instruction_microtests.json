@@ -4343,6 +4343,27 @@
       ]
     },
     {
+      "name": "vm_fnv1_dword64_loop",
+      "symbol": "vm_fnv1_dword64_loop_target",
+      "patterns": [
+        "mul",
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 12638153115695167455, "label": "x=0 n=1: basis*prime ^ 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 590682968308805178,   "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 12638153115695167453, "label": "x=2 n=1" },
+        { "inputs": { "RCX": 3 },                    "expected": 590680769285548756,   "label": "x=3 n=2" },
+        { "inputs": { "RCX": 51966 },                "expected": 12638153115695152417, "label": "0xCAFE n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 12638153114738691425, "label": "0xCAFEBABE n=1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 12863363256966945936, "label": "0xDEADBEEF n=2" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 343057470671516063,   "label": "all 0xFFFFFFFF n=2" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 12638153113929083183, "label": "0x12345...DEF0 n=1: dword 0x9ABCDEF0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 5928553275295805831,  "label": "K (golden) n=2" }
+      ]
+    },
+    {
       "name": "vm_adler32_64_loop",
       "symbol": "vm_adler32_64_loop_target",
       "patterns": [
