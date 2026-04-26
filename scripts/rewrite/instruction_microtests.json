@@ -3817,6 +3817,45 @@
       ]
     },
     {
+      "name": "vm_wordrev_window64_loop",
+      "symbol": "vm_wordrev_window64_loop_target",
+      "patterns": [
+        "shl",
+        "or",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 65536,              "label": "x=1 n=2: pack [1,0] reversed -> 0x10000" },
+        { "inputs": { "RCX": 2 },                    "expected": 8589934592,         "label": "x=2 n=3" },
+        { "inputs": { "RCX": 3 },                    "expected": 844424930131968,    "label": "x=3 n=4" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 205328612196352,    "label": "0xCAFEBABE n=3" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 13758460221250863104, "label": "0xDEADBEEF n=4 full word-swap" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "all 0xFFFF n=4 palindrome" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 4,                   "label": "0x0001000200030004 n=1: only word0=4" }
+      ]
+    },
+    {
+      "name": "vm_dwordrev_window64_loop",
+      "symbol": "vm_dwordrev_window64_loop_target",
+      "patterns": [
+        "shl",
+        "or",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 4294967296,         "label": "x=1 n=2: pack [1,0] reversed -> 0x100000000" },
+        { "inputs": { "RCX": 2 },                    "expected": 2,                   "label": "x=2 n=1: only dword0=2" },
+        { "inputs": { "RCX": 3 },                    "expected": 12884901888,        "label": "x=3 n=2" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 3405691582,         "label": "0xCAFEBABE n=1" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 16045690981097406464,"label": "0xDEADBEEF n=2: full dword-swap" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073709551615, "label": "all 0xFFFFFFFF n=2 palindrome" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 16045690984503098046, "label": "0xCAFEBABEDEADBEEF n=2: dwords swapped" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 12884901889,        "label": "0x100000003 n=2: dwords swapped" }
+      ]
+    },
+    {
       "name": "vm_nibrev_window64_loop",
       "symbol": "vm_nibrev_window64_loop_target",
       "patterns": [
