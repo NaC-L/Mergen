@@ -4487,6 +4487,27 @@
       ]
     },
     {
+      "name": "vm_xxhmix_mulxor64_loop",
+      "symbol": "vm_xxhmix_mulxor64_loop_target",
+      "patterns": [
+        "mul",
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 4278604620067964124, "label": "x=0 n=1: basis*P3 ^ 0, then lshr33 fold" },
+        { "inputs": { "RCX": 1 },                    "expected": 308337685116329214,  "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 7057523341914395112, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 1979780190627482518, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 4278604620067964116, "label": "x=8 n=1: basis*P3 ^ 8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 4656715518476933498, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 10644804712401029655, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 1330156412532094269, "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 4278604620067963948, "label": "0x12345...DEF0 n=1: byte 0xF0" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 6227944150419175729, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_xxhmix_word64_loop",
       "symbol": "vm_xxhmix_word64_loop_target",
       "patterns": [
