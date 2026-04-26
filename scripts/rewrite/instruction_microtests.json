@@ -4358,6 +4358,26 @@
       ]
     },
     {
+      "name": "vm_addxor_chain64_loop",
+      "symbol": "vm_addxor_chain64_loop_target",
+      "patterns": [
+        "add",
+        "xor",
+        "shl"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 3,                    "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 24,                   "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 15,                   "label": "x=7 n=8: chain converges to 0xF" },
+        { "inputs": { "RCX": 8 },                    "expected": 80,                   "label": "x=8 n=1: (8+8)^64=80" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 58283844736,          "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 37956206327,          "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 7,                    "label": "all 0xFF: x<<3 has low bits clear, add wraps" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 13099316782422772320, "label": "0x12345...DEF0 n=1" }
+      ]
+    },
+    {
       "name": "vm_negstep64_loop",
       "symbol": "vm_negstep64_loop_target",
       "patterns": [
