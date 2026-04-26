@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 418 vm-shaped samples (run #73, commit 7d32b33)
-- why it won: 133 cumulative new samples across 73 logged runs in this segment. Seventeen sibling-op pairs closed: satsub<>satadd, borrowchain<>carrychain, xormulsub<>xormuladd_chain, addxor<>subxor_chain, notor<>notand_chain, andxor_pair<>orxor_pair, pairmix_sub<>pairmix, threestate_xormul_sub<>threestate_xormul, lfsr64_galois<>lfsr64, zigzag_substep<>zigzag_step, lcg_ansi_chain_sub<>lcg_ansi_chain, xorrot_substep<>xorrot, squaresub<>squareadd, xorshift_rev<>xorshift, murmurstep_lshl<>murmurstep, djb2a<>djb2, fnv1<>fnv1a (mul-xor vs xor-mul order).
+- metric: 419 vm-shaped samples (run #74, commit 5866529)
+- why it won: 134 cumulative new samples across 74 logged runs in this segment. Eighteen sibling-op pairs closed: satsub<>satadd, borrowchain<>carrychain, xormulsub<>xormuladd_chain, addxor<>subxor_chain, notor<>notand_chain, andxor_pair<>orxor_pair, pairmix_sub<>pairmix, threestate_xormul_sub<>threestate_xormul, lfsr64_galois<>lfsr64, zigzag_substep<>zigzag_step, lcg_ansi_chain_sub<>lcg_ansi_chain, xorrot_substep<>xorrot, squaresub<>squareadd, xorshift_rev<>xorshift, murmurstep_lshl<>murmurstep, djb2a<>djb2, fnv1<>fnv1a, pcg_sub<>pcg64 (sub-increment LCG pair).
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
