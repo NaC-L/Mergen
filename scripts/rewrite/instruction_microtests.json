@@ -5609,6 +5609,26 @@
       ]
     },
     {
+      "name": "vm_andxor_pair64_loop",
+      "symbol": "vm_andxor_pair64_loop_target",
+      "patterns": [
+        "and",
+        "xor",
+        "mul"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 18446744073709551615, "label": "x=0 n=1: a=~0&0=0; b=~0^0=~0; sum=~0" },
+        { "inputs": { "RCX": 1 },                    "expected": 18446744073709551561, "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 18446744073709550867, "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 18446744073668772235, "label": "x=7 n=8: max trip" },
+        { "inputs": { "RCX": 8 },                    "expected": 18446744073709551567, "label": "x=8 n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 18443999238472319347, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 18425443143039481755, "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 18446744073704537531, "label": "all 0xFF: a&b stays ~0; b evolves via XOR-mul *7" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 10576133268926809695, "label": "0x12345...DEF0 n=1" }
+      ]
+    },
+    {
       "name": "vm_lcg_ansi_chain64_loop",
       "symbol": "vm_lcg_ansi_chain64_loop_target",
       "patterns": [
