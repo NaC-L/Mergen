@@ -4666,6 +4666,42 @@
       ]
     },
     {
+      "name": "vm_byte_orfold64_loop",
+      "symbol": "vm_byte_orfold64_loop_target",
+      "patterns": [
+        "or",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "x=0 n=1: 0|0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1 n=2: bytes [1,0] -> 1" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,   "label": "x=7 n=8: byte0=7 then 0s -> 7" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,   "label": "x=8 n=1: single byte=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 254, "label": "0xCAFEBABE n=7: BE|BA|FE|CA|0|0|0=0xFE=254" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 255, "label": "0xDEADBEEF n=8: EF|BE|AD|DE|0|0|0|0=0xFF=255" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 255, "label": "all 0xFF: r=0xFF" },
+        { "inputs": { "RCX": 9241421688590303745 }, "expected": 3,   "label": "0x8040201008040201 n=2: bytes [01,02] -> OR=0x03=3" }
+      ]
+    },
+    {
+      "name": "vm_byte_xorfold64_loop",
+      "symbol": "vm_byte_xorfold64_loop_target",
+      "patterns": [
+        "xor",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,   "label": "x=0 n=1: 0^0=0" },
+        { "inputs": { "RCX": 1 },                    "expected": 1,   "label": "x=1 n=2: 1^0=1" },
+        { "inputs": { "RCX": 7 },                    "expected": 7,   "label": "x=7 n=8: byte0=7 then 0s -> 7" },
+        { "inputs": { "RCX": 8 },                    "expected": 8,   "label": "x=8 n=1: single byte=8" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 48,  "label": "0xCAFEBABE n=7: BE^BA^FE^CA^0^0^0=0x30=48" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 34,  "label": "0xDEADBEEF n=8: EF^BE^AD^DE^0..0=0x22=34" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 0,   "label": "all 0xFF n=8: even count of FF -> 0" },
+        { "inputs": { "RCX": 1157442765409226783 }, "expected": 15,  "label": "0x101010101010101F n=8: bytes 1F,10x7 -> 0x1F^0x10=0x0F=15" }
+      ]
+    },
+    {
       "name": "vm_dword_orfold64_loop",
       "symbol": "vm_dword_orfold64_loop_target",
       "patterns": [
