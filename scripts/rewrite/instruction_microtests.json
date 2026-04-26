@@ -3362,6 +3362,44 @@
       ]
     },
     {
+      "name": "vm_prefixxor_word64_loop",
+      "symbol": "vm_prefixxor_word64_loop_target",
+      "patterns": [
+        "xor",
+        "shl",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                   "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 281479271743489,    "label": "x=1: prefix XOR scan over [1,0,0,0]" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 8088588352820918974, "label": "0xCAFEBABE: scan over [BABE,CAFE,0,0]" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 6936212214303080175, "label": "0xDEADBEEF: scan over [BEEF,DEAD,0,0]" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 281470681808895,    "label": "all 0xFFFF: prefix XOR yields packed [FFFF,0,FFFF,0]" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 1153725232041869039, "label": "0xCAFEBABEDEADBEEF: full scan" },
+        { "inputs": { "RCX": 281483566841860 },      "expected": 1125921382137860,    "label": "0x0001000200030004: scan over [4,3,2,1]" },
+        { "inputs": { "RCX": 65537 },                "expected": 1,                   "label": "0x10001: scan over [1,1,0,0] -> 1,0,0,0 packed = 1" }
+      ]
+    },
+    {
+      "name": "vm_prefixxor_dword64_loop",
+      "symbol": "vm_prefixxor_dword64_loop_target",
+      "patterns": [
+        "xor",
+        "shl",
+        "or"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 0,                    "label": "x=0 -> 0" },
+        { "inputs": { "RCX": 1 },                    "expected": 4294967297,          "label": "x=1: scan over [1,0]" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 14627333968358193854, "label": "0xCAFEBABE: scan over [CAFEBABE,0]" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 16045690984833335023, "label": "0xDEADBEEF: scan over [DEADBEEF,0]" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 4294967295,          "label": "all 0xFFFFFFFF: low keeps FFFFFFFF, high XOR cancels to 0" },
+        { "inputs": { "RCX": 14627333968688430831 }, "expected": 1464519053500333807, "label": "0xCAFEBABEDEADBEEF: scan over [DEADBEEF,CAFEBABE]" },
+        { "inputs": { "RCX": 4294967299 },           "expected": 8589934595,          "label": "0x100000003: scan over [3,1]" },
+        { "inputs": { "RCX": 305419896 },            "expected": 1311768465173141112, "label": "0x12345678: scan over [12345678,0]" }
+      ]
+    },
+    {
       "name": "vm_deinterleave64_loop",
       "symbol": "vm_deinterleave64_loop_target",
       "patterns": [
