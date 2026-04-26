@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 326 vm-shaped samples (run #24, commit 19be928)
-- why it won: 41 cumulative new samples in this segment, all width-symmetric completions of established families. Recent additions in addition to the previous round: addshl chain at byte and word, max-reduction at word and dword, product-reduction at word and dword, squared-sum reduction at word and dword. Pattern: start from a sample whose neighbors at other widths are missing, mirror its dispatcher exactly, swap the lane mask / shift width / n_mask, regenerate semantic vectors with python before committing.
+- metric: 356 vm-shaped samples (run #34, commit b412e8c)
+- why it won: 71 cumulative new samples in this segment, all width-symmetric completions of in-tree families. Latest additions extend the *_idx64 family (lane*counter ADD/SUB/AND/OR/XOR + sext-i16/i32 ADD/XOR) to u16/u32 stride, the dyn{shl,lshr,ashr}_accum trio to u16/u32 stride, mod3/div5/shl3_xor reducers to u16/u32 stride, and self-referential xormul + counter-squared scaled add to u16/u32 stride. Pattern: read the existing byte-stride sample, mirror its dispatcher exactly, swap mask/n_mask/lane width, regenerate semantic vectors with python, validate before commit.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
