@@ -2627,6 +2627,27 @@
       ]
     },
     {
+      "name": "vm_xorshift_rev64_loop",
+      "symbol": "vm_xorshift_rev64_loop_target",
+      "patterns": [
+        "xor",
+        "shl",
+        "lshr"
+      ],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 129,                  "label": "x=0 n=1: state=1, R13/L7/R17 -> 129" },
+        { "inputs": { "RCX": 1 },                    "expected": 16385,                "label": "x=1 n=2" },
+        { "inputs": { "RCX": 2 },                    "expected": 6341301,              "label": "x=2 n=3" },
+        { "inputs": { "RCX": 7 },                    "expected": 504403188332562920,  "label": "x=7 n=8 max" },
+        { "inputs": { "RCX": 8 },                    "expected": 1161,                 "label": "x=8 n=1" },
+        { "inputs": { "RCX": 3405691582 },           "expected": 15882968960391677790, "label": "0xCAFEBABE n=7" },
+        { "inputs": { "RCX": 3735928559 },           "expected": 494289512220922899,  "label": "0xDEADBEEF n=8" },
+        { "inputs": { "RCX": 18446744073709551615 }, "expected": 7826952085264826407, "label": "all 0xFF n=8" },
+        { "inputs": { "RCX": 1311768467463790320 }, "expected": 601000636361394729,   "label": "0x12345...DEF0 n=1" },
+        { "inputs": { "RCX": 11400714819323198485 }, "expected": 14858760881221624209, "label": "K (golden) n=6" }
+      ]
+    },
+    {
       "name": "vm_bswap64_loop",
       "symbol": "vm_bswap64_loop_target",
       "patterns": [
