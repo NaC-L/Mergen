@@ -49,6 +49,10 @@ enum class DiagCode : uint16_t {
   LiftBlockBudgetExceeded   = 503,
   IncompleteBlockSealed     = 504,
 
+  // Optimization fixpoint (51x)
+  FixpointConverged         = 510,
+  FixpointMaxIterations     = 511,
+
 };
 
 struct DiagnosticEntry {
@@ -65,6 +69,37 @@ struct LiftStats {
   unsigned blocks_unreachable = 0;
   unsigned instructions_lifted = 0;
   unsigned instructions_unsupported = 0;
+};
+
+// Per-iteration record for the run_opts fixpoint loop.
+// Counts are llvm::Module::getInstructionCount() after the named pass runs;
+// `before` is the count at the top of the iteration (== `after_post` of the
+// previous iteration, or `initial` for iter 0).
+struct FixpointIteration {
+  unsigned iteration;
+  size_t before;
+  size_t after_o1;
+  size_t after_geploadpass;
+  size_t after_replacetrunc;
+  size_t after_promotestack;
+  size_t after_promotemem;
+  // Wall-clock time per pass (milliseconds). `ms` is the iteration total.
+  double o1_ms;
+  double geploadpass_ms;
+  double replacetrunc_ms;
+  double promotestack_ms;
+  double promotemem_ms;
+  double ms;
+};
+
+struct FixpointStats {
+  unsigned iterations = 0;
+  bool reached_cap = false;
+  size_t initial_size = 0;       // module->getInstructionCount() before iter 0
+  size_t final_loop_size = 0;    // count when the loop exits
+  size_t final_o2_size = 0;      // count after the post-fixpoint O2 pipeline
+  size_t final_post_size = 0;    // count after the post-passes (canonical naming etc.)
+  std::vector<FixpointIteration> iteration_log;
 };
 
 class LiftDiagnostics {
@@ -104,7 +139,8 @@ public:
 
   // Emit diagnostics + profile + stats as JSON string.
   std::string toJson(const std::vector<std::pair<std::string, double>>* profile = nullptr,
-                     const struct LiftStats* stats = nullptr) const {
+                     const struct LiftStats* stats = nullptr,
+                     const struct FixpointStats* fixpoint = nullptr) const {
     std::ostringstream os;
     os << "{\n";
 
@@ -156,6 +192,42 @@ public:
       os << "    \"instructions_unsupported\": " << stats->instructions_unsupported << "\n";
       os << "  },\n";
     }
+    // Optimization fixpoint stats.
+    if (fixpoint) {
+      os << "  \"optimization\": {\n";
+      os << "    \"iterations\": " << fixpoint->iterations << ",\n";
+      os << "    \"reached_cap\": " << (fixpoint->reached_cap ? "true" : "false") << ",\n";
+      os << "    \"initial_size\": " << fixpoint->initial_size << ",\n";
+      os << "    \"final_loop_size\": " << fixpoint->final_loop_size << ",\n";
+      os << "    \"final_o2_size\": " << fixpoint->final_o2_size << ",\n";
+      os << "    \"final_post_size\": " << fixpoint->final_post_size << ",\n";
+      os << "    \"iteration_log\": [";
+      for (size_t i = 0; i < fixpoint->iteration_log.size(); ++i) {
+        const auto& it = fixpoint->iteration_log[i];
+        if (i == 0) os << "\n";
+        os << "      {";
+        os << "\"iter\": " << it.iteration;
+        os << ", \"before\": " << it.before;
+        os << ", \"after_o1\": " << it.after_o1;
+        os << ", \"after_geploadpass\": " << it.after_geploadpass;
+        os << ", \"after_replacetrunc\": " << it.after_replacetrunc;
+        os << ", \"after_promotestack\": " << it.after_promotestack;
+        os << ", \"after_promotemem\": " << it.after_promotemem;
+        os << std::fixed << std::setprecision(3);
+        os << ", \"o1_ms\": " << it.o1_ms;
+        os << ", \"geploadpass_ms\": " << it.geploadpass_ms;
+        os << ", \"replacetrunc_ms\": " << it.replacetrunc_ms;
+        os << ", \"promotestack_ms\": " << it.promotestack_ms;
+        os << ", \"promotemem_ms\": " << it.promotemem_ms;
+        os << ", \"ms\": " << it.ms;
+        os << "}";
+        if (i + 1 < fixpoint->iteration_log.size()) os << ",";
+        os << "\n";
+      }
+      os << "    ]\n";
+      os << "  },\n";
+    }
+
 
     // Summary.
     os << "  \"summary\": {";
