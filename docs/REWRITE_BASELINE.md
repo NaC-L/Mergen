@@ -33,6 +33,9 @@ Sample sources live in:
 - `scripts/rewrite/run_flagstress.cmd` — one-command strict flag suite runner (auto-generates flag-stress vectors and executes microtests with strict flag assertions)
 - `run.ps1` validates that `instruction_microtests.json` covers every `testcases/rewrite_smoke/*` source file
 - `scripts/rewrite/check_semantic.py` — runtime semantic regression for all lifted samples; reads `semantic` cases from the manifest, generates lli-executable wrappers, and verifies return values across all declared inputs (33 samples, 177 test cases)
+- `scripts/rewrite/check_diagnostics.py` — schema guard for `output_diagnostics.json`; asserts the `optimization` section and per-iteration fields are present after every lift. Wired into `run.ps1`, which copies each sample's diagnostics into `ir_outputs/<sample>.diag.json` and runs the check before moving on
+- `scripts/rewrite/generate_vm_sample.py` — generator for the predicate-gated reducer family `vm_<width>_<op>_<pred>_thresh64_loop` (widths byte/word/dword, ops and/or/xor/sum, predicates uge/ult). `check <name>` re-derives expected values for an existing manifest sample and asserts equality; `emit <name> [--out-dir DIR]` writes a fresh `.c` and prints a manifest snippet for paste-in
+- `scripts/rewrite/check_case_index.py` — classifies each lifted `.ll`'s `switch` instruction(s) as `logical_index` (case keys are small integers, the desired shape) or `address_shaped` (case keys are code-address-sized values). `report <ir-dir>` prints the full corpus split; `gate <file.ll>` exits non-zero unless the classification is `logical_index`. Wired into `verify.ps1` for samples flagged `case_index_required: true` in the manifest. The currently address-shaped samples (`calc_switch`, `jumptable_computation`, `jumptable_shared_targets`, `jumptable_shifted`) are tracked in `docs/SCOPE.md` as a known gap
 
 Helper build scripts for local development are in:
 

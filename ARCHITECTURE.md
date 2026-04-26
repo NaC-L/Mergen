@@ -36,6 +36,10 @@ Final O2 pipeline (runs once after fixpoint)
 
 Termination: the loop compares instruction count before and after each iteration. When the count stops changing, the fixpoint is reached.
 
+Iteration cap: the loop bails out after 64 iterations and emits a `FixpointMaxIterations` warning diagnostic. This is a safety net against pass oscillation, not an expected termination path.
+
+Observability: each iteration is recorded into `fixpointStats.iteration_log` and emitted under the `optimization` section of `output_diagnostics.json`. Per-iteration fields: `before`, `after_o1`, `after_geploadpass`, `after_replacetrunc`, `after_promotestack`, `after_promotemem`, plus per-pass `*_ms` timings and total `ms`. The four custom passes are run as separate `ModulePassManager` invocations so per-pass instruction-count delta and wall-clock cost are observable; O1 is recorded as a single bundle. Module-level fields: `iterations`, `reached_cap`, `initial_size`, `final_loop_size`, `final_o2_size`, `final_post_size`.
+
 ## Custom Pass Summary
 
 | Pass | Filters on | Produces | Description |
