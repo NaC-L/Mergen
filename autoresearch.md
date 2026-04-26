@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 318 vm-shaped samples (run #20, commit 067fdb6)
-- why it won: 33 cumulative new samples in this segment, all width-symmetric completions of established families (predicate-gated reducer ult variants, gt_thresh count, ne_first count, nonzero count, increase count, or/xor fold at byte, add/sub/xormul chain at byte, alt sum at word/dword, max/min/clamp const-sum at word/dword, bit_pos count at word/dword, imported rotr). Each sample reuses the in-tree PC-state shape exactly so the lifter sees the same dispatcher form it already lifts cleanly.
+- metric: 326 vm-shaped samples (run #24, commit 19be928)
+- why it won: 41 cumulative new samples in this segment, all width-symmetric completions of established families. Recent additions in addition to the previous round: addshl chain at byte and word, max-reduction at word and dword, product-reduction at word and dword, squared-sum reduction at word and dword. Pattern: start from a sample whose neighbors at other widths are missing, mirror its dispatcher exactly, swap the lane mask / shift width / n_mask, regenerate semantic vectors with python before committing.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
