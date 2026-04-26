@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 390 vm-shaped samples (run #50, commit 49f0629) - 50-run / 105-sample segment mark
-- why it won: 105 cumulative new samples across 50 logged runs in this segment, all width-symmetric completions of in-tree byte-stride samples. Latest addition: vm_pair_xormul_word64_loop (2 u16 words per iter, 1..2 trip count). The dword variant of pair_xormul is not viable (only 1 trip fits) so the family stops at byte+word. Easy width-mirror lever consumed: per-run gain has dropped from 6-9 in early segment to 1-2 most recent runs, and remaining single-stride samples are tied to byte-specific design choices (input-derived multipliers, byte-walking shifts, byte-tuned modular constants) that cannot be mirrored without redesigning the test.
+- metric: 391 vm-shaped samples (run #51, commit 14f327a)
+- why it won: 106 cumulative new samples across 51 logged runs in this segment, all width-symmetric completions of in-tree byte-stride samples. Latest addition: vm_wordmatch64_loop (3-trip count-of-words-equal-to-top-word). Lever saturation: per-run gain has fallen from 9 in early segment to 1 in this run, and turn-over-turn the marginal samples now require careful inspection to confirm distinctness from existing ones - the second decimal-mismatch bug in two turns is a leading indicator that I'm reaching for variants whose value no longer justifies the bookkeeping cost. Recommend: switch segment to a different metric (lifter correctness on the expanded corpus, structural-VM lifter-pass rate) before further width-mirror additions.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
