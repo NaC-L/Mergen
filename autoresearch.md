@@ -63,8 +63,8 @@
 - notes: harness initially printed METRIC lines but `run_experiment` did not capture stdout. Replaced the powershell+heredoc body with a powershell wrapper that resolves py.exe and runs an inline python `-c` script; stdout is still empty under run_experiment on this host but `bash autoresearch.sh` from `proxy_bash` reports the correct metric, so I log keeps with `force: true` after manual verification.
 
 ## Current best
-- metric: 404 vm-shaped samples (run #59, commit 718c0e4)
-- why it won: 119 cumulative new samples across 59 logged runs in this segment. Latest sibling-operation extensions: vm_satsub64 (saturating sub pair with satadd); vm_borrowchain (ripple-borrow pair with carrychain); vm_xormulsub_chain (sub pair with xormuladd_chain). The lever is now sibling-op pair completion - finding samples that test the additive/positive direction and adding the symmetric sub/negative variant.
+- metric: 405 vm-shaped samples (run #60, commit c3dd822) - 60-run / 120-sample mark
+- why it won: 120 cumulative new samples across 60 logged runs in this segment. Sibling-op pair completion lever: satsub<>satadd, borrowchain<>carrychain, xormulsub<>xormuladd_chain, addxor<>subxor_chain. Earlier in segment: width-symmetric extensions across reducer/count/hash/shift/range/clamp/Horner/Murmur/xxhmix/fnv1a/djb2/dyn{shl,lshr,ashr}_accum/lane*counter/var_horner/shiftin_top/rev_window/xor_shifted_self/data-dependent-shift trio/byte_loop narrow-recurrence/prefix-XOR scan/dynshl_pack-chunks.
 
 ## What's Been Tried
 - experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
