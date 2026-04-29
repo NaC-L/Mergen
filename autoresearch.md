@@ -41,7 +41,7 @@
 
 ## Current best
 - metric: 1
-- why it won: The code path was already correct; syncing stale README / loop-handling / manifest commentary removed the visible mismatch without changing lifter behavior.
+- why it won: The code path was already correct; syncing stale README / loop-handling / manifest commentary removed the visible mismatch without changing lifter behavior. The benchmark harness is kept in its simpler tee-based form because the more complex single-path PowerShell rewrite did not improve capture or metrics.
 
 ## What's Been Tried
 - experiment: stale README / loop-handling notes investigated
@@ -56,3 +56,7 @@
 - lesson: cmd-based direct Python launch also fails under `run_experiment` while succeeding in the shell, so no launcher variant within scope is fixing benchmark capture.
 - experiment: simplified single-path `autoresearch.sh` using one PowerShell invocation
 - lesson: even after collapsing the harness to a single launcher and metric-emission path, direct shell output works but `run_experiment` still records an empty benchmark log with null parsed metrics. The remaining fault is outside repo-scoped harness logic.
+- experiment: restore the simpler tee-based `autoresearch.sh` wrapper
+- lesson: equal metric with less harness complexity is the better kept state. Capture still fails under `run_experiment`, but the extra PowerShell-only rewrite provided no benefit.
+- experiment: segment exhaustion check
+- lesson: with `themida_pass_count` already at 1 for the only tracked sample, lifter/test/sample changes off-limits, and runner capture failures proven across direct, cmd, bash, and PowerShell launch shapes, there is no remaining in-scope repo change likely to improve the metric or produce a better kept state.
