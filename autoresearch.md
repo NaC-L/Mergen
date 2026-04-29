@@ -1,62 +1,85 @@
 # Autoresearch
 
 ## Goal
-- Sync Themida-facing docs and manifest notes with the current passing behavior of `example2-virt.bin`.
+- Populate more rewrite-smoke test cases that exercise VM-shaped dispatch with
+  real loops, including custom toy VMs (register machines, nested loops in PC
+  state, conditional branches inside VM loop bodies). Each new sample must be
+  fully wired into the manifest with a symbol, IR pattern set, and at least
+  six semantic test cases covering edge inputs.
 
 ## Benchmark
 - command: bash autoresearch.sh
-- primary metric: themida_pass_count
+- primary metric: vm_sample_count
 - metric unit: count
 - direction: higher
-- secondary metrics: missing_required_imports
+- secondary metrics: total_semantic_cases, manifest_samples
 
 ## Files in Scope
-- README.md
-- docs/LOOP_HANDLING.md
-- scripts/rewrite/themida_samples.json
-- autoresearch.sh
+- testcases/rewrite_smoke/
+- scripts/rewrite/instruction_microtests.json
+- scripts/rewrite/generate_semantic_reports.py
+- docs/semantic_reports/
 
 ## Off Limits
 - lifter/
-- build_iced/
-- testthemida/
-- test.py
 - scripts/dev/
+- scripts/rewrite/run.cmd
+- scripts/rewrite/run.ps1
+- scripts/rewrite/verify.ps1
+- scripts/rewrite/build_samples.cmd
+- scripts/rewrite/manifest_validation.ps1
+- scripts/rewrite/check_semantic.py
+- test.py
 
 ## Constraints
-- Do not change lifter behavior in this segment.
-- Only update stale documentation / manifest commentary.
-- Verification must use the existing `python test.py themida` gate.
+- Every file in `testcases/rewrite_smoke/` MUST have exactly one matching
+  manifest entry in `scripts/rewrite/instruction_microtests.json` (manifest
+  validation enforces this on `python test.py baseline`).
+- Manifest entries MUST include `name`, `symbol`, `patterns` (non-empty),
+  and `semantic` with concrete inputs and expected return values.
+- New VM samples MUST keep their dispatcher in `__declspec(noinline)` and
+  use symbolic input-derived loop bounds so the lifter cannot constant-fold
+  the loop away.
+- Samples MUST be lli-executable: avoid bytecode-array memory loads outside
+  the function stack and avoid platform-specific intrinsics.
+- DO NOT modify the lifter, build pipeline, or verification scripts.
 
 ## Preflight
-- `build_iced/lifter.exe` already exists in this workspace.
-- The Themida sample binaries live in `../testthemida/`.
+- `clang-cl` and `nasm` resolution is handled by `scripts/rewrite/build_samples.cmd`.
+- Full lifter regression requires `python test.py baseline`, which wipes
+  `build_iced/`. Treat that as expensive and run only when validating a
+  batch of new samples end-to-end.
+- The autoresearch metric is cheap (manifest stats only); end-to-end
+  lifter/lli verification is a separate, manual gate.
 
 ## Comparability invariant
-- `autoresearch.sh` must keep using `python test.py themida` and the same sample set.
+- Metric is computed by parsing `scripts/rewrite/instruction_microtests.json`
+  with a fixed Python snippet inside `autoresearch.sh`. Do not change the
+  parser or the manifest schema between runs without re-initializing the
+  segment.
 
 ## Baseline
-- metric: 1
-- notes: `python test.py themida` passes for the single tracked sample (`example2`).
+- metric:
+- notes:
 
 ## Current best
-- metric: 1
-- why it won: The code path was already correct; syncing stale README / loop-handling / manifest commentary removed the visible mismatch without changing lifter behavior. The benchmark harness is kept in its simpler tee-based form because the more complex single-path PowerShell rewrite did not improve capture or metrics.
+- metric:
+- why it won:
 
 ## What's Been Tried
-- experiment: stale README / loop-handling notes investigated
-- lesson: current tree already passes the Themida equivalence gate; the bug is in docs, not lifting.
-- experiment: direct `run_experiment` capture probe via `python.exe test.py themida`
-- lesson: on this workstation, `run_experiment` leaves `benchmark.log` empty even when the command succeeds, so parsed metrics stay null. Keep manual metric logging for this segment instead of treating `autoresearch.sh` as the cause.
-- experiment: alternate wrapper probe via `cmd /c bash autoresearch.sh`
-- lesson: changing the command form does not fix capture; the command succeeds under direct shell execution but still fails with exit 127 and an empty benchmark log under `run_experiment`.
-- experiment: PowerShell wrapper probe via `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "python.exe test.py themida"`
-- lesson: a third launcher shape still produces an empty benchmark log with null parsed metrics under `run_experiment`, so the runner limitation is wrapper-independent on this workstation.
-- experiment: cmd Python probe via `cmd /c python.exe test.py themida`
-- lesson: cmd-based direct Python launch also fails under `run_experiment` while succeeding in the shell, so no launcher variant within scope is fixing benchmark capture.
-- experiment: simplified single-path `autoresearch.sh` using one PowerShell invocation
-- lesson: even after collapsing the harness to a single launcher and metric-emission path, direct shell output works but `run_experiment` still records an empty benchmark log with null parsed metrics. The remaining fault is outside repo-scoped harness logic.
-- experiment: restore the simpler tee-based `autoresearch.sh` wrapper
-- lesson: equal metric with less harness complexity is the better kept state. Capture still fails under `run_experiment`, but the extra PowerShell-only rewrite provided no benefit.
-- experiment: segment exhaustion check
-- lesson: with `themida_pass_count` already at 1 for the only tracked sample, lifter/test/sample changes off-limits, and runner capture failures proven across direct, cmd, bash, and PowerShell launch shapes, there is no remaining in-scope repo change likely to improve the metric or produce a better kept state.
+- experiment: vm_callret_loop with explicit return-PC stack (rstack[rsp])
+  lesson: dispatcher reads next pc from a stack array; lifter cannot generalize the indirect dispatch and trips diagnostic 503 (basic-block budget exceeded, ~4087 blocks). Sample removed; revisit when loop generalization handles stack-indexed pc.
+- experiment: vm_subroutine_loop with single-int rpc slot (one-deep call/ret)
+  lesson: even a single non-indexed `pc = rpc` indirect dispatch crashes the lifter (access violation, exit 0xC0000005) when invoked through PowerShell. The ret-to-stack-loaded-pc pattern is fundamentally unsupported regardless of stack depth. Removed.
+- experiment: vm_bubblesort_loop with adjacent compare-and-swap on a stack array
+  lesson: even a single bubble pass (loop body conditionally writes TWO indexed stack-array slots) trips diagnostic 503 (BB budget exceeded). The lifter enumerates the swap-vs-no-swap path across every iteration. Comparison-driven update of a single accumulator (vm_minarray_loop) is fine; two-slot conditional writes inside a loop are not. Sample removed.
+- experiment: vm_tea_round_loop with TEA-style compound multi-state cross-update
+  lesson: lifter generates IR with the right shape (peeled loop with phi nodes) and pattern verification passes, but the lifted IR computes the WRONG value for some symbolic inputs (e.g. x=0x65501 with n=6: native+python both produce 37119, lifter returns a different value). Real lifter correctness bug for compound v0/v1 cross-update bodies. Sample removed.
+- experiment: vm_switch_dispatch_loop using `switch` for dispatch
+  lesson: lifter collapsed the switch-dispatched VM to a constant -1 return; same class of limitation. Removed.
+- experiment: end-to-end rewrite regression via run_experiment
+  lesson: harness env sets CI=1 and LLVM_DIR points at an install without bundled clang-cl, so build_samples.cmd refuses host fallback. Must pin CLANG_CL_EXE explicitly.
+- experiment: speculative IR patterns vs lifter-observed shapes
+  lesson: 13/18 first-pass VM patterns missed because the lifter heavily compresses dispatchers (if-else -> switch i32, fixed-trip loops unrolled or recognized as intrinsics like llvm.bitreverse.i8, triangular sums closed-form-solved into mul i33 + lshr i33). Patterns must be derived from lifted IR, not from source-level shape.
+- experiment: lli semantic check found undef for empty-loop inputs (limit=0) in branchy/collatz
+  lesson: lifter pseudo-stack promotion drops the entry-block init when the same slot is also written inside a dispatcher state. Fix is the dual_counter pattern: keep an explicit init dispatcher state on the entry-to-halt path. branchy needed `i=0; count=0;` inside BV_LOAD_LIMIT to thread `[ 0, %entry ]` through the loop phi instead of `[ undef, %entry ]`.
