@@ -180,7 +180,8 @@ We get the flags, then we get the 7th bit which is Sign Flag, then we use the Si
 
 Even though we solve the indirect jumps, jumps with more than 2 possible location are not supported. This is because the analysis for them are not implemented yet. This allows us to solve the vm-style branches, but have problem with real life jumptables.
 
-### Example #3 (Themida 3.1.6.0 LION64 (Red))
+### Example #3 (Themida 3.1.6.0 LION64)
+
 Our target program:
 
 ![image](images/themida_disas_b.png)
@@ -202,27 +203,10 @@ Running Mergen:
 ![image](images/running_on_themida.png)
 
 Output code: [click here](docs/themida_output.ll)
-So, why our result is not succesful as lifting a binary thats protected by vmp?
 
-Themida actively writes on .themida section. Unlike stack, we cant disregard these writes, because these values might be read by other stuff later.
+On the current tree this sample lifts successfully, and `python test.py themida` passes. The lifted IR surfaces the guest program's `GetStdHandle`, `WriteConsoleA`, `ReadConsoleA`, and `CharUpperA` imports again, so the older lazy-fix writeup is no longer an accurate description of mainline behavior.
 
-But, we have a temporary solution to that. Remove all stores into .themida section. Since our program doesnt write into memory, [I just commented all the stores.](docs/themida_output_lazy_fix.ll) Now we are left with this:
-
-```llvm
-source_filename = "my_lifting_module"
-
-define i64 @main(i64 %rax, i64 %rcx, i64 %rdx, i64 %rbx, i64 %rsp, i64 %rbp, i64 %rsi, i64 %rdi, i64 %r8, i64 %r9, i64 %r10, i64 %r11, i64 %r12, i64 %r13, i64 %r14, i64 %r15, ptr writeonly %memory) local_unnamed_addr #0 {
-  %trunc = trunc i64 %r8 to i32
-  %trunc1 = trunc i64 %rdx to i32
-  %trunc2 = trunc i64 %rcx to i32
-  %realadd-5369771371- = add i32 %trunc1, %trunc2
-  %realadd-5369582686- = add i32 %realadd-5369771371-, %trunc
-  %trunc457139 = zext i32 %realadd-5369582686- to i64
-  ret i64 %trunc457139
-}
-
-attributes #0 = { mustprogress nofree norecurse nosync nounwind willreturn memory(argmem: write) }
-```
+The remaining challenge is robustness rather than basic success. Themida-style dispatch still produces many spurious indirect-branch candidates during path solving, and the lifter prunes unmapped switch targets instead of trying to decode garbage. See `lifter/analysis/PathSolver.ipp` and `scripts/rewrite/themida_samples.json` for the current gate and rationale.
 # Technical challenges
 - Loops
 - Self Modifying Code ( especially with conditional modification)
