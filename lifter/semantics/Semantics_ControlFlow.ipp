@@ -409,6 +409,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     function->getParent()->print(OS, nullptr);
   });
 
+  auto emitResolvedFunctionReturn = [&]() {
+    auto rax = GetRegisterValue(Register::RAX);
+    rax = createZExtFolder(
+        rax, builder->getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
+    builder->CreateRet(rax);
+    run = 0;
+    finished = 1;
+    printvalue2(finished);
+  };
+
   uint64_t destination = 0;
 
   uint8_t rop_result = REAL_return;
@@ -420,57 +430,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     rop_result = rspval == STACKP_VALUE ? REAL_return : ROP_return;
   }
   printvalue2(rop_result);
+
   if (rop_result == REAL_return) {
-    // lastinst->eraseFromParent();
     block->setName("real_return-" + std::to_string(current_address) + "-");
-
-    auto rax = GetRegisterValue(Register::RAX);
-    rax = createZExtFolder(
-        rax, builder->getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
-    // put this in a function
-    // One entry per x64 GPR (RAX..R15).
-    std::vector<llvm::Type*> argTypes(16, llvm::Type::getInt64Ty(context));
-    auto myStructType = StructType::create(context, argTypes, "returnStruct");
-
-    auto myStruct = UndefValue::get(myStructType);
-    // Use CreateInsertValue for structs
-    // auto returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RCX), {1});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RDX), {2});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RBX), {3});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RSP), {4});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RBP), {5});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RSI), {6});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RDI), {7});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R8), {8});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R9), {9});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R10), {10});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R11), {11});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R12), {12});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R13), {13});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R14), {14});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R15), {15});
-    builder->CreateRet(rax);
-    Function* originalFunc_finalnopt = builder->GetInsertBlock()->getParent();
-
-    run = 0;
-    finished = 1;
-    printvalue2(finished);
+    emitResolvedFunctionReturn();
     return;
   }
 
