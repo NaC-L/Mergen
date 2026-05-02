@@ -585,16 +585,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
                             instruction.types[0] == OperandType::Immediate16 ||
                             instruction.types[0] == OperandType::Immediate32 ||
                             instruction.types[0] == OperandType::Immediate64;
-  switch (instruction.types[0]) {
-  case OperandType::Immediate8:
-  case OperandType::Immediate16: // todo: test 8 and 16
-  case OperandType::Immediate32:
-  case OperandType::Immediate64: {
+  // For direct jumps the immediate is RIP-relative, so add it to the
+  // current RIP to get the absolute target. Indirect jumps already hold
+  // an absolute address (or a computed pointer) in `trunc`.
+  if (isDirectJump) {
     trunc = createAddFolder(trunc, ripval);
     printvalue(trunc);
-  }
-  default:
-    break;
   }
   ScopedPathSolveContext pathSolveContext(
       this, isDirectJump ? PathSolveContext::DirectJump
