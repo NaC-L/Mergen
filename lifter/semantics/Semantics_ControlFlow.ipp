@@ -475,6 +475,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
       auto* contVal = GetMemoryValue(getSPaddress(), 64);
       if (auto* contConst = llvm::dyn_cast<llvm::ConstantInt>(contVal)) {
         uint64_t contVA = contConst->getZExtValue();
+        auto* contRsp = createAddFolder(
+            rsp_result,
+            ConstantInt::getSigned(Type::getInt64Ty(context), ptrSize),
+            "ret-chain-cont-rsp-" + std::to_string(current_address) + "-");
+        SetRegisterValue(Register::RSP, contRsp);
         const std::string& importName = importIt->second;
         // Emit `call @import` but with an EMPTY volatileRegs set so the
         // lifter does not clobber caller-saved GPRs post-call. Rationale:
