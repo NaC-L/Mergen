@@ -154,6 +154,20 @@ static constexpr std::array<uint64_t, 3> kSupportedGeneralizedControlFieldOffset
 
 The diagnostic prints scattered across `PathSolver.ipp`, `LifterClass.hpp`, `LifterClass_Concolic.hpp`, and `GEPTracker.ipp` that gate on specific Themida addresses (`0x1400237F9ULL`, `0x140023582-0x1400237FFULL`, etc.) only fire under `MERGEN_DIAG_LIFT_PROGRESS=1` and are session scaffolding for that sample. They produce no output for any other binary.
 
+## Indirect-jump revisit threshold
+
+Dispatcher-shaped loops reached through `PathSolveContext::IndirectJump` use a revisit threshold before generalized-loop abstraction kicks in. This is an explicit precision/performance tradeoff, not an arbitrary constant:
+
+- Generalize too early and Themida-style dispatchers lose concrete continuation state before the later guest-import path is surfaced.
+- Generalize too late and the lifter spends too long replaying dispatcher handlers concretely, which increases worklist churn and can hit unrelated budgets on larger samples.
+
+Current operational rule for the reference Themida sample:
+
+- `dispatcherShape ? 128u : 0u` is the last known-good threshold on `example2-virt.bin` for preserving the later console-output path.
+- Lowering it to `80` regresses the sample from the fuller 6-import / 10-call output back down to the older 4-import / 5-call output.
+
+Long term, this should become adaptive rather than staying a magic number forever. The right trigger is novelty of dispatcher state or continuation targets, not raw revisit count alone. Until that adaptive policy exists, treat `128` as the conservative regression-safe default for indirect-jump dispatcher generalization.
+
 ## Tests
 
 Loop handling has roughly thirty microtests in `lifter/test/Tester.hpp`. The most relevant groups:

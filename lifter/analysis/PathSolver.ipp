@@ -376,7 +376,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(PATH_info)::solvePath(
       printvalue2("b");
       condition = can_simplify.value();
     } else if (auto can_simplify2 = try_simplify(secondcase, simplifyValue)) {
-      // TODO: fix?
+      // The select's trueValue is `secondcase`, not `firstcase`.
+      // Downstream code wires `firstcase` to bb_true and `secondcase`
+      // to bb_false (see CreateCondBr below), so the firstcase/secondcase
+      // labels need to mean "true side" and "false side" respectively.
+      // Swap them once here so the existing wiring stays correct without
+      // a parallel reversed-branch path.
       printvalue2("c");
       std::swap(firstcase, secondcase);
       condition = can_simplify2.value();

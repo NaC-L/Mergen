@@ -409,6 +409,16 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     function->getParent()->print(OS, nullptr);
   });
 
+  auto emitResolvedFunctionReturn = [&]() {
+    auto rax = GetRegisterValue(Register::RAX);
+    rax = createZExtFolder(
+        rax, builder->getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
+    builder->CreateRet(rax);
+    run = 0;
+    finished = 1;
+    printvalue2(finished);
+  };
+
   uint64_t destination = 0;
 
   uint8_t rop_result = REAL_return;
@@ -420,57 +430,10 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
     rop_result = rspval == STACKP_VALUE ? REAL_return : ROP_return;
   }
   printvalue2(rop_result);
+
   if (rop_result == REAL_return) {
-    // lastinst->eraseFromParent();
     block->setName("real_return-" + std::to_string(current_address) + "-");
-
-    auto rax = GetRegisterValue(Register::RAX);
-    rax = createZExtFolder(
-        rax, builder->getIntNTy(file.getMode() == arch_mode::X64 ? 64 : 32));
-    // put this in a function
-    // One entry per x64 GPR (RAX..R15).
-    std::vector<llvm::Type*> argTypes(16, llvm::Type::getInt64Ty(context));
-    auto myStructType = StructType::create(context, argTypes, "returnStruct");
-
-    auto myStruct = UndefValue::get(myStructType);
-    // Use CreateInsertValue for structs
-    // auto returnvalue = builder->CreateInsertValue(myStruct, rax, {0});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RCX), {1});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RDX), {2});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RBX), {3});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RSP), {4});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RBP), {5});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RSI), {6});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::RDI), {7});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R8), {8});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R9), {9});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R10), {10});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R11), {11});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R12), {12});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R13), {13});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R14), {14});
-    // returnvalue = builder->CreateInsertValue(
-    //     returnvalue, GetRegisterValueWrapper(Register::R15), {15});
-    builder->CreateRet(rax);
-    Function* originalFunc_finalnopt = builder->GetInsertBlock()->getParent();
-
-    run = 0;
-    finished = 1;
-    printvalue2(finished);
+    emitResolvedFunctionReturn();
     return;
   }
 
@@ -512,6 +475,11 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_ret() { // fix
       auto* contVal = GetMemoryValue(getSPaddress(), 64);
       if (auto* contConst = llvm::dyn_cast<llvm::ConstantInt>(contVal)) {
         uint64_t contVA = contConst->getZExtValue();
+        auto* contRsp = createAddFolder(
+            rsp_result,
+            ConstantInt::getSigned(Type::getInt64Ty(context), ptrSize),
+            "ret-chain-cont-rsp-" + std::to_string(current_address) + "-");
+        SetRegisterValue(Register::RSP, contRsp);
         const std::string& importName = importIt->second;
         // Emit `call @import` but with an EMPTY volatileRegs set so the
         // lifter does not clobber caller-saved GPRs post-call. Rationale:
@@ -617,16 +585,12 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
                             instruction.types[0] == OperandType::Immediate16 ||
                             instruction.types[0] == OperandType::Immediate32 ||
                             instruction.types[0] == OperandType::Immediate64;
-  switch (instruction.types[0]) {
-  case OperandType::Immediate8:
-  case OperandType::Immediate16: // todo: test 8 and 16
-  case OperandType::Immediate32:
-  case OperandType::Immediate64: {
+  // For direct jumps the immediate is RIP-relative, so add it to the
+  // current RIP to get the absolute target. Indirect jumps already hold
+  // an absolute address (or a computed pointer) in `trunc`.
+  if (isDirectJump) {
     trunc = createAddFolder(trunc, ripval);
     printvalue(trunc);
-  }
-  default:
-    break;
   }
   ScopedPathSolveContext pathSolveContext(
       this, isDirectJump ? PathSolveContext::DirectJump
@@ -635,8 +599,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   if (pathResult == PATH_unsolved) {
     ++liftStats.blocks_unreachable;
     uint64_t diagAddr = current_address - instruction.length;
-    std::cout << "[diag] lift_jmp: unresolved indirect jump at 0x"
-              << std::hex << diagAddr << std::dec << "\n" << std::flush;
     diagnostics.warning(DiagCode::UnresolvedIndirectJump, diagAddr,
                         "Unresolved indirect jump (symbolic target)");
   }

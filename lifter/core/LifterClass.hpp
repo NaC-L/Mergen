@@ -829,7 +829,7 @@ public:
     // for concrete exploration to cover the IAT-gadget ret sites.
     const bool dispatcherShape =
         currentPathSolveContext == PathSolveContext::IndirectJump;
-    unsigned revisitThreshold = dispatcherShape ? 80u : 0u;
+    unsigned revisitThreshold = dispatcherShape ? 128u : 0u;
     if (const char* env = std::getenv("MERGEN_GEN_MIN_REVISITS")) {
       char* end = nullptr;
       unsigned long parsed = std::strtoul(env, &end, 10);

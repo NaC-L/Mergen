@@ -210,9 +210,17 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_punpcklqdq() {
   LLVMContext& context = builder->getContext();
   auto destinationType = instruction.types[0];
   auto sourceType = instruction.types[1];
+  // Iced classifies the source operand by the bytes the instruction actually
+  // accesses, not by the physical register width. PUNPCKLQDQ only reads the
+  // low 64 bits of its second operand, so Iced reports Register64/Memory64
+  // even though the encoding is `xmm/m128`. Accept both shapes -- the
+  // body below truncates to i64 anyway, so a 64-bit-typed source is
+  // semantically identical to a 128-bit one for this handler.
   bool destinationIsXmm = destinationType == OperandType::Register128;
   bool sourceIsXmm = sourceType == OperandType::Register128 ||
-                     sourceType == OperandType::Memory128;
+                     sourceType == OperandType::Register64 ||
+                     sourceType == OperandType::Memory128 ||
+                     sourceType == OperandType::Memory64;
   if (!destinationIsXmm || !sourceIsXmm) {
     Function* externFunc = cast<Function>(
         fnc->getParent()
