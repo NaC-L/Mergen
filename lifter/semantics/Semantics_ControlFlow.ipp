@@ -599,8 +599,6 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_jmp() {
   if (pathResult == PATH_unsolved) {
     ++liftStats.blocks_unreachable;
     uint64_t diagAddr = current_address - instruction.length;
-    std::cout << "[diag] lift_jmp: unresolved indirect jump at 0x"
-              << std::hex << diagAddr << std::dec << "\n" << std::flush;
     diagnostics.warning(DiagCode::UnresolvedIndirectJump, diagAddr,
                         "Unresolved indirect jump (symbolic target)");
   }
