@@ -412,6 +412,48 @@ private:
   }
 
 
+  bool runSseMemoryFormHandlersDoNotFallThroughToNotImplemented(std::string& details) {
+    // pand/por/pxor accept `xmm, xmm/m128`. The handlers gate on
+    // `Register128 || Memory128` for the source. Iced classifies operands
+    // by the bytes the instruction actually accesses (see the punpcklqdq
+    // case study), so it is not a given that an `xmm, [mem]` form is
+    // reported as Memory128. If Iced reports Memory64 (or anything else),
+    // the handler silently falls through to `call @not_implemented; ret`
+    // and miscompiles every memory-form site in the binary.
+    //
+    // Lift one of each `xmm0, [rax]` encoding and assert that the lifted
+    // function does not contain a direct call to @not_implemented. Pure
+    // structural acceptance check -- we are not validating the unpack
+    // semantics here, just that the handler dispatched at all.
+    struct Encoding {
+      const char* name;
+      std::array<uint8_t, 4> bytes;
+    };
+    static constexpr std::array<Encoding, 3> kEncodings = {{
+        {"pand",  {{0x66, 0x0F, 0xDB, 0x00}}},  // pand xmm0, [rax]
+        {"por",   {{0x66, 0x0F, 0xEB, 0x00}}},  // por  xmm0, [rax]
+        {"pxor",  {{0x66, 0x0F, 0xEF, 0x00}}},  // pxor xmm0, [rax]
+    }};
+
+    for (const auto& enc : kEncodings) {
+      LifterUnderTest lifter;
+      auto& context = lifter.builder->getContext();
+      // Point [rax] at a benign memory address so getPointer/GetMemoryValue
+      // can construct a valid GEP. The actual stored value does not matter;
+      // the test only checks dispatch.
+      lifter.SetRegisterValue(RegisterUnderTest::RAX, makeI64(context, 0x2000));
+      lifter.liftBytes(enc.bytes.data(), enc.bytes.size());
+      if (functionHasDirectCallTo(lifter.fnc, "not_implemented")) {
+        details = std::string("  ") + enc.name +
+                  " xmm, [mem] dispatched to @not_implemented; widen the"
+                  " handler's source-type accept set\n";
+        return false;
+      }
+    }
+    return true;
+  }
+
+
   bool runRetToIatChainAdvancesRspByTwoSlots(std::string& details) {
     // Themida-style ret-to-IAT chain: [RSP] holds an IAT slot VA, [RSP+8]
     // holds the continuation VA. The original code's ret would pop the IAT
@@ -10734,6 +10776,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runLoopGeneralizationDirectJumpAllowed);
     runCustom("loop_generalization_indirect_jump_blocked_when_unresolved",
              &InstructionTester::runLoopGeneralizationIndirectJumpBlockedWhenUnresolved);
+    runCustom("sse_memory_form_handlers_do_not_fall_through_to_not_implemented",
+             &InstructionTester::runSseMemoryFormHandlersDoNotFallThroughToNotImplemented);
     runCustom("ret_to_iat_chain_advances_rsp_by_two_slots",
              &InstructionTester::runRetToIatChainAdvancesRspByTwoSlots);
     runCustom("int29_fastfail_lowered_to_noreturn_call",
