@@ -100,9 +100,9 @@ def _extract_call_names(ir_text: str) -> Dict[str, int]:
     """Return a multiset of call-target identifiers found in IR text.
 
     Intramodule calls to ``@main`` and outlined ``@sub_*`` thunks are excluded
-    \u2014 we only care about named external imports that the lifter resolved.
+    -- we only care about named external imports that the lifter resolved.
     Lifter-synthesized helper calls (``@exception``, ``@fastfail``, etc.) are
-    also excluded so they do not surface as bogus \"extra import\" diffs.
+    also excluded so they do not surface as bogus "extra import" diffs.
     """
     counts: Dict[str, int] = {}
     for match in _CALL_RE.finditer(ir_text):
