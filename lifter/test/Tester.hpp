@@ -412,6 +412,57 @@ private:
   }
 
 
+  bool runRetToIatChainAdvancesRspByTwoSlots(std::string& details) {
+    // Themida-style ret-to-IAT chain: [RSP] holds an IAT slot VA, [RSP+8]
+    // holds the continuation VA. The original code's ret would pop the IAT
+    // slot into RIP (calling the import) and the import's ret pops the
+    // continuation, advancing RSP by 16 total. The lifter collapses this
+    // into `call @import; br contBB`; RSP at the entry of contBB must
+    // therefore equal entry RSP + 16, not + 8 (which is what would result
+    // if only the IAT slot pop were modeled).
+    LifterUnderTest lifter;
+    auto& context = lifter.builder->getContext();
+
+    constexpr uint64_t kImportVA = 0x140002000ULL;
+    constexpr uint64_t kContVA   = 0x140003000ULL;
+    // Push RSP off STACKP_VALUE so the lift_ret REAL_return branch
+    // (which short-circuits when RSP folds to STACKP_VALUE) does not
+    // fire and we actually reach the import-chain recognition path.
+    constexpr uint64_t kEntryRsp = STACKP_VALUE - 0x100ULL;
+    lifter.importMap[kImportVA] = "GetTickCount64";
+    lifter.SetRegisterValue(RegisterUnderTest::RSP, makeI64(context, kEntryRsp));
+
+    auto* rspBase = makeI64(context, kEntryRsp);
+    auto* rspBasePlusEight = makeI64(context, kEntryRsp + 8);
+    lifter.SetMemoryValue(rspBase, makeI64(context, kImportVA));
+    lifter.SetMemoryValue(rspBasePlusEight, makeI64(context, kContVA));
+
+    static constexpr uint8_t kRet[] = {0xC3};
+    lifter.liftBytes(kRet, sizeof(kRet));
+
+    if (!functionHasDirectCallTo(lifter.fnc, "GetTickCount64")) {
+      details = "  chain handler did not emit a call to the IAT import\n";
+      return false;
+    }
+
+    auto rspAfter = readConstantAPInt(
+        lifter.GetRegisterValue(RegisterUnderTest::RSP));
+    if (!rspAfter.has_value()) {
+      details = "  RSP after chain is symbolic; expected STACKP_VALUE + 16\n";
+      return false;
+    }
+    const uint64_t expected = kEntryRsp + 16;
+    if (rspAfter->getZExtValue() != expected) {
+      std::ostringstream os;
+      os << "  RSP after chain = " << formatAPIntHex(*rspAfter)
+         << "; expected 0x" << std::hex << expected << "\n";
+      details = os.str();
+      return false;
+    }
+    return true;
+  }
+
+
   bool runInt29FastfailLoweredToNoReturnCall(std::string& details) {
     LifterUnderTest lifter;
     lifter.SetRegisterValue(RegisterUnderTest::RCX,
@@ -10683,6 +10734,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runLoopGeneralizationDirectJumpAllowed);
     runCustom("loop_generalization_indirect_jump_blocked_when_unresolved",
              &InstructionTester::runLoopGeneralizationIndirectJumpBlockedWhenUnresolved);
+    runCustom("ret_to_iat_chain_advances_rsp_by_two_slots",
+             &InstructionTester::runRetToIatChainAdvancesRspByTwoSlots);
     runCustom("int29_fastfail_lowered_to_noreturn_call",
              &InstructionTester::runInt29FastfailLoweredToNoReturnCall);
     runCustom("xgetbv_returns_deterministic_xcr0",
