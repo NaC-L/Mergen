@@ -81,11 +81,28 @@ def _lift(binary: Path, entry: str, workdir: Path) -> Path:
     return ir_path
 
 
+# Lifter-synthesized helper names that appear as `call @<name>` in the IR but
+# are not user imports — emitted by INT/UD2/syscall/segment-load lowering.
+# Keeping this list close to the call extractor so it stays in sync with the
+# semantics files that emit them (Semantics.ipp, Semantics_Misc.ipp, etc.).
+_LIFTER_SYNTH_HELPERS = frozenset({
+    "exception",       # INT1 / INT3 / UD2
+    "fastfail",        # INT29
+    "not_implemented", # many fallbacks (SCAS/REP, SYSCALL, etc.)
+    "invalid",         # illegal-instruction path
+    "loadGS",          # GS segment register read
+    "loadDS",          # DS segment register read
+    "pext",            # BMI2 PEXT pseudo-intrinsic
+})
+
+
 def _extract_call_names(ir_text: str) -> Dict[str, int]:
     """Return a multiset of call-target identifiers found in IR text.
 
     Intramodule calls to ``@main`` and outlined ``@sub_*`` thunks are excluded
-    — we only care about named external imports that the lifter resolved.
+    -- we only care about named external imports that the lifter resolved.
+    Lifter-synthesized helper calls (``@exception``, ``@fastfail``, etc.) are
+    also excluded so they do not surface as bogus "extra import" diffs.
     """
     counts: Dict[str, int] = {}
     for match in _CALL_RE.finditer(ir_text):
@@ -93,6 +110,8 @@ def _extract_call_names(ir_text: str) -> Dict[str, int]:
         if not name:
             continue
         if name == "main" or name.startswith("sub_") or name.startswith("llvm."):
+            continue
+        if name in _LIFTER_SYNTH_HELPERS:
             continue
         counts[name] = counts.get(name, 0) + 1
     return counts
