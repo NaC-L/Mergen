@@ -138,7 +138,7 @@ Current active quick-gate semantic coverage is **33 samples / 177 cases** on CI 
 Notable current state:
 - `dummy_vm_loop`, `bytecode_vm_loop`, and `stack_vm_loop` are active VM-shaped control-flow samples.
 - `calc_sum_to_n`, `calc_fib`, and `calc_sum_array` are active again under the current safe path.
-- `calc_cout` is active again after SSE2 `PUNPCKLQDQ` support landed; the manifest currently has zero `ci_skip` entries.
+- `calc_cout` is active under the current safe path. The SSE2 `PUNPCKLQDQ` handler had been present for a while but was silently rejecting real encodings: Iced classifies the source operand by the bytes the instruction actually accesses (low 64 bits), not by physical XMM width, so the handler's `Register128`/`Memory128`-only accept set fell through to `not_implemented` for every site. Fixed in #205 by widening the accept set to also include `Register64`/`Memory64`; the body already truncates to i64 internally so the rewrite is semantically identical. Pre-existing oracle vectors `punpcklqdq_xmm0_xmm1_basic` and `punpcklqdq_xmm0_xmm1_zero_upper_from_zero_source` now pass and gate future regressions; the manifest currently has zero `ci_skip` entries.
 
 ## Call-boundary ABI framework
 
