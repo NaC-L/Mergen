@@ -698,6 +698,156 @@ public:
     }
   }
 
+  // Result of generalized-loop slot discovery: control + target slot identity
+  // and the canonical/backedge qword values + per-backedge buffers that
+  // motivate the choice. backedgeSources/Controls/Buffers are filled with
+  // exactly the backedges whose tracked qword at controlSlot differs from
+  // canonical (the activation precondition for the loop-control helpers).
+  struct DiscoveredGeneralizedLoopSlots {
+    bool valid = false;
+    uint64_t controlSlot = 0;
+    uint64_t targetSlot = 0;
+    uint64_t canonicalControl = 0;
+    llvm::SmallVector<llvm::BasicBlock*, 2> backedgeSources;
+    llvm::SmallVector<uint64_t, 2> backedgeControls;
+    llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> backedgeBuffers;
+  };
+
+  // Try to populate `dst` from a specific candidate `slot`. Returns true iff
+  // canonical has a tracked qword at slot AND at least one backedge has a
+  // differing tracked qword at slot. Caller uses this both for the legacy
+  // Themida-slot priority path and for the fallback scan.
+  bool tryPopulateControlFromSlot(
+      const backup_point& canonical,
+      llvm::ArrayRef<backup_point> backedges, uint64_t slot,
+      DiscoveredGeneralizedLoopSlots& dst) {
+    uint64_t canonicalControl = 0;
+    if (!readConstantTrackedQword(canonical.buffer, slot, canonicalControl)) {
+      return false;
+    }
+    llvm::SmallVector<llvm::BasicBlock*, 2> sources;
+    llvm::SmallVector<uint64_t, 2> controls;
+    llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> buffers;
+    for (const auto& be : backedges) {
+      if (!be.sourceBlock || be.sourceBlock == canonical.sourceBlock) {
+        continue;
+      }
+      uint64_t beControl = 0;
+      if (!readConstantTrackedQword(be.buffer, slot, beControl)) {
+        continue;
+      }
+      if (beControl == canonicalControl) {
+        continue;
+      }
+      sources.push_back(be.sourceBlock);
+      controls.push_back(beControl);
+      buffers.push_back(be.buffer);
+    }
+    if (sources.empty()) {
+      return false;
+    }
+    dst.controlSlot = slot;
+    dst.canonicalControl = canonicalControl;
+    dst.backedgeSources = std::move(sources);
+    dst.backedgeControls = std::move(controls);
+    dst.backedgeBuffers = std::move(buffers);
+    return true;
+  }
+
+  // Discover the loop's control + target memory slots from canonical and
+  // backedge buffers. Order of preference for control slot:
+  //   1. The legacy Themida cursor slot if it has a varying tracked qword
+  //      (zero-regression guarantee on the reference Themida sample).
+  //   2. Otherwise, the qword in the canonical buffer with the most-varying
+  //      backedges. Tiebreak: lowest address.
+  // Order of preference for target slot:
+  //   1. The legacy Themida loop-carried slot if every selected backedge has
+  //      a tracked qword there.
+  //   2. Otherwise, the lowest-address candidate qword (excluding the chosen
+  //      controlSlot) that is tracked across canonical and every selected
+  //      backedge buffer. Values may match or differ; the target-slot helper
+  //      handles both cases.
+  // Returns a result with valid=false if no control slot can be identified.
+  // Stack-local addresses are excluded from candidates; they are handled by
+  // separate local-buffer machinery.
+  DiscoveredGeneralizedLoopSlots discoverGeneralizedLoopSlots(
+      const backup_point& canonical,
+      llvm::ArrayRef<backup_point> backedges) {
+    DiscoveredGeneralizedLoopSlots result;
+    if (!canonical.sourceBlock || backedges.empty()) {
+      return result;
+    }
+
+    // 1. Try the legacy Themida cursor slot first.
+    if (!tryPopulateControlFromSlot(canonical, backedges,
+                                    kThemidaControlCursorSlot, result)) {
+      // 2. Fallback scan: enumerate qword-start addresses in canonical buffer
+      //    and pick the most-varying. A "qword start" is an address A where
+      //    canonical has 8 contiguous tracked bytes from A and has no key at
+      //    A-1 (filters overlapping qwords from a single tracked region).
+      llvm::SmallVector<uint64_t, 16> candidates;
+      for (const auto& entry : canonical.buffer) {
+        const uint64_t addr = entry.first;
+        if (this->isTrackedStackAddress(addr)) continue;
+        if (canonical.buffer.contains(addr - 1)) continue;
+        uint64_t dummy = 0;
+        if (!readConstantTrackedQword(canonical.buffer, addr, dummy)) continue;
+        candidates.push_back(addr);
+      }
+      std::sort(candidates.begin(), candidates.end());
+      size_t bestVarianceCount = 0;
+      for (uint64_t addr : candidates) {
+        DiscoveredGeneralizedLoopSlots probe;
+        if (!tryPopulateControlFromSlot(canonical, backedges, addr, probe)) {
+          continue;
+        }
+        if (probe.backedgeSources.size() > bestVarianceCount) {
+          bestVarianceCount = probe.backedgeSources.size();
+          result.controlSlot = probe.controlSlot;
+          result.canonicalControl = probe.canonicalControl;
+          result.backedgeSources = std::move(probe.backedgeSources);
+          result.backedgeControls = std::move(probe.backedgeControls);
+          result.backedgeBuffers = std::move(probe.backedgeBuffers);
+        }
+      }
+      if (bestVarianceCount == 0) {
+        return result;  // no varying qword anywhere -> no control slot
+      }
+    }
+    result.valid = true;
+
+    // Target slot: prefer legacy Themida carried slot if usable across all
+    // selected backedges; otherwise scan for the lowest-addr alternative.
+    auto targetUsableAt = [&](uint64_t slot) -> bool {
+      if (slot == result.controlSlot) return false;
+      uint64_t dummy = 0;
+      if (!readConstantTrackedQword(canonical.buffer, slot, dummy)) return false;
+      for (const auto& buf : result.backedgeBuffers) {
+        if (!readConstantTrackedQword(buf, slot, dummy)) return false;
+      }
+      return true;
+    };
+    if (targetUsableAt(kThemidaLoopCarriedSlot)) {
+      result.targetSlot = kThemidaLoopCarriedSlot;
+    } else {
+      llvm::SmallVector<uint64_t, 16> targetCandidates;
+      for (const auto& entry : canonical.buffer) {
+        const uint64_t addr = entry.first;
+        if (this->isTrackedStackAddress(addr)) continue;
+        if (canonical.buffer.contains(addr - 1)) continue;
+        targetCandidates.push_back(addr);
+      }
+      std::sort(targetCandidates.begin(), targetCandidates.end());
+      for (uint64_t addr : targetCandidates) {
+        if (targetUsableAt(addr)) {
+          result.targetSlot = addr;
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
   void load_generalized_backup_impl(BasicBlock* bb) {
     activeGeneralizedLoopLocalBuffer.clear();
     clearGeneralizedLoopControlFieldState();
@@ -705,39 +855,41 @@ public:
       printvalue2("loading generalized backup");
       auto& backedges = generalizedLoopBackedgeBackup[bb];
       auto snapshot = make_generalized_loop_backup(bb, BBbackup[bb], backedges);
-      // Per-loop control/target slot identity. Phase A: hardcoded Themida
-      // defaults (legacy behavior). Phase B will replace these literals with
-      // active discovery against BBbackup[bb].buffer + backedges.
-      const uint64_t controlSlot = kThemidaControlCursorSlot;
-      const uint64_t targetSlot = kThemidaLoopCarriedSlot;
+      // Discover the per-loop control + target slots from canonical and
+      // backedge buffers. Falls back to the legacy Themida slots when they
+      // qualify (zero behavior change on the reference Themida sample).
+      auto discovery = discoverGeneralizedLoopSlots(BBbackup[bb], backedges);
       if (this->liftProgressDiagEnabled) {
         auto formatHex = [](uint64_t value) {
           std::ostringstream os;
           os << "0x" << std::hex << std::uppercase << value;
           return os.str();
         };
-        uint64_t canonicalControl = 0;
-        const bool hasCanonicalControl = readConstantTrackedQword(
-            BBbackup[bb].buffer, controlSlot, canonicalControl);
         std::cout << "[diag] load_generalized_backup bb=" << bb->getName().str()
                   << " sourceCanonical="
                   << (BBbackup[bb].sourceBlock
                           ? BBbackup[bb].sourceBlock->getName().str()
                           : std::string("<null>"))
                   << " backedgeCount=" << backedges.size()
+                  << " discovered="
+                  << (discovery.valid ? "yes" : "no")
+                  << " controlSlot="
+                  << (discovery.valid ? formatHex(discovery.controlSlot)
+                                      : std::string("na"))
+                  << " targetSlot="
+                  << (discovery.valid && discovery.targetSlot
+                          ? formatHex(discovery.targetSlot)
+                          : std::string("na"))
                   << " canonicalControl="
-                  << (hasCanonicalControl ? formatHex(canonicalControl)
-                                          : std::string("na"));
-        for (size_t i = 0; i < backedges.size(); ++i) {
-          uint64_t be = 0;
-          const bool hasBE = readConstantTrackedQword(backedges[i].buffer,
-                                                      controlSlot, be);
+                  << (discovery.valid ? formatHex(discovery.canonicalControl)
+                                      : std::string("na"));
+        for (size_t i = 0; i < discovery.backedgeSources.size(); ++i) {
           std::cout << " backedge[" << i << "]source="
-                    << (backedges[i].sourceBlock
-                            ? backedges[i].sourceBlock->getName().str()
+                    << (discovery.backedgeSources[i]
+                            ? discovery.backedgeSources[i]->getName().str()
                             : std::string("<null>"))
                     << " backedge[" << i << "]control="
-                    << (hasBE ? formatHex(be) : std::string("na"));
+                    << formatHex(discovery.backedgeControls[i]);
         }
         std::cout << "\n";
       }
@@ -763,51 +915,27 @@ public:
             backedges.empty()
                 ? llvm::DenseMap<uint64_t, ValueByteReference>{}
                 : extractLocalStackBuffer(backedges.front().buffer);
-        uint64_t canonicalControl = 0;
-        const bool hasCanonical = readConstantTrackedQword(
-            BBbackup[bb].buffer, controlSlot, canonicalControl);
-        if (hasCanonical && BBbackup[bb].sourceBlock && !backedges.empty()) {
-          // Collect backedges whose sourceBlock is distinct from canonical
-          // AND whose control value differs from canonical. At least one
-          // such backedge is required to activate the state.
-          llvm::SmallVector<llvm::BasicBlock*, 2> sources;
-          llvm::SmallVector<uint64_t, 2> controls;
-          llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> buffers;
-          for (const auto& be : backedges) {
-            if (!be.sourceBlock || be.sourceBlock == BBbackup[bb].sourceBlock) {
-              continue;
-            }
-            uint64_t beControl = 0;
-            if (!readConstantTrackedQword(be.buffer, controlSlot, beControl)) {
-              continue;
-            }
-            if (beControl == canonicalControl) {
-              continue;
-            }
-            sources.push_back(be.sourceBlock);
-            controls.push_back(beControl);
-            buffers.push_back(be.buffer);
-          }
-          if (!sources.empty()) {
-            activeGeneralizedLoopControlFieldState.valid = true;
-            activeGeneralizedLoopControlFieldState.headerBlock = bb;
-            activeGeneralizedLoopControlFieldState.canonicalSource =
-                BBbackup[bb].sourceBlock;
-            activeGeneralizedLoopControlFieldState.canonicalControl =
-                canonicalControl;
-            activeGeneralizedLoopControlFieldState.canonicalBuffer =
-                BBbackup[bb].buffer;
-            activeGeneralizedLoopControlFieldState.backedgeSources =
-                std::move(sources);
-            activeGeneralizedLoopControlFieldState.backedgeControls =
-                std::move(controls);
-            activeGeneralizedLoopControlFieldState.backedgeBuffers =
-                std::move(buffers);
-            activeGeneralizedLoopControlFieldState.controlSlot = controlSlot;
-            activeGeneralizedLoopControlFieldState.targetSlot = targetSlot;
-            generalizedLoopControlFieldStates[bb] =
-                activeGeneralizedLoopControlFieldState;
-          }
+        if (discovery.valid && BBbackup[bb].sourceBlock) {
+          activeGeneralizedLoopControlFieldState.valid = true;
+          activeGeneralizedLoopControlFieldState.headerBlock = bb;
+          activeGeneralizedLoopControlFieldState.canonicalSource =
+              BBbackup[bb].sourceBlock;
+          activeGeneralizedLoopControlFieldState.canonicalControl =
+              discovery.canonicalControl;
+          activeGeneralizedLoopControlFieldState.canonicalBuffer =
+              BBbackup[bb].buffer;
+          activeGeneralizedLoopControlFieldState.backedgeSources =
+              std::move(discovery.backedgeSources);
+          activeGeneralizedLoopControlFieldState.backedgeControls =
+              std::move(discovery.backedgeControls);
+          activeGeneralizedLoopControlFieldState.backedgeBuffers =
+              std::move(discovery.backedgeBuffers);
+          activeGeneralizedLoopControlFieldState.controlSlot =
+              discovery.controlSlot;
+          activeGeneralizedLoopControlFieldState.targetSlot =
+              discovery.targetSlot;
+          generalizedLoopControlFieldStates[bb] =
+              activeGeneralizedLoopControlFieldState;
         }
       }
       if (this->liftProgressDiagEnabled && bb && bb->getName() == "bb_solved_const282") {

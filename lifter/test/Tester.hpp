@@ -2934,19 +2934,14 @@ bool runGeneralizedLoopControlFieldLoadThreeWayProducesPhi(std::string& details)
   return true;
 }
 
-// KNOWN-LIMITATION (non-Themida control slot is invisible to generalization).
-//
-// retrieve_generalized_loop_control_slot_value_impl explicitly gates on
-// `startAddress != this->kThemidaControlCursorSlot` and returns nullptr for
-// every other address. A loop whose control cursor is stored at any address
-// other than 0x14004DD19 does not get its load re-routed through the
-// canonical/backedge phi; the caller falls back to the normal memory
-// pipeline, which yields a concrete or last-written value - not a phi.
-//
-// When the hardcoded slot is replaced with per-function detection or a
-// tagging layer, this test MUST fail and be rewritten to assert the new
-// discovery mechanism.
-bool runGeneralizedLoopNonThemidaControlSlotProducesNoPhi(std::string& details) {
+// Per-loop slot discovery picks up non-Themida control slots when the legacy
+// Themida cursor is also present. With both the Themida cursor and an
+// otherControlSlot varying across canonical/backedge, the legacy slot is
+// claimed as controlSlot (preserving Themida behavior) and otherControlSlot
+// becomes the target slot - so reads at otherControlSlot route through the
+// target-slot phi path.
+bool runGeneralizedLoopNonThemidaSlotPicksUpAsTargetWhenLegacyControlPresent(
+    std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
   auto* preheader =
@@ -2959,17 +2954,13 @@ bool runGeneralizedLoopNonThemidaControlSlotProducesNoPhi(std::string& details) 
   constexpr uint64_t themidaControlSlot = 0x14004DD19ULL;
   constexpr uint64_t canonicalControl = 0x1401AF740ULL;
   constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
-  // A plausible control-cursor slot for a different protected binary.
-  // Not 0x14004DD19, so the slot-value retrieval must bail.
   constexpr uint64_t otherControlSlot = 0x140050000ULL;
   constexpr uint64_t otherCanonicalValue = 0x1100220033004400ULL;
   constexpr uint64_t otherBackedgeValue = 0x5500660077008800ULL;
 
   lifter.builder->SetInsertPoint(preheader);
-  // Themida slot - required to activate the generalized state machinery.
   lifter.SetMemoryValue(makeI64(context, themidaControlSlot),
                         makeI64(context, canonicalControl));
-  // The actual slot under test, seeded with distinct canonical value.
   lifter.SetMemoryValue(makeI64(context, otherControlSlot),
                         makeI64(context, otherCanonicalValue));
   lifter.branch_backup(loopHeader);
@@ -2983,12 +2974,37 @@ bool runGeneralizedLoopNonThemidaControlSlotProducesNoPhi(std::string& details) 
 
   lifter.load_generalized_backup(loopHeader);
   lifter.builder->SetInsertPoint(loopHeader);
+
+  if (lifter.activeGeneralizedLoopControlFieldState.controlSlot !=
+      themidaControlSlot) {
+    details = "  discovery should pick the legacy Themida cursor as controlSlot "
+              "when present and varying\n";
+    return false;
+  }
+  if (lifter.activeGeneralizedLoopControlFieldState.targetSlot !=
+      otherControlSlot) {
+    details = "  discovery should pick the only non-control varying qword as "
+              "targetSlot\n";
+    return false;
+  }
   auto* loadedAtOtherSlot =
       lifter.GetMemoryValue(makeI64(context, otherControlSlot), 64);
-  if (llvm::isa<llvm::PHINode>(loadedAtOtherSlot)) {
-    details = "  GetMemoryValue at non-Themida control slot unexpectedly "
-              "produced a PHINode - the hardcoded slot gate has been "
-              "generalized; rewrite this test against the new contract.\n";
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(loadedAtOtherSlot);
+  if (!phi || phi->getNumIncomingValues() != 2) {
+    details = "  discovery target-slot helper should produce a 2-way phi at "
+              "the discovered non-Themida slot\n";
+    return false;
+  }
+  bool sawCanonical = false, sawBackedge = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto v = readConstantAPInt(phi->getIncomingValue(i));
+    if (!v.has_value()) continue;
+    if (v->getZExtValue() == otherCanonicalValue) sawCanonical = true;
+    else if (v->getZExtValue() == otherBackedgeValue) sawBackedge = true;
+  }
+  if (!sawCanonical || !sawBackedge) {
+    details = "  discovered target-slot phi must carry both canonical and "
+              "backedge concrete values\n";
     return false;
   }
   return true;
@@ -6829,19 +6845,12 @@ bool runGeneralizedPhiAddressBaseCaseWithoutDisplacementResolvesLoadedValues(
   return true;
 }
 
-// KNOWN-LIMITATION (target-slot helper hardcoded to kThemidaLoopCarriedSlot).
-//
-// retrieve_generalized_loop_target_slot_value_impl gates on
-// `startAddress != this->kThemidaLoopCarriedSlot`. A loop whose
-// loop-carried slot is at any other address cannot benefit from the
-// helper's phi-collapse fast path; the caller falls back to the normal
-// memory pipeline.
-//
-// This is a sibling limitation to the kThemidaControlCursorSlot one
-// (pinned by generalized_loop_non_themida_control_slot_produces_no_phi).
-// When per-function carried-slot detection lands, this test MUST fail
-// and be rewritten to assert the new contract.
-bool runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi(
+// Per-loop slot discovery picks up non-Themida loop-carried slots as the
+// target slot when the legacy carried slot is absent. With the Themida
+// cursor varying (so discovery activates) and otherTargetSlot also varying
+// across canonical/backedge, the target-slot helper now fires at the
+// discovered slot and produces a phi.
+bool runGeneralizedLoopDiscoveryPicksNonThemidaTargetSlot(
     std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -6855,7 +6864,6 @@ bool runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi(
   constexpr uint64_t themidaControlSlot = 0x14004DD19ULL;
   constexpr uint64_t canonicalControl = 0x1401AF740ULL;
   constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
-  // Plausible carried-slot for a non-Themida sample; not 0x14004DC67.
   constexpr uint64_t otherTargetSlot = 0x140050800ULL;
   constexpr uint64_t otherCanonical = 0xAA01AA01AA01AA01ULL;
   constexpr uint64_t otherBackedge = 0xBB02BB02BB02BB02ULL;
@@ -6876,12 +6884,31 @@ bool runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi(
 
   lifter.load_generalized_backup(loopHeader);
   lifter.builder->SetInsertPoint(loopHeader);
+
+  if (lifter.activeGeneralizedLoopControlFieldState.targetSlot !=
+      otherTargetSlot) {
+    details = "  discovery should pick otherTargetSlot as targetSlot when the "
+              "legacy Themida loop-carried slot is absent\n";
+    return false;
+  }
   auto* loaded =
       lifter.GetMemoryValue(makeI64(context, otherTargetSlot), 64);
-  if (llvm::isa<llvm::PHINode>(loaded)) {
-    details = "  GetMemoryValue at non-Themida loop-carried slot unexpectedly "
-              "produced a PHINode - target-slot hardcoded gate has been "
-              "generalized; rewrite this test against the new contract.\n";
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(loaded);
+  if (!phi || phi->getNumIncomingValues() != 2) {
+    details = "  target-slot helper should produce a 2-way phi at the "
+              "discovered non-Themida loop-carried slot\n";
+    return false;
+  }
+  bool sawCanonical = false, sawBackedge = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto v = readConstantAPInt(phi->getIncomingValue(i));
+    if (!v.has_value()) continue;
+    if (v->getZExtValue() == otherCanonical) sawCanonical = true;
+    else if (v->getZExtValue() == otherBackedge) sawBackedge = true;
+  }
+  if (!sawCanonical || !sawBackedge) {
+    details = "  discovered target-slot phi must carry both canonical and "
+              "backedge concrete values\n";
     return false;
   }
   return true;
@@ -10860,8 +10887,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopControlFieldLoadFourWayProducesPhi);
     runCustom("generalized_loop_control_field_load_three_way_produces_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadThreeWayProducesPhi);
-    runCustom("generalized_loop_non_themida_control_slot_produces_no_phi",
-             &InstructionTester::runGeneralizedLoopNonThemidaControlSlotProducesNoPhi);
+    runCustom("generalized_loop_non_themida_slot_picks_up_as_target_when_legacy_control_present",
+             &InstructionTester::runGeneralizedLoopNonThemidaSlotPicksUpAsTargetWhenLegacyControlPresent);
     runCustom("generalized_loop_nested_inner_overwrites_outer_active_state",
              &InstructionTester::runGeneralizedLoopNestedInnerOverwritesOuterActiveState);
     runCustom("generalized_loop_nested_inner_target_slot_uses_inner_state",
@@ -11006,8 +11033,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedPhiAddressByteCountTwoReturnsMaskedPhi);
     runCustom("generalized_local_phi_address_byte_count_one_returns_masked_phi",
              &InstructionTester::runGeneralizedLocalPhiAddressByteCountOneReturnsMaskedPhi);
-    runCustom("generalized_loop_non_themida_target_slot_produces_no_phi",
-             &InstructionTester::runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi);
+    runCustom("generalized_loop_discovery_picks_non_themida_target_slot",
+             &InstructionTester::runGeneralizedLoopDiscoveryPicksNonThemidaTargetSlot);
     runCustom("loop_generalization_missing_addr_to_bb_entry_rejected",
              &InstructionTester::runLoopGeneralizationMissingAddrToBBEntryRejected);
     runCustom("loop_generalization_empty_basic_block_rejected",
