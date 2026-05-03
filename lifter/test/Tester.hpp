@@ -4134,6 +4134,7 @@ bool runGeneralizedLoopControlSlotReturnsCanonicalWhenStoredStateHasNoBackedges(
   stored.headerBlock = header;
   stored.canonicalSource = canonical;
   stored.canonicalControl = canonicalControl;
+  stored.controlSlot = controlSlot;
   stored.canonicalBuffer[controlSlot] = ValueByteReference(
       llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), static_cast<uint8_t>(canonicalControl & 0xFFULL)), 0);
   lifter.activeGeneralizedLoopControlFieldState = stored;
@@ -4168,6 +4169,7 @@ bool runGeneralizedLoopTargetSlotReturnsCanonicalWhenStoredStateHasNoBackedges(
   stored.valid = true;
   stored.headerBlock = header;
   stored.canonicalSource = canonical;
+  stored.targetSlot = loopCarriedSlot;
   for (uint8_t i = 0; i < 8; ++i) {
     stored.canonicalBuffer[loopCarriedSlot + i] = ValueByteReference(
         llvm::ConstantInt::get(llvm::Type::getInt8Ty(context),
@@ -4211,6 +4213,7 @@ bool runGeneralizedLoopControlFieldReturnsCanonicalWhenStoredStateHasNoBackedges
   stored.headerBlock = header;
   stored.canonicalSource = canonical;
   stored.canonicalControl = canonicalControl;
+  stored.controlSlot = controlSlot;
   // Seed control-slot bytes.
   for (uint8_t i = 0; i < 8; ++i) {
     stored.canonicalBuffer[controlSlot + i] = ValueByteReference(
