@@ -5036,6 +5036,21 @@
         { "inputs": { "RCX": 81985529216486895 },    "expected": 2917303668028088609,  "label": "x=0x123456789ABCDEF, trip=16" },
         { "inputs": { "RCX": 9223372036854775808 },  "expected": 2919581753692666904,  "label": "x=0x8000000000000000, trip=1 sign bit" }
       ]
+    },
+    {
+      "name": "vm_subroutine_loop",
+      "symbol": "vm_subroutine_loop_target",
+      "patterns": ["xor", "shl", "lshr"],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                   "expected": 0,                    "label": "x=0, trip=1" },
+        { "inputs": { "RCX": 1 },                   "expected": 1152992998833853505,  "label": "x=1, trip=2 xorshift" },
+        { "inputs": { "RCX": 255 },                 "expected": 10236226849416635145, "label": "x=0xFF, trip=16 max" },
+        { "inputs": { "RCX": 51966 },               "expected": 14592049085638891025, "label": "x=0xCAFE, trip=15" },
+        { "inputs": { "RCX": 57005 },               "expected": 5600319784674029888,  "label": "x=0xDEAD, trip=14" },
+        { "inputs": { "RCX": 4294967296 },          "expected": 4648317627024801792,  "label": "x=0x100000000, trip=1" },
+        { "inputs": { "RCX": 4294967295 },          "expected": 15527988676334462433, "label": "x=0xFFFFFFFF, trip=16" },
+        { "inputs": { "RCX": 81985529216486895 },   "expected": 12770815066297346131, "label": "x=0x123456789ABCDEF, trip=16" }
+      ]
     }
   ]
 }
