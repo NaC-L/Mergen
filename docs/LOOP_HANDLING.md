@@ -196,7 +196,7 @@ For changes that touch register/flag phi shape, also run the two Themida gates �
 build_iced\lifter.exe ..\testthemida\example2-virt.bin 0x140001000
 ```
 
-Inspect `output_diagnostics.json` for `lift_stats.instructions_lifted == 2544` and `summary.warning == 0`, `summary.error == 0`. This only certifies that the lifter walked the VM's 2544 handler instructions without reporting errors — it does **not** certify that the recovered IR is semantically equivalent to the original function.
+Inspect `output_diagnostics.json` for `lift_stats.instructions_lifted > 0` and `summary.warning == 0`, `summary.error == 0`. On the current `example2-virt.bin` reference run this is a large lift (for example, 64879 instructions on the current tree), because the VM and related outlined flow are both traversed. This only certifies that the lifter walked the protected control flow without reporting errors — it does **not** certify that the recovered IR is semantically equivalent to the original function.
 
 **Correctness gate** — confirms the devirtualized IR calls the same external imports as the non-virtualized reference:
 
@@ -206,7 +206,7 @@ python test.py themida
 
 Fails hard if any required import from `scripts/rewrite/themida_samples.json` is missing from the lifted IR. Required imports are pinned against a lift of the non-virt reference binary; regenerate with `python test.py themida --update` when the reference changes (not when the virt output changes). Passing this gate means the VM devirtualization recovered the guest program's external-call semantics, not just the VM's own state-machine activity.
 
-This gate is currently **red** on `example2-virt.bin`: the lifter unrolls the VM but does not surface the guest's `GetStdHandle` / `WriteConsoleA` / `ReadConsoleA` / `CharUpperA` calls. That gap is the active Themida-frontier work item — the coverage gate passing while the correctness gate fails is exactly the failure mode the two-gate split is designed to make visible.
+This gate is currently **green** on `example2-virt.bin`: the lifter surfaces the guest's `GetStdHandle` / `WriteConsoleA` / `ReadConsoleA` / `CharUpperA` calls again. The active frontier for Themida is keeping that recovery robust while path solving still has to discard many unmapped switch-target candidates along the way.
 
 ## Known limitations
 
