@@ -5019,6 +5019,23 @@
         { "inputs": { "RCX": 16 },  "expected": 4294967295,   "label": "default (above range)" },
         { "inputs": { "RCX": 100 }, "expected": 4294967295,   "label": "default far" }
       ]
+    },
+    {
+      "name": "vm_tea_round_loop",
+      "symbol": "vm_tea_round_loop_target",
+      "patterns": ["add", "xor", "shl", "lshr"],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 7552576846484749336,  "label": "x=0, trip=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 2667102906176768614,  "label": "x=1, trip=2" },
+        { "inputs": { "RCX": 255 },                  "expected": 5267398537828208622,  "label": "x=0xFF, trip=32 max low bits" },
+        { "inputs": { "RCX": 51966 },                "expected": 6231673338343464404,  "label": "x=0xCAFE, trip=31" },
+        { "inputs": { "RCX": 57005 },                "expected": 3483684336064875395,  "label": "x=0xDEAD, trip=14" },
+        { "inputs": { "RCX": 414977 },               "expected": 2667102921638851156,  "label": "x=0x65501, trip=2 (original failing input)" },
+        { "inputs": { "RCX": 4294967296 },           "expected": 7552580158648374531,  "label": "x=0x100000000, trip=1 high bits" },
+        { "inputs": { "RCX": 4294967295 },           "expected": 15060787947211530220, "label": "x=0xFFFFFFFF, trip=32" },
+        { "inputs": { "RCX": 81985529216486895 },    "expected": 2917303668028088609,  "label": "x=0x123456789ABCDEF, trip=16" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 2919581753692666904,  "label": "x=0x8000000000000000, trip=1 sign bit" }
+      ]
     }
   ]
 }
