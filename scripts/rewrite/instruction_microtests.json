@@ -5051,6 +5051,16 @@
         { "inputs": { "RCX": 4294967295 },          "expected": 15527988676334462433, "label": "x=0xFFFFFFFF, trip=16" },
         { "inputs": { "RCX": 81985529216486895 },   "expected": 12770815066297346131, "label": "x=0x123456789ABCDEF, trip=16" }
       ]
+    },
+    {
+      "name": "vm_callret_loop",
+      "symbol": "vm_callret_loop_target",
+      "patterns": ["xor", "shl", "lshr"]
+    },
+    {
+      "name": "vm_bubblesort_loop",
+      "symbol": "vm_bubblesort_loop_target",
+      "patterns": ["shl", "lshr", "and", "or"]
     }
   ]
 }
