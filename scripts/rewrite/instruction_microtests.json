@@ -292,7 +292,7 @@
         { "line_all": ["and i32", ", 15"] },
         "phi i32",
         "add i32",
-        "switch i32"
+        "br i1"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },  "expected": 0,   "label": "fib(0)" },
@@ -400,7 +400,7 @@
         { "line_all": ["and i32", ", 15"] },
         "phi i32",
         "icmp eq i32",
-        "br i1"
+        "select"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },  "expected": 8, "label": "target=1: not in table" },
@@ -4483,7 +4483,7 @@
       "name": "vm_signed_dword_sum64_loop",
       "symbol": "vm_signed_dword_sum64_loop_target",
       "patterns": [
-        "sext",
+        "ashr",
         "add"
       ],
       "semantic": [
@@ -4503,7 +4503,7 @@
       "name": "vm_signed_word_sum64_loop",
       "symbol": "vm_signed_word_sum64_loop_target",
       "patterns": [
-        "sext",
+        "ashr",
         "add"
       ],
       "semantic": [
@@ -5019,6 +5019,48 @@
         { "inputs": { "RCX": 16 },  "expected": 4294967295,   "label": "default (above range)" },
         { "inputs": { "RCX": 100 }, "expected": 4294967295,   "label": "default far" }
       ]
+    },
+    {
+      "name": "vm_tea_round_loop",
+      "symbol": "vm_tea_round_loop_target",
+      "patterns": ["add", "xor", "shl", "lshr"],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                    "expected": 7552576846484749336,  "label": "x=0, trip=1" },
+        { "inputs": { "RCX": 1 },                    "expected": 2667102906176768614,  "label": "x=1, trip=2" },
+        { "inputs": { "RCX": 255 },                  "expected": 5267398537828208622,  "label": "x=0xFF, trip=32 max low bits" },
+        { "inputs": { "RCX": 51966 },                "expected": 6231673338343464404,  "label": "x=0xCAFE, trip=31" },
+        { "inputs": { "RCX": 57005 },                "expected": 3483684336064875395,  "label": "x=0xDEAD, trip=14" },
+        { "inputs": { "RCX": 414977 },               "expected": 2667102921638851156,  "label": "x=0x65501, trip=2 (original failing input)" },
+        { "inputs": { "RCX": 4294967296 },           "expected": 7552580158648374531,  "label": "x=0x100000000, trip=1 high bits" },
+        { "inputs": { "RCX": 4294967295 },           "expected": 15060787947211530220, "label": "x=0xFFFFFFFF, trip=32" },
+        { "inputs": { "RCX": 81985529216486895 },    "expected": 2917303668028088609,  "label": "x=0x123456789ABCDEF, trip=16" },
+        { "inputs": { "RCX": 9223372036854775808 },  "expected": 2919581753692666904,  "label": "x=0x8000000000000000, trip=1 sign bit" }
+      ]
+    },
+    {
+      "name": "vm_subroutine_loop",
+      "symbol": "vm_subroutine_loop_target",
+      "patterns": ["xor", "shl", "lshr"],
+      "semantic": [
+        { "inputs": { "RCX": 0 },                   "expected": 0,                    "label": "x=0, trip=1" },
+        { "inputs": { "RCX": 1 },                   "expected": 1152992998833853505,  "label": "x=1, trip=2 xorshift" },
+        { "inputs": { "RCX": 255 },                 "expected": 10236226849416635145, "label": "x=0xFF, trip=16 max" },
+        { "inputs": { "RCX": 51966 },               "expected": 14592049085638891025, "label": "x=0xCAFE, trip=15" },
+        { "inputs": { "RCX": 57005 },               "expected": 5600319784674029888,  "label": "x=0xDEAD, trip=14" },
+        { "inputs": { "RCX": 4294967296 },          "expected": 4648317627024801792,  "label": "x=0x100000000, trip=1" },
+        { "inputs": { "RCX": 4294967295 },          "expected": 15527988676334462433, "label": "x=0xFFFFFFFF, trip=16" },
+        { "inputs": { "RCX": 81985529216486895 },   "expected": 12770815066297346131, "label": "x=0x123456789ABCDEF, trip=16" }
+      ]
+    },
+    {
+      "name": "vm_callret_loop",
+      "symbol": "vm_callret_loop_target",
+      "patterns": ["xor", "shl", "lshr"]
+    },
+    {
+      "name": "vm_bubblesort_loop",
+      "symbol": "vm_bubblesort_loop_target",
+      "patterns": ["shl", "lshr", "and", "or"]
     }
   ]
 }

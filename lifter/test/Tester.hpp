@@ -2934,19 +2934,14 @@ bool runGeneralizedLoopControlFieldLoadThreeWayProducesPhi(std::string& details)
   return true;
 }
 
-// KNOWN-LIMITATION (non-Themida control slot is invisible to generalization).
-//
-// retrieve_generalized_loop_control_slot_value_impl explicitly gates on
-// `startAddress != this->kThemidaControlCursorSlot` and returns nullptr for
-// every other address. A loop whose control cursor is stored at any address
-// other than 0x14004DD19 does not get its load re-routed through the
-// canonical/backedge phi; the caller falls back to the normal memory
-// pipeline, which yields a concrete or last-written value - not a phi.
-//
-// When the hardcoded slot is replaced with per-function detection or a
-// tagging layer, this test MUST fail and be rewritten to assert the new
-// discovery mechanism.
-bool runGeneralizedLoopNonThemidaControlSlotProducesNoPhi(std::string& details) {
+// Per-loop slot discovery picks up non-Themida control slots when the legacy
+// Themida cursor is also present. With both the Themida cursor and an
+// otherControlSlot varying across canonical/backedge, the legacy slot is
+// claimed as controlSlot (preserving Themida behavior) and otherControlSlot
+// becomes the target slot - so reads at otherControlSlot route through the
+// target-slot phi path.
+bool runGeneralizedLoopNonThemidaSlotPicksUpAsTargetWhenLegacyControlPresent(
+    std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
   auto* preheader =
@@ -2959,17 +2954,13 @@ bool runGeneralizedLoopNonThemidaControlSlotProducesNoPhi(std::string& details) 
   constexpr uint64_t themidaControlSlot = 0x14004DD19ULL;
   constexpr uint64_t canonicalControl = 0x1401AF740ULL;
   constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
-  // A plausible control-cursor slot for a different protected binary.
-  // Not 0x14004DD19, so the slot-value retrieval must bail.
   constexpr uint64_t otherControlSlot = 0x140050000ULL;
   constexpr uint64_t otherCanonicalValue = 0x1100220033004400ULL;
   constexpr uint64_t otherBackedgeValue = 0x5500660077008800ULL;
 
   lifter.builder->SetInsertPoint(preheader);
-  // Themida slot - required to activate the generalized state machinery.
   lifter.SetMemoryValue(makeI64(context, themidaControlSlot),
                         makeI64(context, canonicalControl));
-  // The actual slot under test, seeded with distinct canonical value.
   lifter.SetMemoryValue(makeI64(context, otherControlSlot),
                         makeI64(context, otherCanonicalValue));
   lifter.branch_backup(loopHeader);
@@ -2983,12 +2974,37 @@ bool runGeneralizedLoopNonThemidaControlSlotProducesNoPhi(std::string& details) 
 
   lifter.load_generalized_backup(loopHeader);
   lifter.builder->SetInsertPoint(loopHeader);
+
+  if (lifter.activeGeneralizedLoopControlFieldState.controlSlot !=
+      themidaControlSlot) {
+    details = "  discovery should pick the legacy Themida cursor as controlSlot "
+              "when present and varying\n";
+    return false;
+  }
+  if (lifter.activeGeneralizedLoopControlFieldState.targetSlot !=
+      otherControlSlot) {
+    details = "  discovery should pick the only non-control varying qword as "
+              "targetSlot\n";
+    return false;
+  }
   auto* loadedAtOtherSlot =
       lifter.GetMemoryValue(makeI64(context, otherControlSlot), 64);
-  if (llvm::isa<llvm::PHINode>(loadedAtOtherSlot)) {
-    details = "  GetMemoryValue at non-Themida control slot unexpectedly "
-              "produced a PHINode - the hardcoded slot gate has been "
-              "generalized; rewrite this test against the new contract.\n";
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(loadedAtOtherSlot);
+  if (!phi || phi->getNumIncomingValues() != 2) {
+    details = "  discovery target-slot helper should produce a 2-way phi at "
+              "the discovered non-Themida slot\n";
+    return false;
+  }
+  bool sawCanonical = false, sawBackedge = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto v = readConstantAPInt(phi->getIncomingValue(i));
+    if (!v.has_value()) continue;
+    if (v->getZExtValue() == otherCanonicalValue) sawCanonical = true;
+    else if (v->getZExtValue() == otherBackedgeValue) sawBackedge = true;
+  }
+  if (!sawCanonical || !sawBackedge) {
+    details = "  discovered target-slot phi must carry both canonical and "
+              "backedge concrete values\n";
     return false;
   }
   return true;
@@ -4134,6 +4150,7 @@ bool runGeneralizedLoopControlSlotReturnsCanonicalWhenStoredStateHasNoBackedges(
   stored.headerBlock = header;
   stored.canonicalSource = canonical;
   stored.canonicalControl = canonicalControl;
+  stored.controlSlot = controlSlot;
   stored.canonicalBuffer[controlSlot] = ValueByteReference(
       llvm::ConstantInt::get(llvm::Type::getInt8Ty(context), static_cast<uint8_t>(canonicalControl & 0xFFULL)), 0);
   lifter.activeGeneralizedLoopControlFieldState = stored;
@@ -4168,6 +4185,7 @@ bool runGeneralizedLoopTargetSlotReturnsCanonicalWhenStoredStateHasNoBackedges(
   stored.valid = true;
   stored.headerBlock = header;
   stored.canonicalSource = canonical;
+  stored.targetSlot = loopCarriedSlot;
   for (uint8_t i = 0; i < 8; ++i) {
     stored.canonicalBuffer[loopCarriedSlot + i] = ValueByteReference(
         llvm::ConstantInt::get(llvm::Type::getInt8Ty(context),
@@ -4211,6 +4229,7 @@ bool runGeneralizedLoopControlFieldReturnsCanonicalWhenStoredStateHasNoBackedges
   stored.headerBlock = header;
   stored.canonicalSource = canonical;
   stored.canonicalControl = canonicalControl;
+  stored.controlSlot = controlSlot;
   // Seed control-slot bytes.
   for (uint8_t i = 0; i < 8; ++i) {
     stored.canonicalBuffer[controlSlot + i] = ValueByteReference(
@@ -5233,10 +5252,14 @@ bool runMigrateGeneralizedLoopBlockCopiesAllStateToNewBlock(
 }
 
 // make_generalized_loop_backup: non-preserved register widens to Undef
-// on the first backedge (widenFirstBackedge=true by default). RAX is
-// not in shouldPreserveGeneralizedBackedgeRegisterIndex's preserve set,
-// so its phi incoming from backedge must be UndefValue.
-bool runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge(
+// Data-driven register preservation: RAX's canonical and backedge values
+// differ, so shouldPreserveGeneralizedBackedgeRegister returns true and the
+// phi carries the concrete backedge value (no Undef widening). Previously
+// RAX was not in the hardcoded preserve set and was widened to Undef; the
+// data-driven approach preserves ALL registers whose value changes across
+// the loop boundary — this is the fix for the TEA-round class of bugs where
+// loop-carried state in non-Themida registers was silently lost.
+bool runMakeGeneralizedLoopBackupPreservesRaxWhenValueDiffers(
     std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -5247,9 +5270,11 @@ bool runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge(
   auto* loopHeader =
       llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
 
-  constexpr uint64_t controlSlot = 0x14004DD19ULL;
-  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
-  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  // Use a non-Themida control slot so data-driven preservation applies
+  // (the Themida cursor slot triggers the hardcoded dispatcher set).
+  constexpr uint64_t controlSlot = 0x140070000ULL;
+  constexpr uint64_t canonicalControl = 0x140080000ULL;
+  constexpr uint64_t backedgeControl = 0x140090000ULL;
   constexpr uint64_t canonicalRax = 0xAAAA1111ULL;
   constexpr uint64_t backedgeRax = 0xBBBB2222ULL;
 
@@ -5276,21 +5301,23 @@ bool runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge(
     return false;
   }
   bool sawCanonical = false;
-  bool sawUndef = false;
+  bool sawConcreteBackedge = false;
   for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
     auto* inc = phi->getIncomingValue(i);
     if (llvm::isa<llvm::UndefValue>(inc)) {
-      sawUndef = true;
-    } else {
-      auto actual = readConstantAPInt(inc);
-      if (actual.has_value() && actual->getZExtValue() == canonicalRax) {
-        sawCanonical = true;
-      }
+      details = "  RAX phi must not carry Undef — RAX value differs between "
+                "canonical and backedge, so data-driven preservation applies\n";
+      return false;
     }
+    auto actual = readConstantAPInt(inc);
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalRax) sawCanonical = true;
+    else if (v == backedgeRax) sawConcreteBackedge = true;
   }
-  if (!sawCanonical || !sawUndef) {
-    details = "  RAX phi should carry canonical concrete value and Undef "
-              "for the widened first backedge (non-preserved register)\n";
+  if (!sawCanonical || !sawConcreteBackedge) {
+    details = "  RAX phi should carry both canonical and concrete backedge "
+              "values (data-driven preservation: values differ)\n";
     return false;
   }
   return true;
@@ -5367,10 +5394,10 @@ bool runGeneralizedPhiAddressWithNegativeDisplacementResolvesLoadedValues(
 }
 
 // make_generalized_loop_backup preserves the concrete backedge value for
-// RCX (shouldPreserveGeneralizedBackedgeRegisterIndex index 1). The
-// preserve set protects specific registers from the default Undef
-// widening so their backedge value flows through unchanged on the
-// first lift. Without this, RCX would become Undef and downstream code
+// RCX when canonical and backedge values differ (data-driven preservation).
+// The preserve policy protects registers whose loop-body value changed from
+// the default Undef widening so their backedge value flows through unchanged
+// on the first lift. Without this, RCX would become Undef and downstream code
 // using it would lose its concrete shape.
 bool runMakeGeneralizedLoopBackupPreservesConcreteRcxOnFirstBackedge(
     std::string& details) {
@@ -5416,8 +5443,8 @@ bool runMakeGeneralizedLoopBackupPreservesConcreteRcxOnFirstBackedge(
   for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
     auto* inc = phi->getIncomingValue(i);
     if (llvm::isa<llvm::UndefValue>(inc)) {
-      details = "  RCX phi must not carry Undef - RCX is in the preserved "
-                "set (shouldPreserveGeneralizedBackedgeRegisterIndex=1)\n";
+      details = "  RCX phi must not carry Undef - RCX value differs between "
+                "canonical and backedge (data-driven preservation)\n";
       return false;
     }
     auto actual = readConstantAPInt(inc);
@@ -5434,8 +5461,8 @@ bool runMakeGeneralizedLoopBackupPreservesConcreteRcxOnFirstBackedge(
   return true;
 }
 
-// Symmetric preserve test for R12 (shouldPreserveGeneralizedBackedgeRegisterIndex
-// index 12). Confirms the preserve list covers more than just RCX/RSP.
+// Symmetric preserve test for R12 (data-driven: canonical and backedge
+// values differ). Confirms preservation covers more than just RCX/RSP.
 bool runMakeGeneralizedLoopBackupPreservesConcreteR12OnFirstBackedge(
     std::string& details) {
   LifterUnderTest lifter;
@@ -6826,19 +6853,12 @@ bool runGeneralizedPhiAddressBaseCaseWithoutDisplacementResolvesLoadedValues(
   return true;
 }
 
-// KNOWN-LIMITATION (target-slot helper hardcoded to kThemidaLoopCarriedSlot).
-//
-// retrieve_generalized_loop_target_slot_value_impl gates on
-// `startAddress != this->kThemidaLoopCarriedSlot`. A loop whose
-// loop-carried slot is at any other address cannot benefit from the
-// helper's phi-collapse fast path; the caller falls back to the normal
-// memory pipeline.
-//
-// This is a sibling limitation to the kThemidaControlCursorSlot one
-// (pinned by generalized_loop_non_themida_control_slot_produces_no_phi).
-// When per-function carried-slot detection lands, this test MUST fail
-// and be rewritten to assert the new contract.
-bool runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi(
+// Per-loop slot discovery picks up non-Themida loop-carried slots as the
+// target slot when the legacy carried slot is absent. With the Themida
+// cursor varying (so discovery activates) and otherTargetSlot also varying
+// across canonical/backedge, the target-slot helper now fires at the
+// discovered slot and produces a phi.
+bool runGeneralizedLoopDiscoveryPicksNonThemidaTargetSlot(
     std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -6852,7 +6872,6 @@ bool runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi(
   constexpr uint64_t themidaControlSlot = 0x14004DD19ULL;
   constexpr uint64_t canonicalControl = 0x1401AF740ULL;
   constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
-  // Plausible carried-slot for a non-Themida sample; not 0x14004DC67.
   constexpr uint64_t otherTargetSlot = 0x140050800ULL;
   constexpr uint64_t otherCanonical = 0xAA01AA01AA01AA01ULL;
   constexpr uint64_t otherBackedge = 0xBB02BB02BB02BB02ULL;
@@ -6873,12 +6892,31 @@ bool runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi(
 
   lifter.load_generalized_backup(loopHeader);
   lifter.builder->SetInsertPoint(loopHeader);
+
+  if (lifter.activeGeneralizedLoopControlFieldState.targetSlot !=
+      otherTargetSlot) {
+    details = "  discovery should pick otherTargetSlot as targetSlot when the "
+              "legacy Themida loop-carried slot is absent\n";
+    return false;
+  }
   auto* loaded =
       lifter.GetMemoryValue(makeI64(context, otherTargetSlot), 64);
-  if (llvm::isa<llvm::PHINode>(loaded)) {
-    details = "  GetMemoryValue at non-Themida loop-carried slot unexpectedly "
-              "produced a PHINode - target-slot hardcoded gate has been "
-              "generalized; rewrite this test against the new contract.\n";
+  auto* phi = llvm::dyn_cast<llvm::PHINode>(loaded);
+  if (!phi || phi->getNumIncomingValues() != 2) {
+    details = "  target-slot helper should produce a 2-way phi at the "
+              "discovered non-Themida loop-carried slot\n";
+    return false;
+  }
+  bool sawCanonical = false, sawBackedge = false;
+  for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
+    auto v = readConstantAPInt(phi->getIncomingValue(i));
+    if (!v.has_value()) continue;
+    if (v->getZExtValue() == otherCanonical) sawCanonical = true;
+    else if (v->getZExtValue() == otherBackedge) sawBackedge = true;
+  }
+  if (!sawCanonical || !sawBackedge) {
+    details = "  discovered target-slot phi must carry both canonical and "
+              "backedge concrete values\n";
     return false;
   }
   return true;
@@ -7502,9 +7540,9 @@ bool runMigrateGeneralizedLoopBlockPreservesExistingControlFieldState(
   return true;
 }
 
-// make_generalized_loop_backup preserves R9 (shouldPreserveGeneralizedBackedgeRegisterIndex
-// index 9). Confirms the preserve list extends past RCX/RSP/R12 to R9 -
-// a hot loop_reg_phi lane in the Themida sample.
+// make_generalized_loop_backup preserves R9 (data-driven: canonical and
+// backedge values differ). Confirms preservation extends to R9 — a hot
+// loop_reg_phi lane in the Themida sample.
 bool runMakeGeneralizedLoopBackupPreservesConcreteR9OnFirstBackedge(
     std::string& details) {
   LifterUnderTest lifter;
@@ -7732,9 +7770,9 @@ bool runGeneralizedLoopTargetSlotBailsWhenBackedgeBufferLacksSlot(
   return true;
 }
 
-// Preserved-register coverage: R10 at index 10 in
-// shouldPreserveGeneralizedBackedgeRegisterIndex. Completes the preserved
-// set beyond RCX/RSP/R9/R12 already tested.
+// Preserved-register coverage: R10 at index 10 (data-driven: canonical
+// and backedge values differ). Completes the preserved set beyond
+// RCX/RSP/R9/R12 already tested.
 bool runMakeGeneralizedLoopBackupPreservesConcreteR10OnFirstBackedge(
     std::string& details) {
   LifterUnderTest lifter;
@@ -7795,8 +7833,8 @@ bool runMakeGeneralizedLoopBackupPreservesConcreteR10OnFirstBackedge(
   return true;
 }
 
-// Preserved-register coverage: R14 at index 14 in
-// shouldPreserveGeneralizedBackedgeRegisterIndex.
+// Preserved-register coverage: R14 at index 14 (data-driven: canonical
+// and backedge values differ).
 bool runMakeGeneralizedLoopBackupPreservesConcreteR14OnFirstBackedge(
     std::string& details) {
   LifterUnderTest lifter;
@@ -8302,10 +8340,11 @@ bool runGeneralizedLoopTargetSlotByteCountOneReturnsMaskedPhi(
   return true;
 }
 
-// RDX is not in shouldPreserveGeneralizedBackedgeRegisterIndex, so its
-// phi backedge incoming widens to Undef on the first lift. Symmetric
-// to the RAX test but at a different non-preserved index (RDX = 2).
-bool runMakeGeneralizedLoopBackupWidensRdxToUndefOnFirstBackedge(
+// Data-driven register preservation: RDX's canonical and backedge values
+// differ, so shouldPreserveGeneralizedBackedgeRegister returns true and the
+// phi carries the concrete backedge value. Symmetric to the RAX test at a
+// different register index (RDX = 2).
+bool runMakeGeneralizedLoopBackupPreservesRdxWhenValueDiffers(
     std::string& details) {
   LifterUnderTest lifter;
   auto& context = lifter.context;
@@ -8316,9 +8355,10 @@ bool runMakeGeneralizedLoopBackupWidensRdxToUndefOnFirstBackedge(
   auto* loopHeader =
       llvm::BasicBlock::Create(context, "loop_header", lifter.fnc);
 
-  constexpr uint64_t controlSlot = 0x14004DD19ULL;
-  constexpr uint64_t canonicalControl = 0x1401AF740ULL;
-  constexpr uint64_t backedgeControl = 0x1401AF0F6ULL;
+  // Use a non-Themida control slot so data-driven preservation applies.
+  constexpr uint64_t controlSlot = 0x140070000ULL;
+  constexpr uint64_t canonicalControl = 0x140080000ULL;
+  constexpr uint64_t backedgeControl = 0x140090000ULL;
   constexpr uint64_t canonicalRdx = 0xDDDD1111ULL;
   constexpr uint64_t backedgeRdx = 0xDDDD2222ULL;
 
@@ -8344,21 +8384,23 @@ bool runMakeGeneralizedLoopBackupWidensRdxToUndefOnFirstBackedge(
     details = "  RDX should become a phi at the loop header\n";
     return false;
   }
-  bool sawCanonical = false, sawUndef = false;
+  bool sawCanonical = false, sawConcreteBackedge = false;
   for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
     auto* inc = phi->getIncomingValue(i);
     if (llvm::isa<llvm::UndefValue>(inc)) {
-      sawUndef = true;
-    } else {
-      auto actual = readConstantAPInt(inc);
-      if (actual.has_value() && actual->getZExtValue() == canonicalRdx) {
-        sawCanonical = true;
-      }
+      details = "  RDX phi must not carry Undef — RDX value differs between "
+                "canonical and backedge, so data-driven preservation applies\n";
+      return false;
     }
+    auto actual = readConstantAPInt(inc);
+    if (!actual.has_value()) continue;
+    const uint64_t v = actual->getZExtValue();
+    if (v == canonicalRdx) sawCanonical = true;
+    else if (v == backedgeRdx) sawConcreteBackedge = true;
   }
-  if (!sawCanonical || !sawUndef) {
-    details = "  RDX phi should carry canonical concrete + Undef for "
-              "widened first backedge (non-preserved register, index 2)\n";
+  if (!sawCanonical || !sawConcreteBackedge) {
+    details = "  RDX phi should carry both canonical and concrete backedge "
+              "values (data-driven preservation: values differ)\n";
     return false;
   }
   return true;
@@ -8479,9 +8521,9 @@ bool runGeneralizedLoopControlSlotByteCountOneReturnsMaskedPhi(
   return true;
 }
 
-// Preserved-register coverage: RDI at index 7 in
-// shouldPreserveGeneralizedBackedgeRegisterIndex. Completes the remaining
-// hot loop_reg_phi lane not yet covered by earlier RCX/RSP/R9/R10/R12/R14 tests.
+// Preserved-register coverage: RDI at index 7 (data-driven: canonical and
+// backedge values differ). Completes the remaining hot loop_reg_phi lane
+// not yet covered by earlier RCX/RSP/R9/R10/R12/R14 tests.
 bool runMakeGeneralizedLoopBackupPreservesConcreteRdiOnFirstBackedge(
     std::string& details) {
   LifterUnderTest lifter;
@@ -10657,22 +10699,25 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
     }
 
     bool sawCanonical = false;
-    bool sawWidenedBackedge = false;
+    bool sawConcreteBackedge = false;
     for (unsigned i = 0; i < phi->getNumIncomingValues(); ++i) {
       auto* incomingBlock = phi->getIncomingBlock(i);
       auto* incomingValue = phi->getIncomingValue(i);
       if (incomingBlock == preheader && incomingValue == canonicalRbx) {
         sawCanonical = true;
       }
-      if (incomingBlock == firstBackedge &&
-          llvm::isa<llvm::UndefValue>(incomingValue)) {
-        sawWidenedBackedge = true;
+      // Data-driven preservation: RBX differs between canonical (37) and
+      // backedge (sub 37 1), so the backedge incoming carries the concrete
+      // value, not Undef.
+      if (incomingBlock == firstBackedge && incomingValue == firstBackedgeRbx) {
+        sawConcreteBackedge = true;
       }
     }
 
-    if (!sawCanonical || !sawWidenedBackedge) {
+    if (!sawCanonical || !sawConcreteBackedge) {
       details =
-          "  generalized loop RBX phi should keep the canonical incoming value and widen the first concrete backedge\n";
+          "  generalized loop RBX phi should keep canonical incoming and "
+          "preserve concrete backedge (data-driven: values differ)\n";
       return false;
     }
 
@@ -10857,8 +10902,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopControlFieldLoadFourWayProducesPhi);
     runCustom("generalized_loop_control_field_load_three_way_produces_phi",
              &InstructionTester::runGeneralizedLoopControlFieldLoadThreeWayProducesPhi);
-    runCustom("generalized_loop_non_themida_control_slot_produces_no_phi",
-             &InstructionTester::runGeneralizedLoopNonThemidaControlSlotProducesNoPhi);
+    runCustom("generalized_loop_non_themida_slot_picks_up_as_target_when_legacy_control_present",
+             &InstructionTester::runGeneralizedLoopNonThemidaSlotPicksUpAsTargetWhenLegacyControlPresent);
     runCustom("generalized_loop_nested_inner_overwrites_outer_active_state",
              &InstructionTester::runGeneralizedLoopNestedInnerOverwritesOuterActiveState);
     runCustom("generalized_loop_nested_inner_target_slot_uses_inner_state",
@@ -10937,8 +10982,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedLoopControlFieldIgnoresBaseCandidate);
     runCustom("generalized_loop_control_field_uses_active_state_from_unrelated_block",
              &InstructionTester::runGeneralizedLoopControlFieldUsesActiveStateFromUnrelatedBlock);
-    runCustom("make_generalized_loop_backup_widens_rax_to_undef_on_first_backedge",
-             &InstructionTester::runMakeGeneralizedLoopBackupWidensRaxToUndefOnFirstBackedge);
+    runCustom("make_generalized_loop_backup_preserves_rax_when_value_differs",
+             &InstructionTester::runMakeGeneralizedLoopBackupPreservesRaxWhenValueDiffers);
     runCustom("generalized_phi_address_with_negative_displacement_resolves_loaded_values",
              &InstructionTester::runGeneralizedPhiAddressWithNegativeDisplacementResolvesLoadedValues);
     runCustom("make_generalized_loop_backup_preserves_concrete_rcx_on_first_backedge",
@@ -11003,8 +11048,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runGeneralizedPhiAddressByteCountTwoReturnsMaskedPhi);
     runCustom("generalized_local_phi_address_byte_count_one_returns_masked_phi",
              &InstructionTester::runGeneralizedLocalPhiAddressByteCountOneReturnsMaskedPhi);
-    runCustom("generalized_loop_non_themida_target_slot_produces_no_phi",
-             &InstructionTester::runGeneralizedLoopNonThemidaTargetSlotProducesNoPhi);
+    runCustom("generalized_loop_discovery_picks_non_themida_target_slot",
+             &InstructionTester::runGeneralizedLoopDiscoveryPicksNonThemidaTargetSlot);
     runCustom("loop_generalization_missing_addr_to_bb_entry_rejected",
              &InstructionTester::runLoopGeneralizationMissingAddrToBBEntryRejected);
     runCustom("loop_generalization_empty_basic_block_rejected",
@@ -11063,8 +11108,8 @@ bool runComputePossibleValuesOnRolledArithmeticChain(std::string& details) {
              &InstructionTester::runStructuredLoopHeaderAcceptsSevenHopChain);
     runCustom("generalized_local_phi_address_bails_on_non_local_stack_incoming",
              &InstructionTester::runGeneralizedLocalPhiAddressBailsOnNonLocalStackIncoming);
-    runCustom("make_generalized_loop_backup_widens_rdx_to_undef_on_first_backedge",
-             &InstructionTester::runMakeGeneralizedLoopBackupWidensRdxToUndefOnFirstBackedge);
+    runCustom("make_generalized_loop_backup_preserves_rdx_when_value_differs",
+             &InstructionTester::runMakeGeneralizedLoopBackupPreservesRdxWhenValueDiffers);
     runCustom("generalized_loop_restore_flag_phi_carries_concrete_backedge_on_divergence",
              &InstructionTester::runGeneralizedLoopRestoreFlagPhiCarriesConcreteBackedgeOnDivergence);
     runCustom("generalized_loop_target_slot_byte_count_two_returns_masked_phi",

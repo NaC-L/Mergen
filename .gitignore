@@ -73,4 +73,6 @@ scripts/rewrite/tmp_*.json
 *.vtil
 
 # test binaries and research (sources live in testcases/)
-/simple/
+/simple/themida_trace.txt
+simple/
+themida_trace.txt

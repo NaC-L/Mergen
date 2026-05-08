@@ -116,17 +116,23 @@ public:
 
     for (auto& F : M) {
       llvm::Value* memory = mem;
-      llvm::Value* stackMemory = nullptr;
-      // --- Pass 1: scan all stack GEPs to find the actual offset range ---
-      // The stack spans both below and above STACKP_VALUE:
-      //   below = locals/saved regs (frame grows downward)
-      //   above = return address, shadow space, stack-passed arguments
-      // We use explicit stack bounds [stackLower, stackUpper] derived from the
-      // PE header's stack reserve, NOT isConcrete() — because PE image sections
-      // are also concrete and would be misclassified as stack.
-      uint64_t min_offset = UINT64_MAX;
-      uint64_t max_offset = 0;
-      bool found_any = false;
+
+      // Two-alloca split:
+      //   - Main alloca:  scratch slots that don't escape via calls (SROA-friendly).
+      //   - Escape alloca: slots whose pointer flows into a CallBase (won't SROA,
+      //     but isolated so dead stores in the main alloca still get DSE'd).
+      //
+      // The split is by CONSTANT OFFSET: any constant offset touched by ANY
+      // GEP with a CallBase user is marked "escaped". All GEPs (constant or
+      // non-constant) at escaped offsets go to the escape alloca; everything
+      // else goes to the main alloca. This preserves pointer identity within
+      // each escaped slot (init store, call arg, post-call read all alias).
+      //
+      // Non-constant-offset GEPs always go to the main alloca because we can't
+      // cheaply determine whether their KnownBits range overlaps an escaped slot.
+      // In practice, lifters emit non-constant offsets for buffer regions and
+      // constant offsets for scalar API slots, so this partitioning works.
+
       auto getMaxAccessBytes = [&](llvm::GetElementPtrInst* GEP) -> uint64_t {
         uint64_t maxBytes = 1;
         for (auto* User : GEP->users()) {
@@ -149,106 +155,128 @@ public:
         }
         return maxBytes;
       };
+
+      // --- Pass 1a: identify escaped offsets ---
+      std::set<uint64_t> escapedOffsets;
+      for (auto& BB : F) {
+        for (auto& I : BB) {
+          auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I);
+          if (!GEP) continue;
+          if (GEP->getPointerOperand() != memory) continue;
+          auto* OffOp = GEP->getOperand(GEP->getNumOperands() - 1);
+          auto* CI = llvm::dyn_cast<ConstantInt>(OffOp);
+          if (!CI) continue;
+          uint64_t val = CI->getZExtValue();
+          if (!isStackAddress(val)) continue;
+          for (auto* U : GEP->users()) {
+            if (llvm::isa<llvm::CallBase>(U)) {
+              escapedOffsets.insert(val);
+              break;
+            }
+          }
+        }
+      }
+
+      // --- Pass 1b: classify and collect ranges per alloca ---
       struct PendingGEP {
         llvm::GetElementPtrInst* gep;
         bool constant_offset;
-        uint64_t const_val; // only valid when constant_offset=true
+        uint64_t const_val;     // only valid when constant_offset=true
+        bool to_escape_alloca;  // route to escape alloca instead of main
       };
       std::vector<PendingGEP> pending;
+
+      uint64_t main_min = UINT64_MAX, main_max = 0;
+      uint64_t escape_min = UINT64_MAX, escape_max = 0;
+      bool found_main = false, found_escape = false;
 
       for (auto& BB : F) {
         for (auto& I : BB) {
           auto* GEP = llvm::dyn_cast<llvm::GetElementPtrInst>(&I);
           if (!GEP) continue;
           if (GEP->getPointerOperand() != memory) continue;
-          // Skip GEPs that escape via a call argument: migrating them to the
-          // stack alloca and then having a call use the resulting pointer
-          // blocks mem2reg/SROA, leaving hundreds of dead stack stores in
-          // the post-opt IR. Leave such GEPs through %memory - it is
-          // already a function argument, so escaping it costs nothing.
-          // Other non-load/store uses (ptrtoint, GEP-of-GEP, etc.) still
-          // get migrated; rewrite_smoke samples rely on that.
-          {
-            bool escapesViaCall = false;
-            for (auto* U : GEP->users()) {
-              if (llvm::isa<llvm::CallBase>(U)) {
-                escapesViaCall = true;
-                break;
-              }
-            }
-            if (escapesViaCall) continue;
-          }
           auto* OffOp = GEP->getOperand(GEP->getNumOperands() - 1);
+          const uint64_t accessBytes = getMaxAccessBytes(GEP);
 
           if (auto* CI = dyn_cast<ConstantInt>(OffOp)) {
             uint64_t val = CI->getZExtValue();
-            if (isStackAddress(val)) {
-              const uint64_t accessBytes = getMaxAccessBytes(GEP);
-              min_offset = std::min(min_offset, val);
-              max_offset =
-                  std::max(max_offset, val + std::max<uint64_t>(1, accessBytes) - 1);
-              found_any = true;
-              pending.push_back({GEP, true, val});
+            if (!isStackAddress(val)) continue;
+            const bool toEscape = escapedOffsets.count(val) != 0;
+            if (toEscape) {
+              escape_min = std::min(escape_min, val);
+              escape_max = std::max(escape_max, val + std::max<uint64_t>(1, accessBytes) - 1);
+              found_escape = true;
+            } else {
+              main_min = std::min(main_min, val);
+              main_max = std::max(main_max, val + std::max<uint64_t>(1, accessBytes) - 1);
+              found_main = true;
             }
+            pending.push_back({GEP, true, val, toEscape});
             continue;
           }
-          // Non-constant offset: use KnownBits to bound the range
+          // Non-constant offset: use KnownBits to bound the range, route to main.
           auto offsetKB = computeKnownBits(OffOp, M.getDataLayout());
           uint64_t kb_min = offsetKB.getMinValue().getZExtValue();
           uint64_t kb_max = offsetKB.getMaxValue().getZExtValue();
-          const uint64_t accessBytes = getMaxAccessBytes(GEP);
-          // Accept if the entire KnownBits range falls within stack bounds.
           if (isStackAddress(kb_min) && isStackAddress(kb_max)) {
-            min_offset = std::min(min_offset, kb_min);
-            max_offset =
-                std::max(max_offset, kb_max + std::max<uint64_t>(1, accessBytes) - 1);
-            found_any = true;
-            pending.push_back({GEP, false, 0});
+            main_min = std::min(main_min, kb_min);
+            main_max = std::max(main_max, kb_max + std::max<uint64_t>(1, accessBytes) - 1);
+            found_main = true;
+            pending.push_back({GEP, false, 0, false});
           } else if (auto* SI = dyn_cast<SelectInst>(OffOp)) {
-            // SelectInst with two constant arms: check both in stack range
             if (isa<ConstantInt>(SI->getTrueValue()) &&
                 isa<ConstantInt>(SI->getFalseValue())) {
               uint64_t tv = cast<ConstantInt>(SI->getTrueValue())->getZExtValue();
               uint64_t fv = cast<ConstantInt>(SI->getFalseValue())->getZExtValue();
               if (isStackAddress(tv) && isStackAddress(fv)) {
-                min_offset = std::min({min_offset, tv, fv});
-                max_offset = std::max(
-                    {max_offset,
+                main_min = std::min({main_min, tv, fv});
+                main_max = std::max(
+                    {main_max,
                      tv + std::max<uint64_t>(1, accessBytes) - 1,
                      fv + std::max<uint64_t>(1, accessBytes) - 1});
-                found_any = true;
-                pending.push_back({GEP, false, 0});
+                found_main = true;
+                pending.push_back({GEP, false, 0, false});
               }
             }
           }
         }
       }
-      if (!found_any) continue;
+      if (!found_main && !found_escape) continue;
 
-      // --- Create correctly-sized byte-addressed alloca instead of 22MB i128 ---
-      uint64_t alloca_size = max_offset - min_offset + 1;
-      if (!stackMemory) {
-        llvm::IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
-        stackMemory = Builder.CreateAlloca(
+      // --- Create allocas (sized to actual offset ranges) ---
+      llvm::Value* mainAlloca = nullptr;
+      llvm::Value* escapeAlloca = nullptr;
+      llvm::IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
+      if (found_main) {
+        uint64_t main_size = main_max - main_min + 1;
+        mainAlloca = Builder.CreateAlloca(
             llvm::Type::getInt8Ty(M.getContext()),
-            Builder.getInt64(alloca_size),
+            Builder.getInt64(main_size),
             "stackmemory");
       }
+      if (found_escape) {
+        uint64_t escape_size = escape_max - escape_min + 1;
+        escapeAlloca = Builder.CreateAlloca(
+            llvm::Type::getInt8Ty(M.getContext()),
+            Builder.getInt64(escape_size),
+            "stackmemory.escape");
+      }
 
-      // --- Pass 2: rewrite GEPs to use the new alloca with rebased offsets ---
+      // --- Pass 2: rewrite GEPs to point at the right alloca with rebased offset ---
       for (auto& pg : pending) {
         auto* GEP = pg.gep;
-        GEP->setOperand(GEP->getNumOperands() - 2, stackMemory);
+        llvm::Value* targetAlloca = pg.to_escape_alloca ? escapeAlloca : mainAlloca;
+        uint64_t base = pg.to_escape_alloca ? escape_min : main_min;
+        GEP->setOperand(GEP->getNumOperands() - 2, targetAlloca);
         if (pg.constant_offset) {
-          // Rebase constant offset relative to min_offset
-          uint64_t rebased = pg.const_val - min_offset;
+          uint64_t rebased = pg.const_val - base;
           GEP->setOperand(GEP->getNumOperands() - 1,
                           ConstantInt::get(Type::getInt64Ty(M.getContext()), rebased));
         } else {
-          // Rebase non-constant offset with a Sub instruction
+          // Non-constant offsets only ever go to the main alloca.
           llvm::IRBuilder<> B(GEP);
           auto* OrigOff = GEP->getOperand(GEP->getNumOperands() - 1);
-          auto* Rebased = B.CreateSub(OrigOff, B.getInt64(min_offset), "stack.rebase");
+          auto* Rebased = B.CreateSub(OrigOff, B.getInt64(base), "stack.rebase");
           GEP->setOperand(GEP->getNumOperands() - 1, Rebased);
         }
         hasChanged = true;

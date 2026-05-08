@@ -208,6 +208,16 @@ public:
   llvm::DenseMap<BasicBlock*, std::array<llvm::PHINode*, FLAGS_END>>
       generalizedLoopFlagPhis;
   llvm::DenseMap<uint64_t, ValueByteReference> activeGeneralizedLoopLocalBuffer;
+  // A non-primary loop-carried memory qword: tracked across the loop boundary
+  // with per-backedge values, but not the primary dispatcher control cursor.
+  // Used by the generalized retrieve helpers to build phis for all varying
+  // memory slots, not just the first two (control + target).
+  struct LoopCarriedSlot {
+    uint64_t address = 0;
+    uint64_t canonicalValue = 0;
+    llvm::SmallVector<uint64_t, 2> backedgeValues;
+  };
+
   struct GeneralizedLoopControlFieldState {
     bool valid = false;
     llvm::BasicBlock* headerBlock = nullptr;
@@ -218,6 +228,19 @@ public:
     llvm::SmallVector<uint64_t, 2> backedgeControls;
     llvm::DenseMap<uint64_t, ValueByteReference> canonicalBuffer;
     llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> backedgeBuffers;
+    // Per-loop-discovered memory slots (Phase A: seeded to the Themida defaults
+    // by the populator; Phase B will replace the seed with active discovery).
+    // controlSlot is the qword whose value advances across loop iterations and
+    // drives the dispatcher cursor; targetSlot is the loop-carried output slot
+    // consumed by retrieve_generalized_loop_target_slot_value_impl.
+    uint64_t controlSlot = 0;
+    uint64_t targetSlot = 0;
+    // Additional loop-carried memory slots beyond controlSlot/targetSlot.
+    // Each varying qword discovered during slot discovery gets an entry here
+    // so retrieve helpers can build phis for ALL loop-carried state, not just
+    // the primary two. This fixes the TEA-round class of bugs where a third+
+    // varying slot was silently dropped.
+    llvm::SmallVector<LoopCarriedSlot, 4> carriedSlots;
   } activeGeneralizedLoopControlFieldState;
   llvm::DenseMap<llvm::BasicBlock*, GeneralizedLoopControlFieldState>
       generalizedLoopControlFieldStates;
@@ -339,8 +362,11 @@ public:
     activeGeneralizedLoopControlFieldState.backedgeSources.clear();
     activeGeneralizedLoopControlFieldState.canonicalControl = 0;
     activeGeneralizedLoopControlFieldState.backedgeControls.clear();
+    activeGeneralizedLoopControlFieldState.controlSlot = 0;
+    activeGeneralizedLoopControlFieldState.targetSlot = 0;
     activeGeneralizedLoopControlFieldState.canonicalBuffer.clear();
     activeGeneralizedLoopControlFieldState.backedgeBuffers.clear();
+    activeGeneralizedLoopControlFieldState.carriedSlots.clear();
   }
   bool evaluateConcreteGeneralizedLoopInt(llvm::Value* candidate,
                                           llvm::BasicBlock* incomingBlock,
@@ -481,7 +507,9 @@ public:
       return false;
     }
     auto* offsetCI = llvm::dyn_cast<llvm::ConstantInt>(gep->getOperand(1));
-    if (!offsetCI || offsetCI->getZExtValue() != kThemidaControlCursorSlot) {
+    if (!offsetCI ||
+        offsetCI->getZExtValue() !=
+            activeGeneralizedLoopControlFieldState.controlSlot) {
       return false;
     }
     fieldOffsetOut = constantOffset;
@@ -501,24 +529,53 @@ public:
   }
 
 
-  bool shouldPreserveGeneralizedBackedgeRegisterIndex(size_t index) const {
-    switch (index) {
-    case 1:  // RCX
-    case 4:  // RSP
-    case 7:  // hot loop_reg_phi289 lane
-    case 9:  // hot loop_reg_phi291 lane
-    case 10: // loop_reg_phi292 / R10 lane
-    case 12: // hot loop_reg_phi294 lane
-    case 14: // hot loop_reg_phi296 lane
-      return true;
-    default:
-      return false;
+  // Data-driven register preservation: a register is preserved (not widened
+  // to undef on the first backedge) when its value differs between canonical
+  // and any effective backedge — meaning the loop body carries state through
+  // that register. RSP is always preserved regardless.
+  //
+  // For dispatcher-shaped loops (IndirectJump context), the Themida-tuned
+  // hardcoded set {1,4,7,9,10,12,14} is used instead. Preserving ALL
+  // differing registers in dispatchers prevents LLVM from optimizing away
+  // scratch computations, which blocks import resolution.
+  bool shouldPreserveGeneralizedBackedgeRegister(
+      size_t index, const backup_point& canonical,
+      llvm::ArrayRef<const backup_point*> effectiveSources,
+      bool dispatcherShaped) const {
+    // RSP is unconditionally preserved so the stack pointer is never
+    // treated as "could be anything" inside the loop body.
+    if (index == RSP_) return true;
+    if (dispatcherShaped) {
+      // Legacy Themida-tuned set: only these registers carry dispatcher
+      // state that must survive widening. All others widen to undef so
+      // LLVM can fold away scratch noise and resolve import targets.
+      switch (index) {
+      case 1:  // RCX
+      case 7:  // RDI
+      case 9:  // R9
+      case 10: // R10
+      case 12: // R12
+      case 14: // R14
+        return true;
+      default:
+        return false;
+      }
     }
+    // Data-driven: preserve when any backedge has a different SSA value
+    // from canonical. ConstantInts with the same numeric value share a
+    // pointer in LLVM, so pointer equality is a sound test for constants.
+    for (const auto* src : effectiveSources) {
+      if (src->vec[index] != canonical.vec[index]) {
+        return true;
+      }
+    }
+    return false;
   }
 
   backup_point make_generalized_loop_backup(BasicBlock* bb,
                                             const backup_point& canonical,
-                                            llvm::ArrayRef<backup_point> sources) {
+                                            llvm::ArrayRef<backup_point> sources,
+                                            bool dispatcherShaped = false) {
     // Use the first source as the base for the generalized snapshot shape
     // (buffer, counter, etc.). For 2-way loops this matches the original
     // single-source behavior exactly; for N-way we pick sources[0] as the
@@ -611,7 +668,9 @@ public:
     llvm::SmallVector<llvm::Value*, 2> flagValues;
     for (size_t i = 0; i < REGISTER_COUNT; ++i) {
       const bool widenFirstBackedge =
-          !shouldPreserveGeneralizedBackedgeRegisterIndex(i);
+          !shouldPreserveGeneralizedBackedgeRegister(i, canonical,
+                                                     effectiveSources,
+                                                     dispatcherShaped);
       regValues.clear();
       for (auto* src : effectiveSources) {
         regValues.push_back(src->vec[i]);
@@ -687,41 +746,272 @@ public:
     }
   }
 
+  // Result of generalized-loop slot discovery: control + target slot identity
+  // and the canonical/backedge qword values + per-backedge buffers that
+  // motivate the choice. backedgeSources/Controls/Buffers are filled with
+  // exactly the backedges whose tracked qword at controlSlot differs from
+  // canonical (the activation precondition for the loop-control helpers).
+  struct DiscoveredGeneralizedLoopSlots {
+    bool valid = false;
+    uint64_t controlSlot = 0;
+    uint64_t targetSlot = 0;
+    uint64_t canonicalControl = 0;
+    llvm::SmallVector<llvm::BasicBlock*, 2> backedgeSources;
+    llvm::SmallVector<uint64_t, 2> backedgeControls;
+    llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> backedgeBuffers;
+    // All non-primary varying qwords discovered during scan.
+    llvm::SmallVector<LoopCarriedSlot, 4> carriedSlots;
+  };
+
+  // Try to populate `dst` from a specific candidate `slot`. Returns true iff
+  // canonical has a tracked qword at slot AND at least one backedge has a
+  // differing tracked qword at slot. Caller uses this both for the legacy
+  // Themida-slot priority path and for the fallback scan.
+  bool tryPopulateControlFromSlot(
+      const backup_point& canonical,
+      llvm::ArrayRef<backup_point> backedges, uint64_t slot,
+      DiscoveredGeneralizedLoopSlots& dst) {
+    uint64_t canonicalControl = 0;
+    if (!readConstantTrackedQword(canonical.buffer, slot, canonicalControl)) {
+      return false;
+    }
+    llvm::SmallVector<llvm::BasicBlock*, 2> sources;
+    llvm::SmallVector<uint64_t, 2> controls;
+    llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> buffers;
+    for (const auto& be : backedges) {
+      if (!be.sourceBlock || be.sourceBlock == canonical.sourceBlock) {
+        continue;
+      }
+      uint64_t beControl = 0;
+      if (!readConstantTrackedQword(be.buffer, slot, beControl)) {
+        continue;
+      }
+      if (beControl == canonicalControl) {
+        continue;
+      }
+      sources.push_back(be.sourceBlock);
+      controls.push_back(beControl);
+      buffers.push_back(be.buffer);
+    }
+    if (sources.empty()) {
+      return false;
+    }
+    dst.controlSlot = slot;
+    dst.canonicalControl = canonicalControl;
+    dst.backedgeSources = std::move(sources);
+    dst.backedgeControls = std::move(controls);
+    dst.backedgeBuffers = std::move(buffers);
+    return true;
+  }
+
+  // Discover the loop's control + target memory slots from canonical and
+  // backedge buffers. Order of preference for control slot:
+  //   1. The legacy Themida cursor slot if it has a varying tracked qword
+  //      (zero-regression guarantee on the reference Themida sample).
+  //   2. Otherwise, the qword in the canonical buffer with the most-varying
+  //      backedges. Tiebreak: lowest address.
+  // Order of preference for target slot:
+  //   1. The legacy Themida loop-carried slot if every selected backedge has
+  //      a tracked qword there.
+  //   2. Otherwise, the lowest-address candidate qword (excluding the chosen
+  //      controlSlot) that is tracked across canonical and every selected
+  //      backedge buffer. Values may match or differ; the target-slot helper
+  //      handles both cases.
+  // Returns a result with valid=false if no control slot can be identified.
+  // Stack-local addresses are excluded from candidates; they are handled by
+  // separate local-buffer machinery.
+  DiscoveredGeneralizedLoopSlots discoverGeneralizedLoopSlots(
+      const backup_point& canonical,
+      llvm::ArrayRef<backup_point> backedges) {
+    DiscoveredGeneralizedLoopSlots result;
+    if (!canonical.sourceBlock || backedges.empty()) {
+      return result;
+    }
+
+    // 1. Try the legacy Themida cursor slot first.
+    if (!tryPopulateControlFromSlot(canonical, backedges,
+                                    kThemidaControlCursorSlot, result)) {
+      // 2. Fallback scan: enumerate qword-start addresses in canonical buffer
+      //    and pick the most-varying. A "qword start" is an address A where
+      //    canonical has 8 contiguous tracked bytes from A and has no key at
+      //    A-1 (filters overlapping qwords from a single tracked region).
+      llvm::SmallVector<uint64_t, 16> candidates;
+      for (const auto& entry : canonical.buffer) {
+        const uint64_t addr = entry.first;
+        if (this->isTrackedStackAddress(addr)) continue;
+        if (canonical.buffer.contains(addr - 1)) continue;
+        uint64_t dummy = 0;
+        if (!readConstantTrackedQword(canonical.buffer, addr, dummy)) continue;
+        candidates.push_back(addr);
+      }
+      std::sort(candidates.begin(), candidates.end());
+      size_t bestVarianceCount = 0;
+      for (uint64_t addr : candidates) {
+        DiscoveredGeneralizedLoopSlots probe;
+        if (!tryPopulateControlFromSlot(canonical, backedges, addr, probe)) {
+          continue;
+        }
+        if (probe.backedgeSources.size() > bestVarianceCount) {
+          bestVarianceCount = probe.backedgeSources.size();
+          result.controlSlot = probe.controlSlot;
+          result.canonicalControl = probe.canonicalControl;
+          result.backedgeSources = std::move(probe.backedgeSources);
+          result.backedgeControls = std::move(probe.backedgeControls);
+          result.backedgeBuffers = std::move(probe.backedgeBuffers);
+        }
+      }
+      if (bestVarianceCount == 0) {
+        return result;  // no varying qword anywhere -> no control slot
+      }
+    }
+    result.valid = true;
+
+    // Target slot: prefer legacy Themida carried slot if usable across all
+    // selected backedges; otherwise scan for the lowest-addr alternative.
+    auto targetUsableAt = [&](uint64_t slot) -> bool {
+      if (slot == result.controlSlot) return false;
+      uint64_t dummy = 0;
+      if (!readConstantTrackedQword(canonical.buffer, slot, dummy)) return false;
+      for (const auto& buf : result.backedgeBuffers) {
+        if (!readConstantTrackedQword(buf, slot, dummy)) return false;
+      }
+      return true;
+    };
+    if (targetUsableAt(kThemidaLoopCarriedSlot)) {
+      result.targetSlot = kThemidaLoopCarriedSlot;
+    } else {
+      llvm::SmallVector<uint64_t, 16> targetCandidates;
+      for (const auto& entry : canonical.buffer) {
+        const uint64_t addr = entry.first;
+        if (this->isTrackedStackAddress(addr)) continue;
+        if (canonical.buffer.contains(addr - 1)) continue;
+        targetCandidates.push_back(addr);
+      }
+      std::sort(targetCandidates.begin(), targetCandidates.end());
+      for (uint64_t addr : targetCandidates) {
+        if (targetUsableAt(addr)) {
+          result.targetSlot = addr;
+          break;
+        }
+      }
+    }
+
+    // Collect ALL additional varying qwords beyond controlSlot/targetSlot.
+    // Each gets a LoopCarriedSlot so retrieve helpers can build phis for
+    // every loop-carried memory address, fixing the TEA-round class of bugs.
+    {
+      llvm::SmallVector<uint64_t, 16> allCandidates;
+      for (const auto& entry : canonical.buffer) {
+        const uint64_t addr = entry.first;
+        if (this->isTrackedStackAddress(addr)) continue;
+        if (canonical.buffer.contains(addr - 1)) continue;
+        uint64_t dummy = 0;
+        if (!readConstantTrackedQword(canonical.buffer, addr, dummy)) continue;
+        allCandidates.push_back(addr);
+      }
+      std::sort(allCandidates.begin(), allCandidates.end());
+      for (uint64_t addr : allCandidates) {
+        if (addr == result.controlSlot || addr == result.targetSlot) continue;
+        uint64_t canonVal = 0;
+        if (!readConstantTrackedQword(canonical.buffer, addr, canonVal)) continue;
+        // Collect per-backedge values at this address.
+        // Unlike controlSlot, we include slots even when some backedges match
+        // the canonical value — the helper will collapse to the shared value
+        // when all match, and build a phi when any differ.
+        bool anyBackedgeHasSlot = false;
+        LoopCarriedSlot slot;
+        slot.address = addr;
+        slot.canonicalValue = canonVal;
+        for (const auto& buf : result.backedgeBuffers) {
+          uint64_t beVal = 0;
+          if (readConstantTrackedQword(buf, addr, beVal)) {
+            slot.backedgeValues.push_back(beVal);
+            anyBackedgeHasSlot = true;
+          } else {
+            // Backedge buffer lacks this slot — skip entire slot to avoid
+            // mismatched backedge vector sizes.
+            anyBackedgeHasSlot = false;
+            break;
+          }
+        }
+        if (anyBackedgeHasSlot && !slot.backedgeValues.empty()) {
+          result.carriedSlots.push_back(std::move(slot));
+        }
+      }
+    }
+
+    return result;
+  }
+
   void load_generalized_backup_impl(BasicBlock* bb) {
     activeGeneralizedLoopLocalBuffer.clear();
     clearGeneralizedLoopControlFieldState();
     if (generalizedLoopBackedgeBackup.contains(bb) && BBbackup.contains(bb)) {
       printvalue2("loading generalized backup");
       auto& backedges = generalizedLoopBackedgeBackup[bb];
-      auto snapshot = make_generalized_loop_backup(bb, BBbackup[bb], backedges);
+      // Discover the per-loop control + target slots from canonical and
+      // backedge buffers. Falls back to the legacy Themida slots when they
+      // qualify (zero behavior change on the reference Themida sample).
+      auto discovery = discoverGeneralizedLoopSlots(BBbackup[bb], backedges);
+      // Dispatcher-shaped loops (Themida-style) use the hardcoded register
+      // preserve set; simple guest loops use data-driven preservation.
+      // Dispatcher detection: check if this is a Themida-style dispatcher
+      // where the hardcoded register preserve set should be used.
+      // When discovery IS valid and the control slot is the Themida cursor,
+      // it's definitely a dispatcher. When discovery is invalid (no varying
+      // slots), check if the canonical buffer contains the cursor slot —
+      // if so, it's likely a dispatcher that hasn't diverged yet.
+      // Otherwise (no cursor slot in buffer at all), it's a guest loop.
+      bool dispatcherShaped = false;
+      if (discovery.valid) {
+        dispatcherShaped = (discovery.controlSlot == kThemidaControlCursorSlot);
+      } else {
+        // No varying slots — check if the Themida cursor address is even
+        // present in the canonical buffer (indicates a dispatcher that
+        // hasn't fully diverged yet). Guest loops never write to the cursor.
+        uint64_t cursorProbe = 0;
+        dispatcherShaped = readConstantTrackedQword(
+            BBbackup[bb].buffer, kThemidaControlCursorSlot, cursorProbe);
+      }
+      if (this->liftProgressDiagEnabled) {
+        std::cout << "[diag] dispatcher_check valid=" << discovery.valid
+                  << " controlSlot=0x" << std::hex << discovery.controlSlot
+                  << " kThemida=0x" << kThemidaControlCursorSlot
+                  << std::dec << " result=" << dispatcherShaped << "\n";
+      }
+      auto snapshot = make_generalized_loop_backup(bb, BBbackup[bb], backedges,
+                                                   dispatcherShaped);
       if (this->liftProgressDiagEnabled) {
         auto formatHex = [](uint64_t value) {
           std::ostringstream os;
           os << "0x" << std::hex << std::uppercase << value;
           return os.str();
         };
-        uint64_t canonicalControl = 0;
-        const bool hasCanonicalControl = readConstantTrackedQword(
-            BBbackup[bb].buffer, kThemidaControlCursorSlot, canonicalControl);
         std::cout << "[diag] load_generalized_backup bb=" << bb->getName().str()
                   << " sourceCanonical="
                   << (BBbackup[bb].sourceBlock
                           ? BBbackup[bb].sourceBlock->getName().str()
                           : std::string("<null>"))
                   << " backedgeCount=" << backedges.size()
+                  << " discovered="
+                  << (discovery.valid ? "yes" : "no")
+                  << " controlSlot="
+                  << (discovery.valid ? formatHex(discovery.controlSlot)
+                                      : std::string("na"))
+                  << " targetSlot="
+                  << (discovery.valid && discovery.targetSlot
+                          ? formatHex(discovery.targetSlot)
+                          : std::string("na"))
                   << " canonicalControl="
-                  << (hasCanonicalControl ? formatHex(canonicalControl)
-                                          : std::string("na"));
-        for (size_t i = 0; i < backedges.size(); ++i) {
-          uint64_t be = 0;
-          const bool hasBE = readConstantTrackedQword(backedges[i].buffer,
-                                                      kThemidaControlCursorSlot, be);
+                  << (discovery.valid ? formatHex(discovery.canonicalControl)
+                                      : std::string("na"));
+        for (size_t i = 0; i < discovery.backedgeSources.size(); ++i) {
           std::cout << " backedge[" << i << "]source="
-                    << (backedges[i].sourceBlock
-                            ? backedges[i].sourceBlock->getName().str()
+                    << (discovery.backedgeSources[i]
+                            ? discovery.backedgeSources[i]->getName().str()
                             : std::string("<null>"))
                     << " backedge[" << i << "]control="
-                    << (hasBE ? formatHex(be) : std::string("na"));
+                    << formatHex(discovery.backedgeControls[i]);
         }
         std::cout << "\n";
       }
@@ -747,50 +1037,29 @@ public:
             backedges.empty()
                 ? llvm::DenseMap<uint64_t, ValueByteReference>{}
                 : extractLocalStackBuffer(backedges.front().buffer);
-        uint64_t canonicalControl = 0;
-        const bool hasCanonical = readConstantTrackedQword(
-            BBbackup[bb].buffer, kThemidaControlCursorSlot, canonicalControl);
-        if (hasCanonical && BBbackup[bb].sourceBlock && !backedges.empty()) {
-          // Collect backedges whose sourceBlock is distinct from canonical
-          // AND whose control value differs from canonical. At least one
-          // such backedge is required to activate the state.
-          llvm::SmallVector<llvm::BasicBlock*, 2> sources;
-          llvm::SmallVector<uint64_t, 2> controls;
-          llvm::SmallVector<llvm::DenseMap<uint64_t, ValueByteReference>, 2> buffers;
-          for (const auto& be : backedges) {
-            if (!be.sourceBlock || be.sourceBlock == BBbackup[bb].sourceBlock) {
-              continue;
-            }
-            uint64_t beControl = 0;
-            if (!readConstantTrackedQword(be.buffer, kThemidaControlCursorSlot,
-                                          beControl)) {
-              continue;
-            }
-            if (beControl == canonicalControl) {
-              continue;
-            }
-            sources.push_back(be.sourceBlock);
-            controls.push_back(beControl);
-            buffers.push_back(be.buffer);
-          }
-          if (!sources.empty()) {
-            activeGeneralizedLoopControlFieldState.valid = true;
-            activeGeneralizedLoopControlFieldState.headerBlock = bb;
-            activeGeneralizedLoopControlFieldState.canonicalSource =
-                BBbackup[bb].sourceBlock;
-            activeGeneralizedLoopControlFieldState.canonicalControl =
-                canonicalControl;
-            activeGeneralizedLoopControlFieldState.canonicalBuffer =
-                BBbackup[bb].buffer;
-            activeGeneralizedLoopControlFieldState.backedgeSources =
-                std::move(sources);
-            activeGeneralizedLoopControlFieldState.backedgeControls =
-                std::move(controls);
-            activeGeneralizedLoopControlFieldState.backedgeBuffers =
-                std::move(buffers);
-            generalizedLoopControlFieldStates[bb] =
-                activeGeneralizedLoopControlFieldState;
-          }
+        if (discovery.valid && BBbackup[bb].sourceBlock) {
+          activeGeneralizedLoopControlFieldState.valid = true;
+          activeGeneralizedLoopControlFieldState.headerBlock = bb;
+          activeGeneralizedLoopControlFieldState.canonicalSource =
+              BBbackup[bb].sourceBlock;
+          activeGeneralizedLoopControlFieldState.canonicalControl =
+              discovery.canonicalControl;
+          activeGeneralizedLoopControlFieldState.canonicalBuffer =
+              BBbackup[bb].buffer;
+          activeGeneralizedLoopControlFieldState.backedgeSources =
+              std::move(discovery.backedgeSources);
+          activeGeneralizedLoopControlFieldState.backedgeControls =
+              std::move(discovery.backedgeControls);
+          activeGeneralizedLoopControlFieldState.backedgeBuffers =
+              std::move(discovery.backedgeBuffers);
+          activeGeneralizedLoopControlFieldState.controlSlot =
+              discovery.controlSlot;
+          activeGeneralizedLoopControlFieldState.targetSlot =
+              discovery.targetSlot;
+          activeGeneralizedLoopControlFieldState.carriedSlots =
+              std::move(discovery.carriedSlots);
+          generalizedLoopControlFieldStates[bb] =
+              activeGeneralizedLoopControlFieldState;
         }
       }
       if (this->liftProgressDiagEnabled && bb && bb->getName() == "bb_solved_const282") {
@@ -1101,7 +1370,7 @@ public:
   llvm::Value* retrieve_generalized_loop_control_slot_value_impl(
       uint64_t startAddress, uint8_t byteCount) {
     auto& state = activeGeneralizedLoopControlFieldState;
-    if (!state.valid || startAddress != this->kThemidaControlCursorSlot ||
+    if (!state.valid || startAddress != state.controlSlot ||
         byteCount == 0 || byteCount > 8) {
       return nullptr;
     }
@@ -1145,45 +1414,78 @@ public:
 
   llvm::Value* retrieve_generalized_loop_target_slot_value_impl(
       uint64_t startAddress, uint8_t byteCount) {
-    if (!activeGeneralizedLoopControlFieldState.valid ||
-        startAddress != this->kThemidaLoopCarriedSlot || byteCount == 0) {
+    if (!activeGeneralizedLoopControlFieldState.valid || byteCount == 0) {
       return nullptr;
     }
     auto& state = activeGeneralizedLoopControlFieldState;
-    auto* canonicalValue = retrieveBufferedOrConcreteValue(state.canonicalBuffer,
-                                                           startAddress, byteCount);
-    if (!canonicalValue) return nullptr;
-    if (this->liftProgressDiagEnabled) {
-      std::cout << "[diag] target_slot current=0x" << std::hex
-                << this->current_address << " start=0x" << startAddress
-                << std::dec << " bytes=" << static_cast<unsigned>(byteCount)
-                << " backedgeCount=" << state.backedgeBuffers.size() << "\n";
-    }
-    // Collect all backedge values, require type match; any missing/mismatch
-    // bails the helper (caller falls through).
-    llvm::SmallVector<llvm::Value*, 2> backedgeValues;
-    backedgeValues.reserve(state.backedgeBuffers.size());
-    bool allSame = true;
-    for (const auto& beBuf : state.backedgeBuffers) {
-      auto* v = retrieveBufferedOrConcreteValue(beBuf, startAddress, byteCount);
-      if (!v || v->getType() != canonicalValue->getType()) {
-        return nullptr;
+
+    // Check the legacy targetSlot first.
+    if (startAddress == state.targetSlot) {
+      auto* canonicalValue = retrieveBufferedOrConcreteValue(state.canonicalBuffer,
+                                                             startAddress, byteCount);
+      if (!canonicalValue) return nullptr;
+      if (this->liftProgressDiagEnabled) {
+        std::cout << "[diag] target_slot current=0x" << std::hex
+                  << this->current_address << " start=0x" << startAddress
+                  << std::dec << " bytes=" << static_cast<unsigned>(byteCount)
+                  << " backedgeCount=" << state.backedgeBuffers.size() << "\n";
       }
-      if (v != canonicalValue) allSame = false;
-      backedgeValues.push_back(v);
+      llvm::SmallVector<llvm::Value*, 2> backedgeValues;
+      backedgeValues.reserve(state.backedgeBuffers.size());
+      bool allSame = true;
+      for (const auto& beBuf : state.backedgeBuffers) {
+        auto* v = retrieveBufferedOrConcreteValue(beBuf, startAddress, byteCount);
+        if (!v || v->getType() != canonicalValue->getType()) {
+          return nullptr;
+        }
+        if (v != canonicalValue) allSame = false;
+        backedgeValues.push_back(v);
+      }
+      if (state.backedgeSources.empty() || allSame) {
+        return canonicalValue;
+      }
+      llvm::IRBuilder<> phiBuilder(state.headerBlock, state.headerBlock->begin());
+      auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(),
+                                       1 + backedgeValues.size(),
+                                       "generalized_local_slot_phi");
+      phi->addIncoming(canonicalValue, state.canonicalSource);
+      for (size_t i = 0; i < backedgeValues.size(); ++i) {
+        phi->addIncoming(backedgeValues[i], state.backedgeSources[i]);
+      }
+      return phi;
     }
-    if (state.backedgeSources.empty() || allSame) {
-      return canonicalValue;
+
+    // Check additional carried slots (multi-slot extension).
+    for (const auto& slot : state.carriedSlots) {
+      if (slot.address != startAddress) continue;
+      if (slot.backedgeValues.size() != state.backedgeSources.size()) continue;
+
+      const uint64_t mask = llvm::maskTrailingOnes<uint64_t>(byteCount * 8);
+      auto* canonicalValue = this->builder->getIntN(
+          byteCount * 8, slot.canonicalValue & mask);
+
+      llvm::SmallVector<llvm::Value*, 2> backedgeValues;
+      bool allSame = true;
+      for (uint64_t be : slot.backedgeValues) {
+        auto* v = this->builder->getIntN(byteCount * 8, be & mask);
+        if (v != canonicalValue) allSame = false;
+        backedgeValues.push_back(v);
+      }
+      if (state.backedgeSources.empty() || allSame) {
+        return canonicalValue;
+      }
+      llvm::IRBuilder<> phiBuilder(state.headerBlock, state.headerBlock->begin());
+      auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(),
+                                       1 + backedgeValues.size(),
+                                       "generalized_carried_slot_phi");
+      phi->addIncoming(canonicalValue, state.canonicalSource);
+      for (size_t i = 0; i < backedgeValues.size(); ++i) {
+        phi->addIncoming(backedgeValues[i], state.backedgeSources[i]);
+      }
+      return phi;
     }
-    llvm::IRBuilder<> phiBuilder(state.headerBlock, state.headerBlock->begin());
-    auto* phi = phiBuilder.CreatePHI(canonicalValue->getType(),
-                                     1 + backedgeValues.size(),
-                                     "generalized_local_slot_phi");
-    phi->addIncoming(canonicalValue, state.canonicalSource);
-    for (size_t i = 0; i < backedgeValues.size(); ++i) {
-      phi->addIncoming(backedgeValues[i], state.backedgeSources[i]);
-    }
-    return phi;
+
+    return nullptr;
   }
 
   llvm::Value* retrieve_generalized_loop_control_field_value_impl(
@@ -1316,7 +1618,7 @@ public:
         return;
       }
       auto* currentControlValue =
-          retrieveContiguousBufferedValue(this->buffer, kThemidaControlCursorSlot, 8);
+          retrieveContiguousBufferedValue(this->buffer, stateIt->second.controlSlot, 8);
       uint64_t rolledBackedgeControl = 0;
       if (!currentControlValue ||
           !evaluateConcreteGeneralizedLoopInt(currentControlValue,
@@ -1334,6 +1636,15 @@ public:
       sources.front() = sourceBlock;
       controls.front() = rolledBackedgeControl;
       buffers.front() = this->buffer;
+      // Rotate carried slots alongside the primary control slot.
+      for (auto& carried : stateIt->second.carriedSlots) {
+        if (carried.backedgeValues.size() != 1) continue;
+        uint64_t newCarriedValue = 0;
+        if (readConstantTrackedQword(this->buffer, carried.address, newCarriedValue)) {
+          carried.canonicalValue = carried.backedgeValues.front();
+          carried.backedgeValues.front() = newCarriedValue;
+        }
+      }
       if (bb == activeGeneralizedLoopControlFieldState.headerBlock) {
         activeGeneralizedLoopControlFieldState = stateIt->second;
         activeGeneralizedLoopEntrySourceBlock = sourceBlock;
@@ -1361,7 +1672,7 @@ public:
       return;
     }
     auto* currentControlValue =
-        retrieveContiguousBufferedValue(this->buffer, kThemidaControlCursorSlot, 8);
+        retrieveContiguousBufferedValue(this->buffer, stateIt->second.controlSlot, 8);
     uint64_t newControl = 0;
     if (!currentControlValue ||
         !evaluateConcreteGeneralizedLoopInt(currentControlValue, sourceBlock,
@@ -1378,6 +1689,15 @@ public:
         }
         controls[i] = newControl;
         buffers[i] = this->buffer;
+        // Update carried slots for this backedge index.
+        for (auto& carried : stateIt->second.carriedSlots) {
+          if (i < carried.backedgeValues.size()) {
+            uint64_t newVal = 0;
+            if (readConstantTrackedQword(this->buffer, carried.address, newVal)) {
+              carried.backedgeValues[i] = newVal;
+            }
+          }
+        }
         mutated = true;
         break;
       }
@@ -1386,6 +1706,16 @@ public:
       sources.push_back(sourceBlock);
       controls.push_back(newControl);
       buffers.push_back(this->buffer);
+      // Append carried slot values for the new backedge.
+      for (auto& carried : stateIt->second.carriedSlots) {
+        uint64_t newVal = 0;
+        if (readConstantTrackedQword(this->buffer, carried.address, newVal)) {
+          carried.backedgeValues.push_back(newVal);
+        } else {
+          // Keep vectors aligned: push canonical as fallback.
+          carried.backedgeValues.push_back(carried.canonicalValue);
+        }
+      }
       mutated = true;
     }
     if (mutated && bb == activeGeneralizedLoopControlFieldState.headerBlock) {

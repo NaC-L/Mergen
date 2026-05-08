@@ -1039,44 +1039,47 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_lzcnt() {
   setFlag(FLAG_ZF, isOutputZero);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsr() {
-  // check
-  /*
-  auto dest = operands[0];
-  auto src = operands[1];
-  */
-
+  // BSR = bit scan reverse = index of highest set bit = bitWidth - 1 - LZCNT.
+  // When input is zero: ZF=1, destination is undefined (we use undef).
+  // Previously emitted as a 32-iteration unrolled loop of AND+ICMP+SELECT;
+  // now uses @llvm.ctlz so LLVM can recognize the pattern and optimize.
   Value* Rvalue = GetIndexValue(1);
+  unsigned bitWidth = Rvalue->getType()->getIntegerBitWidth();
+
   Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
                                    ConstantInt::get(Rvalue->getType(), 0));
   setFlag(FLAG_ZF, isZero);
 
-  unsigned bitWidth = Rvalue->getType()->getIntegerBitWidth();
-
-  Value* index = ConstantInt::get(Rvalue->getType(), bitWidth - 1);
-  Value* zeroVal = ConstantInt::get(Rvalue->getType(), 0);
-  Value* oneVal = ConstantInt::get(Rvalue->getType(), 1);
-
-  Value* bitPosition = ConstantInt::get(Rvalue->getType(), -1);
-
-  for (unsigned i = 0; i < bitWidth; ++i) {
-
-    Value* mask = createShlFolder(oneVal, index);
-
-    Value* test = createAndFolder(Rvalue, mask, "bsrtest");
-    Value* isBitSet = createICMPFolder(CmpInst::ICMP_NE, test, zeroVal);
-
-    Value* tmpPosition = createSelectFolder(isBitSet, index, bitPosition);
-
-    Value* isPositionUnset = createICMPFolder(
-        CmpInst::ICMP_EQ, bitPosition, ConstantInt::get(Rvalue->getType(), -1));
-    bitPosition = createSelectFolder(isPositionUnset, tmpPosition, bitPosition);
-
-    index = createSubFolder(index, oneVal);
+  Value* bsrResult;
+  if (auto* CI = dyn_cast<ConstantInt>(Rvalue)) {
+    if (CI->isZero()) {
+      bsrResult = UndefValue::get(Rvalue->getType());
+    } else {
+      unsigned lz = CI->getValue().countl_zero();
+      bsrResult = ConstantInt::get(Rvalue->getType(), bitWidth - 1 - lz);
+    }
+  } else {
+    auto ctlzDecl = Intrinsic::getDeclaration(
+        builder->GetInsertBlock()->getModule(), Intrinsic::ctlz,
+        Rvalue->getType());
+    // is_zero_undef=true: BSR is undefined when input is zero, so we tell
+    // LLVM it can assume nonzero for the intrinsic path. The select below
+    // handles the zero case explicitly.
+    auto* lzcntValue = builder->CreateCall(
+        ctlzDecl, {Rvalue, ConstantInt::getTrue(builder->getContext())},
+        "bsr.lzcnt");
+    bsrResult = createSubFolder(
+        ConstantInt::get(Rvalue->getType(), bitWidth - 1), lzcntValue,
+        "bsr.result");
   }
 
-  setFlag(FLAG_PF, computeParityFlag(bitPosition));
+  // When input is zero, BSR result is architecturally undefined.
+  // Use undef to give LLVM maximum freedom.
+  Value* result = createSelectFolder(
+      isZero, UndefValue::get(Rvalue->getType()), bsrResult, "bsr.select");
 
-  SetIndexValue(0, bitPosition);
+  setFlag(FLAG_PF, computeParityFlag(result));
+  SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_pdep() {
   /*  auto dest = operands[0]; // destination
@@ -1195,44 +1198,38 @@ MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bzhi() {
   setFlag(FLAG_CF, createNotFolder(indexInRange));
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_bsf() {
-  // TODOs
-  LLVMContext& context = builder->getContext();
-  /*   auto dest = operands[0];
-    auto src = operands[1]; */
-
+  // BSF = bit scan forward = index of lowest set bit = TZCNT.
+  // When input is zero: ZF=1, destination is undefined (we use undef).
+  // Previously emitted as a bitWidth-iteration unrolled loop; now uses
+  // @llvm.cttz so LLVM can recognize the pattern and optimize.
   Value* Rvalue = GetIndexValue(1);
 
   Value* isZero = createICMPFolder(CmpInst::ICMP_EQ, Rvalue,
                                    ConstantInt::get(Rvalue->getType(), 0));
   setFlag(FLAG_ZF, isZero);
 
-  Type* intType = Rvalue->getType();
-  uint64_t intWidth = intType->getIntegerBitWidth();
-
-  Value* result = ConstantInt::get(intType, intWidth);
-  Value* one = ConstantInt::get(intType, 1);
-
-  Value* continuecounting = ConstantInt::get(Type::getInt1Ty(context), 1);
-  for (uint64_t i = 0; i < intWidth; ++i) {
-    Value* bitMask =
-        createShlFolder(one, ConstantInt::get(intType, i));        // a = v >> i
-    Value* bitSet = createAndFolder(Rvalue, bitMask, "bsfbitset"); // b = a & 1
-    Value* isBitZero = createICMPFolder(
-        CmpInst::ICMP_EQ, bitSet, ConstantInt::get(intType, 0)); // c = b == 0
-    // continue until isBitZero is 1
-    // 0010
-    // if continuecounting, select
-    Value* possibleResult = ConstantInt::get(intType, i);
-    Value* condition = createAndFolder(continuecounting, isBitZero,
-                                       "bsfcondition"); // cond = cc, c, 0
-    continuecounting = createNotFolder(isBitZero);      // cc = ~c
-    result = createSelectFolder(
-        condition, result, possibleResult,
-        "updateResultOnFirstNonZeroBit"); // cond ift res(64) , i
+  Value* bsfResult;
+  if (auto* CI = dyn_cast<ConstantInt>(Rvalue)) {
+    if (CI->isZero()) {
+      bsfResult = UndefValue::get(Rvalue->getType());
+    } else {
+      unsigned tz = CI->getValue().countr_zero();
+      bsfResult = ConstantInt::get(Rvalue->getType(), tz);
+    }
+  } else {
+    auto cttzDecl = Intrinsic::getDeclaration(
+        builder->GetInsertBlock()->getModule(), Intrinsic::cttz,
+        Rvalue->getType());
+    // is_zero_undef=true: BSF is undefined when input is zero.
+    bsfResult = builder->CreateCall(
+        cttzDecl, {Rvalue, ConstantInt::getTrue(builder->getContext())},
+        "bsf.cttz");
   }
 
-  setFlag(FLAG_PF, computeParityFlag(result));
+  Value* result = createSelectFolder(
+      isZero, UndefValue::get(Rvalue->getType()), bsfResult, "bsf.select");
 
+  setFlag(FLAG_PF, computeParityFlag(result));
   SetIndexValue(0, result);
 }
 MERGEN_LIFTER_DEFINITION_TEMPLATES(void)::lift_tzcnt() {
