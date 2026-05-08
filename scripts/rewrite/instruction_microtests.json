@@ -292,7 +292,7 @@
         { "line_all": ["and i32", ", 15"] },
         "phi i32",
         "add i32",
-        "switch i32"
+        "br i1"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },  "expected": 0,   "label": "fib(0)" },
@@ -400,7 +400,7 @@
         { "line_all": ["and i32", ", 15"] },
         "phi i32",
         "icmp eq i32",
-        "br i1"
+        "select"
       ],
       "semantic": [
         { "inputs": { "RCX": 0 },  "expected": 8, "label": "target=1: not in table" },
@@ -4483,7 +4483,7 @@
       "name": "vm_signed_dword_sum64_loop",
       "symbol": "vm_signed_dword_sum64_loop_target",
       "patterns": [
-        "sext",
+        "ashr",
         "add"
       ],
       "semantic": [
@@ -4503,7 +4503,7 @@
       "name": "vm_signed_word_sum64_loop",
       "symbol": "vm_signed_word_sum64_loop_target",
       "patterns": [
-        "sext",
+        "ashr",
         "add"
       ],
       "semantic": [
